@@ -1,3 +1,5 @@
+> 历史版本说明：本文档属于第一版 `Zone / OperatingLocation / Route` 原型文档，仅用于历史对比和回退参考。新版空间 Map 模型中，Route 表示基于 RoadSegment 序列生成的路径方案，请以 `08-route.md` 和 `initialization-map.md` 为准。
+
 ## 1. 业务含义
 Route是运营路径，是 Robotaxi 最小运营闭环中，连接两个 OperatingLocation 的可行驶路径。  
 它表示车辆可以从一个运营位置移动到另一个运营位置，并记录这段移动所需的距离、预计时间、道路类型和可通行状态。  

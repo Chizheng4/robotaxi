@@ -1,4 +1,6 @@
 
+> 历史版本说明：本文档属于第一版 `Zone / OperatingLocation / Route` 原型文档，仅用于历史对比和回退参考。新版空间 Map 模型已经将 OperatingLocation 拆分为 `Place`（地点 / 需求来源）和 `ServiceArea`（服务区域），请以 `05-place.md`、`06-servicearea.md` 和 `initialization-map.md` 为准。
+
 
 ## 1. 业务含义
 
