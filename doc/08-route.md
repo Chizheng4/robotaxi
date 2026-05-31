@@ -39,6 +39,7 @@ Route
 |属性英文名|中文名|含义|
 |---|---|---|
 |route_id|路径编号|路径唯一编号|
+|route_name|路径说明|便于用户理解路径用途的中文说明，不改变 Route 的空间路径结果属性|
 |map_id|地图编号|所属 Map|
 |start_cell_id|起点网格|路径起点 Cell|
 |end_cell_id|终点网格|路径终点 Cell|
@@ -66,6 +67,7 @@ Route
 ```json
 {
   "route_id": "R-001",
+  "route_name": "住宅区接驾区到办公区接驾区",
   "map_id": "M-001",
   "start_cell_id": "C-12-12",
   "end_cell_id": "C-20-08",

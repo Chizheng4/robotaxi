@@ -6,14 +6,13 @@
   --text: #17202a;
   --muted: #657386;
   --accent: #2563eb;
-  --residential: #0f766e;
-  --office: #2563eb;
-  --metro: #7c3aed;
-  --mall: #b45309;
-  --parking: #475569;
-  --charging: #15803d;
-  --hub: #be123c;
-  --hotel: #0369a1;
+  --cell-empty: #f8fafc;
+  --cell-road: #d8dee8;
+  --cell-place: #f8e1a6;
+  --cell-blocked: #334155;
+  --service-area: #14b8a6;
+  --route: #ef4444;
+  --road-node: #1d4ed8;
 }
 
 * {
@@ -236,143 +235,95 @@ button {
   background: #fbfcfe;
 }
 
-.zone-grid {
-  stroke: #e4e9f0;
-  stroke-width: 0.035;
+.zone-boundary {
+  fill: transparent;
+  stroke: #2563eb;
+  stroke-width: 0.08;
   pointer-events: none;
 }
 
-.zone-boundary {
-  fill: rgba(37, 99, 235, 0.07);
-  stroke: #2563eb;
-  stroke-width: 0.08;
-  cursor: pointer;
-}
-
 .zone-boundary[data-active="true"] {
-  fill: rgba(37, 99, 235, 0.14);
   stroke-width: 0.14;
 }
 
-.route-hit-line {
-  stroke: transparent;
-  stroke-width: 1.2;
+.map-cell {
+  stroke: #edf1f6;
+  stroke-width: 0.025;
   cursor: pointer;
 }
 
-.route-line {
-  fill: none;
-  stroke: #64748b;
-  stroke-linecap: round;
+.cell-empty {
+  fill: var(--cell-empty);
+}
+
+.cell-road {
+  fill: var(--cell-road);
+}
+
+.cell-place {
+  fill: var(--cell-place);
+}
+
+.cell-blocked {
+  fill: var(--cell-blocked);
+}
+
+.map-cell:hover,
+.map-cell[data-active="true"] {
+  fill: #bfdbfe;
+}
+
+.map-cell[data-route="true"] {
+  fill: #fecaca;
+}
+
+.service-area-cell {
+  fill: rgba(20, 184, 166, 0.8);
+  stroke: #0f766e;
+  stroke-width: 0.04;
+  pointer-events: none;
+}
+
+.service-area-cell[data-active="true"] {
+  fill: #2dd4bf;
+  stroke-width: 0.12;
+}
+
+.road-node {
+  fill: #fff;
+  stroke: var(--road-node);
   stroke-width: 0.12;
   pointer-events: none;
 }
 
-.route-line[data-active="true"] {
-  stroke: var(--accent);
-  stroke-width: 0.24;
+.road-node[data-active="true"] {
+  fill: var(--accent);
+  stroke: #fff;
 }
 
-.road-main_road {
-  stroke: #1d4ed8;
+.legend-dot.cell-empty {
+  background: var(--cell-empty);
+  border: 1px solid #cbd5e1;
 }
 
-.road-secondary_road {
-  stroke-dasharray: 2 1.4;
+.legend-dot.cell-road {
+  background: var(--cell-road);
 }
 
-.road-internal_road {
-  stroke-dasharray: 0.8 1.6;
+.legend-dot.cell-place {
+  background: var(--cell-place);
 }
 
-.road-parking_access {
-  stroke: var(--parking);
+.legend-dot.service-area-swatch {
+  background: var(--service-area);
 }
 
-.road-charging_access {
-  stroke: var(--charging);
+.legend-dot.route-swatch {
+  background: var(--route);
 }
 
-.location-node {
-  cursor: pointer;
-}
-
-.location-node circle {
-  fill: #fff;
-  stroke-width: 0.16;
-}
-
-.location-node text {
-  fill: #111827;
-  font-size: 0.38px;
-  font-weight: 800;
-  pointer-events: none;
-  text-anchor: middle;
-}
-
-.location-node[data-active="true"] circle {
-  stroke: var(--accent);
-  stroke-width: 0.26;
-}
-
-.location-residential_area circle,
-.legend-dot.location-residential_area {
-  stroke: var(--residential);
-  background: var(--residential);
-}
-
-.location-office_area circle,
-.legend-dot.location-office_area {
-  stroke: var(--office);
-  background: var(--office);
-}
-
-.location-metro_station circle,
-.legend-dot.location-metro_station {
-  stroke: var(--metro);
-  background: var(--metro);
-}
-
-.location-shopping_mall circle,
-.legend-dot.location-shopping_mall {
-  stroke: var(--mall);
-  background: var(--mall);
-}
-
-.location-school circle,
-.legend-dot.location-school {
-  stroke: #a16207;
-  background: #a16207;
-}
-
-.location-hospital circle,
-.legend-dot.location-hospital {
-  stroke: #dc2626;
-  background: #dc2626;
-}
-
-.location-parking_lot circle,
-.legend-dot.location-parking_lot {
-  stroke: var(--parking);
-  background: var(--parking);
-}
-
-.location-charging_station circle,
-.legend-dot.location-charging_station {
-  stroke: var(--charging);
-  background: var(--charging);
-}
-
-.location-transport_hub circle,
-.legend-dot.location-transport_hub {
-  stroke: var(--hub);
-  background: var(--hub);
-}
-
-.location-hotel circle,
-.legend-dot.location-hotel {
-  stroke: var(--hotel);
-  background: var(--hotel);
+.legend-dot.road-node-swatch {
+  background: var(--road-node);
 }
 
 .legend {

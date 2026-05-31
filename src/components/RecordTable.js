@@ -1,49 +1,59 @@
+import { getFieldLabel } from "../domain/fieldDictionary.js?v=20260531-dict";
+
 const tableConfig = {
+  maps: {
+    title: "地图管理",
+    description: "Map 是 Robotaxi 运营模拟中的空间容器。",
+    columns: ["map_id", "map_name", "map_width_m", "map_height_m", "cell_size_m", "grid_cols", "grid_rows", "total_cells", "coordinate_type"],
+  },
+  cells: {
+    title: "网格单元管理",
+    description: "Cell 是地图的最小空间单元，用于表达基础空间事实。",
+    columns: ["cell_id", "row", "col", "base_cell_type", "traversable"],
+  },
+  roads: {
+    title: "道路管理",
+    description: "Road 表示完整道路语义，由多个 RoadSegment 组成。",
+    columns: ["road_id", "road_name", "road_type", "road_status", "road_segment_ids"],
+  },
+  roadNodes: {
+    title: "道路节点管理",
+    description: "RoadNode 是道路网络中的连接节点。",
+    columns: ["road_node_id", "cell_id", "row", "col", "node_type", "node_status"],
+  },
+  roadSegments: {
+    title: "道路片段管理",
+    description: "RoadSegment 是道路网络的最小计算和通行单元。",
+    columns: ["road_segment_id", "road_id", "start_node_id", "end_node_id", "distance_m", "direction", "speed_limit_kmh", "service_area_ids"],
+  },
+  places: {
+    title: "地点管理",
+    description: "Place 表示会产生出行需求的地点、建筑或土地使用区域。",
+    columns: ["place_id", "place_name", "place_type", "demand_weight", "peak_pattern", "nearby_service_area_ids", "cell_count"],
+  },
+  serviceAreas: {
+    title: "服务区域管理",
+    description: "ServiceArea 是 RoadSegment 上的人车服务接口空间。",
+    columns: ["service_area_id", "name", "segment_ids", "customer_capabilities", "vehicle_capabilities", "max_vehicle_capacity", "covered_cell_count"],
+  },
   zones: {
     title: "运营区域管理",
-    description: "Zone 是最小运营闭环中的空间经营边界。",
-    columns: [
-      ["zone_id", "区域编号"],
-      ["zone_name", "区域名称"],
-      ["grid_size", "网格规模"],
-      ["cell_size", "最小格边长"],
-      ["zone_type", "区域类型"],
-      ["operating_status", "运营状态"],
-      ["service_policy_id", "服务策略"],
-      ["map_area_id", "地图区域"],
-    ],
-  },
-  locations: {
-    title: "运营位置管理",
-    description: "OperatingLocation 是 Zone 内被运营系统识别和使用的现实空间位置。",
-    columns: [
-      ["location_id", "位置编号"],
-      ["location_name", "位置名称"],
-      ["location_type", "地点类型"],
-      ["operating_status", "运营状态"],
-      ["capabilities", "运营能力"],
-      ["capacity", "容量"],
-      ["demand_weight", "需求权重"],
-      ["coordinates", "网格坐标"],
-    ],
+    description: "Zone 是运营管理区域，用于经营统计和管理。",
+    columns: ["zone_id", "parent_zone_id", "zone_name", "zone_level", "zone_type", "zone_status", "cell_count", "place_ids", "service_area_ids"],
   },
   routes: {
-    title: "路径管理",
-    description: "Route 是两个 OperatingLocation 之间的可行驶空间连接。",
-    columns: [
-      ["route_id", "路径编号"],
-      ["start_location_name", "起点位置"],
-      ["end_location_name", "终点位置"],
-      ["road_type", "道路类型"],
-      ["route_status", "路径状态"],
-      ["is_bidirectional", "是否双向"],
-      ["distance", "距离"],
-      ["estimated_duration", "预计时长"],
-    ],
+    title: "路径方案管理",
+    description: "Route 是基于 RoadSegment 序列生成的车辆移动路径结果。",
+    columns: ["route_id", "route_name", "start_cell_id", "end_cell_id", "road_segment_sequence", "related_service_area_ids", "total_distance_m", "estimated_time_s", "route_status"],
+  },
+  validations: {
+    title: "初始化校验",
+    description: "根据 initialization-map.md 规则检查生成后的空间对象数据。",
+    columns: ["rule_id", "rule_name", "result", "detail"],
   },
 };
 
-export function renderRecordTable({ page, rows, locations, selected, onSelect }) {
+export function renderRecordTable({ page, rows, selected, onSelect }) {
   const config = tableConfig[page];
   const root = document.createElement("main");
   root.className = "record-page";
@@ -55,7 +65,7 @@ export function renderRecordTable({ page, rows, locations, selected, onSelect })
   title.textContent = config.title;
 
   const description = document.createElement("p");
-  description.textContent = config.description;
+  description.textContent = `${config.description} 当前 ${rows.length} 条记录。`;
 
   header.append(title, description);
 
@@ -67,9 +77,9 @@ export function renderRecordTable({ page, rows, locations, selected, onSelect })
 
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  config.columns.forEach(([, label]) => {
+  config.columns.forEach((key) => {
     const th = document.createElement("th");
-    th.textContent = label;
+    th.textContent = getFieldLabel(key);
     headRow.append(th);
   });
   thead.append(headRow);
@@ -82,9 +92,9 @@ export function renderRecordTable({ page, rows, locations, selected, onSelect })
     tr.dataset.active = selected?.type === objectType && selected?.id === objectId ? "true" : "false";
     tr.addEventListener("click", () => onSelect(objectType, objectId));
 
-    config.columns.forEach(([key]) => {
+    config.columns.forEach((key) => {
       const td = document.createElement("td");
-      td.textContent = getCellValue(key, row, locations);
+      td.textContent = getCellValue(key, row);
       tr.append(td);
     });
 
@@ -97,39 +107,52 @@ export function renderRecordTable({ page, rows, locations, selected, onSelect })
   return root;
 }
 
-function getCellValue(key, row, locations) {
-  if (key === "grid_size") return `${row.grid.cols} x ${row.grid.rows}`;
-  if (key === "cell_size") return `${row.grid.cell_size} ${row.grid.cell_unit}`;
-  if (key === "coordinates") return `col:${row.grid_col}, row:${row.grid_row}`;
-  if (key === "capabilities") return summarizeCapabilities(row.capabilities);
-  if (key === "distance") return `${row.distance} m`;
-  if (key === "estimated_duration") return `${row.estimated_duration} min`;
-  if (key === "is_bidirectional") return row.is_bidirectional ? "Yes" : "No";
-  if (key === "start_location_name") return getLocationName(locations, row.start_location_id);
-  if (key === "end_location_name") return getLocationName(locations, row.end_location_id);
+function getCellValue(key, row) {
+  if (key === "cell_count") return String(row.cell_ids?.length ?? 0);
+  if (key === "covered_cell_count") return String(row.covered_cell_ids?.length ?? 0);
+  if (Array.isArray(row[key])) return row[key].join(" → ");
+  if (typeof row[key] === "boolean") return row[key] ? "是" : "否";
+  if (typeof row[key] === "object" && row[key] !== null) return summarizeObject(row[key]);
   return String(row[key] ?? "");
 }
 
-function summarizeCapabilities(capabilities) {
-  return Object.entries(capabilities)
-    .filter(([, value]) => value)
-    .map(([key]) => key.replace("can_", ""))
+function summarizeObject(value) {
+  return Object.entries(value)
+    .filter(([, itemValue]) => itemValue === true)
+    .map(([key]) => getFieldLabel(key))
     .join(", ");
 }
 
-function getLocationName(locations, locationId) {
-  const location = locations.find((item) => item.location_id === locationId);
-  return location ? `${location.location_name} (${location.location_id})` : locationId;
-}
-
 function getObjectType(page) {
-  if (page === "zones") return "zone";
-  if (page === "locations") return "location";
-  return "route";
+  const mapping = {
+    maps: "map",
+    cells: "cell",
+    roads: "road",
+    roadNodes: "roadNode",
+    roadSegments: "roadSegment",
+    places: "place",
+    serviceAreas: "serviceArea",
+    zones: "zone",
+    routes: "route",
+    validations: "validation",
+  };
+
+  return mapping[page];
 }
 
 function getObjectId(page, row) {
-  if (page === "zones") return row.zone_id;
-  if (page === "locations") return row.location_id;
-  return row.route_id;
+  const mapping = {
+    maps: "map_id",
+    cells: "cell_id",
+    roads: "road_id",
+    roadNodes: "road_node_id",
+    roadSegments: "road_segment_id",
+    places: "place_id",
+    serviceAreas: "service_area_id",
+    zones: "zone_id",
+    routes: "route_id",
+    validations: "rule_id",
+  };
+
+  return row[mapping[page]];
 }

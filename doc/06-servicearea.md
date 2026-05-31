@@ -2,17 +2,19 @@
 
 ## 1. 定义
 
-ServiceArea（服务区域）是 RoadSegment 上的人车服务接口空间。  
+ServiceArea（服务区域）是 RoadSegment 上的人车服务接口空间。
 它表示车辆可以停靠并完成用户服务动作的区域，同时满足客户侧需求：
 
 - 上车（Pickup）
-    
+
 - 下车（Dropoff）
-    
+
 - 等候（Waiting）
-    
+
 
 ServiceArea 不是 Cell 类型，也不表示 Place 或充电设施。
+
+ServiceArea 只能覆盖适合车辆安全停靠和服务动作的 ROAD Cell。RoadNode 所在 Cell，特别是连接多个 RoadSegment 的路口或道路连接点，不得作为 ServiceArea。
 
 ---
 
@@ -24,11 +26,11 @@ RoadSegment
 ```
 
 - 每个 ServiceArea 依附于一个或多个 RoadSegment。
-    
+
 - ServiceArea 定义车辆可执行服务的位置。
-    
+
 - 一个 RoadSegment 可以包含多个 ServiceArea。
-    
+
 
 ---
 
@@ -124,21 +126,27 @@ RoadSegment
 ## 9. 规则
 
 1. ServiceArea 必须依附于一个或多个 RoadSegment；
-    
+
 2. ServiceArea 不属于 Cell 基础类型；
-    
+
 3. ServiceArea 表达的是“可服务能力覆盖”，不是普通道路通行能力；
-    
+
 4. 上车/下车必须以 `vehicle_capabilities.can_stop_for_service` 为前提；
-    
+
 5. 短时停靠、待命、长期停放能力分层表达；
-    
+
 6. ServiceArea 不表达充电或其他设施功能；
-    
+
 7. Route 的起终点是 ROAD Cell；当路径用于服务动作时，相关起终点 Cell 应被 ServiceArea 覆盖；
-    
+
 8. 客户行为和车辆停靠能力必须同时满足，才算可执行服务区域。
-    
+
+9. ServiceArea 不得覆盖 RoadNode 所在 Cell；
+
+10. 当某个 RoadNode 同时连接两个及以上 RoadSegment 时，该 RoadNode 所在 Cell 应视为路口或道路连接点，不得用于上车、下车、等待、短停或待命；
+
+11. ServiceArea 应覆盖 RoadSegment 上非 RoadNode 的 ROAD Cell，以表达“可通行道路上的可服务位置”。
+
 
 ---
 

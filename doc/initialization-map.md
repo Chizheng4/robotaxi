@@ -16,9 +16,12 @@ Codex 应基于以下文档理解对象定义：
 06-servicearea.md
 07-zone.md
 08-route.md
+09-field-dictionary.md
 ```
 
 本文档只描述初始化目标、空间布局、对象数量、生成规则和校验规则。
+
+字段英文名、中文名和前端显示规则统一以 `09-field-dictionary.md` 为准。初始化数据使用英文字段名，前端展示优先使用对应中文名。
 
 ---
 
@@ -52,6 +55,7 @@ Codex 应基于以下文档理解对象定义：
 |ServiceArea|服务区域|可上车、下车、等待、停靠的人车服务接口空间|
 |Zone|运营区域|运营管理和统计区域|
 |Route|路径方案|基于 RoadSegment 序列生成的路径结果|
+|ValidationResult|初始化校验结果|展示初始化校验规则和检查结果|
 
 ---
 
@@ -82,17 +86,17 @@ Route
 原因：
 
 - Cell 是所有空间对象的底层承载；
-    
+
 - RoadNode 和 RoadSegment 依赖 Cell；
-    
+
 - Place 依赖 PLACE Cell；
-    
+
 - ServiceArea 依赖 ROAD Cell / RoadSegment；
-    
+
 - Zone 聚合 Cell、RoadSegment、Place、ServiceArea；
-    
+
 - Route 基于 RoadSegment，并以 ROAD Cell 作为起点和终点。
-    
+
 
 ---
 
@@ -146,6 +150,16 @@ col = 0 ~ 39
 
 同一个 Cell 只能有一个 `base_cell_type`。
 
+前端展示要求：
+
+- 点击任意 Cell 时，右侧详情栏必须展示 Cell 自身信息；
+
+- 同时聚合展示该 Cell 关联的 Map、Zone、Road、RoadSegment、RoadNode、ServiceArea、Place 等必要上下文；
+
+- 如果某类对象无关联，应明确显示无关联；
+
+- 该设计用于让用户通过一个 Cell 理解完整空间关系，避免空间语义模糊。
+
 ---
 
 ## 6. Road 初始化
@@ -186,6 +200,16 @@ col = 0 ~ 39
 map_id = M-001
 node_status = Active
 ```
+
+RoadNode 所在 Cell 规则：
+
+- RoadNode 所在 Cell 是道路拓扑连接点；
+
+- RoadNode 所在 Cell 不得被 ServiceArea 覆盖；
+
+- 当 RoadNode 连接两个及以上 RoadSegment 时，应视为 T 型路口、十字路口或道路连接点；
+
+- 路口 Cell 只表达道路网络连接关系，不表达服务能力。
 
 ---
 
@@ -265,10 +289,20 @@ Place 不应覆盖 ROAD Cell。
 |SA-002|办公区西侧接驾区|RS-004|col=25, row=5~7|办公区上下车|
 |SA-003|商业中心北侧上下客区|RS-008|row=12, col=17~20|商业中心上下车|
 |SA-004|医院学校东侧上下客区|RS-010|row=28, col=5~8|医院学校上下车|
-|SA-005|地铁站南侧接驳区|RS-012|row=28, col=25~27|地铁接驳|
+|SA-005|地铁站南侧接驳区|RS-012|row=28, col=26~27|地铁接驳|
 |SA-006|东侧主路车辆待命区|RS-006|col=25, row=30~33|车辆待命|
 
 ServiceArea 只能覆盖 ROAD Cell。
+
+ServiceArea 覆盖限制：
+
+- ServiceArea 不得覆盖 RoadNode 所在 Cell；
+
+- ServiceArea 不得覆盖连接两个及以上 RoadSegment 的路口 Cell；
+
+- ServiceArea 应选择 RoadSegment 上非 RoadNode 的 ROAD Cell；
+
+- 即使某个 Cell 是 ROAD，只要它同时是 RoadNode 所在 Cell，也不能作为 ServiceArea。
 
 默认能力如下：
 
@@ -315,11 +349,11 @@ ServiceArea 只能覆盖 ROAD Cell。
 说明：
 
 - ServiceArea 不表达充电能力；
-    
+
 - 充电设施不在第一版初始化范围内；
-    
+
 - ServiceArea 是 RoadSegment 上的服务能力覆盖层。
-    
+
 
 ---
 
@@ -358,7 +392,7 @@ Z-001
 
 Route 起终点必须是 ROAD Cell。
 
-|route_id|start_cell_id|end_cell_id|road_segment_sequence|说明|
+|route_id|start_cell_id|end_cell_id|road_segment_sequence|route_name（路径说明）|
 |---|---|---|---|---|
 |RT-001|C-06-10|C-06-25|RS-001 → RS-008 → RS-004|住宅区接驾区到办公区接驾区|
 |RT-002|C-06-10|C-12-18|RS-001 → RS-008|住宅区到商业中心|
@@ -369,13 +403,13 @@ Route 起终点必须是 ROAD Cell。
 Route 规则：
 
 - 起点和终点必须是 ROAD Cell；
-    
+
 - 如果 Route 用于服务动作，起点或终点 Cell 应被 ServiceArea 覆盖；
-    
+
 - Route 的距离和时间由 RoadSegment 累加计算；
-    
+
 - Route 不表示订单，只表示移动路径结果。
-    
+
 
 ---
 
@@ -386,66 +420,72 @@ Codex 生成数据后必须检查以下规则：
 ### 13.1 Cell 校验
 
 1. Cell 总数必须为 1600；
-    
+
 2. 每个 Cell 只能有一个 base_cell_type；
-    
+
 3. ROAD Cell 不得同时是 PLACE Cell；
-    
+
 4. PLACE Cell 不得同时是 ROAD Cell。
-    
+
+5. 点击 Cell 的详情数据应能聚合 Map、Zone、Road、RoadSegment、RoadNode、ServiceArea、Place 等关联上下文。
+
 
 ### 13.2 RoadSegment 校验
 
 1. 每个 RoadSegment 必须属于 Road；
-    
+
 2. 每个 RoadSegment 必须有 start_node_id 和 end_node_id；
-    
+
 3. RoadSegment 覆盖的 Cell 必须是 ROAD；
-    
+
 4. RoadSegment 覆盖 Cell 应连续。
-    
+
 
 ### 13.3 Place 校验
 
 1. Place 覆盖 Cell 必须是 PLACE；
-    
+
 2. Place 不得覆盖 ROAD Cell；
-    
+
 3. Place 必须至少关联一个附近 ServiceArea。
-    
+
 
 ### 13.4 ServiceArea 校验
 
 1. ServiceArea 覆盖 Cell 必须是 ROAD；
-    
+
 2. ServiceArea 必须关联 RoadSegment；
-    
+
 3. can_pickup 或 can_dropoff 为 true 时，can_stop_for_service 必须为 true；
-    
+
 4. ServiceArea 不得定义 can_charge。
-    
+
+5. ServiceArea 不得覆盖 RoadNode 所在 Cell。
+
+6. ServiceArea 不得覆盖连接两个及以上 RoadSegment 的路口 Cell。
+
 
 ### 13.5 Zone 校验
 
 1. 子 Zone 必须属于父 Zone；
-    
+
 2. 子 Zone 覆盖范围不得超出父 Zone；
-    
+
 3. Zone 不作为 Cell 基础类型；
-    
+
 4. Zone 应能统计包含的 Cell、Place、RoadSegment 和 ServiceArea。
-    
+
 
 ### 13.6 Route 校验
 
 1. start_cell_id 和 end_cell_id 必须是 ROAD Cell；
-    
+
 2. road_segment_sequence 必须连续；
-    
+
 3. Route 起终点如果用于服务，应位于 ServiceArea 覆盖范围内；
-    
+
 4. Route 不得直接以 ServiceArea 作为几何起终点。
-    
+
 
 ---
 
@@ -454,25 +494,27 @@ Codex 生成数据后必须检查以下规则：
 Codex 基于本文档初始化空间数据时，应完成：
 
 1. 生成 Map；
-    
+
 2. 生成 1600 个 Cell；
-    
+
 3. 根据 RoadSegment 设置 ROAD Cell；
-    
+
 4. 根据 Place 设置 PLACE Cell；
-    
+
 5. 根据 ServiceArea 设置服务能力覆盖；
-    
+
 6. 根据 Zone 生成运营区域覆盖；
-    
+
 7. 根据 Route 生成路径示例；
-    
+
 8. 输出初始化后的空间对象数据；
-    
+
 9. 输出校验结果；
-    
+
 10. 不生成 Vehicle、Demand、Order、DispatchTask、Trip、Metric。
-    
+
+11. 前端表格、详情栏和筛选项应依据 `09-field-dictionary.md` 显示中文字段名。
+
 
 ---
 
@@ -483,5 +525,5 @@ initialization-map.md 只定义第一版空间数据如何生成
 不重新定义业务对象本身
 ```
 
-业务对象定义以各自 md 文件为准。  
+业务对象定义以各自 md 文件为准。
 本文档只负责提供第一版可运行模拟地图的初始化方案。

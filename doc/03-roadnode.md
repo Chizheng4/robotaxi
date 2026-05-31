@@ -28,6 +28,8 @@ RoadSegment
 RN-001 ── RS-001 ── RN-002
 ```
 
+当一个 RoadNode 连接两个及以上 RoadSegment 时，该 RoadNode 所在 Cell 表示道路连接点，可能是道路端点、T 型路口、十字路口或其他道路拓扑节点。该 Cell 用于表达道路网络连接关系，不适合作为车辆停靠、上下客或等待的服务位置。
+
 ---
 
 ## 3. 核心属性
@@ -101,13 +103,19 @@ RN-001 ── RS-001 ── RN-002
 ## 8. 规则
 
 1. RoadNode 必须属于一个 Map；
-    
+
 2. RoadNode 必须定位到一个 Cell；
-    
+
 3. RoadNode 仅表达道路连接关系；
-    
+
 4. RoadNode 不表达道路长度、通行时间、方向或通行能力；
-    
+
 5. RoadNode 不表达服务能力、需求来源或运营区域；
-    
+
 6. 道路属性和通行能力由 RoadSegment 表达。
+
+7. RoadNode 所在 Cell 不得被 ServiceArea 覆盖；
+
+8. 当 RoadNode 同时连接两个及以上 RoadSegment 时，应视为路口或道路连接点，该 Cell 只能表达道路拓扑连接，不表达服务能力；
+
+9. 如果前端展示 RoadNode 所在 Cell，应明确提示该 Cell 是道路节点 / 路口，不可作为服务区域。
