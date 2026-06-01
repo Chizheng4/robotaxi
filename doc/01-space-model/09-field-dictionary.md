@@ -60,6 +60,9 @@
 |related_road_nodes|道路节点|聚合展示字段|位于该 Cell 的 RoadNode 列表|
 |related_service_areas|服务区域|聚合展示字段|覆盖该 Cell 的 ServiceArea 列表|
 |related_places|地点 / 需求来源|聚合展示字段|覆盖该 Cell 的 Place 列表|
+|related_ops_centers|关联运营中心|聚合展示字段|覆盖该 Cell 的 OpsCenter 列表|
+|related_robotaxis|停放 Robotaxi|聚合展示字段|当前位于该 Cell 的 Robotaxi 列表|
+|operational_space_coverage|运营空间覆盖|聚合展示字段|说明该 Cell 是否被运营中心等运营设施覆盖|
 |service_eligibility|服务能力判断|聚合展示字段|说明该 Cell 是否可作为服务区域，以及原因|
 
 ---
@@ -210,11 +213,72 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 
 ---
 
-## 12. 前端显示规则
+## 12. 前端枚举值字典
+
+前端应将代码内部稳定使用的英文枚举值转换为中文，不直接向运营人员暴露代码值。
+
+|英文字段值|中文显示值|
+|---|---|
+|SIMULATION_GRID|模拟网格坐标|
+|EMPTY|空白区域|
+|ROAD|道路区域|
+|PLACE|地点区域|
+|BLOCKED|不可通行区域|
+|MAIN_ROAD|主干路|
+|SECONDARY_ROAD|次干路|
+|INTERNAL_ROAD|内部道路|
+|ACCESS_ROAD|接入道路|
+|INTERSECTION|道路交叉口|
+|ROAD_ENDPOINT|道路端点|
+|ENTRANCE_EXIT|出入口|
+|RAMP_NODE|匝道节点|
+|TURNING_POINT|转向节点|
+|TWO_WAY|双向通行|
+|ONE_WAY|单向通行|
+|RESIDENTIAL|住宅区|
+|OFFICE|办公区|
+|COMMERCIAL|商业区|
+|SCHOOL|学校|
+|HOSPITAL|医院|
+|METRO_STATION|地铁站|
+|HOTEL|酒店|
+|TRANSPORT_HUB|交通枢纽|
+|MORNING_OUTBOUND|早高峰流出|
+|EVENING_INBOUND|晚高峰流入|
+|EVENING_OUTBOUND|晚高峰流出|
+|ALL_DAY_STABLE|全天稳定|
+|WEEKEND_PEAK|周末高峰|
+|EVENT_DRIVEN|事件驱动|
+|LOW_DEMAND|低需求|
+|CITY|城市|
+|OPERATING_REGION|运营大区|
+|ZONE|运营区域|
+|SUB_ZONE|子区域|
+|MICRO_ZONE|微区域|
+|RESIDENTIAL_ZONE|住宅区域|
+|OFFICE_ZONE|办公区域|
+|COMMERCIAL_ZONE|商业区域|
+|TRANSPORT_ZONE|交通区域|
+|MIXED_ZONE|混合区域|
+|SUPPORT_ZONE|保障区域|
+|Planned|规划中|
+|Testing|测试中|
+|Active|可使用|
+|Restricted|受限使用|
+|Suspended|暂停使用|
+|Closed|已关闭|
+|Blocked|已阻断|
+|Deprecated|已废弃|
+|PASS|通过|
+|FAIL|未通过|
+
+---
+
+## 13. 前端显示规则
 
 1. 代码、初始化数据和对象引用继续使用英文字段名；
 2. 前端表格列名、详情栏字段名、筛选项名称优先显示中文名；
-3. 必要时可以在中文名后补充英文字段名，但不应只显示英文；
+3. 前端应依据枚举值字典显示中文业务含义，不应直接暴露英文代码值；
 4. Cell 详情中的聚合展示字段应与持久化字段明确区分；
 5. 新增或修改字段时，应同步更新：
    - 对应对象文档；

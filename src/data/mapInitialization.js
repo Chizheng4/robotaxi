@@ -19,7 +19,7 @@ import {
   createRoute,
   createServiceArea,
   createZone,
-} from "../domain/types.js?v=20260531-dict";
+} from "../domain/types.js?v=20260601-ops";
 
 const MAP_ID = "M-001";
 const CELL_SIZE_M = 50;
@@ -100,6 +100,7 @@ function createRoads(map, roadSegments) {
     ["RD-002", "东侧纵向主路", RoadType.MAIN_ROAD],
     ["RD-003", "北侧横向主路", RoadType.MAIN_ROAD],
     ["RD-004", "南侧横向主路", RoadType.SECONDARY_ROAD],
+    ["RD-005", "运营中心接入道路", RoadType.ACCESS_ROAD],
   ];
 
   return definitions.map(([roadId, roadName, roadType]) => createRoad({
@@ -128,6 +129,8 @@ function createRoadNodes(map) {
     ["RN-010", 12, 39, NodeType.ROAD_ENDPOINT],
     ["RN-011", 28, 0, NodeType.ROAD_ENDPOINT],
     ["RN-012", 28, 39, NodeType.ROAD_ENDPOINT],
+    ["RN-013", 35, 25, NodeType.INTERSECTION],
+    ["RN-014", 35, 31, NodeType.ENTRANCE_EXIT],
   ];
 
   return definitions.map(([roadNodeId, row, col, nodeType]) => createRoadNode({
@@ -151,13 +154,15 @@ function createRoadSegments(map, roadNodes) {
     ["RS-003", "RD-001", "RN-003", "RN-004", rangeCells({ col: 10, rowStart: 28, rowEnd: 39 })],
     ["RS-004", "RD-002", "RN-005", "RN-006", rangeCells({ col: 25, rowStart: 0, rowEnd: 12 })],
     ["RS-005", "RD-002", "RN-006", "RN-007", rangeCells({ col: 25, rowStart: 12, rowEnd: 28 })],
-    ["RS-006", "RD-002", "RN-007", "RN-008", rangeCells({ col: 25, rowStart: 28, rowEnd: 39 })],
+    ["RS-006", "RD-002", "RN-007", "RN-013", rangeCells({ col: 25, rowStart: 28, rowEnd: 35 })],
     ["RS-007", "RD-003", "RN-009", "RN-002", rangeCells({ row: 12, colStart: 0, colEnd: 10 })],
     ["RS-008", "RD-003", "RN-002", "RN-006", rangeCells({ row: 12, colStart: 10, colEnd: 25 })],
     ["RS-009", "RD-003", "RN-006", "RN-010", rangeCells({ row: 12, colStart: 25, colEnd: 39 })],
     ["RS-010", "RD-004", "RN-011", "RN-003", rangeCells({ row: 28, colStart: 0, colEnd: 10 })],
     ["RS-011", "RD-004", "RN-003", "RN-007", rangeCells({ row: 28, colStart: 10, colEnd: 25 })],
     ["RS-012", "RD-004", "RN-007", "RN-012", rangeCells({ row: 28, colStart: 25, colEnd: 39 })],
+    ["RS-013", "RD-002", "RN-013", "RN-008", rangeCells({ col: 25, rowStart: 35, rowEnd: 39 })],
+    ["RS-014", "RD-005", "RN-013", "RN-014", rangeCells({ row: 35, colStart: 25, colEnd: 31 })],
   ];
 
   return definitions.map(([segmentId, roadId, startNodeId, endNodeId, cellIds]) => {
@@ -240,7 +245,7 @@ function createServiceAreas(map) {
     ["SA-003", "商业中心北侧上下客区", ["RS-008"], rangeCells({ row: 12, colStart: 17, colEnd: 20 }), serviceDefaults],
     ["SA-004", "医院学校东侧上下客区", ["RS-010"], rangeCells({ row: 28, colStart: 5, colEnd: 8 }), serviceDefaults],
     ["SA-005", "地铁站南侧接驳区", ["RS-012"], rangeCells({ row: 28, colStart: 26, colEnd: 27 }), serviceDefaults],
-    ["SA-006", "东侧主路车辆待命区", ["RS-006"], rangeCells({ col: 25, rowStart: 30, rowEnd: 33 }), stageDefaults],
+    ["SA-006", "运营中心接入道路待命区", ["RS-014"], rangeCells({ row: 35, colStart: 28, colEnd: 30 }), stageDefaults],
   ];
 
   return definitions.map(([serviceAreaId, name, segmentIds, coveredCellIds, defaults]) => createServiceArea({
@@ -300,7 +305,7 @@ function createRoutes(map, roadSegments) {
     ["RT-002", "C-06-10", "C-12-18", ["RS-001", "RS-008"], ["SA-001", "SA-003"], "住宅区到商业中心"],
     ["RT-003", "C-12-18", "C-28-26", ["RS-008", "RS-005", "RS-012"], ["SA-003", "SA-005"], "商业中心到地铁接驳区"],
     ["RT-004", "C-28-06", "C-28-26", ["RS-010", "RS-011", "RS-012"], ["SA-004", "SA-005"], "医院学校区到地铁接驳区"],
-    ["RT-005", "C-31-25", "C-06-25", ["RS-006", "RS-005", "RS-004"], ["SA-006", "SA-002"], "待命区到办公区"],
+    ["RT-005", "C-35-29", "C-06-25", ["RS-014", "RS-006", "RS-005", "RS-004"], ["SA-006", "SA-002"], "运营中心待命区到办公区"],
   ];
 
   return definitions.map(([routeId, startCellId, endCellId, segmentSequence, serviceAreaIds, routeName]) => {

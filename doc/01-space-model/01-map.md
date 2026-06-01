@@ -119,6 +119,8 @@ Cell 详情至少应包含：
 | RoadNode 关联    | 道路节点      | 如果该 Cell 存在 RoadNode，展示 RoadNode 及其连接关系    |
 | ServiceArea 关联 | 服务区域      | 如果该 Cell 被 ServiceArea 覆盖，展示服务能力           |
 | Place 关联       | 地点 / 需求来源 | 如果该 Cell 为 PLACE，展示对应 Place                |
+| OpsCenter 关联   | 关联运营中心    | 如果该 Cell 被 OpsCenter 覆盖，展示供给侧运营设施          |
+| Robotaxi 关联    | 停放 Robotaxi | 如果车辆当前位于该 Cell，展示车辆列表                     |
 
 ### Cell 聚合展示字段
 
@@ -133,6 +135,9 @@ Cell 详情至少应包含：
 |related_road_nodes|道路节点|位于该 Cell 的 RoadNode 列表|
 |related_service_areas|服务区域|覆盖该 Cell 的 ServiceArea 列表|
 |related_places|地点 / 需求来源|覆盖该 Cell 的 Place 列表|
+|related_ops_centers|关联运营中心|覆盖该 Cell 的 OpsCenter 列表|
+|related_robotaxis|停放 Robotaxi|当前位于该 Cell 的 Robotaxi 列表|
+|operational_space_coverage|运营空间覆盖|说明该 Cell 是否被运营中心等运营设施覆盖|
 |service_eligibility|服务能力判断|说明该 Cell 是否可作为服务区域，以及原因|
 
 展示原则：
@@ -142,6 +147,8 @@ Cell 详情至少应包含：
 3. PLACE Cell 应能说明“需求来源在哪里，以及附近服务区域是什么”。
 4. RoadNode 所在 Cell 应明确说明其道路拓扑意义，例如道路端点、T 型路口或十字路口。
 5. 如果 Cell 不属于某类对象，应明确显示为空或无关联，避免语义模糊。
+6. Cell 的 `base_cell_type` 继续表达底层空间事实，但前端必须显示对应中文值。
+7. 当基础空间类型为 `EMPTY` 且 Cell 被 OpsCenter 覆盖时，前端应同时显示“空白区域”和“运营中心”覆盖语义，避免运营人员误认为该 Cell 没有用途。
 
 ---
 

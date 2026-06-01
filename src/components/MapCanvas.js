@@ -36,6 +36,7 @@ export function renderMapCanvas({ data, selected, onSelect }) {
 
   svg.append(renderCells(data.cells, selected, highlightedCells, onSelect));
   svg.append(renderServiceAreas(data.serviceAreas, selected));
+  svg.append(renderOpsCenters(data.opsCenters || [], selected));
   svg.append(renderRoadNodes(data.roadNodes, selected));
   svg.append(renderMapBoundary(map, selected, onSelect));
 
@@ -101,6 +102,27 @@ function renderRoadNodes(roadNodes, selected) {
   return group;
 }
 
+function renderOpsCenters(opsCenters, selected) {
+  const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  group.setAttribute("class", "ops-center-layer");
+
+  opsCenters.forEach((opsCenter) => {
+    opsCenter.cell_ids.forEach((cellId) => {
+      const { row, col } = parseCellId(cellId);
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", col + 0.06);
+      rect.setAttribute("y", row + 0.06);
+      rect.setAttribute("width", 0.88);
+      rect.setAttribute("height", 0.88);
+      rect.setAttribute("class", "ops-center-cell");
+      rect.dataset.active = selected?.type === "opsCenter" && selected?.id === opsCenter.ops_center_id ? "true" : "false";
+      group.append(rect);
+    });
+  });
+
+  return group;
+}
+
 function renderMapBoundary(map, selected) {
   const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
   rect.setAttribute("x", 0);
@@ -121,6 +143,7 @@ function renderLegend() {
     ["cell-road", "道路网格"],
     ["cell-place", "地点网格"],
     ["service-area-swatch", "服务区域"],
+    ["ops-center-swatch", "运营中心"],
     ["route-swatch", "选中路径"],
     ["road-node-swatch", "道路节点"],
   ].forEach(([className, label]) => {

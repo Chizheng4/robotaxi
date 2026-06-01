@@ -120,6 +120,7 @@ RoadSegment
 |Cell|ServiceArea 覆盖 ROAD Cell|
 |Zone|Zone 可以包含 ServiceArea|
 |Route|Route 可以经过 ServiceArea 进行调度与路径规划|
+|OpsCenter|OpsCenter 可以关联附近道路上的 ServiceArea，作为车辆出入和待命接口|
 
 ---
 
@@ -146,6 +147,8 @@ RoadSegment
 10. 当某个 RoadNode 同时连接两个及以上 RoadSegment 时，该 RoadNode 所在 Cell 应视为路口或道路连接点，不得用于上车、下车、等待、短停或待命；
 
 11. ServiceArea 应覆盖 RoadSegment 上非 RoadNode 的 ROAD Cell，以表达“可通行道路上的可服务位置”。
+
+12. 当 ServiceArea 作为 OpsCenter 的车辆出入和待命接口时，应位于 OpsCenter 附近道路，但不承担 OpsCenter 内部全部车辆的停放容量。
 
 
 ---

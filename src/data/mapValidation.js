@@ -1,4 +1,4 @@
-import { CellType } from "../domain/types.js?v=20260531-dict";
+import { CellType } from "../domain/types.js?v=20260601-ops";
 
 export function validateMapSpace(data) {
   const cellById = new Map(data.cells.map((cell) => [cell.cell_id, cell]));
@@ -15,46 +15,46 @@ export function validateMapSpace(data) {
   const zoneById = new Map(data.zones.map((zone) => [zone.zone_id, zone]));
 
   return [
-    check("CELL_COUNT", "Cell 总数必须为 1600", data.cells.length === 1600, `当前 ${data.cells.length} 个 Cell`),
-    check("CELL_TYPE_EXCLUSIVE", "每个 Cell 只能有一个 base_cell_type", data.cells.every((cell) => typeof cell.base_cell_type === "string")),
+    check("CELL_COUNT", "网格单元总数必须为 1600", data.cells.length === 1600, `当前 ${data.cells.length} 个网格单元`),
+    check("CELL_TYPE_EXCLUSIVE", "每个网格单元只能有一个基础空间类型", data.cells.every((cell) => typeof cell.base_cell_type === "string")),
     check(
       "ROAD_SEGMENT_ROAD_REF",
-      "每个 RoadSegment 必须属于 Road",
+      "每个道路片段必须属于有效道路",
       data.roadSegments.every((segment) => roadById.has(segment.road_id)),
     ),
     check(
       "ROAD_SEGMENT_NODE_REF",
-      "每个 RoadSegment 必须有有效 start_node_id 和 end_node_id",
+      "每个道路片段必须有有效起点和终点道路节点",
       data.roadSegments.every((segment) => nodeById.has(segment.start_node_id) && nodeById.has(segment.end_node_id)),
     ),
     check(
       "ROAD_SEGMENT_CELLS_ROAD",
-      "RoadSegment 覆盖 Cell 必须是 ROAD",
+      "道路片段覆盖的网格必须是道路区域",
       data.roadSegments.every((segment) => segment.cell_ids.every((cellId) => cellById.get(cellId)?.base_cell_type === CellType.ROAD)),
     ),
     check(
       "ROAD_SEGMENT_CELLS_CONTINUOUS",
-      "RoadSegment 覆盖 Cell 应连续",
+      "道路片段覆盖的网格应连续",
       data.roadSegments.every((segment) => areCellsContinuous(segment.cell_ids, cellById)),
     ),
     check(
       "PLACE_CELLS_PLACE",
-      "Place 覆盖 Cell 必须是 PLACE",
+      "地点覆盖的网格必须是地点区域",
       data.places.every((place) => place.cell_ids.every((cellId) => cellById.get(cellId)?.base_cell_type === CellType.PLACE)),
     ),
     check(
       "PLACE_HAS_SERVICE_AREA",
-      "Place 必须至少关联一个附近 ServiceArea",
+      "地点必须至少关联一个附近服务区",
       data.places.every((place) => place.nearby_service_area_ids.length > 0),
     ),
     check(
       "SERVICE_AREA_CELLS_ROAD",
-      "ServiceArea 覆盖 Cell 必须是 ROAD",
+      "服务区覆盖的网格必须是道路区域",
       data.serviceAreas.every((area) => area.covered_cell_ids.every((cellId) => cellById.get(cellId)?.base_cell_type === CellType.ROAD)),
     ),
     check(
       "SERVICE_AREA_SEGMENT_REF",
-      "ServiceArea 必须关联 RoadSegment",
+      "服务区必须关联道路片段",
       data.serviceAreas.every((area) => area.segment_ids.length > 0 && area.segment_ids.every((segmentId) => segmentById.has(segmentId))),
     ),
     check(
@@ -67,32 +67,32 @@ export function validateMapSpace(data) {
     ),
     check(
       "SERVICE_AREA_NO_CHARGE",
-      "ServiceArea 不得定义 can_charge",
+      "服务区不得定义充电能力",
       data.serviceAreas.every((area) => !("can_charge" in area.customer_capabilities) && !("can_charge" in area.vehicle_capabilities)),
     ),
     check(
       "SERVICE_AREA_NO_ROAD_NODE_CELL",
-      "ServiceArea 不得覆盖 RoadNode 所在 Cell",
+      "服务区不得覆盖道路节点所在网格",
       data.serviceAreas.every((area) => area.covered_cell_ids.every((cellId) => !roadNodeCellIds.has(cellId))),
     ),
     check(
       "SERVICE_AREA_NO_JUNCTION_CELL",
-      "ServiceArea 不得覆盖连接两个及以上 RoadSegment 的路口 Cell",
+      "服务区不得覆盖连接两个及以上道路片段的路口网格",
       data.serviceAreas.every((area) => area.covered_cell_ids.every((cellId) => !junctionNodeCellIds.has(cellId))),
     ),
     check(
       "ZONE_PARENT_REF",
-      "子 Zone 必须属于父 Zone",
+      "子运营区域必须属于父运营区域",
       data.zones.every((zone) => !zone.parent_zone_id || zoneById.has(zone.parent_zone_id)),
     ),
     check(
       "ZONE_CHILD_WITHIN_PARENT",
-      "子 Zone 覆盖范围不得超出父 Zone",
+      "子运营区域覆盖范围不得超出父运营区域",
       data.zones.every((zone) => !zone.parent_zone_id || isSubset(zone.cell_ids, zoneById.get(zone.parent_zone_id).cell_ids)),
     ),
     check(
       "ROUTE_ENDPOINTS_ROAD",
-      "Route 起终点必须是 ROAD Cell",
+      "路径方案起终点必须是道路区域网格",
       data.routes.every((route) =>
         cellById.get(route.start_cell_id)?.base_cell_type === CellType.ROAD &&
         cellById.get(route.end_cell_id)?.base_cell_type === CellType.ROAD
@@ -100,12 +100,12 @@ export function validateMapSpace(data) {
     ),
     check(
       "ROUTE_SEGMENTS_CONTINUOUS",
-      "Route road_segment_sequence 必须连续",
+      "路径方案的道路片段序列必须连续",
       data.routes.every((route) => isSegmentSequenceContinuous(route.road_segment_sequence, segmentById)),
     ),
     check(
       "ROUTE_SERVICE_ENDPOINTS",
-      "Route 起终点如果用于服务，应位于 ServiceArea 覆盖范围内",
+      "路径方案起终点如果用于服务，应位于服务区覆盖范围内",
       data.routes.every((route) => serviceCellIds.has(route.start_cell_id) && serviceCellIds.has(route.end_cell_id)),
     ),
   ];

@@ -154,7 +154,7 @@ col = 0 ~ 39
 
 - 点击任意 Cell 时，右侧详情栏必须展示 Cell 自身信息；
 
-- 同时聚合展示该 Cell 关联的 Map、Zone、Road、RoadSegment、RoadNode、ServiceArea、Place 等必要上下文；
+- 同时聚合展示该 Cell 关联的 Map、Zone、Road、RoadSegment、RoadNode、ServiceArea、Place，以及后续接入的 OpsCenter、Robotaxi 等必要上下文；
 
 - 如果某类对象无关联，应明确显示无关联；
 
@@ -164,7 +164,7 @@ col = 0 ~ 39
 
 ## 6. Road 初始化
 
-第一版生成 4 条 Road。
+第一版生成 5 条 Road。
 
 |road_id|road_name|road_type|
 |---|---|---|
@@ -172,12 +172,13 @@ col = 0 ~ 39
 |RD-002|东侧纵向主路|MAIN_ROAD|
 |RD-003|北侧横向主路|MAIN_ROAD|
 |RD-004|南侧横向主路|SECONDARY_ROAD|
+|RD-005|运营中心接入道路|ACCESS_ROAD|
 
 ---
 
 ## 7. RoadNode 初始化
 
-第一版生成 12 个 RoadNode。
+第一版生成 14 个 RoadNode。
 
 |road_node_id|row|col|node_type|
 |---|---|---|---|
@@ -193,6 +194,8 @@ col = 0 ~ 39
 |RN-010|12|39|ROAD_ENDPOINT|
 |RN-011|28|0|ROAD_ENDPOINT|
 |RN-012|28|39|ROAD_ENDPOINT|
+|RN-013|35|25|INTERSECTION|
+|RN-014|35|31|ENTRANCE_EXIT|
 
 所有 RoadNode 均属于：
 
@@ -215,7 +218,7 @@ RoadNode 所在 Cell 规则：
 
 ## 8. RoadSegment 初始化
 
-第一版生成 12 条 RoadSegment。
+第一版生成 14 条 RoadSegment。
 
 |road_segment_id|road_id|start_node_id|end_node_id|覆盖 Cell 规则|
 |---|---|---|---|---|
@@ -224,13 +227,15 @@ RoadNode 所在 Cell 规则：
 |RS-003|RD-001|RN-003|RN-004|col=10, row=28~39|
 |RS-004|RD-002|RN-005|RN-006|col=25, row=0~12|
 |RS-005|RD-002|RN-006|RN-007|col=25, row=12~28|
-|RS-006|RD-002|RN-007|RN-008|col=25, row=28~39|
+|RS-006|RD-002|RN-007|RN-013|col=25, row=28~35|
 |RS-007|RD-003|RN-009|RN-002|row=12, col=0~10|
 |RS-008|RD-003|RN-002|RN-006|row=12, col=10~25|
 |RS-009|RD-003|RN-006|RN-010|row=12, col=25~39|
 |RS-010|RD-004|RN-011|RN-003|row=28, col=0~10|
 |RS-011|RD-004|RN-003|RN-007|row=28, col=10~25|
 |RS-012|RD-004|RN-007|RN-012|row=28, col=25~39|
+|RS-013|RD-002|RN-013|RN-008|col=25, row=35~39|
+|RS-014|RD-005|RN-013|RN-014|row=35, col=25~31|
 
 所有 RoadSegment 默认：
 
@@ -290,7 +295,7 @@ Place 不应覆盖 ROAD Cell。
 |SA-003|商业中心北侧上下客区|RS-008|row=12, col=17~20|商业中心上下车|
 |SA-004|医院学校东侧上下客区|RS-010|row=28, col=5~8|医院学校上下车|
 |SA-005|地铁站南侧接驳区|RS-012|row=28, col=26~27|地铁接驳|
-|SA-006|东侧主路车辆待命区|RS-006|col=25, row=30~33|车辆待命|
+|SA-006|运营中心接入道路待命区|RS-014|row=35, col=28~30|运营中心车辆出入与待命|
 
 ServiceArea 只能覆盖 ROAD Cell。
 
@@ -354,6 +359,8 @@ ServiceArea 覆盖限制：
 
 - ServiceArea 是 RoadSegment 上的服务能力覆盖层。
 
+- `SA-006` 位于 Map 右下角运营中心附近的接入道路，不承担运营中心内全部车辆的停放容量。
+
 
 ---
 
@@ -398,7 +405,7 @@ Route 起终点必须是 ROAD Cell。
 |RT-002|C-06-10|C-12-18|RS-001 → RS-008|住宅区到商业中心|
 |RT-003|C-12-18|C-28-26|RS-008 → RS-005 → RS-012|商业中心到地铁接驳区|
 |RT-004|C-28-06|C-28-26|RS-010 → RS-011 → RS-012|医院学校区到地铁接驳区|
-|RT-005|C-31-25|C-06-25|RS-006 → RS-005 → RS-004|待命区到办公区|
+|RT-005|C-35-29|C-06-25|RS-014 → RS-006 → RS-005 → RS-004|运营中心待命区到办公区|
 
 Route 规则：
 

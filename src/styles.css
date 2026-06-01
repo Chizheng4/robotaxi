@@ -11,6 +11,7 @@
   --cell-place: #f8e1a6;
   --cell-blocked: #334155;
   --service-area: #14b8a6;
+  --ops-center: #a855f7;
   --route: #ef4444;
   --road-node: #1d4ed8;
 }
@@ -69,26 +70,85 @@ button {
 
 .platform-menu {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
+.platform-menu-group {
+  display: grid;
+  gap: 3px;
+}
+
+.platform-menu-toggle,
 .platform-menu-item {
   width: 100%;
-  min-height: 40px;
-  padding: 9px 10px;
+  min-height: 36px;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: #2f3a47;
+  color: #344256;
   background: transparent;
+  font-size: 14px;
+  line-height: 1.35;
   text-align: left;
   cursor: pointer;
 }
 
+.platform-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  font-weight: 700;
+}
+
+.platform-menu-chevron {
+  color: #7a8899;
+  font-size: 19px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 140ms ease;
+}
+
+.platform-menu-toggle[aria-expanded="true"] .platform-menu-chevron {
+  transform: rotate(90deg);
+}
+
+.platform-menu-item {
+  padding: 8px 10px;
+  font-weight: 600;
+}
+
+.platform-menu-child {
+  min-height: 34px;
+  padding: 7px 10px 7px 24px;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  color: #536174;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.platform-menu-toggle:hover,
+.platform-menu-toggle[data-active="true"],
 .platform-menu-item:hover,
 .platform-menu-item[data-active="true"] {
-  border-color: var(--accent);
   color: #174ea6;
   background: #eef4ff;
+}
+
+.platform-menu-toggle[data-active="true"] {
+  font-weight: 800;
+}
+
+.platform-menu-child[data-active="true"] {
+  border-left-color: var(--accent);
+  color: #174ea6;
+  background: #e8f0ff;
+  font-weight: 750;
+}
+
+.platform-menu-item:not(.platform-menu-child)[data-active="true"] {
+  border-color: var(--accent);
   font-weight: 750;
 }
 
@@ -289,6 +349,18 @@ button {
   stroke-width: 0.12;
 }
 
+.ops-center-cell {
+  fill: rgba(168, 85, 247, 0.84);
+  stroke: #7e22ce;
+  stroke-width: 0.06;
+  pointer-events: none;
+}
+
+.ops-center-cell[data-active="true"] {
+  fill: #c084fc;
+  stroke-width: 0.14;
+}
+
 .road-node {
   fill: #fff;
   stroke: var(--road-node);
@@ -316,6 +388,10 @@ button {
 
 .legend-dot.service-area-swatch {
   background: var(--service-area);
+}
+
+.legend-dot.ops-center-swatch {
+  background: var(--ops-center);
 }
 
 .legend-dot.route-swatch {

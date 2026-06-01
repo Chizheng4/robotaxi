@@ -1,13 +1,21 @@
-import { renderMapCanvas } from "./components/MapCanvas.js?v=20260531-dict";
-import { renderObjectDetailPanel } from "./components/ObjectDetailPanel.js?v=20260531-dict";
-import { renderPlatformNav } from "./components/PlatformNav.js?v=20260531-dict";
-import { renderRecordTable } from "./components/RecordTable.js?v=20260531-dict";
-import { createCellContext } from "./data/cellContext.js?v=20260531-dict";
-import { initializeMapSpace } from "./data/mapInitialization.js?v=20260531-dict";
-import { validateMapSpace } from "./data/mapValidation.js?v=20260531-dict";
+import { renderMapCanvas } from "./components/MapCanvas.js?v=20260601-ops";
+import { renderObjectDetailPanel } from "./components/ObjectDetailPanel.js?v=20260601-values";
+import { renderPlatformNav } from "./components/PlatformNav.js?v=20260601-menu";
+import { renderRecordTable } from "./components/RecordTable.js?v=20260601-values";
+import { createCellContext } from "./data/cellContext.js?v=20260601-values";
+import { initializeMapSpace } from "./data/mapInitialization.js?v=20260601-ops";
+import { validateMapSpace } from "./data/mapValidation.js?v=20260601-values";
+import { initializeOperationsCenter } from "./data/operationsCenterInitialization.js?v=20260601-ops";
+import { validateOperationsCenter } from "./data/operationsCenterValidation.js?v=20260601-values";
 
-const data = initializeMapSpace();
-const validations = validateMapSpace(data);
+const data = {
+  ...initializeMapSpace(),
+  ...initializeOperationsCenter(),
+};
+const validations = [
+  ...validateMapSpace(data),
+  ...validateOperationsCenter(data),
+];
 const app = document.querySelector("#app");
 
 let activePage = "console";
@@ -38,6 +46,8 @@ function getSelectedObject() {
     serviceArea: data.serviceAreas,
     zone: data.zones,
     route: data.routes,
+    opsCenter: data.opsCenters,
+    robotaxi: data.robotaxis,
     validation: validations,
   };
 
@@ -83,6 +93,8 @@ function rowsByPage() {
     serviceAreas: data.serviceAreas,
     zones: data.zones,
     routes: data.routes,
+    opsCenters: data.opsCenters,
+    robotaxis: data.robotaxis,
     validations,
   };
 }
@@ -98,6 +110,8 @@ function getObjectId(type, item) {
     serviceArea: "service_area_id",
     zone: "zone_id",
     route: "route_id",
+    opsCenter: "ops_center_id",
+    robotaxi: "robotaxi_id",
     validation: "rule_id",
   };
 
