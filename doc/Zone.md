@@ -1,4 +1,4 @@
-> 历史版本说明：本文档属于第一版 `Zone / OperatingLocation / Route` 原型文档，仅用于历史对比和回退参考。新版空间 Map 模型请以 `00-space-model-overview.md.md`、`01-map.md` 到 `08-route.md` 以及 `initialization-map.md` 为准。
+> 历史版本说明：本文档属于第一版 `Zone / OperatingLocation / Route` 原型文档，仅用于历史对比和回退参考。新版空间 Map 模型请以 `01-space-model/00-space-model-overview.md`、`01-space-model/01-map.md` 到 `01-space-model/08-route.md` 以及 `01-space-model/initialization-map.md` 为准。
 
 ## 1. 业务含义
 ZONE是运营区域， 是 Robotaxi 最小运营闭环中的空间经营单元。

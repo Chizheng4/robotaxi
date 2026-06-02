@@ -7,7 +7,7 @@
 Codex 应基于以下文档理解对象定义：
 
 ```text
-00-space-model-overview.md.md
+00-space-model-overview.md
 01-map.md
 02-road.md
 03-roadnode.md
@@ -261,7 +261,7 @@ RoadSegment 覆盖的 Cell 应更新为：
 
 ## 9. Place 初始化
 
-第一版生成 5 个 Place。
+第一版生成 6 个 Place。
 
 |place_id|place_name|place_type|覆盖 Cell 范围|demand_weight|peak_pattern|
 |---|---|---|---|---|---|
@@ -270,6 +270,7 @@ RoadSegment 覆盖的 Cell 应更新为：
 |P-003|商业中心|COMMERCIAL|row=15~23, col=15~23|0.75|ALL_DAY_STABLE|
 |P-004|医院学校片区|HOSPITAL|row=30~37, col=2~9|0.55|ALL_DAY_STABLE|
 |P-005|地铁接驳点|METRO_STATION|row=24~27, col=27~31|0.8|ALL_DAY_STABLE|
+|P-006|最小运营测试中心|OPS_CENTER|C-34-32、C-34-33、C-35-32、C-35-33|0.2|MORNING_OUTBOUND|
 
 Place 覆盖的 Cell 应更新为：
 
@@ -281,6 +282,20 @@ Place 覆盖的 Cell 应更新为：
 ```
 
 Place 不应覆盖 ROAD Cell。
+
+`P-006` 是特殊 Place：
+
+- 与 `OC-001` 使用相同 Cell；
+
+- 表达运营中心的地图地点语义；
+
+- 可以产生员工通勤、访客等人员出行需求；
+
+- 关联附近服务区 `SA-006`；
+
+- 地图中应使用浅紫色展示，与其他 Place 类型区分。
+
+不同 `place_type` 应使用不同颜色展示，便于运营人员快速识别住宅、办公、商业、医院、地铁站和运营中心等空间用途。颜色以简洁、柔和、易区分为原则。
 
 ---
 

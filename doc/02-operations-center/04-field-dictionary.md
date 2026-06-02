@@ -2,7 +2,7 @@
 
 ## 1. 目的
 
-本文档集中维护 OpsCenter 与 Robotaxi 的字段英文名和中文显示名。代码与初始化数据使用英文字段名，前端表格和详情栏优先显示中文名。
+本文档集中维护 OpsCenter、Robotaxi 与 Worker 的字段英文名和中文显示名。代码与初始化数据使用英文字段名，前端表格和详情栏优先显示中文名。
 
 ---
 
@@ -12,6 +12,7 @@
 |---|---|---|
 |ops_center_id|运营中心编号|运营中心唯一编号|
 |ops_center_name|运营中心名称|运营中心名称|
+|place_id|地点编号|关联的 OPS_CENTER 类型 Place|
 |map_id|地图编号|所属 Map|
 |cell_ids|覆盖网格列表|运营中心覆盖 Cell|
 |service_area_ids|服务区域列表|附近车辆出入和待命 ServiceArea|
@@ -49,7 +50,22 @@
 
 ---
 
-## 4. 前端枚举值字典
+## 4. Worker：运营中心作业人员
+
+|属性英文名|中文名|含义|
+|---|---|---|
+|worker_id|作业人员编号|Worker 唯一编号|
+|ops_center_id|运营中心编号|所属 OpsCenter|
+|worker_name|作业人员名称|Worker 名称|
+|worker_role|作业角色|运营中心内部作业角色|
+|worker_status|作业人员状态|当前是否可被分配任务|
+|time_per_robotaxi|单车处理时间|处理一台 Robotaxi 所需时间单位|
+|max_robotaxi_per_day|单日最大处理量|每天最多处理 Robotaxi 数量|
+|current_task_id|当前任务|当前执行任务，可为空|
+
+---
+
+## 5. 前端枚举值字典
 
 |英文字段值|中文显示值|
 |---|---|
@@ -67,13 +83,20 @@
 |PARKED|停车中|
 |STOPPED|临停中|
 |MOVING|行驶中|
+|INSPECTION_OPERATOR|检查人员|
+|CLEANING_OPERATOR|清洁人员|
+|CHARGING_OPERATOR|充电协助人员|
+|MAINTENANCE_OPERATOR|维修人员|
+|IDLE|空闲|
+|BUSY|忙碌|
+|OFF_DUTY|非工作中|
 
 ---
 
-## 5. 前端显示规则
+## 6. 前端显示规则
 
-1. OpsCenter 在地图中使用独立颜色展示，不与 Place 混淆；
-2. 点击 OpsCenter 或 Robotaxi 记录时，右侧详情栏显示对应中文字段名；
+1. `OPS_CENTER` 类型 Place 在地图中使用浅紫色展示，与其他 Place 类型区分；
+2. 点击 OpsCenter、Robotaxi 或 Worker 记录时，右侧详情栏显示对应中文字段名；
 3. 点击 OpsCenter 覆盖 Cell 时，Cell 聚合详情应展示关联运营中心和当前停放 Robotaxi；
 4. 不在本字段字典中增加 Task、Demand、Order、Dispatch、Trip、Metric 字段。
 5. 前端应显示中文业务含义，不直接向运营人员暴露英文状态代码。
