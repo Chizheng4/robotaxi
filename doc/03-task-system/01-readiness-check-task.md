@@ -1,107 +1,308 @@
-# ReadinessCheckTask：运营准入检查任务单
+# ReadinessCheckTask：运营准入任务单
 
 ## 1. 定义
 
-ReadinessCheckTask 是用于确认 Robotaxi 是否具备进入运营闭环资格的检查任务单。
+ReadinessCheckTask 是用于确认单台 Robotaxi 是否具备进入运营闭环资格的检查任务单。
+
+```text
+ReadinessCheckTask = 单台 Robotaxi 的运营准入任务单
+```
 
 它发生在 Robotaxi 到达 OpsCenter 后、正式投放到运营区域之前。
 
+---
+
+## 2. 核心关系
+
 ```text
-ReadinessCheckTask = Robotaxi 从车辆资产转化为可运营车辆的准入检查单
+1 个 ReadinessCheckTask 对应 1 台 Robotaxi
+1 个 ReadinessCheckTask 分配 1 个 Worker
+```
+
+不允许：
+
+```text
+1 个任务单包含多台 Robotaxi
+1 个任务单分配多个 Worker
+```
+
+原因：
+
+- 检查结果只对应单台 Robotaxi；
+    
+- 问题类型只对应单台 Robotaxi；
+    
+- Robotaxi 状态更新必须清晰；
+    
+- Worker 执行责任必须清晰。
+    
+
+---
+
+## 3. 触发方式
+
+ReadinessCheckTask 支持两种触发方式。
+
+|触发方式|含义|
+|---|---|
+|AUTO|系统每 10 分钟自动触发|
+|MANUAL|人工点击按钮触发|
+
+两种触发方式共用同一套后续逻辑：
+
+```text
+查询候选 Robotaxi
+↓
+创建任务单
+↓
+分配 Worker
+↓
+Worker 检查
+↓
+提交检查结果
+↓
+更新 Robotaxi 状态
+↓
+记录消息
 ```
 
 ---
 
-## 2. 业务场景
+## 4. 创建条件
 
-Robotaxi 到达 OpsCenter 后，初始状态为：
-
-```text
-availability_status = PENDING_INSPECTION
-```
-
-系统需要确认该 Robotaxi 是否满足运营条件。
-
-检查通过后，Robotaxi 可进入运营投放流程。
-检查不通过后，Robotaxi 进入不可运营状态，并触发后续充电、清洁或维修需求。
-
----
-
-## 3. 触发条件
-
-ReadinessCheckTask 的生成需要满足：
+创建 ReadinessCheckTask 必须满足：
 
 ```text
-存在 availability_status = PENDING_INSPECTION 的 Robotaxi
+Robotaxi.availability_status = PENDING_INSPECTION
 AND
-存在 worker_status = IDLE 的 Worker
+该 Robotaxi 当前不存在未完成的 ReadinessCheckTask
 AND
 OpsCenter.can_inspect_robotaxi = true
 ```
 
 说明：
 
-- Robotaxi 状态是任务触发条件；
-
-- Worker 是任务执行资源；
-
-- OpsCenter 提供检查能力。
-
-
----
-
-## 4. 参与对象
-
-|对象|作用|
-|---|---|
-|Robotaxi|被检查车辆|
-|OpsCenter|检查发生的运营中心|
-|Worker|执行检查的作业人员|
-|Task|承载检查流程和结果|
+- Worker 是否空闲不影响任务创建；
+    
+- 没有空闲 Worker 时，任务停留在 `WAITING_ASSIGNMENT`；
+    
+- Worker 空闲后可继续分配。
+    
 
 ---
 
-## 5. 核心属性
+## 5. 防重复规则
+
+同一台 Robotaxi 同一时间只能存在一张未完成的 ReadinessCheckTask。
+
+未完成状态包括：
+
+```text
+WAITING_ASSIGNMENT
+WAITING_CHECK
+CHECKING
+```
+
+重复触发时不创建新任务，只记录消息：
+
+```text
+ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
+```
+
+---
+
+## 6. 核心属性
 
 |属性|含义|
 |---|---|
 |task_id|任务唯一编号|
 |task_type|固定为 READINESS_CHECK|
-|task_status|任务状态|
+|task_status|当前任务状态|
 |task_priority|默认 NORMAL|
+|trigger_type|AUTO / MANUAL|
 |source_type|固定为 OPS_CENTER|
 |source_id|OpsCenter ID|
 |robotaxi_id|被检查 Robotaxi|
-|worker_id|执行检查 Worker|
+|worker_id|执行 Worker，可为空|
 |ops_center_id|检查所在 OpsCenter|
-|check_result|检查结果|
-|issue_type|问题类型|
+|check_result|检查结果，可为空|
+|issue_type|问题类型，可为空|
+|created_at|创建时间|
+|assigned_at|分配时间|
 |started_at|开始时间|
 |completed_at|完成时间|
 
 ---
 
-## 6. task_status
+## 7. task_status
 
-|task_status|含义|
-|---|---|
-|CREATED|检查任务已创建|
-|ASSIGNED|已分配 Worker|
-|IN_PROGRESS|检查中|
-|COMPLETED|检查完成|
-|CANCELLED|任务取消|
-|FAILED|任务异常失败|
+任务状态应表达：
+
+```text
+当前任务正在等待什么动作
+```
+
+而不是表达：
+
+```text
+上一步已经完成了什么结果
+```
+
+|task_status|含义|下一步动作|
+|---|---|---|
+|WAITING_ASSIGNMENT|等待分配 Worker|分配 Worker|
+|WAITING_CHECK|已分配 Worker，等待开始检查|Worker 开始检查|
+|CHECKING|Worker 正在检查|提交检查结果|
+|COMPLETED|检查已完成|无|
+|CANCELLED|任务已取消|无|
+|FAILED|任务异常失败|人工处理|
 
 说明：
 
 ```text
-task_status 只表达任务生命周期。
+task_status 表达下一步动作。
 check_result 表达检查结果。
 ```
 
 ---
 
-## 7. check_result
+## 8. 状态与功能按钮
+
+前端应根据 task_status 展示可用操作。
+
+|task_status|可用功能|操作人|操作结果|
+|---|---|---|---|
+|WAITING_ASSIGNMENT|分配 Worker|系统 / 运营人员|成功后进入 WAITING_CHECK|
+|WAITING_CHECK|开始检查|Worker|进入 CHECKING|
+|CHECKING|提交检查结果|Worker|进入 COMPLETED|
+|COMPLETED|查看详情|运营人员 / Worker|无状态变化|
+|CANCELLED|查看详情|运营人员|无状态变化|
+|FAILED|查看异常|运营人员|无状态变化|
+
+---
+
+## 9. 功能操作规则
+
+### 9.1 手动触发创建任务
+
+功能按钮：
+
+```text
+生成准入检查任务
+```
+
+操作结果：
+
+|情况|结果|
+|---|---|
+|存在候选 Robotaxi|创建任务|
+|不存在候选 Robotaxi|不创建任务，记录 NO_CANDIDATE_ROBOTAXI|
+|Robotaxi 已有未完成任务|不创建任务，记录 ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK|
+
+---
+
+### 9.2 分配 Worker
+
+适用状态：
+
+```text
+WAITING_ASSIGNMENT
+```
+
+分配条件：
+
+```text
+worker_status = IDLE
+AND
+Worker 属于同一个 OpsCenter
+AND
+Worker.current_task_id = null
+```
+
+成功后：
+
+```text
+Task.task_status = WAITING_CHECK
+Task.worker_id = worker_id
+Worker.worker_status = BUSY
+Worker.current_task_id = task_id
+```
+
+失败时：
+
+```text
+Task.task_status = WAITING_ASSIGNMENT
+```
+
+并记录：
+
+```text
+NO_IDLE_WORKER
+```
+
+---
+
+### 9.3 开始检查
+
+适用状态：
+
+```text
+WAITING_CHECK
+```
+
+操作人：
+
+```text
+已分配 Worker
+```
+
+成功后：
+
+```text
+Task.task_status = CHECKING
+Task.started_at = 当前时间
+```
+
+---
+
+### 9.4 提交检查结果
+
+适用状态：
+
+```text
+CHECKING
+```
+
+操作人：
+
+```text
+已分配 Worker
+```
+
+提交内容：
+
+```text
+check_result = PASSED / FAILED
+```
+
+如果检查不通过，必须填写：
+
+```text
+issue_type
+```
+
+成功后：
+
+```text
+Task.task_status = COMPLETED
+Task.completed_at = 当前时间
+Worker.worker_status = IDLE
+Worker.current_task_id = null
+```
+
+---
+
+## 10. check_result
 
 |check_result|含义|
 |---|---|
@@ -111,15 +312,15 @@ check_result 表达检查结果。
 规则：
 
 - `task_status = COMPLETED` 时，必须有 `check_result`；
-
-- `check_result = PASSED` 时，Robotaxi 可进入运营；
-
+    
+- `check_result = PASSED` 时，Robotaxi 进入可运营；
+    
 - `check_result = FAILED` 时，必须填写 `issue_type`。
-
+    
 
 ---
 
-## 8. issue_type
+## 11. issue_type
 
 |issue_type|含义|
 |---|---|
@@ -133,71 +334,81 @@ check_result 表达检查结果。
 
 ---
 
-## 9. 操作流程
+## 12. 状态反馈
 
-```text
-CREATED
-↓
-ASSIGNED
-↓
-IN_PROGRESS
-↓
-COMPLETED / FAILED / CANCELLED
-```
-
-标准流程：
-
-```text
-系统生成检查任务
-↓
-分配空闲 Worker
-↓
-Worker 开始检查
-↓
-Worker 提交检查结果
-↓
-系统更新 Robotaxi 状态
-↓
-任务完成
-```
-
----
-
-## 10. 状态反馈
-
-### 10.1 检查通过
+### 12.1 检查通过
 
 ```text
 check_result = PASSED
 ↓
 Robotaxi.availability_status = AVAILABLE
-Worker.worker_status = IDLE
 Task.task_status = COMPLETED
+Worker.worker_status = IDLE
+Worker.current_task_id = null
 ```
 
-### 10.2 检查不通过
+### 12.2 检查不通过
 
 ```text
 check_result = FAILED
 ↓
 Robotaxi.availability_status = UNAVAILABLE
 Robotaxi.unavailable_reason = issue_type
-Worker.worker_status = IDLE
 Task.task_status = COMPLETED
+Worker.worker_status = IDLE
+Worker.current_task_id = null
 ```
 
-### 10.3 任务异常失败
+### 12.3 任务异常失败
 
 ```text
 task_status = FAILED
 ↓
 Robotaxi.availability_status 保持 PENDING_INSPECTION
 Worker.worker_status = IDLE
+Worker.current_task_id = null
 ```
 
 ---
 
-## 11. 执行能力约束
+## 13. TaskEventLog
+
+ReadinessCheckTask 全流程需要记录事件消息。
+
+典型 event_type：
+
+|event_type|含义|
+|---|---|
+|AUTO_TRIGGER_STARTED|自动触发开始|
+|MANUAL_TRIGGER_STARTED|手动触发开始|
+|NO_CANDIDATE_ROBOTAXI|没有候选 Robotaxi|
+|TASK_CREATED|任务创建成功|
+|ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK|Robotaxi 已有未完成检查任务|
+|NO_IDLE_WORKER|没有空闲 Worker|
+|WORKER_ASSIGNED|Worker 分配成功|
+|CHECK_STARTED|检查开始|
+|CHECK_SUBMITTED|检查结果已提交|
+|ROBOTAXI_MARKED_AVAILABLE|Robotaxi 标记为可运营|
+|ROBOTAXI_MARKED_UNAVAILABLE|Robotaxi 标记为不可运营|
+|TASK_FAILED|任务异常失败|
+
+基础字段：
+
+|属性|含义|
+|---|---|
+|event_id|事件唯一编号|
+|task_id|关联任务，可为空|
+|robotaxi_id|关联 Robotaxi，可为空|
+|worker_id|关联 Worker，可为空|
+|trigger_type|AUTO / MANUAL，可为空|
+|event_type|事件类型|
+|event_result|SUCCESS / FAILED / SKIPPED|
+|message|可读消息|
+|created_at|发生时间|
+
+---
+
+## 14. Worker 能力约束
 
 第一阶段 Worker 检查能力规则：
 
@@ -209,22 +420,23 @@ max_robotaxi_per_day = 5
 含义：
 
 - 每个 Worker 检查 1 台 Robotaxi 需要 2 个时间单位；
-
+    
 - 每个 Worker 每天最多检查 5 台 Robotaxi；
-
+    
 - 只有 `worker_status = IDLE` 的 Worker 可以被分配任务。
-
+    
 
 ---
 
-## 12. 示例数据
+## 15. 示例数据
 
 ```json
 {
   "task_id": "TASK-RC-001",
   "task_type": "READINESS_CHECK",
-  "task_status": "ASSIGNED",
+  "task_status": "WAITING_CHECK",
   "task_priority": "NORMAL",
+  "trigger_type": "AUTO",
   "source_type": "OPS_CENTER",
   "source_id": "OC-001",
   "robotaxi_id": "RTX-001",
@@ -232,6 +444,8 @@ max_robotaxi_per_day = 5
   "ops_center_id": "OC-001",
   "check_result": null,
   "issue_type": null,
+  "created_at": "2026-01-01T09:00:00",
+  "assigned_at": "2026-01-01T09:00:00",
   "started_at": null,
   "completed_at": null
 }
@@ -239,35 +453,53 @@ max_robotaxi_per_day = 5
 
 ---
 
-## 13. 规则
+## 16. 核心规则
 
 1. ReadinessCheckTask 只能发生在 OpsCenter；
-
-2. 被检查 Robotaxi 必须处于 `PENDING_INSPECTION`；
-
-3. 执行 Worker 必须处于 `IDLE`；
-
-4. Worker 被分配后应变为 `BUSY`；
-
-5. 检查完成后 Worker 应恢复为 `IDLE`；
-
-6. 任务状态和检查结果必须分离；
-
-7. 检查通过后 Robotaxi 变为 `AVAILABLE`；
-
-8. 检查不通过后 Robotaxi 变为 `UNAVAILABLE`；
-
-9. 检查不通过必须记录 `issue_type`；
-
-10. ReadinessCheckTask 不负责维修、清洁或充电，只负责准入判断。
-
+    
+2. 1 个 ReadinessCheckTask 只能对应 1 台 Robotaxi；
+    
+3. 1 个 ReadinessCheckTask 只能分配 1 个 Worker；
+    
+4. 被检查 Robotaxi 必须处于 `PENDING_INSPECTION`；
+    
+5. 同一台 Robotaxi 不得存在多个未完成 ReadinessCheckTask；
+    
+6. Worker 必须属于同一个 OpsCenter；
+    
+7. Worker 分配成功后应变为 `BUSY`；
+    
+8. Worker 检查完成后应恢复为 `IDLE`；
+    
+9. task_status 应表达下一步待执行动作；
+    
+10. check_result 应表达检查结果；
+    
+11. 检查通过后 Robotaxi 变为 `AVAILABLE`；
+    
+12. 检查不通过后 Robotaxi 变为 `UNAVAILABLE`；
+    
+13. 检查不通过必须记录 `issue_type`；
+    
+14. ReadinessCheckTask 不负责维修、清洁或充电；
+    
+15. 自动触发和手动触发共用同一套创建、分配和执行逻辑；
+    
+16. 前端功能按钮必须由 task_status 决定；
+    
+17. 全流程必须记录 TaskEventLog。
+    
 
 ---
 
-## 14. 核心原则
+## 17. 核心原则
 
 ```text
-ReadinessCheckTask = Robotaxi 运营准入判断单
+ReadinessCheckTask = 单台 Robotaxi 的运营准入判断单
 ```
 
-它的核心价值是确认 Robotaxi 是否可以从 OpsCenter 进入运营闭环。
+```text
+任务状态决定当前可用功能。
+操作完成推动任务状态变化。
+检查结果决定 Robotaxi 是否进入运营。
+```
