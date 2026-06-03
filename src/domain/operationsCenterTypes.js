@@ -27,10 +27,27 @@ export const MotionStatus = {
   MOVING: "MOVING",
 };
 
+export const WorkerRole = {
+  INSPECTION_OPERATOR: "INSPECTION_OPERATOR",
+  CLEANING_OPERATOR: "CLEANING_OPERATOR",
+  CHARGING_OPERATOR: "CHARGING_OPERATOR",
+  MAINTENANCE_OPERATOR: "MAINTENANCE_OPERATOR",
+};
+
+export const WorkerStatus = {
+  IDLE: "IDLE",
+  BUSY: "BUSY",
+  OFF_DUTY: "OFF_DUTY",
+};
+
 export function createOpsCenter(opsCenter) {
   return opsCenter;
 }
 
 export function createRobotaxi(robotaxi) {
   return robotaxi;
+}
+
+export function createWorker(worker) {
+  return worker;
 }

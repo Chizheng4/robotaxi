@@ -1,4 +1,4 @@
-import { getDetailTitle, getDisplayValue, getFieldLabel } from "../domain/fieldDictionary.js?v=20260601-values";
+import { getDetailTitle, getDisplayValue, getFieldLabel } from "../domain/fieldDictionary.js?v=20260603-v006";
 
 export function renderObjectDetailPanel({ selectedObject, selectedType }) {
   const root = document.createElement("aside");
@@ -11,7 +11,7 @@ export function renderObjectDetailPanel({ selectedObject, selectedType }) {
   if (!selectedObject) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "请选择地图、网格、道路、地点、服务区、运营区域、路径方案、运营中心或 Robotaxi 查看详情。";
+    empty.textContent = "请选择地图、网格、道路、地点、服务区、运营区域、路径方案、运营中心、作业人员或 Robotaxi 查看详情。";
     root.append(empty);
     return root;
   }

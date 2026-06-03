@@ -4,16 +4,21 @@ import {
   MotionStatus,
   OpsCenterStatus,
   ServiceType,
+  WorkerRole,
+  WorkerStatus,
   createOpsCenter,
   createRobotaxi,
-} from "../domain/operationsCenterTypes.js?v=20260601-ops";
+  createWorker,
+} from "../domain/operationsCenterTypes.js?v=20260603-v006";
 
 const ROBOTAXI_COUNT = 20;
+const WORKER_COUNT = 10;
 
 export function initializeOperationsCenter() {
   const opsCenter = createOpsCenter({
     ops_center_id: "OC-001",
     ops_center_name: "最小运营测试中心",
+    place_id: "P-006",
     map_id: "M-001",
     cell_ids: ["C-34-32", "C-34-33", "C-35-32", "C-35-33"],
     service_area_ids: ["SA-006"],
@@ -31,6 +36,7 @@ export function initializeOperationsCenter() {
   return {
     opsCenters: [opsCenter],
     robotaxis: createRobotaxis(opsCenter),
+    workers: createWorkers(opsCenter),
   };
 }
 
@@ -56,4 +62,17 @@ function createRobotaxis(opsCenter) {
       current_task_id: null,
     });
   });
+}
+
+function createWorkers(opsCenter) {
+  return Array.from({ length: WORKER_COUNT }, (_, index) => createWorker({
+    worker_id: `WK-${String(index + 1).padStart(3, "0")}`,
+    ops_center_id: opsCenter.ops_center_id,
+    worker_name: `Worker-${String(index + 1).padStart(2, "0")}`,
+    worker_role: WorkerRole.INSPECTION_OPERATOR,
+    worker_status: WorkerStatus.IDLE,
+    time_per_robotaxi: 2,
+    max_robotaxi_per_day: 5,
+    current_task_id: null,
+  }));
 }

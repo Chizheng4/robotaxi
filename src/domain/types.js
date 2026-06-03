@@ -41,6 +41,7 @@ export const PlaceType = {
   METRO_STATION: "METRO_STATION",
   HOTEL: "HOTEL",
   TRANSPORT_HUB: "TRANSPORT_HUB",
+  OPS_CENTER: "OPS_CENTER",
 };
 
 export const PeakPattern = {

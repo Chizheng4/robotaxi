@@ -1,4 +1,4 @@
-import { CellType } from "../domain/types.js?v=20260601-ops";
+import { CellType } from "../domain/types.js?v=20260603-v006";
 
 export function validateMapSpace(data) {
   const cellById = new Map(data.cells.map((cell) => [cell.cell_id, cell]));

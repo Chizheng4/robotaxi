@@ -5,7 +5,10 @@ const menuGroups = [
   {
     id: "opsCenter",
     label: "运营中心管理",
-    items: [{ id: "opsCenters", label: "运营中心列表" }],
+    items: [
+      { id: "opsCenters", label: "运营中心列表" },
+      { id: "workers", label: "作业人员列表" },
+    ],
   },
   {
     id: "robotaxi",

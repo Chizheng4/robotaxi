@@ -1,4 +1,4 @@
-import { getDisplayValue, getFieldLabel } from "../domain/fieldDictionary.js?v=20260601-values";
+import { getDisplayValue, getFieldLabel } from "../domain/fieldDictionary.js?v=20260603-v006";
 
 const tableConfig = {
   maps: {
@@ -49,7 +49,12 @@ const tableConfig = {
   opsCenters: {
     title: "运营中心管理",
     description: "运营中心是 Robotaxi 进入运营闭环的供给侧设施。",
-    columns: ["ops_center_id", "ops_center_name", "map_id", "cell_ids", "service_area_ids", "capacity", "ops_center_status"],
+    columns: ["ops_center_id", "ops_center_name", "place_id", "map_id", "cell_ids", "service_area_ids", "capacity", "ops_center_status"],
+  },
+  workers: {
+    title: "作业人员管理",
+    description: "作业人员是运营中心内部的人工运维资源，当前仅初始化检查作业能力。",
+    columns: ["worker_id", "ops_center_id", "worker_name", "worker_role", "worker_status", "time_per_robotaxi", "max_robotaxi_per_day", "current_task_id"],
   },
   robotaxis: {
     title: "Robotaxi 管理",
@@ -145,6 +150,7 @@ function getObjectType(page) {
     zones: "zone",
     routes: "route",
     opsCenters: "opsCenter",
+    workers: "worker",
     robotaxis: "robotaxi",
     validations: "validation",
   };
@@ -164,6 +170,7 @@ function getObjectId(page, row) {
     zones: "zone_id",
     routes: "route_id",
     opsCenters: "ops_center_id",
+    workers: "worker_id",
     robotaxis: "robotaxi_id",
     validations: "rule_id",
   };

@@ -19,7 +19,7 @@ import {
   createRoute,
   createServiceArea,
   createZone,
-} from "../domain/types.js?v=20260601-ops";
+} from "../domain/types.js?v=20260603-v006";
 
 const MAP_ID = "M-001";
 const CELL_SIZE_M = 50;
@@ -193,6 +193,7 @@ function createPlaces(map) {
     ["P-003", "商业中心", PlaceType.COMMERCIAL, rectCells(15, 23, 15, 23), 0.75, PeakPattern.ALL_DAY_STABLE],
     ["P-004", "医院学校片区", PlaceType.HOSPITAL, rectCells(30, 37, 2, 9), 0.55, PeakPattern.ALL_DAY_STABLE],
     ["P-005", "地铁接驳点", PlaceType.METRO_STATION, rectCells(24, 27, 27, 31), 0.8, PeakPattern.ALL_DAY_STABLE],
+    ["P-006", "最小运营测试中心", PlaceType.OPS_CENTER, rectCells(34, 35, 32, 33), 0.2, PeakPattern.MORNING_OUTBOUND],
   ];
 
   return definitions.map(([placeId, placeName, placeType, cellIds, demandWeight, peakPattern]) => createPlace({
@@ -341,6 +342,7 @@ function attachServiceAreasToPlaces(places, serviceAreas) {
     "P-003": ["SA-003"],
     "P-004": ["SA-004"],
     "P-005": ["SA-005"],
+    "P-006": ["SA-006"],
   };
 
   places.forEach((place) => {

@@ -1,4 +1,4 @@
-import { getDisplayValue } from "../domain/fieldDictionary.js?v=20260601-values";
+import { getDisplayValue } from "../domain/fieldDictionary.js?v=20260603-v006";
 
 export function createCellContext(cell, data) {
   const relatedRoadSegments = data.roadSegments.filter((segment) => segment.cell_ids.includes(cell.cell_id));

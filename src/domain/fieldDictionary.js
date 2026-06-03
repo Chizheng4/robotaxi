@@ -10,6 +10,7 @@ export const objectDictionary = {
   route: { label: "路径方案", detailTitle: "路径方案详情" },
   opsCenter: { label: "运营中心", detailTitle: "运营中心详情" },
   robotaxi: { label: "Robotaxi", detailTitle: "Robotaxi 详情" },
+  worker: { label: "作业人员", detailTitle: "作业人员详情" },
   validation: { label: "初始化校验结果", detailTitle: "校验规则详情" },
 };
 
@@ -127,6 +128,12 @@ export const fieldDictionary = {
   current_cell_id: "当前所在网格",
   current_route_id: "当前路径",
   current_task_id: "当前任务",
+  worker_id: "作业人员编号",
+  worker_name: "作业人员名称",
+  worker_role: "作业角色",
+  worker_status: "作业人员状态",
+  time_per_robotaxi: "单车处理时间单位",
+  max_robotaxi_per_day: "单日最大处理车辆数",
   cell_count: "覆盖网格数",
   covered_cell_count: "覆盖网格数",
 };
@@ -164,6 +171,7 @@ export const valueDictionary = {
   METRO_STATION: "地铁站",
   HOTEL: "酒店",
   TRANSPORT_HUB: "交通枢纽",
+  OPS_CENTER: "运营中心",
   MORNING_OUTBOUND: "早高峰流出",
   EVENING_INBOUND: "晚高峰流入",
   EVENING_OUTBOUND: "晚高峰流出",
@@ -200,6 +208,13 @@ export const valueDictionary = {
   PARKED: "停车中",
   STOPPED: "临停中",
   MOVING: "行驶中",
+  INSPECTION_OPERATOR: "检查作业员",
+  CLEANING_OPERATOR: "清洁作业员",
+  CHARGING_OPERATOR: "充电协助员",
+  MAINTENANCE_OPERATOR: "维修协助员",
+  IDLE: "空闲",
+  BUSY: "作业中",
+  OFF_DUTY: "离岗",
   PASS: "通过",
   FAIL: "未通过",
 };

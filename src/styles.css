@@ -10,6 +10,15 @@
   --cell-road: #d8dee8;
   --cell-place: #f8e1a6;
   --cell-blocked: #334155;
+  --place-residential: #d9f2df;
+  --place-office: #dbeafe;
+  --place-commercial: #fde7b8;
+  --place-school: #fef3c7;
+  --place-hospital: #fde2e2;
+  --place-metro-station: #cffafe;
+  --place-hotel: #fce7f3;
+  --place-transport-hub: #e2e8f0;
+  --place-ops-center: #e9d5ff;
   --service-area: #14b8a6;
   --ops-center: #a855f7;
   --route: #ef4444;
@@ -324,6 +333,42 @@ button {
   fill: var(--cell-place);
 }
 
+.cell-place-residential {
+  fill: var(--place-residential);
+}
+
+.cell-place-office {
+  fill: var(--place-office);
+}
+
+.cell-place-commercial {
+  fill: var(--place-commercial);
+}
+
+.cell-place-school {
+  fill: var(--place-school);
+}
+
+.cell-place-hospital {
+  fill: var(--place-hospital);
+}
+
+.cell-place-metro-station {
+  fill: var(--place-metro-station);
+}
+
+.cell-place-hotel {
+  fill: var(--place-hotel);
+}
+
+.cell-place-transport-hub {
+  fill: var(--place-transport-hub);
+}
+
+.cell-place-ops-center {
+  fill: var(--place-ops-center);
+}
+
 .cell-blocked {
   fill: var(--cell-blocked);
 }
@@ -384,6 +429,36 @@ button {
 
 .legend-dot.cell-place {
   background: var(--cell-place);
+}
+
+.legend-dot.place-residential-swatch {
+  background: var(--place-residential);
+  border: 1px solid #9bc7a4;
+}
+
+.legend-dot.place-office-swatch {
+  background: var(--place-office);
+  border: 1px solid #93b4e6;
+}
+
+.legend-dot.place-commercial-swatch {
+  background: var(--place-commercial);
+  border: 1px solid #dfb464;
+}
+
+.legend-dot.place-hospital-swatch {
+  background: var(--place-hospital);
+  border: 1px solid #e7a4a4;
+}
+
+.legend-dot.place-metro-station-swatch {
+  background: var(--place-metro-station);
+  border: 1px solid #67c8d7;
+}
+
+.legend-dot.place-ops-center-swatch {
+  background: var(--place-ops-center);
+  border: 1px solid #b78bf0;
 }
 
 .legend-dot.service-area-swatch {

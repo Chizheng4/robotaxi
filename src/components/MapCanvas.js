@@ -7,6 +7,7 @@ const cellClass = {
 
 export function renderMapCanvas({ data, selected, onSelect }) {
   const map = data.maps[0];
+  const placeTypeByCellId = createPlaceTypeByCellId(data.places);
   const selectedRoute = selected?.type === "route"
     ? data.routes.find((route) => route.route_id === selected.id)
     : null;
@@ -34,7 +35,7 @@ export function renderMapCanvas({ data, selected, onSelect }) {
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", "Robotaxi simulation map");
 
-  svg.append(renderCells(data.cells, selected, highlightedCells, onSelect));
+  svg.append(renderCells(data.cells, selected, highlightedCells, placeTypeByCellId, onSelect));
   svg.append(renderServiceAreas(data.serviceAreas, selected));
   svg.append(renderOpsCenters(data.opsCenters || [], selected));
   svg.append(renderRoadNodes(data.roadNodes, selected));
@@ -44,7 +45,7 @@ export function renderMapCanvas({ data, selected, onSelect }) {
   return root;
 }
 
-function renderCells(cells, selected, highlightedCells, onSelect) {
+function renderCells(cells, selected, highlightedCells, placeTypeByCellId, onSelect) {
   const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
   group.setAttribute("class", "map-cells");
 
@@ -54,7 +55,7 @@ function renderCells(cells, selected, highlightedCells, onSelect) {
     rect.setAttribute("y", cell.row);
     rect.setAttribute("width", 1);
     rect.setAttribute("height", 1);
-    rect.setAttribute("class", `map-cell ${cellClass[cell.base_cell_type]}`);
+    rect.setAttribute("class", `map-cell ${getCellClass(cell, placeTypeByCellId)}`);
     rect.dataset.active = selected?.type === "cell" && selected?.id === cell.cell_id ? "true" : "false";
     rect.dataset.route = highlightedCells.has(cell.cell_id) ? "true" : "false";
     rect.addEventListener("click", () => onSelect("cell", cell.cell_id));
@@ -62,6 +63,22 @@ function renderCells(cells, selected, highlightedCells, onSelect) {
   });
 
   return group;
+}
+
+function createPlaceTypeByCellId(places) {
+  const placeTypeByCellId = new Map();
+  places.forEach((place) => {
+    place.cell_ids.forEach((cellId) => placeTypeByCellId.set(cellId, place.place_type));
+  });
+  return placeTypeByCellId;
+}
+
+function getCellClass(cell, placeTypeByCellId) {
+  if (cell.base_cell_type !== "PLACE") return cellClass[cell.base_cell_type];
+
+  const placeType = placeTypeByCellId.get(cell.cell_id);
+  if (!placeType) return cellClass.PLACE;
+  return `${cellClass.PLACE} cell-place-${placeType.toLowerCase().replaceAll("_", "-")}`;
 }
 
 function renderServiceAreas(serviceAreas, selected) {
@@ -141,9 +158,14 @@ function renderLegend() {
   [
     ["cell-empty", "空白网格"],
     ["cell-road", "道路网格"],
-    ["cell-place", "地点网格"],
+    ["place-residential-swatch", "住宅地点"],
+    ["place-office-swatch", "办公地点"],
+    ["place-commercial-swatch", "商业地点"],
+    ["place-hospital-swatch", "医院学校"],
+    ["place-metro-station-swatch", "地铁接驳"],
+    ["place-ops-center-swatch", "运营中心地点"],
     ["service-area-swatch", "服务区域"],
-    ["ops-center-swatch", "运营中心"],
+    ["ops-center-swatch", "运营中心覆盖"],
     ["route-swatch", "选中路径"],
     ["road-node-swatch", "道路节点"],
   ].forEach(([className, label]) => {
