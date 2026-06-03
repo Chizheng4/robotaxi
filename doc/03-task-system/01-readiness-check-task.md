@@ -111,7 +111,46 @@ ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
 
 ---
 
-## 6. 核心属性
+## 6. 字段字典
+
+### 6.1 ReadinessCheckTask 字段
+
+|英文字段|中文字段|说明|
+|---|---|---|
+|task_id|任务编号|任务唯一编号|
+|task_type|任务类型|固定为 READINESS_CHECK|
+|task_status|任务状态|当前任务等待的下一步动作|
+|task_priority|任务优先级|默认 NORMAL|
+|trigger_type|触发方式|AUTO / MANUAL|
+|source_type|来源类型|固定为 OPS_CENTER|
+|source_id|来源编号|OpsCenter ID|
+|robotaxi_id|Robotaxi 编号|被检查 Robotaxi|
+|worker_id|作业人员编号|执行 Worker，可为空|
+|ops_center_id|运营中心编号|检查所在 OpsCenter|
+|check_result|检查结果|PASSED / FAILED，可为空|
+|issue_type|问题类型|检查不通过原因，可为空|
+|created_at|创建时间|任务创建时间|
+|assigned_at|分配时间|Worker 分配时间|
+|started_at|开始时间|检查开始时间|
+|completed_at|完成时间|任务完成时间|
+
+### 6.2 TaskEventLog 字段
+
+|英文字段|中文字段|说明|
+|---|---|---|
+|event_id|事件编号|事件唯一编号|
+|task_id|任务编号|关联任务，可为空|
+|robotaxi_id|Robotaxi 编号|关联 Robotaxi，可为空|
+|worker_id|作业人员编号|关联 Worker，可为空|
+|trigger_type|触发方式|AUTO / MANUAL，可为空|
+|event_type|事件类型|流程事件类型|
+|event_result|事件结果|SUCCESS / FAILED / SKIPPED|
+|message|事件消息|运营人员可读消息|
+|created_at|创建时间|事件发生时间|
+
+---
+
+## 7. 核心属性
 
 |属性|含义|
 |---|---|
@@ -134,7 +173,7 @@ ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
 
 ---
 
-## 7. task_status
+## 8. task_status
 
 任务状态应表达：
 
@@ -166,7 +205,7 @@ check_result 表达检查结果。
 
 ---
 
-## 8. 状态与功能按钮
+## 9. 状态与功能按钮
 
 前端应根据 task_status 展示可用操作。
 
@@ -181,9 +220,9 @@ check_result 表达检查结果。
 
 ---
 
-## 9. 功能操作规则
+## 10. 功能操作规则
 
-### 9.1 手动触发创建任务
+### 10.1 手动触发创建任务
 
 功能按钮：
 
@@ -201,7 +240,7 @@ check_result 表达检查结果。
 
 ---
 
-### 9.2 分配 Worker
+### 10.2 分配 Worker
 
 适用状态：
 
@@ -242,7 +281,7 @@ NO_IDLE_WORKER
 
 ---
 
-### 9.3 开始检查
+### 10.3 开始检查
 
 适用状态：
 
@@ -265,7 +304,7 @@ Task.started_at = 当前时间
 
 ---
 
-### 9.4 提交检查结果
+### 10.4 提交检查结果
 
 适用状态：
 
@@ -302,7 +341,7 @@ Worker.current_task_id = null
 
 ---
 
-## 10. check_result
+## 11. check_result
 
 |check_result|含义|
 |---|---|
@@ -320,7 +359,7 @@ Worker.current_task_id = null
 
 ---
 
-## 11. issue_type
+## 12. issue_type
 
 |issue_type|含义|
 |---|---|
@@ -334,9 +373,9 @@ Worker.current_task_id = null
 
 ---
 
-## 12. 状态反馈
+## 13. 状态反馈
 
-### 12.1 检查通过
+### 13.1 检查通过
 
 ```text
 check_result = PASSED
@@ -347,7 +386,7 @@ Worker.worker_status = IDLE
 Worker.current_task_id = null
 ```
 
-### 12.2 检查不通过
+### 13.2 检查不通过
 
 ```text
 check_result = FAILED
@@ -359,7 +398,7 @@ Worker.worker_status = IDLE
 Worker.current_task_id = null
 ```
 
-### 12.3 任务异常失败
+### 13.3 任务异常失败
 
 ```text
 task_status = FAILED
@@ -371,7 +410,7 @@ Worker.current_task_id = null
 
 ---
 
-## 13. TaskEventLog
+## 14. TaskEventLog
 
 ReadinessCheckTask 全流程需要记录事件消息。
 
@@ -408,7 +447,7 @@ ReadinessCheckTask 全流程需要记录事件消息。
 
 ---
 
-## 14. Worker 能力约束
+## 15. Worker 能力约束
 
 第一阶段 Worker 检查能力规则：
 
@@ -428,7 +467,7 @@ max_robotaxi_per_day = 5
 
 ---
 
-## 15. 示例数据
+## 16. 示例数据
 
 ```json
 {
@@ -453,7 +492,7 @@ max_robotaxi_per_day = 5
 
 ---
 
-## 16. 核心规则
+## 17. 核心规则
 
 1. ReadinessCheckTask 只能发生在 OpsCenter；
     
@@ -492,7 +531,7 @@ max_robotaxi_per_day = 5
 
 ---
 
-## 17. 核心原则
+## 18. 核心原则
 
 ```text
 ReadinessCheckTask = 单台 Robotaxi 的运营准入判断单
