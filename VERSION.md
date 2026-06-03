@@ -2,6 +2,15 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v010
+
+核心：修正 Task 总览与 Worker 状态文档冲突。
+
+- 明确 Task 总览中的生命周期只是通用抽象，具体任务可以有专属状态机。
+- 明确 ReadinessCheckTask 以自身文档中的 `WAITING_ASSIGNMENT / WAITING_CHECK / CHECKING` 等状态为准。
+- 统一 Worker 状态枚举，当前阶段只使用 `IDLE`、`BUSY`、`OFF_DUTY`。
+- 删除 Worker 文档中的 `UNAVAILABLE`，避免与代码和准入任务规则冲突。
+
 ## v009
 
 核心：细化 ReadinessCheckTask 方案设计。

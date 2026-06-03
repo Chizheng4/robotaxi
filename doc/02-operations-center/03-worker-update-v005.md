@@ -50,7 +50,13 @@ worker_role = INSPECTION_OPERATOR
 |IDLE|空闲，可分配任务|
 |BUSY|忙碌，正在执行任务|
 |OFF_DUTY|非工作中|
-|UNAVAILABLE|暂不可用|
+
+说明：
+
+```text
+当前阶段不使用 UNAVAILABLE 表达 Worker 状态。
+如果 Worker 暂不工作，统一使用 OFF_DUTY。
+```
 
 ---
 
@@ -116,6 +122,8 @@ max_robotaxi_per_day = 5
 6. Worker 当前行为由 current_task_id 指向的 Task 表达；
 
 7. 当前阶段 Worker 只用于支撑运营中心内的检查任务。
+
+8. 当前阶段 Worker 状态只使用 `IDLE`、`BUSY`、`OFF_DUTY`。
 
 
 ---

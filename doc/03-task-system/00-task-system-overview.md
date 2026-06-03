@@ -123,6 +123,17 @@
 
 ## 7. Task 生命周期示例
 
+本文档中的生命周期只表达 Task 系统的通用抽象。
+
+具体 Task 可以根据业务动作定义自己的专属状态机。
+
+例如：
+
+```text
+ReadinessCheckTask 使用 WAITING_ASSIGNMENT / WAITING_CHECK / CHECKING 等状态，
+以 01-readiness-check-task.md 的具体定义为准。
+```
+
 |状态|含义|
 |---|---|
 |CREATED|已创建|
