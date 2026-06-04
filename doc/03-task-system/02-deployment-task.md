@@ -39,13 +39,13 @@ DeploymentTask 的来源只有两类。
 说明：
 
 - 预测需求不直接生成任务；
-    
+
 - 预测需求先形成 SupplyAdjustmentPlan；
-    
+
 - SupplyAdjustmentPlan 再触发 DeploymentTask；
-    
+
 - ServiceOrder 不作为 DeploymentTask 来源。
-    
+
 
 ---
 
@@ -78,11 +78,11 @@ AND
 说明：
 
 - Worker 不参与投放任务；
-    
+
 - Dispatch / 简化分配逻辑负责选择 Robotaxi；
-    
+
 - 当前阶段可先使用手动创建或简单分配，后续再接入完整 Dispatch 和 SupplyAdjustmentPlan。
-    
+
 
 ---
 
@@ -101,15 +101,15 @@ DeploymentTask 必须明确起点和目标。
 规则：
 
 - Robotaxi 当前位置以 `current_cell_id` 为准；
-    
+
 - 投放目标最终必须落到一个有效 `target_cell_id`；
-    
+
 - `target_service_area_id` 用于表达服务区待命或临停；
-    
+
 - `target_zone_id` 用于表达运营区域目标；
-    
+
 - Route 由路径规划系统生成。
-    
+
 
 ---
 
@@ -122,6 +122,10 @@ DeploymentTask 创建
 ↓
 路径规划系统计算 Route
 ↓
+DeploymentTask 绑定 route_id
+↓
+创建 RouteExecution = WAITING_START
+↓
 Robotaxi 执行 Route
 ↓
 到达 target_cell_id
@@ -129,8 +133,18 @@ Robotaxi 执行 Route
 DeploymentTask 完成
 ```
 
-当前阶段可使用简化路径规划。  
+当前阶段可使用简化路径规划。
 后续再单独设计 Dispatch System 和 Route Planning System。
+
+说明：
+
+- 路径规划成功后，应立即创建 RouteExecution；
+
+- DeploymentTask 进入 `WAITING_START` 时，必须已经有 `route_id` 和对应 RouteExecution；
+
+- 运营投放任务单不直接推进车辆移动；
+
+- RouteExecution 负责开始行驶、继续行驶和反馈移动结果。
 
 如果执行中路径不可用：
 
@@ -151,8 +165,8 @@ Robotaxi 继续执行
 |task_status|含义|下一步动作|
 |---|---|---|
 |WAITING_ROUTE|等待生成 Route|路径规划|
-|WAITING_START|已有 Route，等待 Robotaxi 开始执行|开始投放|
-|MOVING|Robotaxi 正在前往目标位置|到达目标|
+|WAITING_START|已有 Route 和 RouteExecution，等待 Robotaxi 开始行驶|由 RouteExecution 开始行驶|
+|MOVING|Robotaxi 正在前往目标位置，行驶中|由 RouteExecution 继续行驶 / 到达|
 |COMPLETED|投放完成|无|
 |CANCELLED|任务已取消|无|
 |FAILED|任务异常失败|人工处理|
@@ -163,9 +177,9 @@ Robotaxi 继续执行
 
 |task_status|可用功能|操作方|结果|
 |---|---|---|---|
-|WAITING_ROUTE|生成 Route|系统 / 运营人员|进入 WAITING_START|
-|WAITING_START|开始投放|系统 / 运营人员|进入 MOVING|
-|MOVING|标记到达 / 重新规划 Route|系统 / 运营人员|完成或更新 Route|
+|WAITING_ROUTE|路径规划|系统 / 运营人员|进入 WAITING_START，并创建 RouteExecution|
+|WAITING_START|查看行驶记录|运营人员|跳转到对应行驶记录并选中|
+|MOVING|查看行驶记录|运营人员|跳转到对应行驶记录并选中|
 |COMPLETED|查看详情|运营人员|无|
 |CANCELLED|查看详情|运营人员|无|
 |FAILED|查看异常|运营人员|无|
@@ -193,11 +207,11 @@ DeploymentTask 进入 CANCELLED
 说明：
 
 - ServiceOrder 不触发 DeploymentTask；
-    
+
 - ServiceOrder 可以通过 Dispatch 中止 DeploymentTask；
-    
+
 - 中止后必须记录 TaskEventLog。
-    
+
 
 ---
 
@@ -291,25 +305,25 @@ failure_reason = ROUTE_UNAVAILABLE / TARGET_UNAVAILABLE / ROBOTAXI_UNAVAILABLE /
 ## 14. 核心规则
 
 1. DeploymentTask 只用于运营供给布局；
-    
+
 2. ServiceOrder 不触发 DeploymentTask；
-    
+
 3. ServiceOrder 应触发 ServiceTask；
-    
+
 4. DeploymentTask 可以被高优先级 ServiceTask 中止；
-    
+
 5. DeploymentTask 不需要 Worker；
-    
+
 6. 1 个 DeploymentTask 只能对应 1 台 Robotaxi；
-    
+
 7. 1 个 DeploymentTask 必须有 1 个目标 Cell；
-    
+
 8. Route 由路径规划系统生成；
-    
+
 9. 当前阶段可使用简化路径规划和手动创建；
-    
+
 10. 后续再接入 SupplyAdjustmentPlan、Dispatch System 和 Route Planning System。
-    
+
 
 ---
 

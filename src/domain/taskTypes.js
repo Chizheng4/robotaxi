@@ -1,5 +1,6 @@
 export const TaskType = {
   READINESS_CHECK: "READINESS_CHECK",
+  DEPLOYMENT: "DEPLOYMENT",
 };
 
 export const ReadinessTaskStatus = {
@@ -18,6 +19,24 @@ export const TaskPriority = {
   URGENT: "URGENT",
 };
 
+export const DeploymentTaskStatus = {
+  WAITING_ROUTE: "WAITING_ROUTE",
+  WAITING_START: "WAITING_START",
+  MOVING: "MOVING",
+  COMPLETED: "COMPLETED",
+  CANCELLED: "CANCELLED",
+  FAILED: "FAILED",
+};
+
+export const RouteExecutionStatus = {
+  WAITING_START: "WAITING_START",
+  MOVING: "MOVING",
+  PAUSED: "PAUSED",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+  CANCELLED: "CANCELLED",
+};
+
 export const TriggerType = {
   AUTO: "AUTO",
   MANUAL: "MANUAL",
@@ -25,6 +44,16 @@ export const TriggerType = {
 
 export const TaskSourceType = {
   OPS_CENTER: "OPS_CENTER",
+  MANUAL_OPERATION: "MANUAL_OPERATION",
+  SUPPLY_ADJUSTMENT_PLAN: "SUPPLY_ADJUSTMENT_PLAN",
+};
+
+export const DeploymentFailureReason = {
+  NONE: "NONE",
+  ROUTE_UNAVAILABLE: "ROUTE_UNAVAILABLE",
+  TARGET_UNAVAILABLE: "TARGET_UNAVAILABLE",
+  ROBOTAXI_UNAVAILABLE: "ROBOTAXI_UNAVAILABLE",
+  UNKNOWN: "UNKNOWN",
 };
 
 export const CheckResult = {
@@ -55,6 +84,12 @@ export const TaskEventType = {
   ROBOTAXI_MARKED_AVAILABLE: "ROBOTAXI_MARKED_AVAILABLE",
   ROBOTAXI_MARKED_UNAVAILABLE: "ROBOTAXI_MARKED_UNAVAILABLE",
   TASK_FAILED: "TASK_FAILED",
+  DEPLOYMENT_TRIGGER_STARTED: "DEPLOYMENT_TRIGGER_STARTED",
+  ROUTE_PLANNED: "ROUTE_PLANNED",
+  DEPLOYMENT_STARTED: "DEPLOYMENT_STARTED",
+  ROUTE_STEP_ADVANCED: "ROUTE_STEP_ADVANCED",
+  DEPLOYMENT_COMPLETED: "DEPLOYMENT_COMPLETED",
+  DEPLOYMENT_FAILED: "DEPLOYMENT_FAILED",
 };
 
 export const TaskEventResult = {
@@ -65,6 +100,14 @@ export const TaskEventResult = {
 
 export function createReadinessCheckTask(task) {
   return task;
+}
+
+export function createDeploymentTask(task) {
+  return task;
+}
+
+export function createRouteExecution(routeExecution) {
+  return routeExecution;
 }
 
 export function createTaskEventLog(event) {

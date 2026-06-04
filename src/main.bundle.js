@@ -15,6 +15,7 @@ const {
   Select,
   Space,
   Table,
+  Tabs,
   Tag,
   Typography
 } = antd;
@@ -34,10 +35,15 @@ let getDetailTitle;
 let getDisplayValue;
 let getFieldLabel;
 let validateReadinessCheckTasks;
+let validateDeploymentTasks;
 let taskTypes;
 let taskSequence = 0;
+let deploymentTaskSequence = 0;
+let routeExecutionSequence = 0;
+let deploymentRouteSequence = 0;
 let eventSequence = 0;
 const unfinishedTaskStatuses = new Set(["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING"]);
+const unfinishedDeploymentStatuses = new Set(["WAITING_ROUTE", "WAITING_START", "MOVING"]);
 const pageGroups = [{
   key: "console",
   label: "运营中控台",
@@ -54,6 +60,9 @@ const pageGroups = [{
     children: [{
       key: "readinessTasks",
       label: "运营准入"
+    }, {
+      key: "deploymentTasks",
+      label: "运营投放"
     }]
   }, {
     key: "opsCenters",
@@ -68,6 +77,9 @@ const pageGroups = [{
   children: [{
     key: "robotaxis",
     label: "Robotaxi 列表"
+  }, {
+    key: "routeExecutions",
+    label: "行驶记录"
   }]
 }, {
   key: "space",
@@ -155,22 +167,32 @@ const tableConfig = {
   workers: {
     title: "作业人员管理",
     description: "作业人员是运营中心内部的人工运维资源，当前仅初始化检查作业能力。",
-    columns: ["worker_id", "ops_center_id", "worker_name", "worker_role", "worker_status", "time_per_robotaxi", "max_robotaxi_per_day", "current_task_id"]
+    columns: ["worker_id", "ops_center_id", "worker_name", "worker_role", "worker_status", "current_task_id", "current_task_type", "current_task_status", "time_per_robotaxi", "max_robotaxi_per_day"]
   },
   readinessTasks: {
     title: "运营准入任务",
     description: "用于将待检查 Robotaxi 转化为可运营车辆的准入任务单。",
     columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "worker_id", "check_result", "issue_type", "created_at"]
   },
+  deploymentTasks: {
+    title: "运营投放任务",
+    description: "用于将可运营 Robotaxi 投放到指定服务区或待命位置。",
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "origin_location_summary", "target_cell_id", "target_location_summary", "target_service_area_id", "route_id", "route_summary", "created_at"]
+  },
+  routeExecutions: {
+    title: "行驶记录",
+    description: "记录 Robotaxi 执行任务时的模拟行驶过程。",
+    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_summary", "origin_location_summary", "target_location_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km"]
+  },
   taskEventLogs: {
     title: "任务事件日志",
     description: "记录运营准入任务的创建、分配、检查和状态反馈事件。",
-    columns: ["event_id", "event_type", "event_result", "task_id", "robotaxi_id", "worker_id", "message", "created_at"]
+    columns: ["event_id", "event_type", "event_result", "task_id", "robotaxi_id", "worker_id", "route_execution_id", "message", "created_at"]
   },
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "battery_percent", "estimated_range_km", "availability_status", "unavailable_reason", "motion_status", "current_cell_id"]
+    columns: ["robotaxi_id", "fleet_id", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_route_id", "current_route_execution_id", "unavailable_reason"]
   },
   validations: {
     title: "初始化校验",
@@ -191,6 +213,8 @@ const pageObjectType = {
   opsCenters: "opsCenter",
   workers: "worker",
   readinessTasks: "readinessTask",
+  deploymentTasks: "deploymentTask",
+  routeExecutions: "routeExecution",
   taskEventLogs: "taskEventLog",
   robotaxis: "robotaxi",
   validations: "validation"
@@ -208,6 +232,8 @@ const idFieldByType = {
   opsCenter: "ops_center_id",
   worker: "worker_id",
   readinessTask: "task_id",
+  deploymentTask: "task_id",
+  routeExecution: "route_execution_id",
   taskEventLog: "event_id",
   robotaxi: "robotaxi_id",
   validation: "rule_id"
@@ -223,6 +249,8 @@ const statusFieldByPage = {
   opsCenters: "ops_center_status",
   workers: "worker_status",
   readinessTasks: "task_status",
+  deploymentTasks: "task_status",
+  routeExecutions: "execution_status",
   robotaxis: "availability_status",
   validations: "result"
 };
@@ -234,8 +262,10 @@ const cellClass = {
 };
 const legendItems = [["cell-empty", "空白网格"], ["cell-road", "道路网格"], ["place-residential-swatch", "住宅地点"], ["place-office-swatch", "办公地点"], ["place-commercial-swatch", "商业地点"], ["place-hospital-swatch", "医院学校"], ["place-metro-station-swatch", "地铁接驳"], ["place-ops-center-swatch", "运营中心地点"], ["service-area-swatch", "服务区域"], ["ops-center-swatch", "运营中心覆盖"], ["route-swatch", "选中路径"], ["road-node-swatch", "道路节点"]];
 const readinessStatusOptions = ["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING", "COMPLETED", "CANCELLED", "FAILED"];
+const deploymentStatusOptions = ["WAITING_ROUTE", "WAITING_START", "MOVING", "COMPLETED", "CANCELLED", "FAILED"];
+const routeExecutionStatusOptions = ["WAITING_START", "MOVING", "PAUSED", "COMPLETED", "FAILED", "CANCELLED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v011";
+const runtimeStorageKey = "robotaxi.runtime.v013";
 const defaultPageFilters = {
   keyword: "",
   statusValue: null,
@@ -249,14 +279,18 @@ function App() {
   const initialRuntime = useMemo(() => loadRuntimeSnapshot(initialData), [initialData]);
   const [operationalData, setOperationalData] = useState(initialRuntime.operationalData);
   const [readinessTasks, setReadinessTasks] = useState(initialRuntime.readinessTasks);
+  const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
+  const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const initialValidations = useMemo(() => [...validateMapSpace(initialData), ...validateOperationsCenter(initialData)], [initialData]);
   const data = useMemo(() => ({
     ...operationalData,
     readinessCheckTasks: readinessTasks,
+    deploymentTasks,
+    routeExecutions,
     taskEventLogs
-  }), [operationalData, readinessTasks, taskEventLogs]);
-  const validations = useMemo(() => [...initialValidations, ...validateReadinessCheckTasks(data)], [data, initialValidations]);
+  }), [deploymentTasks, operationalData, readinessTasks, routeExecutions, taskEventLogs]);
+  const validations = useMemo(() => [...initialValidations, ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
@@ -275,16 +309,34 @@ function App() {
     zones: data.zones,
     routes: data.routes,
     opsCenters: data.opsCenters,
-    workers: data.workers,
+    workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks,
+    deploymentTasks: deploymentTasks.map(task => enrichDeploymentTaskForDisplay(task, data)),
+    routeExecutions: routeExecutions.map(execution => enrichRouteExecutionForDisplay(execution, data)),
     taskEventLogs,
-    robotaxis: data.robotaxis,
+    robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     validations
-  }), [data, validations]);
+  }), [data, deploymentTasks, readinessTasks, routeExecutions, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
       return cell ? createCellContext(cell, data) : null;
+    }
+    if (selected.type === "robotaxi") {
+      const robotaxi = data.robotaxis.find(item => item.robotaxi_id === selected.id);
+      return robotaxi ? enrichRobotaxiForDetail(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions) : null;
+    }
+    if (selected.type === "worker") {
+      const worker = data.workers.find(item => item.worker_id === selected.id);
+      return worker ? enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks) : null;
+    }
+    if (selected.type === "deploymentTask") {
+      const task = deploymentTasks.find(item => item.task_id === selected.id);
+      return task ? enrichDeploymentTaskForDisplay(task, data) : null;
+    }
+    if (selected.type === "routeExecution") {
+      const execution = routeExecutions.find(item => item.route_execution_id === selected.id);
+      return execution ? enrichRouteExecutionForDisplay(execution, data) : null;
     }
     const collections = {
       map: data.maps,
@@ -299,7 +351,6 @@ function App() {
       worker: data.workers,
       readinessTask: readinessTasks,
       taskEventLog: taskEventLogs,
-      robotaxi: data.robotaxis,
       validation: validations
     };
     return collections[selected.type]?.find(item => item[idFieldByType[selected.type]] === selected.id) || null;
@@ -335,31 +386,33 @@ function App() {
     saveRuntimeSnapshot({
       operationalData,
       readinessTasks,
+      deploymentTasks,
+      routeExecutions,
       taskEventLogs,
       activePage,
       pageSelections,
       pageUiState
     });
-  }, [activePage, operationalData, pageSelections, pageUiState, readinessTasks, taskEventLogs]);
-  return React.createElement(Layout, {
+  }, [activePage, deploymentTasks, operationalData, pageSelections, pageUiState, readinessTasks, routeExecutions, taskEventLogs]);
+  return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
-  }, React.createElement(Sider, {
+  }, /*#__PURE__*/React.createElement(Sider, {
     className: "ops-sider",
     width: 216,
     collapsedWidth: 58,
     collapsed: collapsed,
     trigger: null
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "brand-bar"
-  }, React.createElement(Button, {
+  }, /*#__PURE__*/React.createElement(Button, {
     className: "brand-title-button",
     type: "text",
     onClick: goToConsole
-  }, collapsed ? "RT" : "Robotaxi 运营平台"), React.createElement(Button, {
+  }, collapsed ? "RT" : "Robotaxi 运营平台"), /*#__PURE__*/React.createElement(Button, {
     type: "text",
     size: "small",
     onClick: () => setCollapsed(value => !value)
-  }, collapsed ? "≡" : "‹")), React.createElement(Menu, {
+  }, collapsed ? "≡" : "‹")), /*#__PURE__*/React.createElement(Menu, {
     mode: "inline",
     className: "ops-menu",
     selectedKeys: [activePage],
@@ -369,45 +422,45 @@ function App() {
     onClick: ({
       key
     }) => handleMenuClick(key)
-  })), React.createElement(Layout, {
+  })), /*#__PURE__*/React.createElement(Layout, {
     className: "ops-main-layout"
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "top-strip"
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "top-strip-title"
-  }, React.createElement(Text, {
+  }, /*#__PURE__*/React.createElement(Text, {
     strong: true
-  }, topTitle), topDescription && React.createElement(Text, {
+  }, topTitle), topDescription && /*#__PURE__*/React.createElement(Text, {
     type: "secondary"
-  }, topDescription)), React.createElement("div", {
+  }, topDescription)), /*#__PURE__*/React.createElement("div", {
     className: "top-strip-metrics"
-  }, showConsoleSummary ? React.createElement(React.Fragment, null, React.createElement(Tag, {
+  }, showConsoleSummary ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Tag, {
     bordered: false
-  }, data.maps[0].grid_cols, " x ", data.maps[0].grid_rows, " / ", data.maps[0].cell_size_m, "m"), React.createElement(Tag, {
+  }, data.maps[0].grid_cols, " x ", data.maps[0].grid_rows, " / ", data.maps[0].cell_size_m, "m"), /*#__PURE__*/React.createElement(Tag, {
     bordered: false
-  }, "\u5730\u56FE ", data.maps.length), React.createElement(Tag, {
+  }, "\u5730\u56FE ", data.maps.length), /*#__PURE__*/React.createElement(Tag, {
     bordered: false
-  }, "\u7F51\u683C ", data.cells.length), React.createElement(Tag, {
+  }, "\u7F51\u683C ", data.cells.length), /*#__PURE__*/React.createElement(Tag, {
     bordered: false
-  }, "Robotaxi ", data.robotaxis.length), React.createElement(Tag, {
+  }, "Robotaxi ", data.robotaxis.length), /*#__PURE__*/React.createElement(Tag, {
     bordered: false
-  }, "Worker ", data.workers.length), React.createElement(Tag, {
+  }, "Worker ", data.workers.length), /*#__PURE__*/React.createElement(Tag, {
     bordered: false,
     color: failedCount === 0 ? "success" : "error"
-  }, "\u6821\u9A8C ", failedCount === 0 ? "全部通过" : `${failedCount} 项异常`)) : React.createElement(Tag, {
+  }, "\u6821\u9A8C ", failedCount === 0 ? "全部通过" : `${failedCount} 项异常`)) : /*#__PURE__*/React.createElement(Tag, {
     bordered: false
-  }, "\u8BB0\u5F55 ", activeRows.length), React.createElement(Button, {
+  }, "\u8BB0\u5F55 ", activeRows.length), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: resetRuntime
-  }, "\u91CD\u7F6E\u6A21\u62DF\u6570\u636E"))), React.createElement(Layout, {
+  }, "\u91CD\u7F6E\u6A21\u62DF\u6570\u636E"))), /*#__PURE__*/React.createElement(Layout, {
     className: detailCollapsed ? "workbench detail-collapsed" : "workbench"
-  }, React.createElement(Content, {
+  }, /*#__PURE__*/React.createElement(Content, {
     className: "work-content"
-  }, activePage === "console" ? React.createElement(MapCanvas, {
+  }, activePage === "console" ? /*#__PURE__*/React.createElement(MapCanvas, {
     data: data,
     selected: selected,
     onSelect: (type, id) => selectForPage("console", type, id)
-  }) : React.createElement(RecordTable, {
+  }) : /*#__PURE__*/React.createElement(RecordTable, {
     key: activePage,
     page: activePage,
     rows: rowsByPage[activePage] || [],
@@ -421,16 +474,22 @@ function App() {
       assignWorker,
       startCheck,
       submitCheckResult,
+      createDeploymentTasks,
+      planDeploymentRoute,
+      viewRecordDetail,
+      viewRouteExecutionForDeployment,
+      startRouteExecution,
+      advanceRouteExecution,
       taskEventLogs
     }
-  })), React.createElement("aside", {
+  })), /*#__PURE__*/React.createElement("aside", {
     className: "detail-rail"
-  }, detailCollapsed ? React.createElement(Button, {
+  }, detailCollapsed ? /*#__PURE__*/React.createElement(Button, {
     className: "detail-toggle-button",
     size: "small",
     title: "\u5C55\u5F00\u8BE6\u60C5",
     onClick: () => setDetailCollapsed(false)
-  }, "\u2039") : React.createElement(DetailPanel, {
+  }, "\u2039") : /*#__PURE__*/React.createElement(DetailPanel, {
     selectedObject: detailSelectedObject,
     selectedType: detailSelectedType,
     onCollapse: () => setDetailCollapsed(true)
@@ -460,6 +519,9 @@ function App() {
   }
   function resetRuntime() {
     taskSequence = 0;
+    deploymentTaskSequence = 0;
+    routeExecutionSequence = 0;
+    deploymentRouteSequence = 0;
     eventSequence = 0;
     const nextSelection = {
       type: "map",
@@ -467,6 +529,8 @@ function App() {
     };
     setOperationalData(initialData);
     setReadinessTasks([]);
+    setDeploymentTasks([]);
+    setRouteExecutions([]);
     setTaskEventLogs([]);
     setActivePage("console");
     setOpenMenuKeys([]);
@@ -478,7 +542,9 @@ function App() {
     if (typeof window !== "undefined") {
       try {
         window.localStorage.removeItem(runtimeStorageKey);
-      } catch (error) {}
+      } catch (error) {
+        // Ignore storage cleanup failures; in-memory reset is already complete.
+      }
     }
   }
   function selectForPage(page, type, id) {
@@ -490,6 +556,41 @@ function App() {
     setPageSelections(current => ({
       ...current,
       [page]: nextSelection
+    }));
+  }
+  function viewRecordDetail(page, type, id) {
+    selectForPage(page, type, id);
+    setDetailCollapsed(false);
+  }
+  function viewRouteExecutionForDeployment(task) {
+    const execution = routeExecutions.find(item => item.task_id === task.task_id && item.robotaxi_id === task.robotaxi_id);
+    if (!execution) {
+      viewRecordDetail("deploymentTasks", "deploymentTask", task.task_id);
+      return;
+    }
+    const nextFilters = {
+      keyword: task.task_id,
+      statusValue: null,
+      triggerType: null
+    };
+    const nextSelection = {
+      type: "routeExecution",
+      id: execution.route_execution_id
+    };
+    setActivePage("routeExecutions");
+    setOpenMenuKeys(getOpenKeysForPage("routeExecutions"));
+    setSelected(nextSelection);
+    setDetailCollapsed(false);
+    setPageSelections(current => ({
+      ...current,
+      routeExecutions: nextSelection
+    }));
+    setPageUiState(current => ({
+      ...current,
+      routeExecutions: {
+        filters: nextFilters,
+        appliedFilters: nextFilters
+      }
     }));
   }
   function updatePageUiState(page, nextState) {
@@ -677,6 +778,188 @@ function App() {
       message: passed ? `${task.robotaxi_id} 已标记为可运营` : `${task.robotaxi_id} 已标记为不可运营`
     });
   }
+  function createDeploymentTasks() {
+    const candidates = data.robotaxis.filter(robotaxi => isDeploymentCandidateRobotaxi(robotaxi, deploymentTasks));
+    const target = getDefaultDeploymentTarget(data);
+    const triggerLog = createEventLog({
+      event_type: taskTypes.TaskEventType.DEPLOYMENT_TRIGGER_STARTED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      trigger_type: taskTypes.TriggerType.MANUAL,
+      message: "手动触发运营投放任务生成"
+    });
+    if (!target || candidates.length === 0) {
+      setTaskEventLogs(logs => [createEventLog({
+        event_type: taskTypes.TaskEventType.DEPLOYMENT_FAILED,
+        event_result: taskTypes.TaskEventResult.SKIPPED,
+        trigger_type: taskTypes.TriggerType.MANUAL,
+        message: target ? "当前没有可运营投放的 Robotaxi" : "当前没有有效投放目标"
+      }), triggerLog, ...logs]);
+      return;
+    }
+    const newTasks = candidates.map(robotaxi => createDeploymentTask(robotaxi, target));
+    setDeploymentTasks(tasks => [...newTasks, ...tasks]);
+    setOperationalData(current => ({
+      ...current,
+      robotaxis: current.robotaxis.map(robotaxi => {
+        const task = newTasks.find(item => item.robotaxi_id === robotaxi.robotaxi_id);
+        return task ? {
+          ...robotaxi,
+          current_task_id: task.task_id
+        } : robotaxi;
+      })
+    }));
+    setTaskEventLogs(logs => [...newTasks.map(task => createEventLog({
+      event_type: taskTypes.TaskEventType.TASK_CREATED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: task.task_id,
+      robotaxi_id: task.robotaxi_id,
+      trigger_type: task.trigger_type,
+      message: `已创建 ${task.robotaxi_id} 的运营投放任务`
+    })), triggerLog, ...logs]);
+    selectForPage("deploymentTasks", "deploymentTask", newTasks[0].task_id);
+  }
+  function planDeploymentRoute(taskId) {
+    const task = deploymentTasks.find(item => item.task_id === taskId);
+    if (!task || task.task_status !== taskTypes.DeploymentTaskStatus.WAITING_ROUTE) return;
+    const route = createDeploymentRoute(task, data);
+    const routeCells = getRouteExecutionCells(route, data.roadSegments, task.origin_cell_id, task.target_cell_id);
+    const execution = taskTypes.createRouteExecution({
+      route_execution_id: nextRouteExecutionId(),
+      task_id: task.task_id,
+      task_type: task.task_type,
+      robotaxi_id: task.robotaxi_id,
+      route_id: route.route_id,
+      execution_status: taskTypes.RouteExecutionStatus.WAITING_START,
+      origin_cell_id: task.origin_cell_id,
+      target_cell_id: task.target_cell_id,
+      current_cell_id: routeCells[0] || task.origin_cell_id,
+      current_step_index: 0,
+      total_step_count: Math.max(0, routeCells.length - 1),
+      route_cell_ids: routeCells,
+      distance_traveled_km: 0,
+      distance_remaining_km: route.total_distance_m / 1000,
+      time_elapsed: "0",
+      battery_consumed_percent: 0,
+      started_at: null,
+      completed_at: null,
+      failure_reason: null
+    });
+    setOperationalData(current => ({
+      ...current,
+      routes: [route, ...current.routes]
+    }));
+    setRouteExecutions(items => [execution, ...items]);
+    setDeploymentTasks(tasks => tasks.map(item => item.task_id === execution.task_id ? {
+      ...item,
+      task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
+      route_id: route.route_id
+    } : item));
+    addLog({
+      event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: task.task_id,
+      robotaxi_id: task.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      message: `${task.task_id} 已生成模拟路径 ${route.route_id} 和行驶记录 ${execution.route_execution_id}`
+    });
+    selectForPage("routeExecutions", "routeExecution", execution.route_execution_id);
+  }
+  function startRouteExecution(routeExecutionId) {
+    const execution = routeExecutions.find(item => item.route_execution_id === routeExecutionId);
+    const task = deploymentTasks.find(item => item.task_id === execution?.task_id);
+    const route = data.routes.find(item => item.route_id === execution?.route_id);
+    if (!task || !route || !execution || execution.execution_status !== taskTypes.RouteExecutionStatus.WAITING_START) return;
+    setRouteExecutions(items => items.map(item => item.route_execution_id === execution.route_execution_id ? {
+      ...item,
+      execution_status: taskTypes.RouteExecutionStatus.MOVING,
+      started_at: now()
+    } : item));
+    setDeploymentTasks(tasks => tasks.map(item => item.task_id === execution.task_id ? {
+      ...item,
+      task_status: taskTypes.DeploymentTaskStatus.MOVING,
+      started_at: now()
+    } : item));
+    setOperationalData(current => ({
+      ...current,
+      robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === task.robotaxi_id ? {
+        ...robotaxi,
+        motion_status: "MOVING",
+        current_route_id: route.route_id,
+        current_task_id: task.task_id
+      } : robotaxi)
+    }));
+    addLog({
+      event_type: taskTypes.TaskEventType.DEPLOYMENT_STARTED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: task.task_id,
+      robotaxi_id: task.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      message: `${task.robotaxi_id} 开始自动行驶`
+    });
+    selectForPage("routeExecutions", "routeExecution", execution.route_execution_id);
+  }
+  function advanceRouteExecution(routeExecutionId) {
+    const execution = routeExecutions.find(item => item.route_execution_id === routeExecutionId);
+    if (!execution || execution.execution_status !== taskTypes.RouteExecutionStatus.MOVING) return;
+    const task = deploymentTasks.find(item => item.task_id === execution.task_id);
+    const route = data.routes.find(item => item.route_id === execution.route_id);
+    if (!task || !route) return;
+    const nextStepIndex = Math.min(execution.current_step_index + 1, execution.total_step_count);
+    const nextCellId = execution.route_cell_ids[nextStepIndex] || execution.target_cell_id;
+    const completed = nextStepIndex >= execution.total_step_count;
+    const distancePerStepKm = execution.total_step_count > 0 ? route.total_distance_m / 1000 / execution.total_step_count : 0;
+    const distanceTraveledKm = Number((distancePerStepKm * nextStepIndex).toFixed(2));
+    const distanceDeltaKm = Number(Math.max(0, distanceTraveledKm - Number(execution.distance_traveled_km || 0)).toFixed(2));
+    const distanceRemainingKm = Number(Math.max(0, route.total_distance_m / 1000 - distanceTraveledKm).toFixed(2));
+    const robotaxi = data.robotaxis.find(item => item.robotaxi_id === execution.robotaxi_id);
+    const batteryDeltaPercent = robotaxi?.max_range_km ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2)) : 0;
+    const batteryConsumedPercent = Number((Number(execution.battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2));
+    setRouteExecutions(items => items.map(item => item.route_execution_id === routeExecutionId ? {
+      ...item,
+      execution_status: completed ? taskTypes.RouteExecutionStatus.COMPLETED : taskTypes.RouteExecutionStatus.MOVING,
+      current_cell_id: nextCellId,
+      current_step_index: nextStepIndex,
+      distance_traveled_km: distanceTraveledKm,
+      distance_remaining_km: distanceRemainingKm,
+      time_elapsed: `${nextStepIndex}`,
+      battery_consumed_percent: batteryConsumedPercent,
+      completed_at: completed ? now() : null
+    } : item));
+    setOperationalData(current => ({
+      ...current,
+      robotaxis: current.robotaxis.map(item => item.robotaxi_id === execution.robotaxi_id ? {
+        ...item,
+        current_cell_id: nextCellId,
+        current_route_id: completed ? null : execution.route_id,
+        current_task_id: completed ? null : execution.task_id,
+        motion_status: completed ? "PARKED" : "MOVING",
+        battery_percent: Number(Math.max(0, item.battery_percent - batteryDeltaPercent).toFixed(2)),
+        estimated_range_km: Number(Math.max(0, item.estimated_range_km - distanceDeltaKm).toFixed(2))
+      } : item)
+    }));
+    if (completed) {
+      setDeploymentTasks(tasks => tasks.map(item => item.task_id === execution.task_id ? {
+        ...item,
+        task_status: taskTypes.DeploymentTaskStatus.COMPLETED,
+        completed_at: now()
+      } : item));
+      addLog({
+        event_type: taskTypes.TaskEventType.DEPLOYMENT_COMPLETED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        task_id: execution.task_id,
+        robotaxi_id: execution.robotaxi_id,
+        message: `${execution.robotaxi_id} 已到达投放目标`
+      });
+      return;
+    }
+    addLog({
+      event_type: taskTypes.TaskEventType.ROUTE_STEP_ADVANCED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: execution.task_id,
+      robotaxi_id: execution.robotaxi_id,
+      message: `${execution.robotaxi_id} 继续行驶至 ${nextCellId}`
+    });
+  }
   function addLog(log) {
     setTaskEventLogs(logs => [createEventLog(log), ...logs]);
   }
@@ -701,12 +984,35 @@ function App() {
       completed_at: null
     });
   }
+  function createDeploymentTask(robotaxi, target) {
+    return taskTypes.createDeploymentTask({
+      task_id: nextDeploymentTaskId(),
+      task_type: taskTypes.TaskType.DEPLOYMENT,
+      task_status: taskTypes.DeploymentTaskStatus.WAITING_ROUTE,
+      task_priority: taskTypes.TaskPriority.LOW,
+      trigger_type: taskTypes.TriggerType.MANUAL,
+      source_type: taskTypes.TaskSourceType.MANUAL_OPERATION,
+      source_id: null,
+      robotaxi_id: robotaxi.robotaxi_id,
+      origin_cell_id: robotaxi.current_cell_id,
+      target_cell_id: target.target_cell_id,
+      target_zone_id: target.target_zone_id,
+      target_service_area_id: target.target_service_area_id,
+      route_id: null,
+      interruptible: true,
+      created_at: now(),
+      started_at: null,
+      completed_at: null,
+      failure_reason: null
+    });
+  }
   function createEventLog(event) {
     return taskTypes.createTaskEventLog({
       event_id: nextEventId(),
       task_id: event.task_id || null,
       robotaxi_id: event.robotaxi_id || null,
       worker_id: event.worker_id || null,
+      route_execution_id: event.route_execution_id || null,
       trigger_type: event.trigger_type || null,
       event_type: event.event_type,
       event_result: event.event_result,
@@ -725,6 +1031,9 @@ function RecordTable({
   actions
 }) {
   const isReadinessPage = page === "readinessTasks";
+  const isDeploymentPage = page === "deploymentTasks";
+  const isRouteExecutionPage = page === "routeExecutions";
+  const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -737,7 +1046,9 @@ function RecordTable({
   const displayRows = useMemo(() => {
     return filterRecordRows(rows, config.columns, statusField, appliedFilters);
   }, [appliedFilters, config.columns, rows, statusField]);
-  const statusOptions = useMemo(() => createStatusOptions(rows, statusField, isReadinessPage), [isReadinessPage, rows, statusField]);
+  const orderedStatusValues = getOrderedStatusValues(page);
+  const statusContext = page === "deploymentTasks" ? "deployment" : page === "routeExecutions" ? "routeExecution" : null;
+  const statusOptions = useMemo(() => createStatusOptions(rows, statusField, orderedStatusValues, statusContext), [orderedStatusValues, rows, statusContext, statusField]);
   const columns = config.columns.map(key => ({
     key,
     title: getFieldLabel(key),
@@ -746,36 +1057,28 @@ function RecordTable({
     width: getColumnWidth(key),
     render: (_, row) => renderCellValue(key, row)
   }));
-  const finalColumns = isReadinessPage ? [...columns, {
-    key: "actions",
-    title: "操作",
-    fixed: "right",
-    width: 240,
-    render: (_, row) => renderReadinessActions(row, {
-      ...actions,
-      openAbnormalModal: openAbnormalModal
-    })
-  }] : columns;
-  const tableScrollY = isReadinessPage ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
+  const actionColumn = getActionColumn();
+  const finalColumns = actionColumn ? [...columns, actionColumn] : columns;
+  const tableScrollY = isTaskOperationPage ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
-  return React.createElement("section", {
+  return /*#__PURE__*/React.createElement("section", {
     className: isReadinessPage ? "record-page-new readiness-page" : "record-page-new"
-  }, statusOptions.length > 0 && React.createElement("div", {
+  }, statusOptions.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "status-segment-bar"
-  }, React.createElement(Button, {
+  }, /*#__PURE__*/React.createElement(Button, {
     size: "small",
     type: !appliedFilters.statusValue ? "primary" : "default",
     onClick: () => applyStatusFilter(null)
-  }, "\u5168\u90E8 ", rows.length), statusOptions.map(option => React.createElement(Button, {
+  }, "\u5168\u90E8 ", rows.length), statusOptions.map(option => /*#__PURE__*/React.createElement(Button, {
     key: option.value,
     size: "small",
     type: appliedFilters.statusValue === option.value ? "primary" : "default",
     onClick: () => applyStatusFilter(option.value)
-  }, option.label, " ", option.count))), React.createElement("div", {
+  }, option.label, " ", option.count))), /*#__PURE__*/React.createElement("div", {
     className: "list-filter-bar"
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "filter-field keyword-field"
-  }, React.createElement("span", null, "\u5173\u952E\u8BCD"), React.createElement(Input, {
+  }, /*#__PURE__*/React.createElement("span", null, "\u5173\u952E\u8BCD"), /*#__PURE__*/React.createElement(Input, {
     size: "small",
     placeholder: isReadinessPage ? "任务编号 / Robotaxi / Worker" : "输入关键词",
     value: filters.keyword,
@@ -783,9 +1086,9 @@ function RecordTable({
       ...filters,
       keyword: event.target.value
     })
-  })), statusField && React.createElement("div", {
+  })), statusField && /*#__PURE__*/React.createElement("div", {
     className: "filter-field"
-  }, React.createElement("span", null, "\u72B6\u6001"), React.createElement(Select, {
+  }, /*#__PURE__*/React.createElement("span", null, "\u72B6\u6001"), /*#__PURE__*/React.createElement(Select, {
     size: "small",
     placeholder: "\u5168\u90E8\u72B6\u6001",
     allowClear: true,
@@ -800,9 +1103,9 @@ function RecordTable({
       value: option.value,
       label: option.label
     }))
-  })), isReadinessPage && React.createElement("div", {
+  })), isReadinessPage && /*#__PURE__*/React.createElement("div", {
     className: "filter-field"
-  }, React.createElement("span", null, "\u89E6\u53D1\u65B9\u5F0F"), React.createElement(Select, {
+  }, /*#__PURE__*/React.createElement("span", null, "\u89E6\u53D1\u65B9\u5F0F"), /*#__PURE__*/React.createElement(Select, {
     size: "small",
     placeholder: "\u5168\u90E8\u65B9\u5F0F",
     allowClear: true,
@@ -817,23 +1120,29 @@ function RecordTable({
       value,
       label: getDisplayValue(value)
     }))
-  })), React.createElement(Button, {
+  })), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     type: "primary",
     onClick: () => applyFilters(filters)
-  }, "\u67E5\u8BE2"), React.createElement(Button, {
+  }, "\u67E5\u8BE2"), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: resetFilters
-  }, "\u91CD\u7F6E")), isReadinessPage && React.createElement(React.Fragment, null, React.createElement("div", {
+  }, "\u91CD\u7F6E")), isReadinessPage && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "list-action-bar"
-  }, React.createElement(Button, {
+  }, /*#__PURE__*/React.createElement(Button, {
     size: "small",
     type: "primary",
     onClick: actions.createManualTask
-  }, "\u751F\u6210\u51C6\u5165\u4EFB\u52A1"), React.createElement(Button, {
+  }, "\u751F\u6210\u51C6\u5165\u4EFB\u52A1"), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: actions.runAutoReadinessCheck
-  }, "\u542F\u52A8\u81EA\u52A8\u51C6\u5165\u68C0\u67E5"))), React.createElement(Table, {
+  }, "\u542F\u52A8\u81EA\u52A8\u51C6\u5165\u68C0\u67E5"))), isDeploymentPage && /*#__PURE__*/React.createElement("div", {
+    className: "list-action-bar"
+  }, /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    type: "primary",
+    onClick: actions.createDeploymentTasks
+  }, "\u751F\u6210\u6295\u653E\u4EFB\u52A1")), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: idField,
     columns: finalColumns,
@@ -851,18 +1160,18 @@ function RecordTable({
     onRow: row => ({
       onClick: () => onSelect(objectType, row[idField])
     })
-  }), isReadinessPage && React.createElement("div", {
+  }), isTaskOperationPage && /*#__PURE__*/React.createElement("div", {
     className: "event-log-section",
     style: {
       height: eventPanelHeight
     }
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "event-log-resizer",
     onPointerDown: handleEventResizeStart,
     title: "\u62D6\u52A8\u8C03\u6574\u4E8B\u4EF6\u533A\u9AD8\u5EA6"
-  }), React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     className: "event-log-title"
-  }, "\u6700\u8FD1\u4EFB\u52A1\u4E8B\u4EF6"), React.createElement(Table, {
+  }, "\u6700\u8FD1\u4EFB\u52A1\u4E8B\u4EF6"), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: "event_id",
     columns: tableConfig.taskEventLogs.columns.map(key => ({
@@ -879,13 +1188,13 @@ function RecordTable({
       x: "max-content",
       y: eventTableScrollY
     }
-  })), React.createElement(ModuleFooter, {
+  })), /*#__PURE__*/React.createElement(ModuleFooter, {
     page: page,
     totalCount: rows.length,
     displayCount: displayRows.length,
     eventCount: actions.taskEventLogs?.length || 0,
-    appliedFilters: isReadinessPage ? appliedFilters : null
-  }), isReadinessPage && React.createElement(Modal, {
+    appliedFilters: isTaskOperationPage ? appliedFilters : null
+  }), isReadinessPage && /*#__PURE__*/React.createElement(Modal, {
     title: "\u63D0\u4EA4\u5F02\u5E38\u68C0\u67E5\u7ED3\u679C",
     open: Boolean(abnormalTask),
     okText: "\u786E\u8BA4\u5F02\u5E38",
@@ -893,21 +1202,21 @@ function RecordTable({
     width: 520,
     onOk: confirmAbnormalResult,
     onCancel: () => setAbnormalTask(null)
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "abnormal-modal-body"
-  }, React.createElement(Descriptions, {
+  }, /*#__PURE__*/React.createElement(Descriptions, {
     column: 1,
     size: "small",
     colon: false
-  }, React.createElement(Descriptions.Item, {
+  }, /*#__PURE__*/React.createElement(Descriptions.Item, {
     label: "\u4EFB\u52A1\u7F16\u53F7"
-  }, abnormalTask?.task_id || "无"), React.createElement(Descriptions.Item, {
+  }, abnormalTask?.task_id || "无"), /*#__PURE__*/React.createElement(Descriptions.Item, {
     label: "Robotaxi \u7F16\u53F7"
-  }, abnormalTask?.robotaxi_id || "无"), React.createElement(Descriptions.Item, {
+  }, abnormalTask?.robotaxi_id || "无"), /*#__PURE__*/React.createElement(Descriptions.Item, {
     label: "\u4F5C\u4E1A\u4EBA\u5458\u7F16\u53F7"
-  }, abnormalTask?.worker_id || "无")), React.createElement("div", {
+  }, abnormalTask?.worker_id || "无")), /*#__PURE__*/React.createElement("div", {
     className: "abnormal-field"
-  }, React.createElement("span", null, "\u5F02\u5E38\u7C7B\u578B"), React.createElement(Select, {
+  }, /*#__PURE__*/React.createElement("span", null, "\u5F02\u5E38\u7C7B\u578B"), /*#__PURE__*/React.createElement(Select, {
     size: "small",
     value: abnormalIssueType,
     getPopupContainer: () => document.body,
@@ -918,6 +1227,52 @@ function RecordTable({
       label: getDisplayValue(value)
     }))
   })))));
+  function getActionColumn() {
+    if (isReadinessPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 240,
+        render: (_, row) => renderReadinessActions(row, {
+          ...actions,
+          openAbnormalModal: openAbnormalModal,
+          page,
+          objectType,
+          idField
+        })
+      };
+    }
+    if (isDeploymentPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 220,
+        render: (_, row) => renderDeploymentActions(row, {
+          ...actions,
+          page,
+          objectType,
+          idField
+        })
+      };
+    }
+    if (isRouteExecutionPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 160,
+        render: (_, row) => renderRouteExecutionActions(row, {
+          ...actions,
+          page,
+          objectType,
+          idField
+        })
+      };
+    }
+    return null;
+  }
   function openAbnormalModal(task) {
     setAbnormalTask(task);
     setAbnormalIssueType(taskTypes.IssueType.LOW_BATTERY);
@@ -984,14 +1339,14 @@ function ModuleFooter({
   appliedFilters
 }) {
   const hasFilter = appliedFilters && (appliedFilters.keyword || appliedFilters.statusValue || appliedFilters.triggerType);
-  if (page === "readinessTasks") {
-    return React.createElement("div", {
+  if (["readinessTasks", "deploymentTasks", "routeExecutions"].includes(page)) {
+    return /*#__PURE__*/React.createElement("div", {
       className: "module-footer"
-    }, React.createElement("span", null, "\u5F53\u524D\u663E\u793A ", displayCount, " / \u5168\u90E8 ", totalCount), React.createElement("span", null, "\u4E8B\u4EF6 ", eventCount), React.createElement("span", null, hasFilter ? "已应用筛选条件" : "未应用筛选"));
+    }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u663E\u793A ", displayCount, " / \u5168\u90E8 ", totalCount), /*#__PURE__*/React.createElement("span", null, "\u4E8B\u4EF6 ", eventCount), /*#__PURE__*/React.createElement("span", null, hasFilter ? "已应用筛选条件" : "未应用筛选"));
   }
-  return React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", {
     className: "module-footer"
-  }, React.createElement("span", null, "\u8BB0\u5F55 ", totalCount), React.createElement("span", null, "\u70B9\u51FB\u8868\u683C\u884C\u53EF\u5728\u53F3\u4FA7\u67E5\u770B\u8BE6\u60C5"));
+  }, /*#__PURE__*/React.createElement("span", null, "\u8BB0\u5F55 ", totalCount), /*#__PURE__*/React.createElement("span", null, "\u70B9\u51FB\u8868\u683C\u884C\u53EF\u5728\u53F3\u4FA7\u67E5\u770B\u8BE6\u60C5"));
 }
 function DetailPanel({
   selectedObject,
@@ -999,30 +1354,33 @@ function DetailPanel({
   onCollapse
 }) {
   if (!selectedObject) {
-    return React.createElement("section", {
+    return /*#__PURE__*/React.createElement("section", {
       className: "detail-panel-new"
-    }, React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("div", {
       className: "panel-title"
-    }, React.createElement("span", null, getDetailTitle(selectedType)), React.createElement(Button, {
+    }, /*#__PURE__*/React.createElement("span", null, getDetailTitle(selectedType)), /*#__PURE__*/React.createElement(Button, {
       size: "small",
       type: "text",
       title: "\u9690\u85CF\u8BE6\u60C5",
       onClick: onCollapse
-    }, "\u203A")), React.createElement(Empty, {
+    }, "\u203A")), /*#__PURE__*/React.createElement(Empty, {
       image: Empty.PRESENTED_IMAGE_SIMPLE,
       description: "\u8BF7\u9009\u62E9\u5BF9\u8C61\u67E5\u770B\u8BE6\u60C5"
     }));
   }
-  return React.createElement("section", {
+  return /*#__PURE__*/React.createElement("section", {
     className: "detail-panel-new"
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "panel-title"
-  }, React.createElement("span", null, getDetailTitle(selectedType)), React.createElement(Button, {
+  }, /*#__PURE__*/React.createElement("span", null, getDetailTitle(selectedType)), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     type: "text",
     title: "\u9690\u85CF\u8BE6\u60C5",
     onClick: onCollapse
-  }, "\u203A")), React.createElement(Descriptions, {
+  }, "\u203A")), hasTabbedDetail(selectedType) ? /*#__PURE__*/React.createElement(TabbedDetail, {
+    selectedObject: selectedObject,
+    selectedType: selectedType
+  }) : /*#__PURE__*/React.createElement(Descriptions, {
     className: "compact-descriptions",
     column: 1,
     size: "small",
@@ -1030,9 +1388,112 @@ function DetailPanel({
     items: Object.entries(selectedObject).map(([key, value]) => ({
       key,
       label: getFieldLabel(key),
-      children: renderDetailValue(key, value)
+      children: renderDetailValue(key, value, selectedObject)
     }))
   }));
+}
+function hasTabbedDetail(selectedType) {
+  return ["robotaxi", "worker", "deploymentTask", "routeExecution"].includes(selectedType);
+}
+function TabbedDetail({
+  selectedObject,
+  selectedType
+}) {
+  const tabs = getDetailTabs(selectedType, selectedObject);
+  return /*#__PURE__*/React.createElement(Tabs, {
+    className: "detail-tabs",
+    size: "small",
+    items: tabs.map(tab => ({
+      key: tab.key,
+      label: tab.label,
+      children: /*#__PURE__*/React.createElement(Descriptions, {
+        className: "compact-descriptions",
+        column: 1,
+        size: "small",
+        colon: false,
+        items: tab.keys.map(key => ({
+          key,
+          label: getFieldLabel(key),
+          children: renderDetailValue(key, selectedObject[key], selectedObject)
+        }))
+      })
+    }))
+  });
+}
+function getDetailTabs(selectedType) {
+  if (selectedType === "robotaxi") {
+    return [{
+      key: "basic",
+      label: "基础信息",
+      keys: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "unavailable_reason"]
+    }, {
+      key: "task",
+      label: "任务状态",
+      keys: ["current_task_id", "current_task_type", "current_task_status", "current_route_id"]
+    }, {
+      key: "location",
+      label: "位置上下文",
+      keys: ["current_cell_id", "location_summary", "location_context"]
+    }, {
+      key: "execution",
+      label: "行驶记录",
+      keys: ["current_route_execution_id", "current_execution_status", "current_route_step"]
+    }];
+  }
+  if (selectedType === "worker") {
+    return [{
+      key: "basic",
+      label: "基础信息",
+      keys: ["worker_id", "ops_center_id", "worker_name", "worker_role", "worker_status"]
+    }, {
+      key: "task",
+      label: "任务状态",
+      keys: ["current_task_id", "current_task_type", "current_task_status"]
+    }, {
+      key: "capacity",
+      label: "作业能力",
+      keys: ["time_per_robotaxi", "max_robotaxi_per_day"]
+    }];
+  }
+  if (selectedType === "deploymentTask") {
+    return [{
+      key: "basic",
+      label: "任务信息",
+      keys: ["task_id", "task_type", "task_status", "task_priority", "trigger_type", "source_type", "robotaxi_id"]
+    }, {
+      key: "route",
+      label: "路径信息",
+      keys: ["route_id", "route_summary", "route_detail"]
+    }, {
+      key: "location",
+      label: "起终点",
+      keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "target_zone_id"]
+    }, {
+      key: "time",
+      label: "时间",
+      keys: ["created_at", "started_at", "completed_at", "failure_reason"]
+    }];
+  }
+  if (selectedType === "routeExecution") {
+    return [{
+      key: "basic",
+      label: "执行信息",
+      keys: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id"]
+    }, {
+      key: "route",
+      label: "路径信息",
+      keys: ["route_id", "route_summary", "route_detail"]
+    }, {
+      key: "location",
+      label: "位置上下文",
+      keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "target_cell_id", "target_location_summary", "target_location_detail", "current_cell_id", "current_location_summary", "current_location_detail"]
+    }, {
+      key: "progress",
+      label: "执行进度",
+      keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent", "started_at", "completed_at", "failure_reason"]
+    }];
+  }
+  return [];
 }
 function MapCanvas({
   data,
@@ -1091,22 +1552,22 @@ function MapCanvas({
   function handlePointerUp() {
     dragRef.current = null;
   }
-  return React.createElement("section", {
+  return /*#__PURE__*/React.createElement("section", {
     className: "map-page-new"
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "map-stage"
-  }, React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     className: "map-floating-actions"
-  }, React.createElement(Button, {
+  }, /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: () => changeZoom(viewport.zoom + 0.2)
-  }, "\u653E\u5927"), React.createElement(Button, {
+  }, "\u653E\u5927"), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: () => changeZoom(viewport.zoom - 0.2)
-  }, "\u7F29\u5C0F"), React.createElement(Button, {
+  }, "\u7F29\u5C0F"), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: resetViewport
-  }, "\u590D\u4F4D")), React.createElement("svg", {
+  }, "\u590D\u4F4D")), /*#__PURE__*/React.createElement("svg", {
     className: "zone-canvas-new",
     viewBox: `0 0 ${map.grid_cols} ${map.grid_rows}`,
     preserveAspectRatio: "xMidYMid meet",
@@ -1117,11 +1578,11 @@ function MapCanvas({
     onMouseMove: handlePointerMove,
     onMouseUp: handlePointerUp,
     onMouseLeave: handlePointerUp
-  }, React.createElement("g", {
+  }, /*#__PURE__*/React.createElement("g", {
     transform: `translate(${viewport.panX} ${viewport.panY}) scale(${viewport.zoom})`
-  }, React.createElement("g", {
+  }, /*#__PURE__*/React.createElement("g", {
     className: "map-cells"
-  }, data.cells.map(cell => React.createElement("rect", {
+  }, data.cells.map(cell => /*#__PURE__*/React.createElement("rect", {
     key: cell.cell_id,
     x: cell.col,
     y: cell.row,
@@ -1131,28 +1592,28 @@ function MapCanvas({
     "data-active": selected?.type === "cell" && selected?.id === cell.cell_id,
     "data-route": highlightedCells.has(cell.cell_id),
     onClick: () => onSelect("cell", cell.cell_id)
-  }))), React.createElement(ServiceAreas, {
+  }))), /*#__PURE__*/React.createElement(ServiceAreas, {
     serviceAreas: data.serviceAreas,
     selected: selected
-  }), React.createElement(OpsCenters, {
+  }), /*#__PURE__*/React.createElement(OpsCenters, {
     opsCenters: data.opsCenters || [],
     selected: selected
-  }), React.createElement(RoadNodes, {
+  }), /*#__PURE__*/React.createElement(RoadNodes, {
     roadNodes: data.roadNodes,
     selected: selected
-  }), React.createElement("rect", {
+  }), /*#__PURE__*/React.createElement("rect", {
     x: "0",
     y: "0",
     width: map.grid_cols,
     height: map.grid_rows,
     className: "zone-boundary map-boundary",
     "data-active": selected?.type === "map" && selected?.id === map.map_id
-  })))), React.createElement("div", {
+  })))), /*#__PURE__*/React.createElement("div", {
     className: "legend-new"
-  }, legendItems.map(([className, label]) => React.createElement("span", {
+  }, legendItems.map(([className, label]) => /*#__PURE__*/React.createElement("span", {
     className: "legend-item",
     key: className
-  }, React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", {
     className: `legend-dot ${className}`
   }), label))));
 }
@@ -1160,14 +1621,14 @@ function ServiceAreas({
   serviceAreas,
   selected
 }) {
-  return React.createElement("g", {
+  return /*#__PURE__*/React.createElement("g", {
     className: "service-area-layer"
   }, serviceAreas.flatMap(area => area.covered_cell_ids.map(cellId => {
     const {
       row,
       col
     } = parseCellId(cellId);
-    return React.createElement("rect", {
+    return /*#__PURE__*/React.createElement("rect", {
       key: `${area.service_area_id}-${cellId}`,
       x: col + 0.12,
       y: row + 0.12,
@@ -1182,14 +1643,14 @@ function OpsCenters({
   opsCenters,
   selected
 }) {
-  return React.createElement("g", {
+  return /*#__PURE__*/React.createElement("g", {
     className: "ops-center-layer"
   }, opsCenters.flatMap(opsCenter => opsCenter.cell_ids.map(cellId => {
     const {
       row,
       col
     } = parseCellId(cellId);
-    return React.createElement("rect", {
+    return /*#__PURE__*/React.createElement("rect", {
       key: `${opsCenter.ops_center_id}-${cellId}`,
       x: col + 0.06,
       y: row + 0.06,
@@ -1204,9 +1665,9 @@ function RoadNodes({
   roadNodes,
   selected
 }) {
-  return React.createElement("g", {
+  return /*#__PURE__*/React.createElement("g", {
     className: "road-node-layer"
-  }, roadNodes.map(node => React.createElement("circle", {
+  }, roadNodes.map(node => /*#__PURE__*/React.createElement("circle", {
     key: node.road_node_id,
     cx: node.col + 0.5,
     cy: node.row + 0.5,
@@ -1220,73 +1681,135 @@ function renderCellValue(key, row) {
   if (key === "covered_cell_count") return row.covered_cell_ids?.length ?? 0;
   if (key === "result") {
     const passed = row[key] === "PASS";
-    return React.createElement(Tag, {
+    return /*#__PURE__*/React.createElement(Tag, {
       color: passed ? "success" : "error"
     }, getDisplayValue(row[key]));
   }
   if (Array.isArray(row[key])) return row[key].join(" / ");
   if (typeof row[key] === "boolean") return row[key] ? "是" : "否";
   if (typeof row[key] === "object" && row[key] !== null) return summarizeObject(row[key]);
-  return getFieldDisplayValue(key, row[key] ?? "");
+  return getFieldDisplayValue(key, row[key] ?? "", row);
+}
+function RowActionButton({
+  children,
+  onClick,
+  type = "primary",
+  danger = false
+}) {
+  return /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    type: type,
+    danger: danger,
+    className: "row-action-button",
+    onClick: event => {
+      event.stopPropagation();
+      onClick?.();
+    }
+  }, children);
+}
+function RowActionGroup({
+  children
+}) {
+  return /*#__PURE__*/React.createElement(Space, {
+    size: 4,
+    className: "row-action-group"
+  }, children);
+}
+function renderViewDetailAction(row, actions) {
+  return /*#__PURE__*/React.createElement(RowActionButton, {
+    type: "default",
+    onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
+  }, "\u67E5\u770B\u8BE6\u60C5");
 }
 function renderReadinessActions(row, actions) {
   if (row.task_status === "WAITING_ASSIGNMENT") {
-    return React.createElement(Button, {
-      size: "small",
+    return /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.assignWorker(row.task_id)
     }, "\u5206\u914D Worker");
   }
   if (row.task_status === "WAITING_CHECK") {
-    return React.createElement(Button, {
-      size: "small",
-      type: "primary",
+    return /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.startCheck(row.task_id)
     }, "\u5F00\u59CB\u68C0\u67E5");
   }
   if (row.task_status === "CHECKING") {
-    return React.createElement(Space, {
-      size: 4
-    }, React.createElement(Button, {
-      size: "small",
-      type: "primary",
+    return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.submitCheckResult(row.task_id, taskTypes.CheckResult.PASSED)
-    }, "\u68C0\u67E5\u901A\u8FC7"), React.createElement(Button, {
-      size: "small",
+    }, "\u68C0\u67E5\u901A\u8FC7"), /*#__PURE__*/React.createElement(RowActionButton, {
+      type: "default",
       danger: true,
       onClick: () => actions.openAbnormalModal(row)
     }, "\u5F02\u5E38"));
   }
-  return React.createElement(Text, {
-    type: "secondary"
-  }, "\u67E5\u770B\u8BE6\u60C5");
+  return renderViewDetailAction(row, actions);
 }
-function renderDetailValue(key, value) {
+function renderDeploymentActions(row, actions) {
+  if (row.task_status === "WAITING_ROUTE") {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.planDeploymentRoute(row.task_id)
+    }, "\u8DEF\u5F84\u89C4\u5212");
+  }
+  if (["WAITING_START", "MOVING"].includes(row.task_status)) {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.viewRouteExecutionForDeployment(row)
+    }, "\u67E5\u770B\u884C\u9A76\u8BB0\u5F55");
+  }
+  return renderViewDetailAction(row, actions);
+}
+function renderRouteExecutionActions(row, actions) {
+  if (row.execution_status === "WAITING_START") {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.startRouteExecution(row.route_execution_id)
+    }, "\u5F00\u59CB\u884C\u9A76");
+  }
+  if (row.execution_status === "MOVING") {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.advanceRouteExecution(row.route_execution_id)
+    }, "\u7EE7\u7EED\u884C\u9A76");
+  }
+  return renderViewDetailAction(row, actions);
+}
+function renderDetailValue(key, value, row = null) {
   if (key === "result") {
     const passed = value === "PASS";
-    return React.createElement(Tag, {
+    return /*#__PURE__*/React.createElement(Tag, {
       color: passed ? "success" : "error"
     }, getDisplayValue(value));
   }
-  return React.createElement(Text, {
+  return /*#__PURE__*/React.createElement(Text, {
     className: "detail-value"
-  }, formatDetailValue(value, key) || "无");
+  }, formatDetailValue(value, key, row) || "无");
 }
 function summarizeObject(value) {
   const enabled = Object.entries(value).filter(([, itemValue]) => itemValue === true).map(([key]) => getFieldLabel(key));
   return enabled.length > 0 ? enabled.join(", ") : "无";
 }
-function formatDetailValue(value, key) {
-  if (Array.isArray(value)) return value.map(item => formatDetailValue(item, key)).join(", ");
+function formatDetailValue(value, key, parentRow = null) {
+  if (Array.isArray(value)) return value.map(item => formatDetailValue(item, key, parentRow)).join(", ");
   if (typeof value === "boolean") return value ? "是" : "否";
   if (typeof value === "object" && value !== null) {
-    return Object.entries(value).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey)}`).join("; ");
+    return Object.entries(value).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, value)}`).join("; ");
   }
-  return String(getFieldDisplayValue(key, value ?? ""));
+  return String(getFieldDisplayValue(key, value ?? "", parentRow));
 }
-function getFieldDisplayValue(key, value) {
+function getFieldDisplayValue(key, value, row = null) {
   if (key === "check_result" && value === "FAILED") return "检查不通过";
   if (key === "event_result" && value === "FAILED") return "失败";
+  if (isStatusField(key)) return getStatusDisplayValue(key, value, row);
   return getDisplayValue(value);
+}
+function isStatusField(key) {
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "place_status", "status", "result"].includes(key);
+}
+function getStatusDisplayValue(key, value, row = null) {
+  if (!value) return "无";
+  if (value === "WAITING_START" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution")) return "等待行驶";
+  if (value === "WAITING_START" && isDeploymentLike(row)) return "等待行驶";
+  if (value === "MOVING" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution" || isDeploymentLike(row))) return "行驶中";
+  return getDisplayValue(value);
+}
+function isDeploymentLike(row) {
+  return row?.status_context === "deployment" || row?.task_type === "DEPLOYMENT" || row?.current_task_type === "DEPLOYMENT" || String(row?.task_id || "").startsWith("TASK-DP-");
 }
 function getColumnWidth(key) {
   if (key.endsWith("_ids") || key === "cell_ids" || key === "road_segment_sequence") return 220;
@@ -1319,7 +1842,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, operationsCenterValidation, cellContext, fieldDictionary, readinessTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260603-v006"), import("./data/mapValidation.js?v=20260603-v006"), import("./data/operationsCenterInitialization.js?v=20260603-v006"), import("./data/operationsCenterValidation.js?v=20260603-v006"), import("./data/cellContext.js?v=20260603-v006"), import("./domain/fieldDictionary.js?v=20260603-v006"), import("./data/readinessCheckTaskValidation.js"), import("./domain/taskTypes.js")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, operationsCenterValidation, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260603-v006"), import("./data/mapValidation.js?v=20260603-v006"), import("./data/operationsCenterInitialization.js?v=20260603-v006"), import("./data/operationsCenterValidation.js?v=20260603-v006"), import("./data/cellContext.js?v=20260603-v006"), import("./domain/fieldDictionary.js?v=20260603-v006"), import("./data/readinessCheckTaskValidation.js"), import("./data/deploymentTaskValidation.js"), import("./domain/taskTypes.js")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -1329,8 +1852,9 @@ async function bootstrap() {
   getDisplayValue = fieldDictionary.getDisplayValue;
   getFieldLabel = fieldDictionary.getFieldLabel;
   validateReadinessCheckTasks = readinessTaskValidation.validateReadinessCheckTasks;
+  validateDeploymentTasks = deploymentTaskValidation.validateDeploymentTasks;
   taskTypes = taskTypeModule;
-  ReactDOM.createRoot(document.querySelector("#app")).render(React.createElement(App, null));
+  ReactDOM.createRoot(document.querySelector("#app")).render(/*#__PURE__*/React.createElement(App, null));
 }
 bootstrap();
 function findNextCandidate(robotaxis, tasks) {
@@ -1339,12 +1863,177 @@ function findNextCandidate(robotaxis, tasks) {
 function isCandidateRobotaxi(robotaxi, tasks) {
   return robotaxi.availability_status === "PENDING_INSPECTION" && !tasks.some(task => task.robotaxi_id === robotaxi.robotaxi_id && unfinishedTaskStatuses.has(task.task_status));
 }
+function isDeploymentCandidateRobotaxi(robotaxi, deploymentTasks) {
+  return robotaxi.availability_status === "AVAILABLE" && !deploymentTasks.some(task => task.robotaxi_id === robotaxi.robotaxi_id && unfinishedDeploymentStatuses.has(task.task_status));
+}
+function getDefaultDeploymentTarget(data) {
+  const serviceArea = data.serviceAreas.find(area => area.service_area_id === "SA-006") || data.serviceAreas.find(area => area.vehicle_capabilities?.can_stage || area.vehicle_capabilities?.can_short_wait);
+  if (!serviceArea) return null;
+  return {
+    target_cell_id: serviceArea.covered_cell_ids[0],
+    target_service_area_id: serviceArea.service_area_id,
+    target_zone_id: data.zones.find(zone => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null
+  };
+}
+function createDeploymentRoute(task, data) {
+  const serviceArea = data.serviceAreas.find(area => area.service_area_id === task.target_service_area_id);
+  const segmentId = serviceArea?.segment_ids?.[0] || "RS-014";
+  const segment = data.roadSegments.find(item => item.road_segment_id === segmentId);
+  const totalDistance = segment?.distance_m || 50;
+  return {
+    route_id: nextDeploymentRouteId(),
+    route_name: `${task.robotaxi_id} 投放到 ${task.target_service_area_id}`,
+    map_id: data.maps[0].map_id,
+    start_cell_id: task.origin_cell_id,
+    end_cell_id: task.target_cell_id,
+    road_segment_sequence: segment ? [segment.road_segment_id] : [],
+    related_service_area_ids: task.target_service_area_id ? [task.target_service_area_id] : [],
+    total_distance_m: totalDistance,
+    estimated_time_s: Math.max(1, Math.round(totalDistance / (40 * 1000 / 3600))),
+    route_status: "Active"
+  };
+}
+function getRouteExecutionCells(route, roadSegments, originCellId, targetCellId) {
+  const cells = routeCellIds(route, roadSegments);
+  return [...new Set([originCellId, ...cells, targetCellId].filter(Boolean))];
+}
+function enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks) {
+  const currentTask = findCurrentTask(worker.current_task_id, readinessTasks, deploymentTasks);
+  return {
+    ...worker,
+    current_task_type: currentTask?.task_type || null,
+    current_task_status: currentTask?.task_status || null
+  };
+}
+function enrichDeploymentTaskForDisplay(task, data) {
+  const route = data.routes.find(item => item.route_id === task.route_id);
+  const originLocation = getLocationInfo(task.origin_cell_id, data);
+  const targetLocation = getLocationInfo(task.target_cell_id, data);
+  return {
+    ...task,
+    route_summary: summarizeRoute(route),
+    origin_location_summary: originLocation.summary,
+    target_location_summary: targetLocation.summary,
+    origin_location_detail: originLocation.detail,
+    target_location_detail: targetLocation.detail,
+    route_detail: route ? getRouteDetail(route) : null
+  };
+}
+function enrichRouteExecutionForDisplay(execution, data) {
+  const route = data.routes.find(item => item.route_id === execution.route_id);
+  const originLocation = getLocationInfo(execution.origin_cell_id, data);
+  const targetLocation = getLocationInfo(execution.target_cell_id, data);
+  const currentLocation = getLocationInfo(execution.current_cell_id, data);
+  return {
+    ...execution,
+    route_summary: summarizeRoute(route),
+    route_detail: route ? getRouteDetail(route) : null,
+    origin_location_summary: originLocation.summary,
+    target_location_summary: targetLocation.summary,
+    current_location_summary: currentLocation.summary,
+    origin_location_detail: originLocation.detail,
+    target_location_detail: targetLocation.detail,
+    current_location_detail: currentLocation.detail
+  };
+}
+function enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions = []) {
+  const currentTask = findCurrentTask(robotaxi.current_task_id, readinessTasks, deploymentTasks);
+  const currentRouteExecution = findCurrentRouteExecution(robotaxi, routeExecutions);
+  const location = getLocationInfo(robotaxi.current_cell_id, data);
+  return {
+    ...robotaxi,
+    current_task_type: currentTask?.task_type || null,
+    current_task_status: currentTask?.task_status || null,
+    current_route_execution_id: currentRouteExecution?.route_execution_id || null,
+    location_summary: location.summary
+  };
+}
+function enrichRobotaxiForDetail(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions) {
+  const currentTask = findCurrentTask(robotaxi.current_task_id, readinessTasks, deploymentTasks);
+  const currentRouteExecution = findCurrentRouteExecution(robotaxi, routeExecutions);
+  const location = getLocationInfo(robotaxi.current_cell_id, data);
+  return {
+    ...enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions),
+    current_route_execution_id: currentRouteExecution?.route_execution_id || null,
+    current_execution_status: currentRouteExecution?.execution_status || null,
+    current_route_step: currentRouteExecution ? `${currentRouteExecution.current_step_index} / ${currentRouteExecution.total_step_count}` : null,
+    location_context: location.detail
+  };
+}
+function findCurrentRouteExecution(robotaxi, routeExecutions) {
+  return routeExecutions.find(execution => execution.robotaxi_id === robotaxi.robotaxi_id && ["WAITING_START", "MOVING", "PAUSED"].includes(execution.execution_status));
+}
+function summarizeRobotaxiLocation(cellContext) {
+  if (!cellContext) return "未知位置";
+  if (hasRelation(cellContext.related_ops_centers)) return `运营中心：${cellContext.related_ops_centers}`;
+  if (hasRelation(cellContext.related_places)) return `地点：${cellContext.related_places}`;
+  if (hasRelation(cellContext.related_service_areas)) return `服务区：${cellContext.related_service_areas}`;
+  if (hasRelation(cellContext.related_road_segments)) return `道路片段：${cellContext.related_road_segments}`;
+  if (hasRelation(cellContext.related_roads)) return `道路：${cellContext.related_roads}`;
+  if (hasRelation(cellContext.related_zones)) return `运营区域：${cellContext.related_zones}`;
+  return "空白网格";
+}
+function getLocationInfo(cellId, data) {
+  const cell = data.cells.find(item => item.cell_id === cellId);
+  const cellContext = cell ? createCellContext(cell, data) : null;
+  return {
+    summary: summarizeRobotaxiLocation(cellContext),
+    detail: cellContext ? {
+      current_cell_id: cellContext.cell_id,
+      related_map: cellContext.related_map,
+      related_zones: cellContext.related_zones,
+      related_roads: cellContext.related_roads,
+      related_road_segments: cellContext.related_road_segments,
+      related_road_nodes: cellContext.related_road_nodes,
+      related_service_areas: cellContext.related_service_areas,
+      related_places: cellContext.related_places,
+      related_ops_centers: cellContext.related_ops_centers,
+      service_eligibility: cellContext.service_eligibility
+    } : null
+  };
+}
+function summarizeRoute(route) {
+  if (!route) return "未生成";
+  return `${route.route_id} ${route.route_name || ""}`.trim();
+}
+function getRouteDetail(route) {
+  return {
+    route_id: route.route_id,
+    route_name: route.route_name,
+    start_cell_id: route.start_cell_id,
+    end_cell_id: route.end_cell_id,
+    road_segment_sequence: route.road_segment_sequence,
+    related_service_area_ids: route.related_service_area_ids,
+    total_distance_m: route.total_distance_m,
+    estimated_time_s: route.estimated_time_s,
+    route_status: route.route_status
+  };
+}
+function hasRelation(value) {
+  return Boolean(value) && value !== "无关联";
+}
+function findCurrentTask(taskId, readinessTasks, deploymentTasks) {
+  if (!taskId) return null;
+  return readinessTasks.find(task => task.task_id === taskId) || deploymentTasks.find(task => task.task_id === taskId) || null;
+}
 function now() {
   return new Date().toISOString();
 }
 function nextTaskId() {
   taskSequence += 1;
   return `TASK-RC-${String(taskSequence).padStart(3, "0")}`;
+}
+function nextDeploymentTaskId() {
+  deploymentTaskSequence += 1;
+  return `TASK-DP-${String(deploymentTaskSequence).padStart(3, "0")}`;
+}
+function nextRouteExecutionId() {
+  routeExecutionSequence += 1;
+  return `REX-${String(routeExecutionSequence).padStart(3, "0")}`;
+}
+function nextDeploymentRouteId() {
+  deploymentRouteSequence += 1;
+  return `DRT-${String(deploymentRouteSequence).padStart(3, "0")}`;
 }
 function nextEventId() {
   eventSequence += 1;
@@ -1378,6 +2067,8 @@ function loadRuntimeSnapshot(initialData) {
   const fallback = {
     operationalData: initialData,
     readinessTasks: [],
+    deploymentTasks: [],
+    routeExecutions: [],
     taskEventLogs: [],
     activePage: "console",
     pageSelections: {
@@ -1394,12 +2085,19 @@ function loadRuntimeSnapshot(initialData) {
     if (!rawValue) return fallback;
     const snapshot = JSON.parse(rawValue);
     const readinessTasks = Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : [];
+    const deploymentTasks = Array.isArray(snapshot.deploymentTasks) ? snapshot.deploymentTasks : [];
+    const routeExecutions = Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : [];
     const taskEventLogs = Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : [];
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
+    deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
+    routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
+    deploymentRouteSequence = deriveSequence(snapshot.operationalData?.routes || [], "route_id", "DRT-");
     eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
     return {
       operationalData: snapshot.operationalData || initialData,
       readinessTasks,
+      deploymentTasks,
+      routeExecutions,
       taskEventLogs,
       activePage: snapshot.activePage || "console",
       pageSelections: {
@@ -1423,7 +2121,9 @@ function saveRuntimeSnapshot(snapshot) {
       taskSequence,
       eventSequence
     }));
-  } catch (error) {}
+  } catch (error) {
+    // Local persistence is a convenience for this prototype; runtime should continue if storage is unavailable.
+  }
 }
 function deriveSequence(items, field, prefix) {
   return items.reduce((maxValue, item) => {
@@ -1442,15 +2142,22 @@ function filterRecordRows(rows, columns, statusField, filters) {
     return keywordMatched && statusMatched && triggerMatched;
   });
 }
-function createStatusOptions(rows, statusField, isReadinessPage) {
+function getOrderedStatusValues(page) {
+  if (page === "readinessTasks") return readinessStatusOptions;
+  if (page === "deploymentTasks") return deploymentStatusOptions;
+  if (page === "routeExecutions") return routeExecutionStatusOptions;
+  return [];
+}
+function createStatusOptions(rows, statusField, orderedValues = [], statusContext = null) {
   if (!statusField) return [];
-  const orderedValues = isReadinessPage ? readinessStatusOptions : [];
   const values = [...orderedValues, ...rows.map(row => row[statusField]).filter(Boolean)];
   return [...new Set(values)].map(value => ({
     value,
-    label: getDisplayValue(value),
+    label: getStatusDisplayValue(statusField, value, rows.find(row => row[statusField] === value) || {
+      status_context: statusContext
+    }),
     count: rows.filter(row => row[statusField] === value).length
-  })).filter(item => item.count > 0 || isReadinessPage);
+  })).filter(item => item.count > 0 || orderedValues.includes(item.value));
 }
 function getOpenKeysForPage(pageKey) {
   if (pageKey === "console") return [];

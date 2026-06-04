@@ -24,7 +24,7 @@
 |can_clean_robotaxi|允许清洁|是否可以清洁车辆|
 |can_charge_robotaxi|允许充电|是否可以为车辆充电|
 |can_repair_robotaxi|允许维修|是否可以维修车辆|
-|can_release_robotaxi|允许投放 Robotaxi|是否可以将车辆投放进入运营|
+|can_release_robotaxi|允许投放 Robotaxi|是否可以通过运营投放任务将车辆投放进入运营|
 
 ---
 
@@ -47,6 +47,10 @@
 |current_cell_id|当前所在网格|车辆当前位置|
 |current_route_id|当前路径|当前执行 Route，可为空|
 |current_task_id|当前任务|当前关联 Task，可为空|
+|current_task_type|当前任务类型|由 current_task_id 关联 Task 推导的展示字段|
+|current_task_status|当前任务状态|由 current_task_id 关联 Task 推导的展示字段|
+|current_route_execution_id|当前行驶记录|当前关联 RouteExecution，可为空，展示推导字段|
+|location_summary|位置摘要|由 current_cell_id 通过 CellContext 推导的展示字段|
 
 ---
 
@@ -62,10 +66,32 @@
 |time_per_robotaxi|单车处理时间|处理一台 Robotaxi 所需时间单位|
 |max_robotaxi_per_day|单日最大处理量|每天最多处理 Robotaxi 数量|
 |current_task_id|当前任务|当前执行任务，可为空|
+|current_task_type|当前任务类型|由 current_task_id 关联 Task 推导的展示字段|
+|current_task_status|当前任务状态|由 current_task_id 关联 Task 推导的展示字段|
 
 ---
 
-## 5. 前端枚举值字典
+## 5. Task / 执行记录展示字段
+
+|属性英文名|中文名|含义|
+|---|---|---|
+|route_summary|路径摘要|Route 的简要展示信息|
+|route_detail|路径详情|Route 的结构化详情|
+|origin_location_summary|起点位置摘要|由起点 CellContext 推导|
+|target_location_summary|终点位置摘要|由终点 CellContext 推导|
+|current_location_summary|当前位置摘要|由当前 CellContext 推导|
+|origin_location_detail|起点位置详情|起点结构化位置上下文|
+|target_location_detail|终点位置详情|终点结构化位置上下文|
+|current_location_detail|当前位置详情|当前位置结构化位置上下文|
+
+说明：
+
+- 以上字段主要用于前端展示；
+- 位置类字段均由 CellContext 推导，不作为业务对象冗余存储字段。
+
+---
+
+## 6. 前端枚举值字典
 
 |英文字段值|中文显示值|
 |---|---|
@@ -90,10 +116,16 @@
 |IDLE|空闲|
 |BUSY|忙碌|
 |OFF_DUTY|非工作中|
+|DEPLOYMENT|运营投放|
+|WAITING_ROUTE|等待路径|
+|WAITING_START|等待行驶|运营投放和路径执行场景统一显示为等待行驶|
+|COMPLETED|已完成|
+|CANCELLED|已取消|
+|FAILED|异常失败|
 
 ---
 
-## 6. 前端显示规则
+## 7. 前端显示规则
 
 1. `OPS_CENTER` 类型 Place 在地图中使用浅紫色展示，与其他 Place 类型区分；
 2. 点击 OpsCenter、Robotaxi 或 Worker 记录时，右侧详情栏显示对应中文字段名；

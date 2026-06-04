@@ -4,7 +4,7 @@
 
 Robotaxi 是具备 L4 / L5 自动驾驶能力的 AI 汽车资产。
 
-在运营系统中，Robotaxi 是供给侧车辆资源。  
+在运营系统中，Robotaxi 是供给侧车辆资源。
 它只有在满足运营条件时，才形成可被调度的出行服务产能。
 
 Robotaxi 不等同于传统人工驾驶车辆。
@@ -24,7 +24,7 @@ Robotaxi
 └── 当前任务引用
 ```
 
-Robotaxi 只表达车辆自身属性和当前状态。  
+Robotaxi 只表达车辆自身属性和当前状态。
 车辆正在执行什么业务动作，由后续 Task 对象表达。
 
 ---
@@ -90,11 +90,11 @@ service_type = PASSENGER_RIDE
 规则：
 
 1. `battery_percent` 表示电池剩余比例；
-    
+
 2. `estimated_range_km` 表示当前可用于调度判断的预计续航；
-    
+
 3. 后续任务分配时，应判断 `estimated_range_km` 是否覆盖任务所需里程。
-    
+
 
 ---
 
@@ -112,11 +112,11 @@ service_type = PASSENGER_RIDE
 说明：
 
 - `availability_status` 只表达车辆是否具备运营资格；
-    
+
 - 它不表达车辆正在执行什么任务；
-    
+
 - 任务执行过程由后续 Task 对象表达。
-    
+
 
 ---
 
@@ -133,11 +133,11 @@ service_type = PASSENGER_RIDE
 说明：
 
 - `motion_status` 只表达车辆物理形态；
-    
+
 - 它不表达车辆是否在接驾、载客、运维或调度；
-    
+
 - 业务动作由当前任务表达。
-    
+
 
 ---
 
@@ -151,11 +151,41 @@ service_type = PASSENGER_RIDE
 说明：
 
 - Robotaxi 的当前位置以 `current_cell_id` 为准；
-    
+
 - 所属 Map 可通过 Cell 关联获得，不在 Robotaxi 中重复存储；
-    
+
 - `current_route_id` 仅在 Robotaxi 执行移动时存在。
-    
+
+### 8.1 结构化位置表达
+
+Robotaxi 的运营位置展示统一使用空间模型中的 CellContext 推导，不在 Robotaxi 对象中重复存储道路、地点或服务区字段。
+
+```text
+Robotaxi.current_cell_id
+→ CellContext
+→ Map / Zone / Road / RoadSegment / RoadNode / ServiceArea / Place / OpsCenter
+```
+
+前端展示 Robotaxi 位置时，应基于 `current_cell_id` 推导：
+
+|展示项|来源|
+|---|---|
+|当前位置网格|current_cell_id|
+|所在地点|CellContext.related_places|
+|所在服务区|CellContext.related_service_areas|
+|所在道路片段|CellContext.related_road_segments|
+|所在道路|CellContext.related_roads|
+|所在运营中心|CellContext.related_ops_centers|
+|所在 Zone|CellContext.related_zones|
+
+说明：
+
+- Robotaxi 原则上位于某个 Place、ServiceArea、RoadSegment / Road，或正在执行某条 Route；
+
+- 位置归属由空间对象关系推导，不新增 `current_place_id`、`current_service_area_id`、`current_road_segment_id` 等冗余字段；
+
+- 后续 Vehicle、Task、Trip 等对象只要引用 Cell，也应复用同一套 CellContext 位置解释能力。
+
 
 ---
 
@@ -168,11 +198,29 @@ service_type = PASSENGER_RIDE
 说明：
 
 - Robotaxi 当前正在做什么，由 `current_task_id` 指向的 Task 表达；
-    
+
 - Robotaxi 不直接表达“接驾中、载客中、去运营区、运维中”等业务动作；
-    
+
 - 没有任务时，`current_task_id = null`。
-    
+
+### 9.1 当前任务展示
+
+Robotaxi 前端可以展示当前任务类型和当前任务状态，但这些字段应由 `current_task_id` 关联的 Task 推导，不作为 Robotaxi 本体冗余字段存储。
+
+```text
+Robotaxi.current_task_id
+→ Task
+→ task_type / task_status
+```
+
+说明：
+
+- `current_task_type`、`current_task_status` 是展示推导字段；
+
+- Robotaxi 本体只保留当前任务引用；
+
+- 当 Task 状态变化时，Robotaxi 视图应同步展示最新任务状态。
+
 
 ---
 
@@ -199,9 +247,9 @@ current_task_id 是否为空
 说明：
 
 - Robotaxi 本体只提供可调度基础条件；
-    
+
 - 任务抢占、任务取消、任务切换由后续 Task / DispatchCenter 定义。
-    
+
 
 ---
 
@@ -239,7 +287,7 @@ current_task_id 是否为空
 
 说明：
 
-Robotaxi 不直接关联 Map、Place、Road、RoadSegment、ServiceArea 或 Zone。  
+Robotaxi 不直接关联 Map、Place、Road、RoadSegment、ServiceArea 或 Zone。
 这些关系通过 Cell、Route 和 Task 间接获得。
 
 ---
@@ -247,25 +295,25 @@ Robotaxi 不直接关联 Map、Place、Road、RoadSegment、ServiceArea 或 Zone
 ## 13. 规则
 
 1. Robotaxi 必须有 `current_cell_id`；
-    
+
 2. 所属 Map 通过 Cell 关联获得；
-    
+
 3. `availability_status` 只表达车辆运营资格；
-    
+
 4. `motion_status` 只表达车辆物理运动形态；
-    
+
 5. `current_task_id` 表达车辆当前业务动作来源；
-    
+
 6. `current_route_id` 仅表达当前移动路径；
-    
+
 7. Robotaxi 不直接生成需求、订单或调度任务；
-    
+
 8. Robotaxi 不直接表达接驾、载客、运维、部署等任务阶段；
-    
+
 9. 任务状态和任务优先级由后续 Task 对象定义；
-    
+
 10. 可调度能力由车辆状态、位置、续航和任务规则共同判断。
-    
+
 
 ---
 
@@ -283,5 +331,5 @@ Robotaxi = 自动驾驶 AI 汽车资产
 当前任务 = 它现在正在做什么业务动作
 ```
 
-Robotaxi 本体不承载完整业务流程。  
+Robotaxi 本体不承载完整业务流程。
 业务动作、任务阶段、任务切换和任务优先级由后续 Task 体系表达。

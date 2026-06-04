@@ -26,6 +26,26 @@ Worker 通过 Task 执行具体作业。
 
 ---
 
+## 2.1 当前任务展示
+
+Worker 当前行为由 `current_task_id` 指向的 Task 表达。前端可以展示当前任务类型和当前任务状态，但这些字段应由 Task 推导，不作为 Worker 本体冗余字段存储。
+
+```text
+Worker.current_task_id
+→ Task
+→ task_type / task_status
+```
+
+说明：
+
+- `current_task_type`、`current_task_status` 是展示推导字段；
+
+- Worker 本体只保留当前任务引用；
+
+- Worker 与 Robotaxi 在当前任务展示规则上保持一致。
+
+---
+
 ## 3. worker_role
 
 |worker_role|含义|

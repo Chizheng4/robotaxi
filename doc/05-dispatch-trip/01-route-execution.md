@@ -1,11 +1,11 @@
-# RouteExecution：路径执行记录
+# RouteExecution：行驶记录
 
 ## 1. 定义
 
-RouteExecution 是 Robotaxi 在执行某个 Task 时，对指定 Route 的离散化移动执行记录。
+RouteExecution 是 Robotaxi 在执行某个 Task 时，对指定 Route 的离散化移动执行记录。前端面向运营人员展示时统一命名为“行驶记录”。
 
 ```text
-RouteExecution = Robotaxi 执行任务时的路径移动过程记录
+RouteExecution = Robotaxi 执行任务时的行驶过程记录
 ```
 
 它不是 Task，也不是 Route，也不是 Trip。
@@ -25,7 +25,7 @@ RouteExecution = 实际怎么走
 ```text
 DeploymentTask：把 RTX-001 投放到 SA-003
 Route：从当前 Cell 到目标 Cell 的规划路径
-RouteExecution：RTX-001 沿 Route 一步步移动的执行记录
+RouteExecution：RTX-001 沿 Route 一步步移动的行驶记录
 ```
 
 ---
@@ -72,9 +72,48 @@ RouteExecution 可被所有需要车辆移动的 Task 复用。
 说明：
 
 - ReadinessCheckTask 主要发生在 OpsCenter 内，不需要路径执行；
-    
+
 - ServiceTask 后续会同时关联 Trip，但车辆移动过程仍可由 RouteExecution 记录。
-    
+
+### 4.1 前端归属
+
+RouteExecution 不是任务单，也不是静态 Route。
+
+在运营平台前端中，RouteExecution 作为 Robotaxi 的执行过程记录展示，归属于：
+
+```text
+Robotaxi 管理
+└── 行驶记录
+```
+
+说明：
+
+- 菜单名称使用 `行驶记录`，与运营人员理解保持一致；
+
+- 业务对象本质仍是 RouteExecution；
+
+- 它记录 Robotaxi 在某个 Task 下如何执行 Route，不表达任务来源、业务目的或客户履约结果。
+
+### 4.2 操作职责
+
+当 DeploymentTask 完成路径规划后，RouteExecution 进入 `WAITING_START`。
+
+后续车辆移动相关操作应发生在行驶记录中：
+
+|execution_status|主要操作|反馈对象|
+|---|---|---|
+|WAITING_START|开始行驶|更新 RouteExecution，并反馈 Task 进入 MOVING|
+|MOVING|继续行驶 / 到达目标|更新 Robotaxi 位置，并反馈 Task 完成或继续移动|
+|COMPLETED|查看轨迹和结果|无状态变化|
+
+说明：
+
+- Task 说明为什么移动；
+
+- Route 说明计划怎么走；
+
+- RouteExecution 说明实际怎么走，并负责把移动结果反馈给 Task 和 Robotaxi。
+
 
 ---
 
@@ -99,7 +138,7 @@ RouteExecution 可被所有需要车辆移动的 Task 复用。
 
 |属性|含义|
 |---|---|
-|route_execution_id|路径执行记录唯一编号|
+|route_execution_id|行驶记录唯一编号|
 |task_id|关联 Task|
 |task_type|关联任务类型|
 |robotaxi_id|执行 Robotaxi|
@@ -124,8 +163,8 @@ RouteExecution 可被所有需要车辆移动的 Task 复用。
 
 |execution_status|含义|下一步动作|
 |---|---|---|
-|WAITING_START|等待开始执行|开始移动|
-|MOVING|正在按 Route 移动|推进一步 / 自动推进 / 暂停 / 重新规划|
+|WAITING_START|等待行驶|开始行驶|
+|MOVING|正在按 Route 行驶|继续行驶 / 自动行驶 / 暂停 / 重新规划|
 |PAUSED|暂停移动|继续移动|
 |COMPLETED|已到达目标|无|
 |FAILED|执行失败|人工处理 / 重新规划|
@@ -139,12 +178,17 @@ RouteExecution 可被所有需要车辆移动的 Task 复用。
 
 |execution_status|可用功能|操作结果|
 |---|---|---|
-|WAITING_START|开始执行|进入 MOVING|
-|MOVING|推进一步 / 自动播放 / 暂停 / 重新规划 Route|更新位置或路径|
-|PAUSED|继续执行|回到 MOVING|
-|COMPLETED|查看轨迹|无状态变化|
-|FAILED|查看异常 / 重新规划|进入 MOVING 或保持 FAILED|
+|WAITING_START|开始行驶|进入 MOVING|
+|MOVING|继续行驶|更新当前位置、电量、续航和任务反馈|
+|PAUSED|查看详情|当前 demo 暂不提供暂停恢复操作|
+|COMPLETED|查看详情|无状态变化|
+|FAILED|查看详情|无状态变化|
 |CANCELLED|查看详情|无状态变化|
+
+说明：
+
+- 当前 demo 只实现 `开始行驶`、`继续行驶` 和 `查看详情`；
+- `自动行驶`、`暂停 / 继续`、`重新规划 Route` 属于后续能力，不在当前版本功能按钮中展示。
 
 ---
 
@@ -159,7 +203,7 @@ RoutePlanning 生成 Route
 ↓
 RouteExecution = WAITING_START
 ↓
-Robotaxi 开始执行
+Robotaxi 开始行驶
 ↓
 RouteExecution = MOVING
 ↓
@@ -180,7 +224,7 @@ Task 完成或进入下一阶段
 
 Robotaxi 的当前位置以 `current_cell_id` 为准。
 
-每推进一步：
+每继续行驶一步：
 
 ```text
 RouteExecution.current_step_index + 1
@@ -212,15 +256,15 @@ Robotaxi.battery_percent = Robotaxi.battery_percent - 本次新增电量消耗
 说明：
 
 - 当前阶段不模拟真实速度、红绿灯、拥堵和加速度；
-    
+
 - 后续可增加拥堵系数、载客能耗、天气影响和电池衰减。
-    
+
 
 ---
 
-## 12. Route 重新规划
+## 12. Route 重新规划（后续能力）
 
-当执行中发现当前 Route 不可用时，可以触发重新规划。
+当执行中发现当前 Route 不可用时，后续可以触发重新规划。当前 demo 不实现该操作。
 
 ```text
 RouteExecution = MOVING
@@ -297,8 +341,8 @@ RouteExecution 全流程需要记录事件。
 
 |event_type|含义|
 |---|---|
-|ROUTE_EXECUTION_CREATED|路径执行记录创建|
-|ROUTE_EXECUTION_STARTED|开始执行|
+|ROUTE_EXECUTION_CREATED|行驶记录创建|
+|ROUTE_EXECUTION_STARTED|开始行驶|
 |ROUTE_STEP_COMPLETED|完成一步移动|
 |ROUTE_EXECUTION_PAUSED|执行暂停|
 |ROUTE_EXECUTION_RESUMED|执行恢复|
@@ -319,7 +363,7 @@ RouteExecution 全流程需要记录事件。
 
 |方式|含义|
 |---|---|
-|手动推进|点击“推进一步”，Robotaxi 前进一个 Route step|
+|手动行驶|点击“继续行驶”，Robotaxi 前进一个 Route step|
 |自动播放|系统按固定时间间隔自动推进 step|
 
 当前阶段不做真实物理仿真。
@@ -367,25 +411,25 @@ RouteExecution 全流程需要记录事件。
 ## 18. 核心规则
 
 1. RouteExecution 只记录车辆移动执行过程；
-    
+
 2. RouteExecution 不表达业务目的，业务目的由 Task 表达；
-    
+
 3. RouteExecution 不负责路径规划，路径规划由 RoutePlanning 生成 Route；
-    
+
 4. 1 个 RouteExecution 只能绑定 1 台 Robotaxi；
-    
+
 5. 1 个 RouteExecution 只能绑定 1 个 Task；
-    
+
 6. Robotaxi 位置、电量、里程必须随 RouteExecution 更新；
-    
+
 7. 到达目标后，RouteExecution 进入 COMPLETED；
-    
+
 8. RouteExecution 完成后，应反馈 Task；
-    
+
 9. Trip 只用于客户服务履约，不用于所有车辆移动；
-    
+
 10. RouteExecution 可被多个不同 Task 类型复用。
-    
+
 
 ---
 

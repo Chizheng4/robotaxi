@@ -19,7 +19,7 @@ Robotaxi 到达 OpsCenter
 ↓
 形成可运营车辆
 ↓
-投放到 Zone / ServiceArea
+通过运营投放任务投放到 Zone / ServiceArea
 ```
 
 OpsCenter 解决的问题：
@@ -131,7 +131,7 @@ OpsCenter 定义设施能力：
 
 10. OpsCenter 不直接代表运营区域；
 
-11. 车辆投放到 Zone / ServiceArea 应由后续 Task 执行。
+11. 运营投放到 Zone / ServiceArea 应由后续 Task 执行。
 
 
 ---
