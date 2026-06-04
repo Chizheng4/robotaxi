@@ -59,6 +59,14 @@ export function validateReadinessCheckTasks(data) {
       data.readinessCheckTasks.every((task) => task.task_status !== ReadinessTaskStatus.WAITING_ASSIGNMENT || task.worker_id === null),
     ),
     check(
+      "READINESS_ASSIGNED_ROBOTAXI_IN_INSPECTION",
+      "已分配或检查中的准入任务必须使 Robotaxi 进入运维检查中",
+      data.readinessCheckTasks.every((task) => ![
+        ReadinessTaskStatus.WAITING_CHECK,
+        ReadinessTaskStatus.CHECKING,
+      ].includes(task.task_status) || robotaxiById.get(task.robotaxi_id)?.availability_status === AvailabilityStatus.IN_INSPECTION),
+    ),
+    check(
       "READINESS_COMPLETED_HAS_RESULT",
       "已完成准入任务必须有检查结果",
       data.readinessCheckTasks.every((task) => task.task_status !== ReadinessTaskStatus.COMPLETED || Boolean(task.check_result)),

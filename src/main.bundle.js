@@ -1,4 +1,5 @@
 const {
+  useEffect,
   useMemo,
   useRef,
   useState
@@ -10,6 +11,7 @@ const {
   Input,
   Layout,
   Menu,
+  Modal,
   Select,
   Space,
   Table,
@@ -168,7 +170,7 @@ const tableConfig = {
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "current_cell_id"]
+    columns: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "battery_percent", "estimated_range_km", "availability_status", "unavailable_reason", "motion_status", "current_cell_id"]
   },
   validations: {
     title: "初始化校验",
@@ -210,6 +212,20 @@ const idFieldByType = {
   robotaxi: "robotaxi_id",
   validation: "rule_id"
 };
+const statusFieldByPage = {
+  roads: "road_status",
+  roadNodes: "node_status",
+  roadSegments: "segment_status",
+  places: "place_status",
+  serviceAreas: "status",
+  zones: "zone_status",
+  routes: "route_status",
+  opsCenters: "ops_center_status",
+  workers: "worker_status",
+  readinessTasks: "task_status",
+  robotaxis: "availability_status",
+  validations: "result"
+};
 const cellClass = {
   EMPTY: "cell-empty",
   ROAD: "cell-road",
@@ -219,14 +235,21 @@ const cellClass = {
 const legendItems = [["cell-empty", "空白网格"], ["cell-road", "道路网格"], ["place-residential-swatch", "住宅地点"], ["place-office-swatch", "办公地点"], ["place-commercial-swatch", "商业地点"], ["place-hospital-swatch", "医院学校"], ["place-metro-station-swatch", "地铁接驳"], ["place-ops-center-swatch", "运营中心地点"], ["service-area-swatch", "服务区域"], ["ops-center-swatch", "运营中心覆盖"], ["route-swatch", "选中路径"], ["road-node-swatch", "道路节点"]];
 const readinessStatusOptions = ["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING", "COMPLETED", "CANCELLED", "FAILED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
+const runtimeStorageKey = "robotaxi.runtime.v011";
+const defaultPageFilters = {
+  keyword: "",
+  statusValue: null,
+  triggerType: null
+};
 function App() {
   const initialData = useMemo(() => ({
     ...initializeMapSpace(),
     ...initializeOperationsCenter()
   }), []);
-  const [operationalData, setOperationalData] = useState(initialData);
-  const [readinessTasks, setReadinessTasks] = useState([]);
-  const [taskEventLogs, setTaskEventLogs] = useState([]);
+  const initialRuntime = useMemo(() => loadRuntimeSnapshot(initialData), [initialData]);
+  const [operationalData, setOperationalData] = useState(initialRuntime.operationalData);
+  const [readinessTasks, setReadinessTasks] = useState(initialRuntime.readinessTasks);
+  const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const initialValidations = useMemo(() => [...validateMapSpace(initialData), ...validateOperationsCenter(initialData)], [initialData]);
   const data = useMemo(() => ({
     ...operationalData,
@@ -234,14 +257,13 @@ function App() {
     taskEventLogs
   }), [operationalData, readinessTasks, taskEventLogs]);
   const validations = useMemo(() => [...initialValidations, ...validateReadinessCheckTasks(data)], [data, initialValidations]);
-  const [activePage, setActivePage] = useState("console");
-  const [selected, setSelected] = useState({
-    type: "map",
-    id: data.maps[0].map_id
-  });
+  const [activePage, setActivePage] = useState(initialRuntime.activePage);
+  const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
-  const [openMenuKeys, setOpenMenuKeys] = useState([]);
+  const [openMenuKeys, setOpenMenuKeys] = useState(getOpenKeysForPage(initialRuntime.activePage));
   const [detailCollapsed, setDetailCollapsed] = useState(false);
+  const [pageSelections, setPageSelections] = useState(initialRuntime.pageSelections);
+  const [pageUiState, setPageUiState] = useState(initialRuntime.pageUiState);
   const rowsByPage = useMemo(() => ({
     maps: data.maps,
     cells: data.cells,
@@ -309,6 +331,16 @@ function App() {
   const topTitle = showConsoleSummary ? data.maps[0].map_name : activeConfig?.title || "业务记录";
   const topDescription = showConsoleSummary ? "模拟网格空间 / 道路 / 地点 / 服务区 / 运营中心" : activeConfig?.description;
   const activeRows = rowsByPage[activePage] || [];
+  useEffect(() => {
+    saveRuntimeSnapshot({
+      operationalData,
+      readinessTasks,
+      taskEventLogs,
+      activePage,
+      pageSelections,
+      pageUiState
+    });
+  }, [activePage, operationalData, pageSelections, pageUiState, readinessTasks, taskEventLogs]);
   return React.createElement(Layout, {
     className: "ops-shell"
   }, React.createElement(Sider, {
@@ -319,8 +351,10 @@ function App() {
     trigger: null
   }, React.createElement("div", {
     className: "brand-bar"
-  }, React.createElement("div", {
-    className: "brand-title"
+  }, React.createElement(Button, {
+    className: "brand-title-button",
+    type: "text",
+    onClick: goToConsole
   }, collapsed ? "RT" : "Robotaxi 运营平台"), React.createElement(Button, {
     type: "text",
     size: "small",
@@ -362,25 +396,25 @@ function App() {
     color: failedCount === 0 ? "success" : "error"
   }, "\u6821\u9A8C ", failedCount === 0 ? "全部通过" : `${failedCount} 项异常`)) : React.createElement(Tag, {
     bordered: false
-  }, "\u8BB0\u5F55 ", activeRows.length))), React.createElement(Layout, {
+  }, "\u8BB0\u5F55 ", activeRows.length), React.createElement(Button, {
+    size: "small",
+    onClick: resetRuntime
+  }, "\u91CD\u7F6E\u6A21\u62DF\u6570\u636E"))), React.createElement(Layout, {
     className: detailCollapsed ? "workbench detail-collapsed" : "workbench"
   }, React.createElement(Content, {
     className: "work-content"
   }, activePage === "console" ? React.createElement(MapCanvas, {
     data: data,
     selected: selected,
-    onSelect: (type, id) => setSelected({
-      type,
-      id
-    })
+    onSelect: (type, id) => selectForPage("console", type, id)
   }) : React.createElement(RecordTable, {
+    key: activePage,
     page: activePage,
     rows: rowsByPage[activePage] || [],
     selected: selected,
-    onSelect: (type, id) => setSelected({
-      type,
-      id
-    }),
+    uiState: pageUiState[activePage] || createDefaultPageUiState(),
+    onUiStateChange: nextState => updatePageUiState(activePage, nextState),
+    onSelect: (type, id) => selectForPage(activePage, type, id),
     actions: {
       createManualTask,
       runAutoReadinessCheck,
@@ -404,21 +438,7 @@ function App() {
   function handleMenuClick(key) {
     setActivePage(key);
     setOpenMenuKeys(getOpenKeysForPage(key));
-    if (key === "console") {
-      setSelected({
-        type: "map",
-        id: data.maps[0].map_id
-      });
-      return;
-    }
-    const nextType = pageObjectType[key];
-    setSelected(nextType ? {
-      type: nextType,
-      id: null
-    } : {
-      type: null,
-      id: null
-    });
+    setSelected(pageSelections[key] || getDefaultSelection(key, data));
   }
   function handleMenuOpenChange(keys) {
     const latestKey = keys.find(key => !openMenuKeys.includes(key));
@@ -429,15 +449,64 @@ function App() {
     const rootKey = getRootMenuKey(latestKey);
     setOpenMenuKeys(keys.filter(key => getRootMenuKey(key) === rootKey));
   }
+  function goToConsole() {
+    setActivePage("console");
+    setOpenMenuKeys([]);
+    const consoleSelection = pageSelections.console || {
+      type: "map",
+      id: data.maps[0].map_id
+    };
+    setSelected(consoleSelection);
+  }
+  function resetRuntime() {
+    taskSequence = 0;
+    eventSequence = 0;
+    const nextSelection = {
+      type: "map",
+      id: initialData.maps[0].map_id
+    };
+    setOperationalData(initialData);
+    setReadinessTasks([]);
+    setTaskEventLogs([]);
+    setActivePage("console");
+    setOpenMenuKeys([]);
+    setSelected(nextSelection);
+    setPageSelections({
+      console: nextSelection
+    });
+    setPageUiState({});
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(runtimeStorageKey);
+      } catch (error) {}
+    }
+  }
+  function selectForPage(page, type, id) {
+    const nextSelection = {
+      type,
+      id
+    };
+    setSelected(nextSelection);
+    setPageSelections(current => ({
+      ...current,
+      [page]: nextSelection
+    }));
+  }
+  function updatePageUiState(page, nextState) {
+    setPageUiState(current => ({
+      ...current,
+      [page]: nextState
+    }));
+  }
   function createManualTask() {
-    const candidate = findNextCandidate(data.robotaxis, readinessTasks);
+    const candidates = data.robotaxis.filter(robotaxi => isCandidateRobotaxi(robotaxi, readinessTasks));
     const nextLogs = [createEventLog({
       event_type: taskTypes.TaskEventType.MANUAL_TRIGGER_STARTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       trigger_type: taskTypes.TriggerType.MANUAL,
       message: "手动触发运营准入任务生成"
     })];
-    if (!candidate) {
+    if (candidates.length === 0) {
       setTaskEventLogs(logs => [...nextLogs, ...logs]);
       addLog({
         event_type: taskTypes.TaskEventType.NO_CANDIDATE_ROBOTAXI,
@@ -447,27 +516,27 @@ function App() {
       });
       return;
     }
-    const task = createTask(candidate, taskTypes.TriggerType.MANUAL);
-    setReadinessTasks(tasks => [task, ...tasks]);
+    const newTasks = candidates.map(robotaxi => createTask(robotaxi, taskTypes.TriggerType.MANUAL));
+    setReadinessTasks(tasks => [...newTasks, ...tasks]);
     setOperationalData(current => ({
       ...current,
-      robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === candidate.robotaxi_id ? {
-        ...robotaxi,
-        current_task_id: task.task_id
-      } : robotaxi)
+      robotaxis: current.robotaxis.map(robotaxi => {
+        const task = newTasks.find(item => item.robotaxi_id === robotaxi.robotaxi_id);
+        return task ? {
+          ...robotaxi,
+          current_task_id: task.task_id
+        } : robotaxi;
+      })
     }));
-    setTaskEventLogs(logs => [createEventLog({
+    setTaskEventLogs(logs => [...newTasks.map(task => createEventLog({
       event_type: taskTypes.TaskEventType.TASK_CREATED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       task_id: task.task_id,
       robotaxi_id: task.robotaxi_id,
       trigger_type: task.trigger_type,
       message: `已创建 ${task.robotaxi_id} 的运营准入任务`
-    }), ...nextLogs, ...logs]);
-    setSelected({
-      type: "readinessTask",
-      id: task.task_id
-    });
+    })), ...nextLogs, ...logs]);
+    selectForPage("readinessTasks", "readinessTask", newTasks[0].task_id);
   }
   function runAutoReadinessCheck() {
     const candidates = data.robotaxis.filter(robotaxi => isCandidateRobotaxi(robotaxi, readinessTasks));
@@ -529,6 +598,11 @@ function App() {
     } : item));
     setOperationalData(current => ({
       ...current,
+      robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === task.robotaxi_id ? {
+        ...robotaxi,
+        availability_status: "IN_INSPECTION",
+        current_task_id: taskId
+      } : robotaxi),
       workers: current.workers.map(item => item.worker_id === worker.worker_id ? {
         ...item,
         worker_status: "BUSY",
@@ -645,6 +719,8 @@ function RecordTable({
   page,
   rows,
   selected,
+  uiState,
+  onUiStateChange,
   onSelect,
   actions
 }) {
@@ -652,16 +728,16 @@ function RecordTable({
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
-  const [filters, setFilters] = useState({
-    keyword: "",
-    taskStatus: null,
-    triggerType: null
-  });
-  const [appliedFilters, setAppliedFilters] = useState(filters);
+  const statusField = statusFieldByPage[page];
+  const [eventPanelHeight, setEventPanelHeight] = useState(112);
+  const [abnormalTask, setAbnormalTask] = useState(null);
+  const [abnormalIssueType, setAbnormalIssueType] = useState(taskTypes?.IssueType?.LOW_BATTERY || "LOW_BATTERY");
+  const filters = uiState.filters;
+  const appliedFilters = uiState.appliedFilters;
   const displayRows = useMemo(() => {
-    if (!isReadinessPage) return rows;
-    return filterReadinessRows(rows, appliedFilters);
-  }, [appliedFilters, isReadinessPage, rows]);
+    return filterRecordRows(rows, config.columns, statusField, appliedFilters);
+  }, [appliedFilters, config.columns, rows, statusField]);
+  const statusOptions = useMemo(() => createStatusOptions(rows, statusField, isReadinessPage), [isReadinessPage, rows, statusField]);
   const columns = config.columns.map(key => ({
     key,
     title: getFieldLabel(key),
@@ -675,48 +751,68 @@ function RecordTable({
     title: "操作",
     fixed: "right",
     width: 240,
-    render: (_, row) => renderReadinessActions(row, actions)
+    render: (_, row) => renderReadinessActions(row, {
+      ...actions,
+      openAbnormalModal: openAbnormalModal
+    })
   }] : columns;
+  const tableScrollY = isReadinessPage ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
+  const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
   return React.createElement("section", {
     className: isReadinessPage ? "record-page-new readiness-page" : "record-page-new"
-  }, isReadinessPage && React.createElement(React.Fragment, null, React.createElement("div", {
+  }, statusOptions.length > 0 && React.createElement("div", {
+    className: "status-segment-bar"
+  }, React.createElement(Button, {
+    size: "small",
+    type: !appliedFilters.statusValue ? "primary" : "default",
+    onClick: () => applyStatusFilter(null)
+  }, "\u5168\u90E8 ", rows.length), statusOptions.map(option => React.createElement(Button, {
+    key: option.value,
+    size: "small",
+    type: appliedFilters.statusValue === option.value ? "primary" : "default",
+    onClick: () => applyStatusFilter(option.value)
+  }, option.label, " ", option.count))), React.createElement("div", {
     className: "list-filter-bar"
   }, React.createElement("div", {
     className: "filter-field keyword-field"
   }, React.createElement("span", null, "\u5173\u952E\u8BCD"), React.createElement(Input, {
     size: "small",
-    placeholder: "\u4EFB\u52A1\u7F16\u53F7 / Robotaxi / Worker",
+    placeholder: isReadinessPage ? "任务编号 / Robotaxi / Worker" : "输入关键词",
     value: filters.keyword,
-    onChange: event => setFilters(current => ({
-      ...current,
+    onChange: event => updateFilters({
+      ...filters,
       keyword: event.target.value
-    }))
-  })), React.createElement("div", {
+    })
+  })), statusField && React.createElement("div", {
     className: "filter-field"
-  }, React.createElement("span", null, "\u4EFB\u52A1\u72B6\u6001"), React.createElement(Select, {
+  }, React.createElement("span", null, "\u72B6\u6001"), React.createElement(Select, {
     size: "small",
     placeholder: "\u5168\u90E8\u72B6\u6001",
     allowClear: true,
-    value: filters.taskStatus,
-    onChange: value => setFilters(current => ({
-      ...current,
-      taskStatus: value || null
-    })),
-    options: readinessStatusOptions.map(value => ({
-      value,
-      label: getDisplayValue(value)
+    getPopupContainer: () => document.body,
+    listHeight: 280,
+    value: filters.statusValue,
+    onChange: value => updateFilters({
+      ...filters,
+      statusValue: value || null
+    }),
+    options: statusOptions.map(option => ({
+      value: option.value,
+      label: option.label
     }))
-  })), React.createElement("div", {
+  })), isReadinessPage && React.createElement("div", {
     className: "filter-field"
   }, React.createElement("span", null, "\u89E6\u53D1\u65B9\u5F0F"), React.createElement(Select, {
     size: "small",
     placeholder: "\u5168\u90E8\u65B9\u5F0F",
     allowClear: true,
+    getPopupContainer: () => document.body,
+    listHeight: 240,
     value: filters.triggerType,
-    onChange: value => setFilters(current => ({
-      ...current,
+    onChange: value => updateFilters({
+      ...filters,
       triggerType: value || null
-    })),
+    }),
     options: triggerTypeOptions.map(value => ({
       value,
       label: getDisplayValue(value)
@@ -724,25 +820,17 @@ function RecordTable({
   })), React.createElement(Button, {
     size: "small",
     type: "primary",
-    onClick: () => setAppliedFilters(filters)
-  }, "\u67E5\u8BE2\u4EFB\u52A1"), React.createElement(Button, {
+    onClick: () => applyFilters(filters)
+  }, "\u67E5\u8BE2"), React.createElement(Button, {
     size: "small",
-    onClick: () => {
-      const resetFilters = {
-        keyword: "",
-        taskStatus: null,
-        triggerType: null
-      };
-      setFilters(resetFilters);
-      setAppliedFilters(resetFilters);
-    }
-  }, "\u91CD\u7F6E\u6761\u4EF6")), React.createElement("div", {
+    onClick: resetFilters
+  }, "\u91CD\u7F6E")), isReadinessPage && React.createElement(React.Fragment, null, React.createElement("div", {
     className: "list-action-bar"
   }, React.createElement(Button, {
     size: "small",
     type: "primary",
     onClick: actions.createManualTask
-  }, "\u751F\u6210\u51C6\u5165\u68C0\u67E5\u4EFB\u52A1"), React.createElement(Button, {
+  }, "\u751F\u6210\u51C6\u5165\u4EFB\u52A1"), React.createElement(Button, {
     size: "small",
     onClick: actions.runAutoReadinessCheck
   }, "\u542F\u52A8\u81EA\u52A8\u51C6\u5165\u68C0\u67E5"))), React.createElement(Table, {
@@ -757,15 +845,22 @@ function RecordTable({
     },
     scroll: {
       x: "max-content",
-      y: isReadinessPage ? "calc(100vh - 384px)" : "calc(100vh - 96px)"
+      y: tableScrollY
     },
     rowClassName: row => selected?.type === objectType && selected?.id === row[idField] ? "active-table-row" : "",
     onRow: row => ({
       onClick: () => onSelect(objectType, row[idField])
     })
   }), isReadinessPage && React.createElement("div", {
-    className: "event-log-section"
+    className: "event-log-section",
+    style: {
+      height: eventPanelHeight
+    }
   }, React.createElement("div", {
+    className: "event-log-resizer",
+    onPointerDown: handleEventResizeStart,
+    title: "\u62D6\u52A8\u8C03\u6574\u4E8B\u4EF6\u533A\u9AD8\u5EA6"
+  }), React.createElement("div", {
     className: "event-log-title"
   }, "\u6700\u8FD1\u4EFB\u52A1\u4E8B\u4EF6"), React.createElement(Table, {
     size: "small",
@@ -782,7 +877,7 @@ function RecordTable({
     pagination: false,
     scroll: {
       x: "max-content",
-      y: 160
+      y: eventTableScrollY
     }
   })), React.createElement(ModuleFooter, {
     page: page,
@@ -790,7 +885,96 @@ function RecordTable({
     displayCount: displayRows.length,
     eventCount: actions.taskEventLogs?.length || 0,
     appliedFilters: isReadinessPage ? appliedFilters : null
-  }));
+  }), isReadinessPage && React.createElement(Modal, {
+    title: "\u63D0\u4EA4\u5F02\u5E38\u68C0\u67E5\u7ED3\u679C",
+    open: Boolean(abnormalTask),
+    okText: "\u786E\u8BA4\u5F02\u5E38",
+    cancelText: "\u53D6\u6D88",
+    width: 520,
+    onOk: confirmAbnormalResult,
+    onCancel: () => setAbnormalTask(null)
+  }, React.createElement("div", {
+    className: "abnormal-modal-body"
+  }, React.createElement(Descriptions, {
+    column: 1,
+    size: "small",
+    colon: false
+  }, React.createElement(Descriptions.Item, {
+    label: "\u4EFB\u52A1\u7F16\u53F7"
+  }, abnormalTask?.task_id || "无"), React.createElement(Descriptions.Item, {
+    label: "Robotaxi \u7F16\u53F7"
+  }, abnormalTask?.robotaxi_id || "无"), React.createElement(Descriptions.Item, {
+    label: "\u4F5C\u4E1A\u4EBA\u5458\u7F16\u53F7"
+  }, abnormalTask?.worker_id || "无")), React.createElement("div", {
+    className: "abnormal-field"
+  }, React.createElement("span", null, "\u5F02\u5E38\u7C7B\u578B"), React.createElement(Select, {
+    size: "small",
+    value: abnormalIssueType,
+    getPopupContainer: () => document.body,
+    listHeight: 280,
+    onChange: setAbnormalIssueType,
+    options: Object.values(taskTypes.IssueType).filter(value => value !== taskTypes.IssueType.NONE).map(value => ({
+      value,
+      label: getDisplayValue(value)
+    }))
+  })))));
+  function openAbnormalModal(task) {
+    setAbnormalTask(task);
+    setAbnormalIssueType(taskTypes.IssueType.LOW_BATTERY);
+  }
+  function confirmAbnormalResult() {
+    if (!abnormalTask) return;
+    actions.submitCheckResult(abnormalTask.task_id, taskTypes.CheckResult.FAILED, abnormalIssueType);
+    setAbnormalTask(null);
+  }
+  function applyStatusFilter(statusValue) {
+    const nextFilters = {
+      ...filters,
+      statusValue
+    };
+    onUiStateChange({
+      filters: nextFilters,
+      appliedFilters: nextFilters
+    });
+  }
+  function resetFilters() {
+    const resetValue = {
+      keyword: "",
+      statusValue: null,
+      triggerType: null
+    };
+    onUiStateChange({
+      filters: resetValue,
+      appliedFilters: resetValue
+    });
+  }
+  function updateFilters(nextFilters) {
+    onUiStateChange({
+      ...uiState,
+      filters: nextFilters
+    });
+  }
+  function applyFilters(nextFilters) {
+    onUiStateChange({
+      filters: nextFilters,
+      appliedFilters: nextFilters
+    });
+  }
+  function handleEventResizeStart(event) {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = eventPanelHeight;
+    const handleMove = moveEvent => {
+      const nextHeight = startHeight - (moveEvent.clientY - startY);
+      setEventPanelHeight(Math.min(360, Math.max(88, nextHeight)));
+    };
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+  }
 }
 function ModuleFooter({
   page,
@@ -799,7 +983,7 @@ function ModuleFooter({
   eventCount,
   appliedFilters
 }) {
-  const hasFilter = appliedFilters && (appliedFilters.keyword || appliedFilters.taskStatus || appliedFilters.triggerType);
+  const hasFilter = appliedFilters && (appliedFilters.keyword || appliedFilters.statusValue || appliedFilters.triggerType);
   if (page === "readinessTasks") {
     return React.createElement("div", {
       className: "module-footer"
@@ -1069,8 +1253,8 @@ function renderReadinessActions(row, actions) {
     }, "\u68C0\u67E5\u901A\u8FC7"), React.createElement(Button, {
       size: "small",
       danger: true,
-      onClick: () => actions.submitCheckResult(row.task_id, taskTypes.CheckResult.FAILED, taskTypes.IssueType.LOW_BATTERY)
-    }, "\u4E0D\u901A\u8FC7-\u7535\u91CF\u4E0D\u8DB3"));
+      onClick: () => actions.openAbnormalModal(row)
+    }, "\u5F02\u5E38"));
   }
   return React.createElement(Text, {
     type: "secondary"
@@ -1166,14 +1350,107 @@ function nextEventId() {
   eventSequence += 1;
   return `EVT-${String(eventSequence).padStart(3, "0")}`;
 }
-function filterReadinessRows(rows, filters) {
+function createDefaultPageUiState() {
+  return {
+    filters: {
+      ...defaultPageFilters
+    },
+    appliedFilters: {
+      ...defaultPageFilters
+    }
+  };
+}
+function getDefaultSelection(page, data) {
+  if (page === "console") return {
+    type: "map",
+    id: data.maps[0].map_id
+  };
+  const type = pageObjectType[page];
+  return type ? {
+    type,
+    id: null
+  } : {
+    type: null,
+    id: null
+  };
+}
+function loadRuntimeSnapshot(initialData) {
+  const fallback = {
+    operationalData: initialData,
+    readinessTasks: [],
+    taskEventLogs: [],
+    activePage: "console",
+    pageSelections: {
+      console: {
+        type: "map",
+        id: initialData.maps[0].map_id
+      }
+    },
+    pageUiState: {}
+  };
+  if (typeof window === "undefined") return fallback;
+  try {
+    const rawValue = window.localStorage.getItem(runtimeStorageKey);
+    if (!rawValue) return fallback;
+    const snapshot = JSON.parse(rawValue);
+    const readinessTasks = Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : [];
+    const taskEventLogs = Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : [];
+    taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
+    eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
+    return {
+      operationalData: snapshot.operationalData || initialData,
+      readinessTasks,
+      taskEventLogs,
+      activePage: snapshot.activePage || "console",
+      pageSelections: {
+        console: {
+          type: "map",
+          id: initialData.maps[0].map_id
+        },
+        ...(snapshot.pageSelections || {})
+      },
+      pageUiState: snapshot.pageUiState || {}
+    };
+  } catch (error) {
+    return fallback;
+  }
+}
+function saveRuntimeSnapshot(snapshot) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(runtimeStorageKey, JSON.stringify({
+      ...snapshot,
+      taskSequence,
+      eventSequence
+    }));
+  } catch (error) {}
+}
+function deriveSequence(items, field, prefix) {
+  return items.reduce((maxValue, item) => {
+    const value = String(item[field] || "");
+    if (!value.startsWith(prefix)) return maxValue;
+    const numberValue = Number(value.slice(prefix.length));
+    return Number.isFinite(numberValue) ? Math.max(maxValue, numberValue) : maxValue;
+  }, 0);
+}
+function filterRecordRows(rows, columns, statusField, filters) {
   const keyword = filters.keyword.trim().toLowerCase();
   return rows.filter(row => {
-    const keywordMatched = !keyword || [row.task_id, row.robotaxi_id, row.worker_id].some(value => String(value || "").toLowerCase().includes(keyword));
-    const statusMatched = !filters.taskStatus || row.task_status === filters.taskStatus;
+    const keywordMatched = !keyword || columns.some(key => String(row[key] || "").toLowerCase().includes(keyword));
+    const statusMatched = !statusField || !filters.statusValue || row[statusField] === filters.statusValue;
     const triggerMatched = !filters.triggerType || row.trigger_type === filters.triggerType;
     return keywordMatched && statusMatched && triggerMatched;
   });
+}
+function createStatusOptions(rows, statusField, isReadinessPage) {
+  if (!statusField) return [];
+  const orderedValues = isReadinessPage ? readinessStatusOptions : [];
+  const values = [...orderedValues, ...rows.map(row => row[statusField]).filter(Boolean)];
+  return [...new Set(values)].map(value => ({
+    value,
+    label: getDisplayValue(value),
+    count: rows.filter(row => row[statusField] === value).length
+  })).filter(item => item.count > 0 || isReadinessPage);
 }
 function getOpenKeysForPage(pageKey) {
   if (pageKey === "console") return [];

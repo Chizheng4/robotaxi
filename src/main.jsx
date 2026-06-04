@@ -1,5 +1,5 @@
-const { useMemo, useRef, useState } = React;
-const { Button, Descriptions, Empty, Input, Layout, Menu, Select, Space, Table, Tag, Typography } = antd;
+const { useEffect, useMemo, useRef, useState } = React;
+const { Button, Descriptions, Empty, Input, Layout, Menu, Modal, Select, Space, Table, Tag, Typography } = antd;
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 
@@ -126,7 +126,7 @@ const tableConfig = {
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "current_cell_id"],
+    columns: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "battery_percent", "estimated_range_km", "availability_status", "unavailable_reason", "motion_status", "current_cell_id"],
   },
   validations: {
     title: "初始化校验",
@@ -171,6 +171,21 @@ const idFieldByType = {
   validation: "rule_id",
 };
 
+const statusFieldByPage = {
+  roads: "road_status",
+  roadNodes: "node_status",
+  roadSegments: "segment_status",
+  places: "place_status",
+  serviceAreas: "status",
+  zones: "zone_status",
+  routes: "route_status",
+  opsCenters: "ops_center_status",
+  workers: "worker_status",
+  readinessTasks: "task_status",
+  robotaxis: "availability_status",
+  validations: "result",
+};
+
 const cellClass = {
   EMPTY: "cell-empty",
   ROAD: "cell-road",
@@ -203,15 +218,18 @@ const readinessStatusOptions = [
 ];
 
 const triggerTypeOptions = ["AUTO", "MANUAL"];
+const runtimeStorageKey = "robotaxi.runtime.v011";
+const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null };
 
 function App() {
   const initialData = useMemo(() => ({
     ...initializeMapSpace(),
     ...initializeOperationsCenter(),
   }), []);
-  const [operationalData, setOperationalData] = useState(initialData);
-  const [readinessTasks, setReadinessTasks] = useState([]);
-  const [taskEventLogs, setTaskEventLogs] = useState([]);
+  const initialRuntime = useMemo(() => loadRuntimeSnapshot(initialData), [initialData]);
+  const [operationalData, setOperationalData] = useState(initialRuntime.operationalData);
+  const [readinessTasks, setReadinessTasks] = useState(initialRuntime.readinessTasks);
+  const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const initialValidations = useMemo(() => [
     ...validateMapSpace(initialData),
     ...validateOperationsCenter(initialData),
@@ -225,11 +243,13 @@ function App() {
     ...initialValidations,
     ...validateReadinessCheckTasks(data),
   ], [data, initialValidations]);
-  const [activePage, setActivePage] = useState("console");
-  const [selected, setSelected] = useState({ type: "map", id: data.maps[0].map_id });
+  const [activePage, setActivePage] = useState(initialRuntime.activePage);
+  const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
-  const [openMenuKeys, setOpenMenuKeys] = useState([]);
+  const [openMenuKeys, setOpenMenuKeys] = useState(getOpenKeysForPage(initialRuntime.activePage));
   const [detailCollapsed, setDetailCollapsed] = useState(false);
+  const [pageSelections, setPageSelections] = useState(initialRuntime.pageSelections);
+  const [pageUiState, setPageUiState] = useState(initialRuntime.pageUiState);
 
   const rowsByPage = useMemo(() => ({
     maps: data.maps,
@@ -299,11 +319,22 @@ function App() {
   const topDescription = showConsoleSummary ? "模拟网格空间 / 道路 / 地点 / 服务区 / 运营中心" : activeConfig?.description;
   const activeRows = rowsByPage[activePage] || [];
 
+  useEffect(() => {
+    saveRuntimeSnapshot({
+      operationalData,
+      readinessTasks,
+      taskEventLogs,
+      activePage,
+      pageSelections,
+      pageUiState,
+    });
+  }, [activePage, operationalData, pageSelections, pageUiState, readinessTasks, taskEventLogs]);
+
   return (
     <Layout className="ops-shell">
       <Sider className="ops-sider" width={216} collapsedWidth={58} collapsed={collapsed} trigger={null}>
         <div className="brand-bar">
-          <div className="brand-title">{collapsed ? "RT" : "Robotaxi 运营平台"}</div>
+          <Button className="brand-title-button" type="text" onClick={goToConsole}>{collapsed ? "RT" : "Robotaxi 运营平台"}</Button>
           <Button type="text" size="small" onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? "≡" : "‹"}
           </Button>
@@ -340,19 +371,23 @@ function App() {
             ) : (
               <Tag bordered={false}>记录 {activeRows.length}</Tag>
             )}
+            <Button size="small" onClick={resetRuntime}>重置模拟数据</Button>
           </div>
         </div>
 
         <Layout className={detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
           <Content className="work-content">
             {activePage === "console" ? (
-              <MapCanvas data={data} selected={selected} onSelect={(type, id) => setSelected({ type, id })} />
+              <MapCanvas data={data} selected={selected} onSelect={(type, id) => selectForPage("console", type, id)} />
             ) : (
               <RecordTable
+                key={activePage}
                 page={activePage}
                 rows={rowsByPage[activePage] || []}
                 selected={selected}
-                onSelect={(type, id) => setSelected({ type, id })}
+                uiState={pageUiState[activePage] || createDefaultPageUiState()}
+                onUiStateChange={(nextState) => updatePageUiState(activePage, nextState)}
+                onSelect={(type, id) => selectForPage(activePage, type, id)}
                 actions={{
                   createManualTask,
                   runAutoReadinessCheck,
@@ -383,12 +418,7 @@ function App() {
   function handleMenuClick(key) {
     setActivePage(key);
     setOpenMenuKeys(getOpenKeysForPage(key));
-    if (key === "console") {
-      setSelected({ type: "map", id: data.maps[0].map_id });
-      return;
-    }
-    const nextType = pageObjectType[key];
-    setSelected(nextType ? { type: nextType, id: null } : { type: null, id: null });
+    setSelected(pageSelections[key] || getDefaultSelection(key, data));
   }
 
   function handleMenuOpenChange(keys) {
@@ -401,8 +431,46 @@ function App() {
     setOpenMenuKeys(keys.filter((key) => getRootMenuKey(key) === rootKey));
   }
 
+  function goToConsole() {
+    setActivePage("console");
+    setOpenMenuKeys([]);
+    const consoleSelection = pageSelections.console || { type: "map", id: data.maps[0].map_id };
+    setSelected(consoleSelection);
+  }
+
+  function resetRuntime() {
+    taskSequence = 0;
+    eventSequence = 0;
+    const nextSelection = { type: "map", id: initialData.maps[0].map_id };
+    setOperationalData(initialData);
+    setReadinessTasks([]);
+    setTaskEventLogs([]);
+    setActivePage("console");
+    setOpenMenuKeys([]);
+    setSelected(nextSelection);
+    setPageSelections({ console: nextSelection });
+    setPageUiState({});
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(runtimeStorageKey);
+      } catch (error) {
+        // Ignore storage cleanup failures; in-memory reset is already complete.
+      }
+    }
+  }
+
+  function selectForPage(page, type, id) {
+    const nextSelection = { type, id };
+    setSelected(nextSelection);
+    setPageSelections((current) => ({ ...current, [page]: nextSelection }));
+  }
+
+  function updatePageUiState(page, nextState) {
+    setPageUiState((current) => ({ ...current, [page]: nextState }));
+  }
+
   function createManualTask() {
-    const candidate = findNextCandidate(data.robotaxis, readinessTasks);
+    const candidates = data.robotaxis.filter((robotaxi) => isCandidateRobotaxi(robotaxi, readinessTasks));
     const nextLogs = [createEventLog({
       event_type: taskTypes.TaskEventType.MANUAL_TRIGGER_STARTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
@@ -410,7 +478,7 @@ function App() {
       message: "手动触发运营准入任务生成",
     })];
 
-    if (!candidate) {
+    if (candidates.length === 0) {
       setTaskEventLogs((logs) => [...nextLogs, ...logs]);
       addLog({
         event_type: taskTypes.TaskEventType.NO_CANDIDATE_ROBOTAXI,
@@ -421,28 +489,28 @@ function App() {
       return;
     }
 
-    const task = createTask(candidate, taskTypes.TriggerType.MANUAL);
-    setReadinessTasks((tasks) => [task, ...tasks]);
+    const newTasks = candidates.map((robotaxi) => createTask(robotaxi, taskTypes.TriggerType.MANUAL));
+    setReadinessTasks((tasks) => [...newTasks, ...tasks]);
     setOperationalData((current) => ({
       ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === candidate.robotaxi_id ? {
-        ...robotaxi,
-        current_task_id: task.task_id,
-      } : robotaxi),
+      robotaxis: current.robotaxis.map((robotaxi) => {
+        const task = newTasks.find((item) => item.robotaxi_id === robotaxi.robotaxi_id);
+        return task ? { ...robotaxi, current_task_id: task.task_id } : robotaxi;
+      }),
     }));
     setTaskEventLogs((logs) => [
-      createEventLog({
+      ...newTasks.map((task) => createEventLog({
         event_type: taskTypes.TaskEventType.TASK_CREATED,
         event_result: taskTypes.TaskEventResult.SUCCESS,
         task_id: task.task_id,
         robotaxi_id: task.robotaxi_id,
         trigger_type: task.trigger_type,
         message: `已创建 ${task.robotaxi_id} 的运营准入任务`,
-      }),
+      })),
       ...nextLogs,
       ...logs,
     ]);
-    setSelected({ type: "readinessTask", id: task.task_id });
+    selectForPage("readinessTasks", "readinessTask", newTasks[0].task_id);
   }
 
   function runAutoReadinessCheck() {
@@ -515,6 +583,11 @@ function App() {
     } : item));
     setOperationalData((current) => ({
       ...current,
+      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === task.robotaxi_id ? {
+        ...robotaxi,
+        availability_status: "IN_INSPECTION",
+        current_task_id: taskId,
+      } : robotaxi),
       workers: current.workers.map((item) => item.worker_id === worker.worker_id ? {
         ...item,
         worker_status: "BUSY",
@@ -634,21 +707,21 @@ function App() {
   }
 }
 
-function RecordTable({ page, rows, selected, onSelect, actions }) {
+function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect, actions }) {
   const isReadinessPage = page === "readinessTasks";
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
-  const [filters, setFilters] = useState({
-    keyword: "",
-    taskStatus: null,
-    triggerType: null,
-  });
-  const [appliedFilters, setAppliedFilters] = useState(filters);
+  const statusField = statusFieldByPage[page];
+  const [eventPanelHeight, setEventPanelHeight] = useState(112);
+  const [abnormalTask, setAbnormalTask] = useState(null);
+  const [abnormalIssueType, setAbnormalIssueType] = useState(taskTypes?.IssueType?.LOW_BATTERY || "LOW_BATTERY");
+  const filters = uiState.filters;
+  const appliedFilters = uiState.appliedFilters;
   const displayRows = useMemo(() => {
-    if (!isReadinessPage) return rows;
-    return filterReadinessRows(rows, appliedFilters);
-  }, [appliedFilters, isReadinessPage, rows]);
+    return filterRecordRows(rows, config.columns, statusField, appliedFilters);
+  }, [appliedFilters, config.columns, rows, statusField]);
+  const statusOptions = useMemo(() => createStatusOptions(rows, statusField, isReadinessPage), [isReadinessPage, rows, statusField]);
   const columns = config.columns.map((key) => ({
     key,
     title: getFieldLabel(key),
@@ -664,55 +737,82 @@ function RecordTable({ page, rows, selected, onSelect, actions }) {
       title: "操作",
       fixed: "right",
       width: 240,
-      render: (_, row) => renderReadinessActions(row, actions),
+      render: (_, row) => renderReadinessActions(row, { ...actions, openAbnormalModal: openAbnormalModal }),
     },
   ] : columns;
+  const tableScrollY = isReadinessPage ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
+  const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
 
   return (
     <section className={isReadinessPage ? "record-page-new readiness-page" : "record-page-new"}>
+      {statusOptions.length > 0 && (
+        <div className="status-segment-bar">
+          <Button
+            size="small"
+            type={!appliedFilters.statusValue ? "primary" : "default"}
+            onClick={() => applyStatusFilter(null)}
+          >
+            全部 {rows.length}
+          </Button>
+          {statusOptions.map((option) => (
+            <Button
+              key={option.value}
+              size="small"
+              type={appliedFilters.statusValue === option.value ? "primary" : "default"}
+              onClick={() => applyStatusFilter(option.value)}
+            >
+              {option.label} {option.count}
+            </Button>
+          ))}
+        </div>
+      )}
+      <div className="list-filter-bar">
+        <div className="filter-field keyword-field">
+          <span>关键词</span>
+          <Input
+            size="small"
+            placeholder={isReadinessPage ? "任务编号 / Robotaxi / Worker" : "输入关键词"}
+            value={filters.keyword}
+            onChange={(event) => updateFilters({ ...filters, keyword: event.target.value })}
+          />
+        </div>
+        {statusField && (
+          <div className="filter-field">
+            <span>状态</span>
+            <Select
+              size="small"
+              placeholder="全部状态"
+              allowClear
+              getPopupContainer={() => document.body}
+              listHeight={280}
+              value={filters.statusValue}
+              onChange={(value) => updateFilters({ ...filters, statusValue: value || null })}
+              options={statusOptions.map((option) => ({ value: option.value, label: option.label }))}
+            />
+          </div>
+        )}
+        {isReadinessPage && (
+          <div className="filter-field">
+            <span>触发方式</span>
+            <Select
+              size="small"
+              placeholder="全部方式"
+              allowClear
+              getPopupContainer={() => document.body}
+              listHeight={240}
+              value={filters.triggerType}
+              onChange={(value) => updateFilters({ ...filters, triggerType: value || null })}
+              options={triggerTypeOptions.map((value) => ({ value, label: getDisplayValue(value) }))}
+            />
+          </div>
+        )}
+        <Button size="small" type="primary" onClick={() => applyFilters(filters)}>查询</Button>
+        <Button size="small" onClick={resetFilters}>重置</Button>
+      </div>
       {isReadinessPage && (
         <>
-          <div className="list-filter-bar">
-            <div className="filter-field keyword-field">
-              <span>关键词</span>
-              <Input
-                size="small"
-                placeholder="任务编号 / Robotaxi / Worker"
-                value={filters.keyword}
-                onChange={(event) => setFilters((current) => ({ ...current, keyword: event.target.value }))}
-              />
-            </div>
-            <div className="filter-field">
-              <span>任务状态</span>
-              <Select
-                size="small"
-                placeholder="全部状态"
-                allowClear
-                value={filters.taskStatus}
-                onChange={(value) => setFilters((current) => ({ ...current, taskStatus: value || null }))}
-                options={readinessStatusOptions.map((value) => ({ value, label: getDisplayValue(value) }))}
-              />
-            </div>
-            <div className="filter-field">
-              <span>触发方式</span>
-              <Select
-                size="small"
-                placeholder="全部方式"
-                allowClear
-                value={filters.triggerType}
-                onChange={(value) => setFilters((current) => ({ ...current, triggerType: value || null }))}
-                options={triggerTypeOptions.map((value) => ({ value, label: getDisplayValue(value) }))}
-              />
-            </div>
-            <Button size="small" type="primary" onClick={() => setAppliedFilters(filters)}>查询任务</Button>
-            <Button size="small" onClick={() => {
-              const resetFilters = { keyword: "", taskStatus: null, triggerType: null };
-              setFilters(resetFilters);
-              setAppliedFilters(resetFilters);
-            }}>重置条件</Button>
-          </div>
           <div className="list-action-bar">
-            <Button size="small" type="primary" onClick={actions.createManualTask}>生成准入检查任务</Button>
+            <Button size="small" type="primary" onClick={actions.createManualTask}>生成准入任务</Button>
             <Button size="small" onClick={actions.runAutoReadinessCheck}>启动自动准入检查</Button>
           </div>
         </>
@@ -723,12 +823,13 @@ function RecordTable({ page, rows, selected, onSelect, actions }) {
         columns={finalColumns}
         dataSource={displayRows}
         pagination={{ pageSize: 14, size: "small", showSizeChanger: false }}
-        scroll={{ x: "max-content", y: isReadinessPage ? "calc(100vh - 384px)" : "calc(100vh - 96px)" }}
+        scroll={{ x: "max-content", y: tableScrollY }}
         rowClassName={(row) => selected?.type === objectType && selected?.id === row[idField] ? "active-table-row" : ""}
         onRow={(row) => ({ onClick: () => onSelect(objectType, row[idField]) })}
       />
       {isReadinessPage && (
-        <div className="event-log-section">
+        <div className="event-log-section" style={{ height: eventPanelHeight }}>
+          <div className="event-log-resizer" onPointerDown={handleEventResizeStart} title="拖动调整事件区高度" />
           <div className="event-log-title">最近任务事件</div>
           <Table
             size="small"
@@ -743,7 +844,7 @@ function RecordTable({ page, rows, selected, onSelect, actions }) {
             }))}
             dataSource={actions.taskEventLogs}
             pagination={false}
-            scroll={{ x: "max-content", y: 160 }}
+            scroll={{ x: "max-content", y: eventTableScrollY }}
           />
         </div>
       )}
@@ -754,14 +855,91 @@ function RecordTable({ page, rows, selected, onSelect, actions }) {
         eventCount={actions.taskEventLogs?.length || 0}
         appliedFilters={isReadinessPage ? appliedFilters : null}
       />
+      {isReadinessPage && (
+        <Modal
+          title="提交异常检查结果"
+          open={Boolean(abnormalTask)}
+          okText="确认异常"
+          cancelText="取消"
+          width={520}
+          onOk={confirmAbnormalResult}
+          onCancel={() => setAbnormalTask(null)}
+        >
+          <div className="abnormal-modal-body">
+            <Descriptions column={1} size="small" colon={false}>
+              <Descriptions.Item label="任务编号">{abnormalTask?.task_id || "无"}</Descriptions.Item>
+              <Descriptions.Item label="Robotaxi 编号">{abnormalTask?.robotaxi_id || "无"}</Descriptions.Item>
+              <Descriptions.Item label="作业人员编号">{abnormalTask?.worker_id || "无"}</Descriptions.Item>
+            </Descriptions>
+            <div className="abnormal-field">
+              <span>异常类型</span>
+              <Select
+                size="small"
+                value={abnormalIssueType}
+                getPopupContainer={() => document.body}
+                listHeight={280}
+                onChange={setAbnormalIssueType}
+                options={Object.values(taskTypes.IssueType)
+                  .filter((value) => value !== taskTypes.IssueType.NONE)
+                  .map((value) => ({ value, label: getDisplayValue(value) }))}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
+
+  function openAbnormalModal(task) {
+    setAbnormalTask(task);
+    setAbnormalIssueType(taskTypes.IssueType.LOW_BATTERY);
+  }
+
+  function confirmAbnormalResult() {
+    if (!abnormalTask) return;
+    actions.submitCheckResult(abnormalTask.task_id, taskTypes.CheckResult.FAILED, abnormalIssueType);
+    setAbnormalTask(null);
+  }
+
+  function applyStatusFilter(statusValue) {
+    const nextFilters = { ...filters, statusValue };
+    onUiStateChange({ filters: nextFilters, appliedFilters: nextFilters });
+  }
+
+  function resetFilters() {
+    const resetValue = { keyword: "", statusValue: null, triggerType: null };
+    onUiStateChange({ filters: resetValue, appliedFilters: resetValue });
+  }
+
+  function updateFilters(nextFilters) {
+    onUiStateChange({ ...uiState, filters: nextFilters });
+  }
+
+  function applyFilters(nextFilters) {
+    onUiStateChange({ filters: nextFilters, appliedFilters: nextFilters });
+  }
+
+  function handleEventResizeStart(event) {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = eventPanelHeight;
+    const handleMove = (moveEvent) => {
+      const nextHeight = startHeight - (moveEvent.clientY - startY);
+      setEventPanelHeight(Math.min(360, Math.max(88, nextHeight)));
+    };
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+  }
 }
 
 function ModuleFooter({ page, totalCount, displayCount, eventCount, appliedFilters }) {
   const hasFilter = appliedFilters && (
     appliedFilters.keyword ||
-    appliedFilters.taskStatus ||
+    appliedFilters.statusValue ||
     appliedFilters.triggerType
   );
   if (page === "readinessTasks") {
@@ -1016,7 +1194,7 @@ function renderReadinessActions(row, actions) {
     return (
       <Space size={4}>
         <Button size="small" type="primary" onClick={() => actions.submitCheckResult(row.task_id, taskTypes.CheckResult.PASSED)}>检查通过</Button>
-        <Button size="small" danger onClick={() => actions.submitCheckResult(row.task_id, taskTypes.CheckResult.FAILED, taskTypes.IssueType.LOW_BATTERY)}>不通过-电量不足</Button>
+        <Button size="small" danger onClick={() => actions.openAbnormalModal(row)}>异常</Button>
       </Space>
     );
   }
@@ -1151,18 +1329,97 @@ function nextEventId() {
   return `EVT-${String(eventSequence).padStart(3, "0")}`;
 }
 
-function filterReadinessRows(rows, filters) {
+function createDefaultPageUiState() {
+  return {
+    filters: { ...defaultPageFilters },
+    appliedFilters: { ...defaultPageFilters },
+  };
+}
+
+function getDefaultSelection(page, data) {
+  if (page === "console") return { type: "map", id: data.maps[0].map_id };
+  const type = pageObjectType[page];
+  return type ? { type, id: null } : { type: null, id: null };
+}
+
+function loadRuntimeSnapshot(initialData) {
+  const fallback = {
+    operationalData: initialData,
+    readinessTasks: [],
+    taskEventLogs: [],
+    activePage: "console",
+    pageSelections: { console: { type: "map", id: initialData.maps[0].map_id } },
+    pageUiState: {},
+  };
+  if (typeof window === "undefined") return fallback;
+  try {
+    const rawValue = window.localStorage.getItem(runtimeStorageKey);
+    if (!rawValue) return fallback;
+    const snapshot = JSON.parse(rawValue);
+    const readinessTasks = Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : [];
+    const taskEventLogs = Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : [];
+    taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
+    eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
+    return {
+      operationalData: snapshot.operationalData || initialData,
+      readinessTasks,
+      taskEventLogs,
+      activePage: snapshot.activePage || "console",
+      pageSelections: {
+        console: { type: "map", id: initialData.maps[0].map_id },
+        ...(snapshot.pageSelections || {}),
+      },
+      pageUiState: snapshot.pageUiState || {},
+    };
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function saveRuntimeSnapshot(snapshot) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(runtimeStorageKey, JSON.stringify({
+      ...snapshot,
+      taskSequence,
+      eventSequence,
+    }));
+  } catch (error) {
+    // Local persistence is a convenience for this prototype; runtime should continue if storage is unavailable.
+  }
+}
+
+function deriveSequence(items, field, prefix) {
+  return items.reduce((maxValue, item) => {
+    const value = String(item[field] || "");
+    if (!value.startsWith(prefix)) return maxValue;
+    const numberValue = Number(value.slice(prefix.length));
+    return Number.isFinite(numberValue) ? Math.max(maxValue, numberValue) : maxValue;
+  }, 0);
+}
+
+function filterRecordRows(rows, columns, statusField, filters) {
   const keyword = filters.keyword.trim().toLowerCase();
   return rows.filter((row) => {
-    const keywordMatched = !keyword || [
-      row.task_id,
-      row.robotaxi_id,
-      row.worker_id,
-    ].some((value) => String(value || "").toLowerCase().includes(keyword));
-    const statusMatched = !filters.taskStatus || row.task_status === filters.taskStatus;
+    const keywordMatched = !keyword || columns.some((key) => String(row[key] || "").toLowerCase().includes(keyword));
+    const statusMatched = !statusField || !filters.statusValue || row[statusField] === filters.statusValue;
     const triggerMatched = !filters.triggerType || row.trigger_type === filters.triggerType;
     return keywordMatched && statusMatched && triggerMatched;
   });
+}
+
+function createStatusOptions(rows, statusField, isReadinessPage) {
+  if (!statusField) return [];
+  const orderedValues = isReadinessPage ? readinessStatusOptions : [];
+  const values = [
+    ...orderedValues,
+    ...rows.map((row) => row[statusField]).filter(Boolean),
+  ];
+  return [...new Set(values)].map((value) => ({
+    value,
+    label: getDisplayValue(value),
+    count: rows.filter((row) => row[statusField] === value).length,
+  })).filter((item) => item.count > 0 || isReadinessPage);
 }
 
 function getOpenKeysForPage(pageKey) {
