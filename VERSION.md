@@ -2,6 +2,15 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v015
+
+核心：记录运营投放、Route 与行驶记录的新一轮方案设计更新。
+
+- 新增 Route v015 设计，强调 Route 必须由有序 `route_steps` 组成，不能再用无序道路网格集合替代路径方案。
+- 新增 DeploymentTask v015 设计，区分计划目标与实际停靠点，并提出到达后备用目标、驻留行为和阻塞处理策略。
+- 新增 RouteExecution v015 设计，明确行驶记录可在同一任务下更换 Route，并负责持续反馈 Robotaxi 位置、里程、电量和任务执行状态。
+- 新增 `07-operations-decision` 目录及运营决策相关文档占位，为后续 DemandForecast、SupplyAdjustmentPlan、SupplyAssignmentDecision、RoutePlanning 等对象设计预留结构。
+
 ## v014
 
 核心：实现运营投放任务与 Robotaxi 行驶记录的最小前端闭环。
