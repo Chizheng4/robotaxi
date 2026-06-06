@@ -718,3 +718,23 @@ body {
   overflow-wrap: anywhere;
   font-size: var(--font-xs);
 }
+
+.compact-location-detail {
+  display: grid;
+  gap: 3px;
+  color: var(--text);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.compact-location-detail details {
+  margin-top: 2px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.compact-location-detail summary {
+  cursor: pointer;
+  color: #2563eb;
+}

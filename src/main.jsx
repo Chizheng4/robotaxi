@@ -30,10 +30,19 @@ const unfinishedDeploymentStatuses = new Set([
   "WAITING_ROUTE",
   "WAITING_START",
   "MOVING",
+  "ARRIVED",
+  "ARRIVAL_ABNORMAL",
 ]);
 
 const pageGroups = [
   { key: "console", label: "运营中控台", children: [{ key: "console", label: "运营中控台" }] },
+  {
+    key: "decision",
+    label: "运营决策中心",
+    children: [
+      { key: "routePlanningStrategies", label: "路径规划管理" },
+    ],
+  },
   {
     key: "opsCenter",
     label: "运营中心管理",
@@ -139,17 +148,27 @@ const tableConfig = {
   deploymentTasks: {
     title: "运营投放任务",
     description: "用于将可运营 Robotaxi 投放到指定服务区或待命位置。",
-    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "origin_location_summary", "target_cell_id", "target_location_summary", "target_service_area_id", "route_id", "route_summary", "created_at"],
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "planned_target_cell_id", "actual_target_cell_id", "arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "planned_target_service_area_id", "actual_target_service_area_id", "route_id", "route_strategy_id", "route_summary", "created_at"],
   },
   routeExecutions: {
     title: "行驶记录",
     description: "记录 Robotaxi 执行任务时的模拟行驶过程。",
-    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_summary", "origin_location_summary", "target_location_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km"],
+    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_strategy_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "planned_target_service_area_id", "current_target_service_area_id", "actual_target_service_area_id", "arrival_execution_result", "route_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km"],
   },
   taskEventLogs: {
     title: "任务事件日志",
     description: "记录运营准入任务的创建、分配、检查和状态反馈事件。",
     columns: ["event_id", "event_type", "event_result", "task_id", "robotaxi_id", "worker_id", "route_execution_id", "message", "created_at"],
+  },
+  routePlanningStrategies: {
+    title: "路径规划管理",
+    description: "用于管理路径规划策略，并追踪每次策略生成 Route 的执行记录。",
+    columns: ["route_strategy_id", "strategy_name", "strategy_type", "trigger_task_status", "origin_rule", "target_rule", "service_area_scope_rule", "route_update_rule", "strategy_status", "strategy_usage_count"],
+  },
+  routePlanningEvents: {
+    title: "路径规划事件",
+    description: "记录路径规划策略的使用结果。",
+    columns: ["event_id", "route_strategy_id", "route_id", "task_id", "robotaxi_id", "route_execution_id", "event_result", "message", "created_at"],
   },
   robotaxis: {
     title: "Robotaxi 管理",
@@ -179,6 +198,8 @@ const pageObjectType = {
   deploymentTasks: "deploymentTask",
   routeExecutions: "routeExecution",
   taskEventLogs: "taskEventLog",
+  routePlanningStrategies: "routePlanningStrategy",
+  routePlanningEvents: "routePlanningEvent",
   robotaxis: "robotaxi",
   validations: "validation",
 };
@@ -199,6 +220,8 @@ const idFieldByType = {
   deploymentTask: "task_id",
   routeExecution: "route_execution_id",
   taskEventLog: "event_id",
+  routePlanningStrategy: "route_strategy_id",
+  routePlanningEvent: "event_id",
   robotaxi: "robotaxi_id",
   validation: "rule_id",
 };
@@ -216,6 +239,7 @@ const statusFieldByPage = {
   readinessTasks: "task_status",
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
+  routePlanningStrategies: "strategy_status",
   robotaxis: "availability_status",
   validations: "result",
 };
@@ -255,6 +279,8 @@ const deploymentStatusOptions = [
   "WAITING_ROUTE",
   "WAITING_START",
   "MOVING",
+  "ARRIVED",
+  "ARRIVAL_ABNORMAL",
   "COMPLETED",
   "CANCELLED",
   "FAILED",
@@ -263,6 +289,8 @@ const deploymentStatusOptions = [
 const routeExecutionStatusOptions = [
   "WAITING_START",
   "MOVING",
+  "ARRIVED",
+  "ARRIVAL_ABNORMAL",
   "PAUSED",
   "COMPLETED",
   "FAILED",
@@ -270,8 +298,12 @@ const routeExecutionStatusOptions = [
 ];
 
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v013";
+const runtimeStorageKey = "robotaxi.runtime.v016.route-strategy-number";
 const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null };
+const legacyRouteStrategyIdMap = {
+  "RPS-INITIAL-DEPLOYMENT": "RPS-001",
+  "RPS-ABNORMAL-SAME-SA": "RPS-002",
+};
 
 function App() {
   const initialData = useMemo(() => ({
@@ -324,9 +356,11 @@ function App() {
     deploymentTasks: deploymentTasks.map((task) => enrichDeploymentTaskForDisplay(task, data)),
     routeExecutions: routeExecutions.map((execution) => enrichRouteExecutionForDisplay(execution, data)),
     taskEventLogs,
+    routePlanningStrategies: createRoutePlanningStrategyRows(data, taskEventLogs),
+    routePlanningEvents: createRoutePlanningEvents(taskEventLogs, data),
     robotaxis: data.robotaxis.map((robotaxi) => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     validations,
-  }), [data, deploymentTasks, readinessTasks, routeExecutions, validations]);
+  }), [data, deploymentTasks, readinessTasks, routeExecutions, taskEventLogs, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -363,6 +397,8 @@ function App() {
       serviceArea: data.serviceAreas,
       zone: data.zones,
       route: data.routes,
+      routePlanningStrategy: rowsByPage.routePlanningStrategies,
+      routePlanningEvent: rowsByPage.routePlanningEvents,
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: readinessTasks,
@@ -371,7 +407,7 @@ function App() {
     };
 
     return collections[selected.type]?.find((item) => item[idFieldByType[selected.type]] === selected.id) || null;
-  }, [data, selected, validations]);
+  }, [data, rowsByPage, selected, validations]);
 
   const menuItems = pageGroups.map((group) => {
     if (group.key === "console") return { key: "console", label: "运营中控台" };
@@ -480,7 +516,11 @@ function App() {
                   viewRouteExecutionForDeployment,
                   startRouteExecution,
                   advanceRouteExecution,
+                  submitNormalArrival,
+                  submitAbnormalArrival,
+                  data,
                   taskEventLogs,
+                  routePlanningEvents: rowsByPage.routePlanningEvents,
                 }}
               />
             )}
@@ -834,23 +874,43 @@ function App() {
 
   function planDeploymentRoute(taskId) {
     const task = deploymentTasks.find((item) => item.task_id === taskId);
-    if (!task || task.task_status !== taskTypes.DeploymentTaskStatus.WAITING_ROUTE) return;
+    if (!task) return;
+    if (task.task_status === taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL) {
+      planAbnormalArrivalRoute(task);
+      return;
+    }
+    if (task.task_status !== taskTypes.DeploymentTaskStatus.WAITING_ROUTE) return;
 
-    const route = createDeploymentRoute(task, data);
-    const routeCells = getRouteExecutionCells(route, data.roadSegments, task.origin_cell_id, task.target_cell_id);
+    const route = createDeploymentRoute(task, data, {
+      originCellId: task.origin_cell_id,
+      targetCellId: task.planned_target_cell_id || task.target_cell_id,
+      targetServiceAreaId: task.planned_target_service_area_id || task.target_service_area_id,
+      strategyId: taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT,
+    });
+    const routeCells = getRouteExecutionCells(route, data.roadSegments, task.origin_cell_id, task.planned_target_cell_id || task.target_cell_id);
     const execution = taskTypes.createRouteExecution({
       route_execution_id: nextRouteExecutionId(),
       task_id: task.task_id,
       task_type: task.task_type,
       robotaxi_id: task.robotaxi_id,
       route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
       execution_status: taskTypes.RouteExecutionStatus.WAITING_START,
       origin_cell_id: task.origin_cell_id,
-      target_cell_id: task.target_cell_id,
+      planned_target_zone_id: task.planned_target_zone_id || task.target_zone_id,
+      planned_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
+      planned_target_cell_id: task.planned_target_cell_id || task.target_cell_id,
+      target_cell_id: task.planned_target_cell_id || task.target_cell_id,
+      target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
       current_cell_id: routeCells[0] || task.origin_cell_id,
       current_step_index: 0,
       total_step_count: Math.max(0, routeCells.length - 1),
       route_cell_ids: routeCells,
+      same_service_area_retry_allowed: true,
+      current_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
+      route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
       distance_traveled_km: 0,
       distance_remaining_km: route.total_distance_m / 1000,
       time_elapsed: "0",
@@ -868,6 +928,7 @@ function App() {
       ...item,
       task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
       route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
     } : item));
     addLog({
       event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
@@ -875,7 +936,106 @@ function App() {
       task_id: task.task_id,
       robotaxi_id: task.robotaxi_id,
       route_execution_id: execution.route_execution_id,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
       message: `${task.task_id} 已生成模拟路径 ${route.route_id} 和行驶记录 ${execution.route_execution_id}`,
+    });
+    selectForPage("routeExecutions", "routeExecution", execution.route_execution_id);
+  }
+
+  function planAbnormalArrivalRoute(task) {
+    const execution = routeExecutions.find((item) => item.task_id === task.task_id);
+    if (!execution || task.blocked_handling_policy !== taskTypes.BlockedHandlingPolicy.SAME_SERVICE_AREA_RETRY) return;
+    const currentCellId = execution.current_cell_id;
+    const target = getAlternativeDeploymentTarget(
+      data,
+      task.planned_target_service_area_id || task.target_service_area_id,
+      [currentCellId, task.planned_target_cell_id, task.target_cell_id],
+    );
+    if (!target) {
+      setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? {
+        ...item,
+        task_status: taskTypes.DeploymentTaskStatus.FAILED,
+        failure_reason: taskTypes.ArrivalExecutionResult.TARGET_SERVICE_AREA_UNAVAILABLE,
+      } : item));
+      addLog({
+        event_type: taskTypes.TaskEventType.DEPLOYMENT_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        robotaxi_id: task.robotaxi_id,
+        route_execution_id: execution.route_execution_id,
+        message: `${task.task_id} 未找到同服务区替代目标`,
+      });
+      return;
+    }
+
+    const route = createDeploymentRoute(task, data, {
+      originCellId: currentCellId,
+      targetCellId: target.target_cell_id,
+      targetServiceAreaId: target.target_service_area_id,
+      strategyId: taskTypes.RoutePlanningStrategy.ABNORMAL_SAME_SERVICE_AREA,
+    });
+    const routeCells = getRouteExecutionCells(route, data.roadSegments, currentCellId, target.target_cell_id);
+
+    setOperationalData((current) => ({
+      ...current,
+      routes: [route, ...current.routes],
+      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === task.robotaxi_id ? {
+        ...robotaxi,
+        current_route_id: route.route_id,
+        current_task_id: task.task_id,
+        motion_status: "MOVING",
+      } : robotaxi),
+    }));
+    setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? {
+      ...item,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      execution_status: taskTypes.RouteExecutionStatus.MOVING,
+      origin_cell_id: currentCellId,
+      planned_target_zone_id: target.target_zone_id,
+      planned_target_service_area_id: target.target_service_area_id,
+      planned_target_cell_id: target.target_cell_id,
+      target_cell_id: target.target_cell_id,
+      target_service_area_id: target.target_service_area_id,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
+      current_step_index: 0,
+      total_step_count: Math.max(0, routeCells.length - 1),
+      route_cell_ids: routeCells,
+      current_target_service_area_id: target.target_service_area_id,
+      route_history: [
+        ...(item.route_history || []),
+        createRouteHistoryEntry(route, taskTypes.RouteChangeReason.ABNORMAL_ARRIVAL_REPLAN, task.arrival_execution_result),
+      ],
+      distance_traveled_km: 0,
+      distance_remaining_km: route.total_distance_m / 1000,
+      time_elapsed: "0",
+      completed_at: null,
+      failure_reason: null,
+    } : item));
+    setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? {
+      ...item,
+      task_status: taskTypes.DeploymentTaskStatus.MOVING,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      planned_target_zone_id: target.target_zone_id,
+      planned_target_service_area_id: target.target_service_area_id,
+      planned_target_cell_id: target.target_cell_id,
+      target_cell_id: target.target_cell_id,
+      target_service_area_id: target.target_service_area_id,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
+    } : item));
+    addLog({
+      event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: task.task_id,
+      robotaxi_id: task.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      message: `${task.task_id} 异常到达后已生成替代路径 ${route.route_id}`,
     });
     selectForPage("routeExecutions", "routeExecution", execution.route_execution_id);
   }
@@ -938,23 +1098,22 @@ function App() {
 
     setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? {
       ...item,
-      execution_status: completed ? taskTypes.RouteExecutionStatus.COMPLETED : taskTypes.RouteExecutionStatus.MOVING,
+      execution_status: completed ? taskTypes.RouteExecutionStatus.ARRIVED : taskTypes.RouteExecutionStatus.MOVING,
       current_cell_id: nextCellId,
       current_step_index: nextStepIndex,
       distance_traveled_km: distanceTraveledKm,
       distance_remaining_km: distanceRemainingKm,
       time_elapsed: `${nextStepIndex}`,
       battery_consumed_percent: batteryConsumedPercent,
-      completed_at: completed ? now() : null,
     } : item));
     setOperationalData((current) => ({
       ...current,
       robotaxis: current.robotaxis.map((item) => item.robotaxi_id === execution.robotaxi_id ? {
         ...item,
         current_cell_id: nextCellId,
-        current_route_id: completed ? null : execution.route_id,
-        current_task_id: completed ? null : execution.task_id,
-        motion_status: completed ? "PARKED" : "MOVING",
+        current_route_id: execution.route_id,
+        current_task_id: execution.task_id,
+        motion_status: completed ? "STOPPED" : "MOVING",
         battery_percent: Number(Math.max(0, item.battery_percent - batteryDeltaPercent).toFixed(2)),
         estimated_range_km: Number(Math.max(0, item.estimated_range_km - distanceDeltaKm).toFixed(2)),
       } : item),
@@ -963,15 +1122,15 @@ function App() {
     if (completed) {
       setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === execution.task_id ? {
         ...item,
-        task_status: taskTypes.DeploymentTaskStatus.COMPLETED,
-        completed_at: now(),
+        task_status: taskTypes.DeploymentTaskStatus.ARRIVED,
       } : item));
       addLog({
-        event_type: taskTypes.TaskEventType.DEPLOYMENT_COMPLETED,
+        event_type: taskTypes.TaskEventType.ROUTE_EXECUTION_ARRIVED,
         event_result: taskTypes.TaskEventResult.SUCCESS,
         task_id: execution.task_id,
         robotaxi_id: execution.robotaxi_id,
-        message: `${execution.robotaxi_id} 已到达投放目标`,
+        route_execution_id: execution.route_execution_id,
+        message: `${execution.robotaxi_id} 已到达当前路径目标，等待到达结果`,
       });
       return;
     }
@@ -982,6 +1141,72 @@ function App() {
       task_id: execution.task_id,
       robotaxi_id: execution.robotaxi_id,
       message: `${execution.robotaxi_id} 继续行驶至 ${nextCellId}`,
+    });
+  }
+
+  function submitNormalArrival(routeExecutionId) {
+    const execution = routeExecutions.find((item) => item.route_execution_id === routeExecutionId);
+    const task = deploymentTasks.find((item) => item.task_id === execution?.task_id);
+    if (!execution || !task || execution.execution_status !== taskTypes.RouteExecutionStatus.ARRIVED) return;
+    setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? {
+      ...item,
+      execution_status: taskTypes.RouteExecutionStatus.COMPLETED,
+      completed_at: now(),
+      arrival_execution_result: taskTypes.ArrivalExecutionResult.NORMAL_ARRIVAL,
+      actual_target_service_area_id: item.target_service_area_id || item.current_target_service_area_id,
+      actual_target_cell_id: execution.current_cell_id,
+    } : item));
+    setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? {
+      ...item,
+      task_status: taskTypes.DeploymentTaskStatus.COMPLETED,
+      actual_target_service_area_id: item.target_service_area_id,
+      actual_target_cell_id: execution.current_cell_id,
+      arrival_execution_result: taskTypes.ArrivalExecutionResult.NORMAL_ARRIVAL,
+      completed_at: now(),
+    } : item));
+    setOperationalData((current) => ({
+      ...current,
+      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === execution.robotaxi_id ? {
+        ...robotaxi,
+        current_cell_id: execution.current_cell_id,
+        current_route_id: null,
+        current_task_id: null,
+        motion_status: "PARKED",
+      } : robotaxi),
+    }));
+    addLog({
+      event_type: taskTypes.TaskEventType.ARRIVAL_NORMAL,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: task.task_id,
+      robotaxi_id: execution.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      message: `${execution.robotaxi_id} 正常到达，运营投放完成`,
+    });
+  }
+
+  function submitAbnormalArrival(routeExecutionId, arrivalResult) {
+    const execution = routeExecutions.find((item) => item.route_execution_id === routeExecutionId);
+    const task = deploymentTasks.find((item) => item.task_id === execution?.task_id);
+    if (!execution || !task || execution.execution_status !== taskTypes.RouteExecutionStatus.ARRIVED) return;
+    setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? {
+      ...item,
+      execution_status: taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL,
+      arrival_execution_result: arrivalResult,
+      failure_reason: arrivalResult,
+    } : item));
+    setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? {
+      ...item,
+      task_status: taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL,
+      arrival_execution_result: arrivalResult,
+      failure_reason: arrivalResult,
+    } : item));
+    addLog({
+      event_type: taskTypes.TaskEventType.ARRIVAL_ABNORMAL,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: task.task_id,
+      robotaxi_id: execution.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      message: `${execution.robotaxi_id} 异常到达：${getDisplayValue(arrivalResult)}`,
     });
   }
 
@@ -1022,10 +1247,19 @@ function App() {
       source_id: null,
       robotaxi_id: robotaxi.robotaxi_id,
       origin_cell_id: robotaxi.current_cell_id,
+      planned_target_zone_id: target.target_zone_id,
+      planned_target_service_area_id: target.target_service_area_id,
+      planned_target_cell_id: target.target_cell_id,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
+      arrival_behavior: taskTypes.ArrivalBehavior.AUTO_BY_SERVICE_AREA,
+      blocked_handling_policy: taskTypes.BlockedHandlingPolicy.SAME_SERVICE_AREA_RETRY,
+      arrival_execution_result: null,
       target_cell_id: target.target_cell_id,
       target_zone_id: target.target_zone_id,
       target_service_area_id: target.target_service_area_id,
       route_id: null,
+      route_strategy_id: null,
       interruptible: true,
       created_at: now(),
       started_at: null,
@@ -1041,6 +1275,8 @@ function App() {
       robotaxi_id: event.robotaxi_id || null,
       worker_id: event.worker_id || null,
       route_execution_id: event.route_execution_id || null,
+      route_id: event.route_id || null,
+      route_strategy_id: event.route_strategy_id || null,
       trigger_type: event.trigger_type || null,
       event_type: event.event_type,
       event_result: event.event_result,
@@ -1054,7 +1290,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isReadinessPage = page === "readinessTasks";
   const isDeploymentPage = page === "deploymentTasks";
   const isRouteExecutionPage = page === "routeExecutions";
+  const isRoutePlanningPage = page === "routePlanningStrategies";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
+  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -1062,6 +1300,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const [eventPanelHeight, setEventPanelHeight] = useState(112);
   const [abnormalTask, setAbnormalTask] = useState(null);
   const [abnormalIssueType, setAbnormalIssueType] = useState(taskTypes?.IssueType?.LOW_BATTERY || "LOW_BATTERY");
+  const [abnormalArrivalExecution, setAbnormalArrivalExecution] = useState(null);
+  const [abnormalArrivalType, setAbnormalArrivalType] = useState(taskTypes?.ArrivalExecutionResult?.ARRIVED_WITH_TARGET_OCCUPIED || "ARRIVED_WITH_TARGET_OCCUPIED");
   const filters = uiState.filters;
   const appliedFilters = uiState.appliedFilters;
   const displayRows = useMemo(() => {
@@ -1083,7 +1323,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const tableScrollY = isTaskOperationPage ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
+  const eventRows = isRoutePlanningPage ? actions.routePlanningEvents : actions.taskEventLogs;
+  const eventColumns = isRoutePlanningPage ? tableConfig.routePlanningEvents.columns : tableConfig.taskEventLogs.columns;
+  const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
 
   return (
@@ -1175,14 +1417,14 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         rowClassName={(row) => selected?.type === objectType && selected?.id === row[idField] ? "active-table-row" : ""}
         onRow={(row) => ({ onClick: () => onSelect(objectType, row[idField]) })}
       />
-      {isTaskOperationPage && (
+      {hasEventPanel && (
         <div className="event-log-section" style={{ height: eventPanelHeight }}>
           <div className="event-log-resizer" onPointerDown={handleEventResizeStart} title="拖动调整事件区高度" />
-          <div className="event-log-title">最近任务事件</div>
+          <div className="event-log-title">{isRoutePlanningPage ? "路径规划执行记录" : "最近任务事件"}</div>
           <Table
             size="small"
             rowKey="event_id"
-            columns={tableConfig.taskEventLogs.columns.map((key) => ({
+            columns={eventColumns.map((key) => ({
               key,
               title: getFieldLabel(key),
               dataIndex: key,
@@ -1190,7 +1432,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
               width: getColumnWidth(key),
               render: (_, row) => renderCellValue(key, row),
             }))}
-            dataSource={actions.taskEventLogs}
+            dataSource={eventRows}
             pagination={false}
             scroll={{ x: "max-content", y: eventTableScrollY }}
           />
@@ -1200,8 +1442,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         page={page}
         totalCount={rows.length}
         displayCount={displayRows.length}
-        eventCount={actions.taskEventLogs?.length || 0}
-        appliedFilters={isTaskOperationPage ? appliedFilters : null}
+        eventCount={eventRows?.length || 0}
+        appliedFilters={hasEventPanel ? appliedFilters : null}
       />
       {isReadinessPage && (
         <Modal
@@ -1235,6 +1477,19 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           </div>
         </Modal>
       )}
+      {isRouteExecutionPage && (
+        <Modal
+          title="提交异常到达"
+          open={Boolean(abnormalArrivalExecution)}
+          okText="确认异常到达"
+          cancelText="取消"
+          width={620}
+          onOk={confirmAbnormalArrival}
+          onCancel={() => setAbnormalArrivalExecution(null)}
+        >
+          {renderAbnormalArrivalModalBody(abnormalArrivalExecution, actions.data, abnormalArrivalType, setAbnormalArrivalType)}
+        </Modal>
+      )}
     </section>
   );
 
@@ -1262,8 +1517,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         key: "actions",
         title: "操作",
         fixed: "right",
-        width: 160,
-        render: (_, row) => renderRouteExecutionActions(row, { ...actions, page, objectType, idField }),
+        width: 220,
+        render: (_, row) => renderRouteExecutionActions(row, { ...actions, openAbnormalArrivalModal, page, objectType, idField }),
       };
     }
     return null;
@@ -1280,8 +1535,19 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     setAbnormalTask(null);
   }
 
+  function openAbnormalArrivalModal(execution) {
+    setAbnormalArrivalExecution(execution);
+    setAbnormalArrivalType(taskTypes.ArrivalExecutionResult.ARRIVED_WITH_TARGET_OCCUPIED);
+  }
+
+  function confirmAbnormalArrival() {
+    if (!abnormalArrivalExecution) return;
+    actions.submitAbnormalArrival(abnormalArrivalExecution.route_execution_id, abnormalArrivalType);
+    setAbnormalArrivalExecution(null);
+  }
+
   function applyStatusFilter(statusValue) {
-    const nextFilters = { ...filters, statusValue };
+    const nextFilters = { ...defaultPageFilters, statusValue };
     onUiStateChange({ filters: nextFilters, appliedFilters: nextFilters });
   }
 
@@ -1321,7 +1587,7 @@ function ModuleFooter({ page, totalCount, displayCount, eventCount, appliedFilte
     appliedFilters.statusValue ||
     appliedFilters.triggerType
   );
-  if (["readinessTasks", "deploymentTasks", "routeExecutions"].includes(page)) {
+  if (["readinessTasks", "deploymentTasks", "routeExecutions", "routePlanningStrategies"].includes(page)) {
     return (
       <div className="module-footer">
         <span>当前显示 {displayCount} / 全部 {totalCount}</span>
@@ -1428,16 +1694,17 @@ function getDetailTabs(selectedType) {
   if (selectedType === "deploymentTask") {
     return [
       { key: "basic", label: "任务信息", keys: ["task_id", "task_type", "task_status", "task_priority", "trigger_type", "source_type", "robotaxi_id"] },
-      { key: "route", label: "路径信息", keys: ["route_id", "route_summary", "route_detail"] },
-      { key: "location", label: "起终点", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "target_zone_id"] },
+      { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "route_summary", "route_detail"] },
+      { key: "arrival", label: "到达处理", keys: ["arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "actual_target_cell_id", "actual_target_service_area_id"] },
+      { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "target_zone_id"] },
       { key: "time", label: "时间", keys: ["created_at", "started_at", "completed_at", "failure_reason"] },
     ];
   }
   if (selectedType === "routeExecution") {
     return [
-      { key: "basic", label: "执行信息", keys: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id"] },
-      { key: "route", label: "路径信息", keys: ["route_id", "route_summary", "route_detail"] },
-      { key: "location", label: "位置上下文", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "target_cell_id", "target_location_summary", "target_location_detail", "current_cell_id", "current_location_summary", "current_location_detail"] },
+      { key: "basic", label: "执行信息", keys: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "arrival_execution_result"] },
+      { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "current_target_service_area_id", "route_summary", "route_detail", "route_history"] },
+      { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "current_cell_id", "current_location_summary", "current_location_detail"] },
       { key: "progress", label: "执行进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent", "started_at", "completed_at", "failure_reason"] },
     ];
   }
@@ -1684,10 +1951,10 @@ function renderReadinessActions(row, actions) {
 }
 
 function renderDeploymentActions(row, actions) {
-  if (row.task_status === "WAITING_ROUTE") {
+  if (["WAITING_ROUTE", "ARRIVAL_ABNORMAL"].includes(row.task_status)) {
     return <RowActionButton onClick={() => actions.planDeploymentRoute(row.task_id)}>路径规划</RowActionButton>;
   }
-  if (["WAITING_START", "MOVING"].includes(row.task_status)) {
+  if (["WAITING_START", "MOVING", "ARRIVED"].includes(row.task_status)) {
     return <RowActionButton onClick={() => actions.viewRouteExecutionForDeployment(row)}>查看行驶记录</RowActionButton>;
   }
   return renderViewDetailAction(row, actions);
@@ -1700,7 +1967,58 @@ function renderRouteExecutionActions(row, actions) {
   if (row.execution_status === "MOVING") {
     return <RowActionButton onClick={() => actions.advanceRouteExecution(row.route_execution_id)}>继续行驶</RowActionButton>;
   }
+  if (row.execution_status === "ARRIVED") {
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => actions.submitNormalArrival(row.route_execution_id)}>正常到达</RowActionButton>
+        <RowActionButton type="default" danger onClick={() => actions.openAbnormalArrivalModal(row)}>异常到达</RowActionButton>
+      </RowActionGroup>
+    );
+  }
+  if (row.execution_status === "ARRIVAL_ABNORMAL") {
+    return renderViewDetailAction(row, actions);
+  }
   return renderViewDetailAction(row, actions);
+}
+
+function renderAbnormalArrivalModalBody(execution, data, abnormalArrivalType, setAbnormalArrivalType) {
+  if (!execution) return null;
+  const robotaxi = data?.robotaxis?.find((item) => item.robotaxi_id === execution.robotaxi_id);
+  const route = data?.routes?.find((item) => item.route_id === execution.route_id);
+  const currentLocation = data ? getLocationInfo(execution.current_cell_id, data) : { summary: "无", detail: null };
+  const originLocation = data ? getLocationInfo(execution.origin_cell_id, data) : { summary: "无", detail: null };
+  const targetLocation = data ? getLocationInfo(execution.target_cell_id, data) : { summary: "无", detail: null };
+  return (
+    <div className="abnormal-modal-body">
+      <Descriptions column={1} size="small" colon={false}>
+        <Descriptions.Item label="Robotaxi 编号">{execution.robotaxi_id}</Descriptions.Item>
+        <Descriptions.Item label="Robotaxi 状态">{getDisplayValue(robotaxi?.motion_status) || "无"}</Descriptions.Item>
+        <Descriptions.Item label="行驶记录编号">{execution.route_execution_id}</Descriptions.Item>
+        <Descriptions.Item label="当前 Route">{route ? summarizeRoute(route) : execution.route_id}</Descriptions.Item>
+        <Descriptions.Item label="Route 起点">{originLocation.summary}</Descriptions.Item>
+        <Descriptions.Item label="Route 终点">{targetLocation.summary}</Descriptions.Item>
+        <Descriptions.Item label="当前位置">{currentLocation.summary}</Descriptions.Item>
+      </Descriptions>
+      <div className="abnormal-field">
+        <span>异常类型</span>
+        <Select
+          size="small"
+          value={abnormalArrivalType}
+          getPopupContainer={() => document.body}
+          listHeight={280}
+          onChange={setAbnormalArrivalType}
+          options={[
+            taskTypes.ArrivalExecutionResult.ARRIVED_WITH_TARGET_OCCUPIED,
+            taskTypes.ArrivalExecutionResult.ARRIVED_WITH_TARGET_BLOCKED,
+            taskTypes.ArrivalExecutionResult.ARRIVED_WITH_NO_AVAILABLE_STOPPING_CELL,
+            taskTypes.ArrivalExecutionResult.ARRIVED_WITH_NO_AVAILABLE_PARKING_CELL,
+            taskTypes.ArrivalExecutionResult.TARGET_SERVICE_AREA_UNAVAILABLE,
+            taskTypes.ArrivalExecutionResult.UNKNOWN,
+          ].map((value) => ({ value, label: getDisplayValue(value) }))}
+        />
+      </div>
+    </div>
+  );
 }
 
 function renderDetailValue(key, value, row = null) {
@@ -1708,7 +2026,45 @@ function renderDetailValue(key, value, row = null) {
     const passed = value === "PASS";
     return <Tag color={passed ? "success" : "error"}>{getDisplayValue(value)}</Tag>;
   }
+  if (isLocationDetailKey(key) && value && typeof value === "object") {
+    return <CompactLocationDetail value={value} />;
+  }
   return <Text className="detail-value">{formatDetailValue(value, key, row) || "无"}</Text>;
+}
+
+function isLocationDetailKey(key) {
+  return ["location_context", "origin_location_detail", "target_location_detail", "current_location_detail"].includes(key);
+}
+
+function CompactLocationDetail({ value }) {
+  const rows = [
+    ["网格", value.current_cell_id],
+    ["地图", value.related_map],
+    ["服务区", value.related_service_areas],
+    ["地点", value.related_places],
+    ["道路片段", value.related_road_segments],
+    ["道路", value.related_roads],
+    ["运营区域", value.related_zones],
+    ["运营中心", value.related_ops_centers],
+  ].filter(([, itemValue]) => hasRelation(itemValue));
+
+  if (rows.length === 0) return <Text className="detail-value">无</Text>;
+
+  return (
+    <div className="compact-location-detail">
+      {rows.slice(0, 4).map(([label, itemValue]) => (
+        <span key={label}>{label}: {formatDetailValue(itemValue, label)}</span>
+      ))}
+      {rows.length > 4 && (
+        <details>
+          <summary>更多位置关联</summary>
+          {rows.slice(4).map(([label, itemValue]) => (
+            <div key={label}>{label}: {formatDetailValue(itemValue, label)}</div>
+          ))}
+        </details>
+      )}
+    </div>
+  );
 }
 
 function summarizeObject(value) {
@@ -1752,6 +2108,7 @@ function isStatusField(key) {
     "node_status",
     "segment_status",
     "place_status",
+    "strategy_status",
     "status",
     "result",
   ].includes(key);
@@ -1771,6 +2128,8 @@ function isDeploymentLike(row) {
 
 function getColumnWidth(key) {
   if (key.endsWith("_ids") || key === "cell_ids" || key === "road_segment_sequence") return 220;
+  if (key.endsWith("_rule") || key === "route_update_rule") return 260;
+  if (key === "strategy_name") return 220;
   if (key.includes("name") || key === "rule_name" || key === "description") return 180;
   if (key === "customer_capabilities" || key === "vehicle_capabilities") return 220;
   return 128;
@@ -1872,23 +2231,121 @@ function getDefaultDeploymentTarget(data) {
   };
 }
 
-function createDeploymentRoute(task, data) {
-  const serviceArea = data.serviceAreas.find((area) => area.service_area_id === task.target_service_area_id);
+function createDeploymentRoute(task, data, options = {}) {
+  const targetServiceAreaId = options.targetServiceAreaId || task.planned_target_service_area_id || task.target_service_area_id;
+  const originCellId = options.originCellId || task.origin_cell_id;
+  const targetCellId = options.targetCellId || task.planned_target_cell_id || task.target_cell_id;
+  const strategyId = options.strategyId || taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT;
+  const serviceArea = data.serviceAreas.find((area) => area.service_area_id === targetServiceAreaId);
   const segmentId = serviceArea?.segment_ids?.[0] || "RS-014";
   const segment = data.roadSegments.find((item) => item.road_segment_id === segmentId);
   const totalDistance = segment?.distance_m || 50;
   return {
     route_id: nextDeploymentRouteId(),
-    route_name: `${task.robotaxi_id} 投放到 ${task.target_service_area_id}`,
+    route_name: `${task.robotaxi_id} 投放到 ${targetServiceAreaId}`,
     map_id: data.maps[0].map_id,
-    start_cell_id: task.origin_cell_id,
-    end_cell_id: task.target_cell_id,
+    start_cell_id: originCellId,
+    end_cell_id: targetCellId,
+    route_strategy_id: strategyId,
     road_segment_sequence: segment ? [segment.road_segment_id] : [],
-    related_service_area_ids: task.target_service_area_id ? [task.target_service_area_id] : [],
+    related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
     total_distance_m: totalDistance,
     estimated_time_s: Math.max(1, Math.round(totalDistance / (40 * 1000 / 3600))),
     route_status: "Active",
   };
+}
+
+function createRouteHistoryEntry(route, routeChangeReason, arrivalExecutionResult) {
+  return {
+    route_id: route.route_id,
+    route_strategy_id: route.route_strategy_id,
+    origin_cell_id: route.start_cell_id,
+    target_cell_id: route.end_cell_id,
+    started_at: now(),
+    ended_at: null,
+    route_change_reason: routeChangeReason,
+    arrival_execution_result: arrivalExecutionResult || null,
+    trigger_type: taskTypes.TriggerType.MANUAL,
+  };
+}
+
+function getAlternativeDeploymentTarget(data, serviceAreaId, excludedCellIds = []) {
+  const serviceArea = data.serviceAreas.find((area) => area.service_area_id === serviceAreaId);
+  const excluded = new Set(excludedCellIds.filter(Boolean));
+  const alternativeCellId = serviceArea?.covered_cell_ids?.find((cellId) => !excluded.has(cellId));
+  if (!alternativeCellId) return null;
+  return {
+    target_cell_id: alternativeCellId,
+    target_service_area_id: serviceArea.service_area_id,
+    target_zone_id: data.zones.find((zone) => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null,
+  };
+}
+
+function createRoutePlanningStrategyRows(data, taskEventLogs) {
+  const routeById = new Map(data.routes.map((route) => [route.route_id, route]));
+  const routeByStrategyId = new Map();
+  data.routes.forEach((route) => {
+    if (!route.route_strategy_id) return;
+    const current = routeByStrategyId.get(route.route_strategy_id) || 0;
+    routeByStrategyId.set(route.route_strategy_id, current + 1);
+  });
+  const eventCountByStrategyId = new Map();
+  taskEventLogs.forEach((event) => {
+    const routeStrategyId = routeById.get(event.route_id)?.route_strategy_id || event.route_strategy_id;
+    if (!routeStrategyId) return;
+    const current = eventCountByStrategyId.get(routeStrategyId) || 0;
+    eventCountByStrategyId.set(routeStrategyId, current + 1);
+  });
+  return [
+    {
+      route_strategy_id: "RPS-001",
+      strategy_name: "初始运营投放路径规划策略",
+      strategy_type: "INITIAL_DEPLOYMENT_ROUTE",
+      trigger_task_status: "WAITING_ROUTE",
+      origin_rule: "使用运营投放任务起点位置",
+      target_rule: "使用任务当前计划目标位置",
+      service_area_scope_rule: "不改变任务目标服务区",
+      route_update_rule: "创建初始 Route，并创建 / 绑定行驶记录",
+      strategy_status: "Active",
+    },
+    {
+      route_strategy_id: "RPS-002",
+      strategy_name: "异常到达同服务区替代路径规划策略",
+      strategy_type: "ABNORMAL_ARRIVAL_SAME_SERVICE_AREA_REPLAN",
+      trigger_task_status: "ARRIVAL_ABNORMAL",
+      origin_rule: "使用 Robotaxi 当前异常到达位置",
+      target_rule: "选择同服务区内其他目标位置，并排除当前异常点和当前目标点",
+      service_area_scope_rule: "限制在当前任务目标服务区内",
+      route_update_rule: "更新同一个行驶记录的当前 Route，不创建新行驶记录",
+      strategy_status: "Active",
+    },
+  ].map((strategy) => ({
+    ...strategy,
+    strategy_usage_count: Math.max(
+      routeByStrategyId.get(strategy.route_strategy_id) || 0,
+      eventCountByStrategyId.get(strategy.route_strategy_id) || 0,
+    ),
+  }));
+}
+
+function createRoutePlanningEvents(taskEventLogs, data) {
+  const routeById = new Map(data.routes.map((route) => [route.route_id, route]));
+  return taskEventLogs
+    .filter((event) => event.event_type === taskTypes.TaskEventType.ROUTE_PLANNED)
+    .map((event) => {
+      const route = routeById.get(event.route_id);
+      return {
+        event_id: event.event_id,
+        route_strategy_id: route?.route_strategy_id || event.route_strategy_id || null,
+        route_id: event.route_id,
+        task_id: event.task_id,
+        robotaxi_id: event.robotaxi_id,
+        route_execution_id: event.route_execution_id,
+        event_result: event.event_result,
+        message: event.message,
+        created_at: event.created_at,
+      };
+    });
 }
 
 function getRouteExecutionCells(route, roadSegments, originCellId, targetCellId) {
@@ -1911,6 +2368,7 @@ function enrichDeploymentTaskForDisplay(task, data) {
   const targetLocation = getLocationInfo(task.target_cell_id, data);
   return {
     ...task,
+    route_strategy_id: route?.route_strategy_id || task.route_strategy_id || null,
     route_summary: summarizeRoute(route),
     origin_location_summary: originLocation.summary,
     target_location_summary: targetLocation.summary,
@@ -1927,6 +2385,7 @@ function enrichRouteExecutionForDisplay(execution, data) {
   const currentLocation = getLocationInfo(execution.current_cell_id, data);
   return {
     ...execution,
+    route_strategy_id: route?.route_strategy_id || execution.route_strategy_id || null,
     route_summary: summarizeRoute(route),
     route_detail: route ? getRouteDetail(route) : null,
     origin_location_summary: originLocation.summary,
@@ -1969,7 +2428,7 @@ function enrichRobotaxiForDetail(robotaxi, data, readinessTasks, deploymentTasks
 
 function findCurrentRouteExecution(robotaxi, routeExecutions) {
   return routeExecutions.find((execution) =>
-    execution.robotaxi_id === robotaxi.robotaxi_id && ["WAITING_START", "MOVING", "PAUSED"].includes(execution.execution_status)
+    execution.robotaxi_id === robotaxi.robotaxi_id && ["WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED"].includes(execution.execution_status)
   );
 }
 
@@ -2015,6 +2474,7 @@ function getRouteDetail(route) {
     route_name: route.route_name,
     start_cell_id: route.start_cell_id,
     end_cell_id: route.end_cell_id,
+    route_strategy_id: route.route_strategy_id,
     road_segment_sequence: route.road_segment_sequence,
     related_service_area_ids: route.related_service_area_ids,
     total_distance_m: route.total_distance_m,
@@ -2093,16 +2553,17 @@ function loadRuntimeSnapshot(initialData) {
     if (!rawValue) return fallback;
     const snapshot = JSON.parse(rawValue);
     const readinessTasks = Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : [];
-    const deploymentTasks = Array.isArray(snapshot.deploymentTasks) ? snapshot.deploymentTasks : [];
-    const routeExecutions = Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : [];
-    const taskEventLogs = Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : [];
+    const deploymentTasks = normalizeRouteStrategyReferences(Array.isArray(snapshot.deploymentTasks) ? snapshot.deploymentTasks : []);
+    const routeExecutions = normalizeRouteStrategyReferences(Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : []);
+    const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
+    const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
-    deploymentRouteSequence = deriveSequence(snapshot.operationalData?.routes || [], "route_id", "DRT-");
+    deploymentRouteSequence = deriveSequence(operationalData.routes || [], "route_id", "DRT-");
     eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
     return {
-      operationalData: snapshot.operationalData || initialData,
+      operationalData,
       readinessTasks,
       deploymentTasks,
       routeExecutions,
@@ -2117,6 +2578,27 @@ function loadRuntimeSnapshot(initialData) {
   } catch (error) {
     return fallback;
   }
+}
+
+function normalizeOperationalRouteStrategies(operationalData) {
+  return {
+    ...operationalData,
+    routes: normalizeRouteStrategyReferences(operationalData.routes || []),
+  };
+}
+
+function normalizeRouteStrategyReferences(items) {
+  return items.map((item) => ({
+    ...item,
+    route_strategy_id: normalizeRouteStrategyId(item.route_strategy_id),
+    route_history: Array.isArray(item.route_history)
+      ? normalizeRouteStrategyReferences(item.route_history)
+      : item.route_history,
+  }));
+}
+
+function normalizeRouteStrategyId(routeStrategyId) {
+  return legacyRouteStrategyIdMap[routeStrategyId] || routeStrategyId || null;
 }
 
 function saveRuntimeSnapshot(snapshot) {

@@ -77,6 +77,28 @@
 |---|---|---|
 |route_summary|路径摘要|Route 的简要展示信息|
 |route_detail|路径详情|Route 的结构化详情|
+|route_strategy_id|路径规划策略编号|路径规划策略对象 ID，用于 Route、任务单、行驶记录和策略事件引用|
+|strategy_name|路径规划策略名称|路径规划策略中文名称|
+|strategy_type|路径规划策略类型|路径规划策略类型|
+|trigger_task_status|触发任务状态|策略触发时的 Task 状态|
+|origin_rule|起点选择规则|策略如何确定 Route 起点|
+|target_rule|终点选择规则|策略如何确定 Route 终点|
+|service_area_scope_rule|服务区范围规则|策略是否限制在指定 ServiceArea 内选择目标|
+|route_update_rule|路径更新规则|策略如何创建或更新 Route|
+|strategy_status|策略状态|路径规划策略状态|
+|planned_target_zone_id|计划目标运营区域|运营投放任务计划投放 Zone，可为空|
+|planned_target_service_area_id|计划目标服务区|运营投放任务计划投放 ServiceArea|
+|planned_target_cell_id|计划目标位置|运营投放任务当前计划目标 Cell|
+|current_target_cell_id|当前目标位置|行驶记录当前 Route 指向的目标 Cell，展示字段|
+|actual_target_service_area_id|实际停靠服务区|Robotaxi 实际完成停靠的 ServiceArea，可为空|
+|actual_target_cell_id|实际到达位置|Robotaxi 实际完成停靠的 Cell，可为空|
+|arrival_behavior|到达驻留要求|Robotaxi 到达后应临停、停车或待命的要求|
+|blocked_handling_policy|遇阻处理策略|计划目标不可用时的处理策略|
+|arrival_execution_result|到达执行结果|Robotaxi 到达目标区域后的反馈结果|
+|same_service_area_retry_allowed|允许同服务区重试|异常到达时是否允许在同 ServiceArea 内选择替代点位|
+|current_target_service_area_id|当前目标服务区|行驶记录当前 Route 指向的目标 ServiceArea|
+|route_history|路径历史|同一行驶记录中 Route 变化历史|
+|route_change_reason|路径变化原因|Route 被创建或替换的原因|
 |origin_location_summary|起点位置摘要|由起点 CellContext 推导|
 |target_location_summary|终点位置摘要|由终点 CellContext 推导|
 |current_location_summary|当前位置摘要|由当前 CellContext 推导|
@@ -119,9 +141,33 @@
 |DEPLOYMENT|运营投放|
 |WAITING_ROUTE|等待路径|
 |WAITING_START|等待行驶|运营投放和路径执行场景统一显示为等待行驶|
+|ARRIVED|已到达|行驶记录已到达当前 Route 目标点，等待到达结果处理|
+|ARRIVAL_ABNORMAL|异常到达|运营投放任务异常到达，等待同服务区替代路径规划|
 |COMPLETED|已完成|
 |CANCELLED|已取消|
 |FAILED|异常失败|
+|SUPPLY_ASSIGNMENT_DECISION|供给分配决策|
+|AUTO_BY_SERVICE_AREA|按服务区能力自动处理|
+|TEMP_STOP_AND_STANDBY|临停待命|
+|PARK_AND_STANDBY|停车待命|
+|STOP_ONLY|仅临时停靠|
+|PARK_ONLY|仅停车|
+|RETURN_TO_OPS_CENTER|返回运营中心|
+|SAME_SERVICE_AREA_RETRY|同服务区替代点重试|
+|FAIL_FAST|快速失败|
+|WAIT_DECISION|等待运营决策|
+|NORMAL_ARRIVAL|正常到达|
+|ARRIVED_WITH_TARGET_OCCUPIED|目标点位被占用|
+|ARRIVED_WITH_TARGET_BLOCKED|目标点位被阻塞|
+|ARRIVED_WITH_NO_AVAILABLE_STOPPING_CELL|无可临停点位|
+|ARRIVED_WITH_NO_AVAILABLE_PARKING_CELL|无可停车点位|
+|TARGET_SERVICE_AREA_UNAVAILABLE|目标服务区不可用|
+|ROUTE_FAILED|路径执行失败|
+|INITIAL_PLANNING|初始路径规划|
+|ABNORMAL_ARRIVAL_REPLAN|异常到达后重新规划|
+|ROUTE_BLOCKED_REPLAN|路径阻塞后重新规划|
+|INITIAL_DEPLOYMENT_ROUTE|初始运营投放路径|
+|ABNORMAL_ARRIVAL_SAME_SERVICE_AREA_REPLAN|异常到达同服务区替代路径|
 
 ---
 

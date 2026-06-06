@@ -1,6 +1,7 @@
 import {
   DeploymentTaskStatus,
   RouteExecutionStatus,
+  TaskEventType,
 } from "../domain/taskTypes.js";
 
 function check(ruleId, ruleName, passed) {
@@ -18,6 +19,8 @@ export function validateDeploymentTasks(data) {
   const routeById = new Map((data.routes || []).map((route) => [route.route_id, route]));
   const executionByTaskId = new Map((data.routeExecutions || []).map((execution) => [execution.task_id, execution]));
   const deploymentTasks = data.deploymentTasks || [];
+  const routeExecutions = data.routeExecutions || [];
+  const taskEventLogs = data.taskEventLogs || [];
 
   return [
     check(
@@ -36,6 +39,8 @@ export function validateDeploymentTasks(data) {
       deploymentTasks.every((task) => ![
         DeploymentTaskStatus.WAITING_START,
         DeploymentTaskStatus.MOVING,
+        DeploymentTaskStatus.ARRIVED,
+        DeploymentTaskStatus.ARRIVAL_ABNORMAL,
         DeploymentTaskStatus.COMPLETED,
       ].includes(task.task_status) || routeById.has(task.route_id)),
     ),
@@ -45,6 +50,8 @@ export function validateDeploymentTasks(data) {
       deploymentTasks.every((task) => ![
         DeploymentTaskStatus.WAITING_START,
         DeploymentTaskStatus.MOVING,
+        DeploymentTaskStatus.ARRIVED,
+        DeploymentTaskStatus.ARRIVAL_ABNORMAL,
       ].includes(task.task_status) || executionByTaskId.has(task.task_id)),
     ),
     check(
@@ -64,6 +71,48 @@ export function validateDeploymentTasks(data) {
       }),
     ),
     check(
+      "DEPLOYMENT_ARRIVED_EXECUTION_STATUS",
+      "已到达的运营投放任务必须对应已到达的行驶记录",
+      deploymentTasks.every((task) => {
+        if (task.task_status !== DeploymentTaskStatus.ARRIVED) return true;
+        return executionByTaskId.get(task.task_id)?.execution_status === RouteExecutionStatus.ARRIVED;
+      }),
+    ),
+    check(
+      "DEPLOYMENT_ABNORMAL_HAS_RESULT",
+      "异常到达的运营投放任务必须有到达执行结果",
+      deploymentTasks.every((task) =>
+        task.task_status !== DeploymentTaskStatus.ARRIVAL_ABNORMAL || Boolean(task.arrival_execution_result)
+      ),
+    ),
+    check(
+      "DEPLOYMENT_ABNORMAL_EXECUTION_STATUS",
+      "异常到达的运营投放任务必须对应异常到达的行驶记录",
+      deploymentTasks.every((task) => {
+        if (task.task_status !== DeploymentTaskStatus.ARRIVAL_ABNORMAL) return true;
+        return executionByTaskId.get(task.task_id)?.execution_status === RouteExecutionStatus.ARRIVAL_ABNORMAL;
+      }),
+    ),
+    check(
+      "DEPLOYMENT_ROUTE_HAS_STRATEGY",
+      "已有路径的运营投放任务必须记录路径规划策略",
+      deploymentTasks.every((task) => ![
+        DeploymentTaskStatus.WAITING_START,
+        DeploymentTaskStatus.MOVING,
+        DeploymentTaskStatus.ARRIVED,
+        DeploymentTaskStatus.ARRIVAL_ABNORMAL,
+        DeploymentTaskStatus.COMPLETED,
+      ].includes(task.task_status) || Boolean(routeById.get(task.route_id)?.route_strategy_id)),
+    ),
+    check(
+      "DEPLOYMENT_ROUTE_STRATEGY_MATCH",
+      "运营投放任务记录的路径规划策略必须与当前 Route 一致",
+      deploymentTasks.every((task) => {
+        if (!task.route_id || !task.route_strategy_id) return true;
+        return task.route_strategy_id === routeById.get(task.route_id)?.route_strategy_id;
+      }),
+    ),
+    check(
       "DEPLOYMENT_MOVING_ROBOTAXI_STATE",
       "行驶中的运营投放任务必须使 Robotaxi 处于行驶中并绑定当前任务和路径",
       deploymentTasks.every((task) => {
@@ -71,6 +120,16 @@ export function validateDeploymentTasks(data) {
         const robotaxi = robotaxiById.get(task.robotaxi_id);
         return robotaxi?.motion_status === "MOVING" &&
           robotaxi?.current_task_id === task.task_id &&
+          robotaxi?.current_route_id === task.route_id;
+      }),
+    ),
+    check(
+      "DEPLOYMENT_ARRIVED_ROBOTAXI_STATE",
+      "已到达的运营投放任务必须使 Robotaxi 保持当前任务和路径",
+      deploymentTasks.every((task) => {
+        if (task.task_status !== DeploymentTaskStatus.ARRIVED) return true;
+        const robotaxi = robotaxiById.get(task.robotaxi_id);
+        return robotaxi?.current_task_id === task.task_id &&
           robotaxi?.current_route_id === task.route_id;
       }),
     ),
@@ -88,16 +147,59 @@ export function validateDeploymentTasks(data) {
     check(
       "ROUTE_EXECUTION_STEP_RANGE",
       "行驶记录当前步序号必须在 Route 总步数范围内",
-      (data.routeExecutions || []).every((execution) =>
+      routeExecutions.every((execution) =>
         execution.current_step_index >= 0 && execution.current_step_index <= execution.total_step_count
       ),
     ),
     check(
       "ROUTE_EXECUTION_COMPLETED_AT_TARGET",
       "已完成行驶记录必须到达目标网格",
-      (data.routeExecutions || []).every((execution) =>
+      routeExecutions.every((execution) =>
         execution.execution_status !== RouteExecutionStatus.COMPLETED || execution.current_cell_id === execution.target_cell_id
       ),
+    ),
+    check(
+      "ROUTE_EXECUTION_TARGET_FIELDS",
+      "行驶记录必须同步计划目标、当前目标和完成后的实际目标",
+      routeExecutions.every((execution) => {
+        const hasTargets = Boolean(execution.planned_target_cell_id && execution.target_cell_id);
+        const hasActualWhenCompleted = execution.execution_status !== RouteExecutionStatus.COMPLETED ||
+          Boolean(execution.actual_target_cell_id);
+        return hasTargets && hasActualWhenCompleted;
+      }),
+    ),
+    check(
+      "ROUTE_EXECUTION_ROUTE_HISTORY_HAS_STRATEGY",
+      "行驶记录路径历史必须记录路径规划策略",
+      routeExecutions.every((execution) =>
+        (execution.route_history || []).every((history) => Boolean(history.route_strategy_id))
+      ),
+    ),
+    check(
+      "ROUTE_EXECUTION_ROUTE_STRATEGY_MATCH",
+      "行驶记录记录的路径规划策略必须与当前 Route 一致",
+      routeExecutions.every((execution) => {
+        if (!execution.route_id || !execution.route_strategy_id) return true;
+        return execution.route_strategy_id === routeById.get(execution.route_id)?.route_strategy_id;
+      }),
+    ),
+    check(
+      "ROUTE_EXECUTION_HISTORY_STRATEGY_MATCH",
+      "行驶记录路径历史中的路径规划策略必须与对应 Route 一致",
+      routeExecutions.every((execution) =>
+        (execution.route_history || []).every((history) => {
+          if (!history.route_id || !history.route_strategy_id) return true;
+          return history.route_strategy_id === routeById.get(history.route_id)?.route_strategy_id;
+        })
+      ),
+    ),
+    check(
+      "ROUTE_PLANNING_EVENT_STRATEGY_MATCH",
+      "路径规划执行记录中的路径规划策略必须与生成的 Route 一致",
+      taskEventLogs.every((event) => {
+        if (event.event_type !== TaskEventType.ROUTE_PLANNED || !event.route_id || !event.route_strategy_id) return true;
+        return event.route_strategy_id === routeById.get(event.route_id)?.route_strategy_id;
+      }),
     ),
   ];
 }
