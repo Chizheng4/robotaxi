@@ -15,7 +15,6 @@ Codex 应基于以下文档理解对象定义：
 05-place.md
 06-servicearea.md
 07-zone.md
-08-route.md
 09-field-dictionary.md
 ```
 
@@ -54,7 +53,6 @@ Codex 应基于以下文档理解对象定义：
 |Place|地点 / 需求来源|产生出行需求的地点或区域|
 |ServiceArea|服务区域|可上车、下车、等待、停靠的人车服务接口空间|
 |Zone|运营区域|运营管理和统计区域|
-|Route|路径方案|基于 RoadSegment 序列生成的路径结果|
 |ValidationResult|初始化校验结果|展示初始化校验规则和检查结果|
 
 ---
@@ -79,8 +77,6 @@ Place
 ServiceArea
 ↓
 Zone
-↓
-Route
 ```
 
 原因：
@@ -93,9 +89,7 @@ Route
 
 - ServiceArea 依赖 ROAD Cell / RoadSegment；
 
-- Zone 聚合 Cell、RoadSegment、Place、ServiceArea；
-
-- Route 基于 RoadSegment，并以 ROAD Cell 作为起点和终点。
+- Zone 聚合 Cell、RoadSegment、Place、ServiceArea。
 
 
 ---
@@ -410,27 +404,15 @@ Z-001
 
 ## 12. Route 初始化
 
-第一版生成基础示例 Route，用于验证路径结构。
+当前版本不在地图初始化阶段生成静态 Route。
 
-Route 起终点必须是 ROAD Cell。
+Route 是路径规划策略执行后的输出结果，应在运营投放、异常到达重规划等业务流程触发路径规划时生成。
 
-|route_id|start_cell_id|end_cell_id|road_segment_sequence|route_name（路径说明）|
-|---|---|---|---|---|
-|RT-001|C-06-10|C-06-25|RS-001 → RS-008 → RS-004|住宅区接驾区到办公区接驾区|
-|RT-002|C-06-10|C-12-18|RS-001 → RS-008|住宅区到商业中心|
-|RT-003|C-12-18|C-28-26|RS-008 → RS-005 → RS-012|商业中心到地铁接驳区|
-|RT-004|C-28-06|C-28-26|RS-010 → RS-011 → RS-012|医院学校区到地铁接驳区|
-|RT-005|C-35-29|C-06-25|RS-014 → RS-006 → RS-005 → RS-004|运营中心待命区到办公区|
+Route 主定义见：
 
-Route 规则：
-
-- 起点和终点必须是 ROAD Cell；
-
-- 如果 Route 用于服务动作，起点或终点 Cell 应被 ServiceArea 覆盖；
-
-- Route 的距离和时间由 RoadSegment 累加计算；
-
-- Route 不表示订单，只表示移动路径结果。
+```text
+doc/05-dispatch-trip/02-route.md
+```
 
 
 ---
@@ -500,13 +482,9 @@ Codex 生成数据后必须检查以下规则：
 
 ### 13.6 Route 校验
 
-1. start_cell_id 和 end_cell_id 必须是 ROAD Cell；
+地图初始化阶段不校验静态 Route。
 
-2. road_segment_sequence 必须连续；
-
-3. Route 起终点如果用于服务，应位于 ServiceArea 覆盖范围内；
-
-4. Route 不得直接以 ServiceArea 作为几何起终点。
+Route 校验应在路径规划生成 Route 后执行，重点校验 route_steps 首尾、连续性、road_segment_sequence 连续性，以及 RoutePlanningRun / RouteExecution 的关联一致性。
 
 
 ---
@@ -527,11 +505,9 @@ Codex 基于本文档初始化空间数据时，应完成：
 
 6. 根据 Zone 生成运营区域覆盖；
 
-7. 根据 Route 生成路径示例；
+7. 输出初始化后的空间对象数据；
 
-8. 输出初始化后的空间对象数据；
-
-9. 输出校验结果；
+8. 输出校验结果；
 
 10. 不生成 Vehicle、Demand、Order、DispatchTask、Trip、Metric。
 

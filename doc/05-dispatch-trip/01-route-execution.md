@@ -65,7 +65,7 @@ Task 可以触发 Route 变化
 说明：
 
 - Route 重规划不创建新的行驶记录；
-- 同一行驶记录通过 `current_route_id / route_id` 和 `route_history` 记录 Route 变化；
+- 同一行驶记录通过 `route_id` 和 `route_history` 记录当前路径与历史路径变化；
 - 不同 Task 不能共用同一个行驶记录。
 
 ---

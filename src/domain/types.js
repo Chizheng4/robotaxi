@@ -30,6 +30,45 @@ export const NodeType = {
 export const Direction = {
   TWO_WAY: "TWO_WAY",
   ONE_WAY: "ONE_WAY",
+  NORTH: "NORTH",
+  SOUTH: "SOUTH",
+  EAST: "EAST",
+  WEST: "WEST",
+  MIXED: "MIXED",
+  UNKNOWN: "UNKNOWN",
+};
+
+export const AllowedDirection = {
+  FORWARD: "FORWARD",
+  BACKWARD: "BACKWARD",
+  BIDIRECTIONAL: "BIDIRECTIONAL",
+  CLOSED: "CLOSED",
+};
+
+export const SegmentStatus = {
+  ACTIVE: "ACTIVE",
+  RESTRICTED: "RESTRICTED",
+  BLOCKED: "BLOCKED",
+  CLOSED: "CLOSED",
+  PLANNED: "PLANNED",
+};
+
+export const ServiceAreaType = {
+  PICKUP_DROPOFF: "PICKUP_DROPOFF",
+  TEMP_STOP: "TEMP_STOP",
+  PARKING: "PARKING",
+  STANDBY: "STANDBY",
+  MIXED: "MIXED",
+  OPS_CENTER_AREA: "OPS_CENTER_AREA",
+};
+
+export const ServiceAreaStatus = {
+  ACTIVE: "ACTIVE",
+  RESTRICTED: "RESTRICTED",
+  FULL: "FULL",
+  BLOCKED: "BLOCKED",
+  CLOSED: "CLOSED",
+  PLANNED: "PLANNED",
 };
 
 export const PlaceType = {
@@ -85,6 +124,10 @@ export const RouteStatus = {
   ACTIVE: "Active",
   BLOCKED: "Blocked",
   DEPRECATED: "Deprecated",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+  INVALID: "Invalid",
+  FAILED: "Failed",
 };
 
 export function createMap(map) {

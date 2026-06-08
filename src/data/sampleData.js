@@ -1,4 +1,4 @@
-import { initializeMapSpace } from "./mapInitialization.js?v=20260603-v006";
+import { initializeMapSpace } from "./mapInitialization.js?v=20260608-v017-route-management";
 
 export function createSampleData() {
   return initializeMapSpace();

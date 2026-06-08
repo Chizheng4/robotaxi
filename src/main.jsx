@@ -18,6 +18,7 @@ let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
+let routePlanningRunSequence = 0;
 let eventSequence = 0;
 
 const unfinishedTaskStatuses = new Set([
@@ -40,7 +41,14 @@ const pageGroups = [
     key: "decision",
     label: "运营决策中心",
     children: [
-      { key: "routePlanningStrategies", label: "路径规划管理" },
+      {
+        key: "routePlanningManagement",
+        label: "路径规划管理",
+        children: [
+          { key: "routePlanningStrategies", label: "路径规划策略" },
+          { key: "routePlanningRuns", label: "策略执行管理" },
+        ],
+      },
     ],
   },
   {
@@ -64,7 +72,15 @@ const pageGroups = [
     label: "Robotaxi 管理",
     children: [
       { key: "robotaxis", label: "Robotaxi 列表" },
-      { key: "routeExecutions", label: "行驶记录" },
+      { key: "routes", label: "Route 管理" },
+      {
+        key: "routeExecutionManagement",
+        label: "行驶记录管理",
+        children: [
+          { key: "routeExecutions", label: "运营行驶记录" },
+          { key: "serviceFulfillmentRecords", label: "服务履约记录" },
+        ],
+      },
     ],
   },
   {
@@ -79,7 +95,6 @@ const pageGroups = [
       { key: "places", label: "地点管理" },
       { key: "serviceAreas", label: "服务区管理" },
       { key: "zones", label: "Zone 管理" },
-      { key: "routes", label: "Route 管理" },
     ],
   },
 ];
@@ -108,7 +123,7 @@ const tableConfig = {
   roadSegments: {
     title: "道路片段管理",
     description: "道路片段是道路网络的最小计算和通行单元。",
-    columns: ["road_segment_id", "road_id", "start_node_id", "end_node_id", "distance_m", "direction", "speed_limit_kmh", "service_area_ids"],
+    columns: ["road_segment_id", "road_id", "start_node_id", "end_node_id", "cell_sequence", "direction", "allowed_direction", "segment_status", "distance_m", "total_distance_km", "service_area_ids"],
   },
   places: {
     title: "地点管理",
@@ -117,8 +132,8 @@ const tableConfig = {
   },
   serviceAreas: {
     title: "服务区管理",
-    description: "服务区是道路片段上的人车服务接口空间。",
-    columns: ["service_area_id", "name", "segment_ids", "customer_capabilities", "vehicle_capabilities", "max_vehicle_capacity", "covered_cell_count"],
+    description: "服务区是 Robotaxi 可服务、可停靠、可待命的道路服务区域。",
+    columns: ["service_area_id", "service_area_name", "service_area_type", "service_area_status", "road_segment_ids", "pickup_cell_ids", "dropoff_cell_ids", "temp_stop_cell_ids", "parking_cell_ids", "standby_cell_ids", "capacity", "current_robotaxi_count"],
   },
   zones: {
     title: "运营区域管理",
@@ -126,9 +141,9 @@ const tableConfig = {
     columns: ["zone_id", "parent_zone_id", "zone_name", "zone_level", "zone_type", "zone_status", "cell_count", "place_ids", "service_area_ids"],
   },
   routes: {
-    title: "路径方案管理",
-    description: "路径方案是基于道路片段序列生成的车辆移动路径结果。",
-    columns: ["route_id", "route_name", "start_cell_id", "end_cell_id", "road_segment_sequence", "related_service_area_ids", "total_distance_m", "estimated_time_s", "route_status"],
+    title: "Route 管理",
+    description: "Route 是路径规划策略执行后生成的路径结果，供运营行驶记录引用。",
+    columns: ["route_id", "route_version", "route_strategy_id", "route_planning_run_id", "task_id", "route_execution_id", "robotaxi_id", "origin_cell_id", "target_cell_id", "road_segment_sequence", "route_step_count", "route_status", "failure_reason"],
   },
   opsCenters: {
     title: "运营中心管理",
@@ -151,7 +166,7 @@ const tableConfig = {
     columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "planned_target_cell_id", "actual_target_cell_id", "arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "planned_target_service_area_id", "actual_target_service_area_id", "route_id", "route_strategy_id", "route_summary", "created_at"],
   },
   routeExecutions: {
-    title: "行驶记录",
+    title: "运营行驶记录",
     description: "记录 Robotaxi 执行任务时的模拟行驶过程。",
     columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_strategy_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "planned_target_service_area_id", "current_target_service_area_id", "actual_target_service_area_id", "arrival_execution_result", "route_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km"],
   },
@@ -161,14 +176,19 @@ const tableConfig = {
     columns: ["event_id", "event_type", "event_result", "task_id", "robotaxi_id", "worker_id", "route_execution_id", "message", "created_at"],
   },
   routePlanningStrategies: {
-    title: "路径规划管理",
-    description: "用于管理路径规划策略，并追踪每次策略生成 Route 的执行记录。",
-    columns: ["route_strategy_id", "strategy_name", "strategy_type", "trigger_task_status", "origin_rule", "target_rule", "service_area_scope_rule", "route_update_rule", "strategy_status", "strategy_usage_count"],
+    title: "路径规划策略",
+    description: "用于管理路径规划策略对象，定义不同场景下如何生成路径。",
+    columns: ["route_strategy_id", "strategy_name", "strategy_type", "trigger_task_status", "origin_rule", "target_rule", "service_area_scope_rule", "route_generation_rule", "route_update_rule", "strategy_status", "strategy_usage_count", "route_planning_run_count"],
   },
-  routePlanningEvents: {
-    title: "路径规划事件",
-    description: "记录路径规划策略的使用结果。",
-    columns: ["event_id", "route_strategy_id", "route_id", "task_id", "robotaxi_id", "route_execution_id", "event_result", "message", "created_at"],
+  routePlanningRuns: {
+    title: "策略执行管理",
+    description: "记录每次路径规划策略执行过程。",
+    columns: ["route_planning_run_id", "route_strategy_id", "task_id", "route_execution_id", "robotaxi_id", "origin_cell_id", "target_cell_id", "result_route_id", "planning_result", "failure_reason", "created_at"],
+  },
+  serviceFulfillmentRecords: {
+    title: "服务履约记录",
+    description: "预留给未来 ServiceOrder / Trip 履约过程记录；当前阶段不实现业务数据。",
+    columns: ["placeholder"],
   },
   robotaxis: {
     title: "Robotaxi 管理",
@@ -199,7 +219,8 @@ const pageObjectType = {
   routeExecutions: "routeExecution",
   taskEventLogs: "taskEventLog",
   routePlanningStrategies: "routePlanningStrategy",
-  routePlanningEvents: "routePlanningEvent",
+  routePlanningRuns: "routePlanningRun",
+  serviceFulfillmentRecords: "serviceFulfillmentRecord",
   robotaxis: "robotaxi",
   validations: "validation",
 };
@@ -221,7 +242,8 @@ const idFieldByType = {
   routeExecution: "route_execution_id",
   taskEventLog: "event_id",
   routePlanningStrategy: "route_strategy_id",
-  routePlanningEvent: "event_id",
+  routePlanningRun: "route_planning_run_id",
+  serviceFulfillmentRecord: "placeholder",
   robotaxi: "robotaxi_id",
   validation: "rule_id",
 };
@@ -231,7 +253,7 @@ const statusFieldByPage = {
   roadNodes: "node_status",
   roadSegments: "segment_status",
   places: "place_status",
-  serviceAreas: "status",
+  serviceAreas: "service_area_status",
   zones: "zone_status",
   routes: "route_status",
   opsCenters: "ops_center_status",
@@ -298,7 +320,7 @@ const routeExecutionStatusOptions = [
 ];
 
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v016.route-strategy-number";
+const runtimeStorageKey = "robotaxi.runtime.v017-route-management";
 const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null };
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
@@ -315,6 +337,7 @@ function App() {
   const [readinessTasks, setReadinessTasks] = useState(initialRuntime.readinessTasks);
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
+  const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const initialValidations = useMemo(() => [
     ...validateMapSpace(initialData),
@@ -325,8 +348,9 @@ function App() {
     readinessCheckTasks: readinessTasks,
     deploymentTasks,
     routeExecutions,
+    routePlanningRuns,
     taskEventLogs,
-  }), [deploymentTasks, operationalData, readinessTasks, routeExecutions, taskEventLogs]);
+  }), [deploymentTasks, operationalData, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs]);
   const validations = useMemo(() => [
     ...initialValidations,
     ...validateReadinessCheckTasks(data),
@@ -349,18 +373,19 @@ function App() {
     places: data.places,
     serviceAreas: data.serviceAreas,
     zones: data.zones,
-    routes: data.routes,
+    routes: data.routes.map((route) => enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns)),
     opsCenters: data.opsCenters,
     workers: data.workers.map((worker) => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks,
     deploymentTasks: deploymentTasks.map((task) => enrichDeploymentTaskForDisplay(task, data)),
     routeExecutions: routeExecutions.map((execution) => enrichRouteExecutionForDisplay(execution, data)),
     taskEventLogs,
-    routePlanningStrategies: createRoutePlanningStrategyRows(data, taskEventLogs),
-    routePlanningEvents: createRoutePlanningEvents(taskEventLogs, data),
+    routePlanningStrategies: createRoutePlanningStrategyRows(data, routePlanningRuns),
+    routePlanningRuns,
+    serviceFulfillmentRecords: [],
     robotaxis: data.robotaxis.map((robotaxi) => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     validations,
-  }), [data, deploymentTasks, readinessTasks, routeExecutions, taskEventLogs, validations]);
+  }), [data, deploymentTasks, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -396,9 +421,10 @@ function App() {
       place: data.places,
       serviceArea: data.serviceAreas,
       zone: data.zones,
-      route: data.routes,
+      route: rowsByPage.routes,
       routePlanningStrategy: rowsByPage.routePlanningStrategies,
-      routePlanningEvent: rowsByPage.routePlanningEvents,
+      routePlanningRun: rowsByPage.routePlanningRuns,
+      serviceFulfillmentRecord: rowsByPage.serviceFulfillmentRecords,
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: readinessTasks,
@@ -439,12 +465,13 @@ function App() {
       readinessTasks,
       deploymentTasks,
       routeExecutions,
+      routePlanningRuns,
       taskEventLogs,
       activePage,
       pageSelections,
       pageUiState,
     });
-  }, [activePage, deploymentTasks, operationalData, pageSelections, pageUiState, readinessTasks, routeExecutions, taskEventLogs]);
+  }, [activePage, deploymentTasks, operationalData, pageSelections, pageUiState, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs]);
 
   return (
     <Layout className="ops-shell">
@@ -479,7 +506,7 @@ function App() {
                 <Tag bordered={false}>地图 {data.maps.length}</Tag>
                 <Tag bordered={false}>网格 {data.cells.length}</Tag>
                 <Tag bordered={false}>Robotaxi {data.robotaxis.length}</Tag>
-                <Tag bordered={false}>Worker {data.workers.length}</Tag>
+                <Tag bordered={false}>作业人员 {data.workers.length}</Tag>
                 <Tag bordered={false} color={failedCount === 0 ? "success" : "error"}>
                   校验 {failedCount === 0 ? "全部通过" : `${failedCount} 项异常`}
                 </Tag>
@@ -513,6 +540,7 @@ function App() {
                   createDeploymentTasks,
                   planDeploymentRoute,
                   viewRecordDetail,
+                  viewGeneratedRoute,
                   viewRouteExecutionForDeployment,
                   startRouteExecution,
                   advanceRouteExecution,
@@ -520,7 +548,7 @@ function App() {
                   submitAbnormalArrival,
                   data,
                   taskEventLogs,
-                  routePlanningEvents: rowsByPage.routePlanningEvents,
+                  routePlanningRuns: rowsByPage.routePlanningRuns,
                 }}
               />
             )}
@@ -569,12 +597,14 @@ function App() {
     deploymentTaskSequence = 0;
     routeExecutionSequence = 0;
     deploymentRouteSequence = 0;
+    routePlanningRunSequence = 0;
     eventSequence = 0;
     const nextSelection = { type: "map", id: initialData.maps[0].map_id };
     setOperationalData(initialData);
     setReadinessTasks([]);
     setDeploymentTasks([]);
     setRouteExecutions([]);
+    setRoutePlanningRuns([]);
     setTaskEventLogs([]);
     setActivePage("console");
     setOpenMenuKeys([]);
@@ -620,6 +650,26 @@ function App() {
     setPageUiState((current) => ({
       ...current,
       routeExecutions: { filters: nextFilters, appliedFilters: nextFilters },
+    }));
+  }
+
+  function viewGeneratedRoute(routePlanningRun) {
+    if (!routePlanningRun?.result_route_id) {
+      viewRecordDetail("routePlanningRuns", "routePlanningRun", routePlanningRun?.route_planning_run_id);
+      return;
+    }
+    const nextSelection = { type: "route", id: routePlanningRun.result_route_id };
+    setActivePage("routes");
+    setOpenMenuKeys(getOpenKeysForPage("routes"));
+    setSelected(nextSelection);
+    setDetailCollapsed(false);
+    setPageSelections((current) => ({ ...current, routes: nextSelection }));
+    setPageUiState((current) => ({
+      ...current,
+      routes: {
+        filters: { keyword: routePlanningRun.result_route_id, statusValue: null, triggerType: null },
+        appliedFilters: { keyword: routePlanningRun.result_route_id, statusValue: null, triggerType: null },
+      },
     }));
   }
 
@@ -728,7 +778,7 @@ function App() {
         event_result: taskTypes.TaskEventResult.FAILED,
         task_id: task.task_id,
         robotaxi_id: task.robotaxi_id,
-        message: "没有可分配的空闲 Worker",
+        message: "没有可分配的空闲作业人员",
       });
       return;
     }
@@ -881,15 +931,19 @@ function App() {
     }
     if (task.task_status !== taskTypes.DeploymentTaskStatus.WAITING_ROUTE) return;
 
+    const routeExecutionId = nextRouteExecutionId();
+    const routePlanningRunId = nextRoutePlanningRunId();
     const route = createDeploymentRoute(task, data, {
       originCellId: task.origin_cell_id,
       targetCellId: task.planned_target_cell_id || task.target_cell_id,
       targetServiceAreaId: task.planned_target_service_area_id || task.target_service_area_id,
       strategyId: taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT,
+      routeExecutionId,
+      routePlanningRunId,
     });
     const routeCells = getRouteExecutionCells(route, data.roadSegments, task.origin_cell_id, task.planned_target_cell_id || task.target_cell_id);
     const execution = taskTypes.createRouteExecution({
-      route_execution_id: nextRouteExecutionId(),
+      route_execution_id: routeExecutionId,
       task_id: task.task_id,
       task_type: task.task_type,
       robotaxi_id: task.robotaxi_id,
@@ -922,8 +976,26 @@ function App() {
     setOperationalData((current) => ({
       ...current,
       routes: [route, ...current.routes],
+      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === task.robotaxi_id ? {
+        ...robotaxi,
+        current_task_id: task.task_id,
+        current_route_id: route.route_id,
+        motion_status: "PARKED",
+      } : robotaxi),
     }));
     setRouteExecutions((items) => [execution, ...items]);
+    setRoutePlanningRuns((items) => [createRoutePlanningRun({
+      routePlanningRunId,
+      routeStrategyId: route.route_strategy_id,
+      taskId: task.task_id,
+      routeExecutionId: execution.route_execution_id,
+      robotaxiId: task.robotaxi_id,
+      originCellId: task.origin_cell_id,
+      targetCellId: task.planned_target_cell_id || task.target_cell_id,
+      resultRouteId: route.route_id,
+      planningResult: taskTypes.RoutePlanningResult.SUCCESS,
+      failureReason: taskTypes.RoutePlanningFailureReason.NONE,
+    }), ...items]);
     setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === execution.task_id ? {
       ...item,
       task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
@@ -958,6 +1030,17 @@ function App() {
         task_status: taskTypes.DeploymentTaskStatus.FAILED,
         failure_reason: taskTypes.ArrivalExecutionResult.TARGET_SERVICE_AREA_UNAVAILABLE,
       } : item));
+      setRoutePlanningRuns((items) => [createRoutePlanningRun({
+        routeStrategyId: taskTypes.RoutePlanningStrategy.ABNORMAL_SAME_SERVICE_AREA,
+        taskId: task.task_id,
+        routeExecutionId: execution.route_execution_id,
+        robotaxiId: task.robotaxi_id,
+        originCellId: currentCellId,
+        targetCellId: null,
+        resultRouteId: null,
+        planningResult: taskTypes.RoutePlanningResult.FAILED,
+        failureReason: taskTypes.RoutePlanningFailureReason.NO_AVAILABLE_TARGET_CELL,
+      }), ...items]);
       addLog({
         event_type: taskTypes.TaskEventType.DEPLOYMENT_FAILED,
         event_result: taskTypes.TaskEventResult.FAILED,
@@ -970,10 +1053,12 @@ function App() {
     }
 
     const route = createDeploymentRoute(task, data, {
+      routeExecutionId: execution.route_execution_id,
       originCellId: currentCellId,
       targetCellId: target.target_cell_id,
       targetServiceAreaId: target.target_service_area_id,
       strategyId: taskTypes.RoutePlanningStrategy.ABNORMAL_SAME_SERVICE_AREA,
+      routePlanningRunId: nextRoutePlanningRunId(),
     });
     const routeCells = getRouteExecutionCells(route, data.roadSegments, currentCellId, target.target_cell_id);
 
@@ -1014,6 +1099,18 @@ function App() {
       completed_at: null,
       failure_reason: null,
     } : item));
+    setRoutePlanningRuns((items) => [createRoutePlanningRun({
+      routePlanningRunId: route.route_planning_run_id,
+      routeStrategyId: route.route_strategy_id,
+      taskId: task.task_id,
+      routeExecutionId: execution.route_execution_id,
+      robotaxiId: task.robotaxi_id,
+      originCellId: currentCellId,
+      targetCellId: target.target_cell_id,
+      resultRouteId: route.route_id,
+      planningResult: taskTypes.RoutePlanningResult.SUCCESS,
+      failureReason: taskTypes.RoutePlanningFailureReason.NONE,
+    }), ...items]);
     setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? {
       ...item,
       task_status: taskTypes.DeploymentTaskStatus.MOVING,
@@ -1291,6 +1388,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isDeploymentPage = page === "deploymentTasks";
   const isRouteExecutionPage = page === "routeExecutions";
   const isRoutePlanningPage = page === "routePlanningStrategies";
+  const isRoutePlanningRunPage = page === "routePlanningRuns";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
   const hasEventPanel = isTaskOperationPage || isRoutePlanningPage;
   const config = tableConfig[page];
@@ -1323,8 +1421,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const eventRows = isRoutePlanningPage ? actions.routePlanningEvents : actions.taskEventLogs;
-  const eventColumns = isRoutePlanningPage ? tableConfig.routePlanningEvents.columns : tableConfig.taskEventLogs.columns;
+  const eventRows = isRoutePlanningPage ? actions.routePlanningRuns : actions.taskEventLogs;
+  const eventColumns = isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isRoutePlanningPage ? "route_planning_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
 
@@ -1356,7 +1455,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <span>关键词</span>
           <Input
             size="small"
-            placeholder={isReadinessPage ? "任务编号 / Robotaxi / Worker" : "输入关键词"}
+            placeholder={isReadinessPage ? "任务编号 / Robotaxi / 作业人员" : "输入关键词"}
             value={filters.keyword}
             onChange={(event) => updateFilters({ ...filters, keyword: event.target.value })}
           />
@@ -1423,7 +1522,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <div className="event-log-title">{isRoutePlanningPage ? "路径规划执行记录" : "最近任务事件"}</div>
           <Table
             size="small"
-            rowKey="event_id"
+            rowKey={eventRowKey}
             columns={eventColumns.map((key) => ({
               key,
               title: getFieldLabel(key),
@@ -1519,6 +1618,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         fixed: "right",
         width: 220,
         render: (_, row) => renderRouteExecutionActions(row, { ...actions, openAbnormalArrivalModal, page, objectType, idField }),
+      };
+    }
+    if (isRoutePlanningRunPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 180,
+        render: (_, row) => renderRoutePlanningRunActions(row, { ...actions, page, objectType, idField }),
       };
     }
     return null;
@@ -1644,7 +1752,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "deploymentTask", "routeExecution"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -1689,6 +1797,15 @@ function getDetailTabs(selectedType) {
       { key: "basic", label: "基础信息", keys: ["worker_id", "ops_center_id", "worker_name", "worker_role", "worker_status"] },
       { key: "task", label: "任务状态", keys: ["current_task_id", "current_task_type", "current_task_status"] },
       { key: "capacity", label: "作业能力", keys: ["time_per_robotaxi", "max_robotaxi_per_day"] },
+    ];
+  }
+  if (selectedType === "route") {
+    return [
+      { key: "basic", label: "路径信息", keys: ["route_id", "route_version", "route_status", "failure_reason", "route_strategy_id", "route_planning_run_id"] },
+      { key: "relation", label: "业务关联", keys: ["task_id", "route_execution_id", "robotaxi_id"] },
+      { key: "location", label: "起终点", keys: ["origin_cell_id", "target_cell_id", "start_cell_id", "end_cell_id"] },
+      { key: "steps", label: "路径步骤", keys: ["road_segment_sequence", "route_step_count", "route_steps"] },
+      { key: "metrics", label: "路径指标", keys: ["total_distance_m", "estimated_time_s", "related_service_area_ids"] },
     ];
   }
   if (selectedType === "deploymentTask") {
@@ -1831,7 +1948,7 @@ function MapCanvas({ data, selected, onSelect }) {
 function ServiceAreas({ serviceAreas, selected }) {
   return (
     <g className="service-area-layer">
-      {serviceAreas.flatMap((area) => area.covered_cell_ids.map((cellId) => {
+      {serviceAreas.flatMap((area) => (area.cell_ids || area.covered_cell_ids || []).map((cellId) => {
         const { row, col } = parseCellId(cellId);
         return (
           <rect
@@ -1889,7 +2006,8 @@ function RoadNodes({ roadNodes, selected }) {
 
 function renderCellValue(key, row) {
   if (key === "cell_count") return row.cell_ids?.length ?? 0;
-  if (key === "covered_cell_count") return row.covered_cell_ids?.length ?? 0;
+  if (key === "covered_cell_count") return (row.cell_ids || row.covered_cell_ids)?.length ?? 0;
+  if (key === "route_step_count") return row.route_steps?.length ?? row.total_step_count ?? 0;
   if (key === "result") {
     const passed = row[key] === "PASS";
     return <Tag color={passed ? "success" : "error"}>{getDisplayValue(row[key])}</Tag>;
@@ -1934,7 +2052,7 @@ function renderViewDetailAction(row, actions) {
 
 function renderReadinessActions(row, actions) {
   if (row.task_status === "WAITING_ASSIGNMENT") {
-    return <RowActionButton onClick={() => actions.assignWorker(row.task_id)}>分配 Worker</RowActionButton>;
+    return <RowActionButton onClick={() => actions.assignWorker(row.task_id)}>分配作业人员</RowActionButton>;
   }
   if (row.task_status === "WAITING_CHECK") {
     return <RowActionButton onClick={() => actions.startCheck(row.task_id)}>开始检查</RowActionButton>;
@@ -1981,6 +2099,13 @@ function renderRouteExecutionActions(row, actions) {
   return renderViewDetailAction(row, actions);
 }
 
+function renderRoutePlanningRunActions(row, actions) {
+  if (row.result_route_id) {
+    return <RowActionButton onClick={() => actions.viewGeneratedRoute(row)}>查看生成路径</RowActionButton>;
+  }
+  return renderViewDetailAction(row, actions);
+}
+
 function renderAbnormalArrivalModalBody(execution, data, abnormalArrivalType, setAbnormalArrivalType) {
   if (!execution) return null;
   const robotaxi = data?.robotaxis?.find((item) => item.robotaxi_id === execution.robotaxi_id);
@@ -1994,9 +2119,9 @@ function renderAbnormalArrivalModalBody(execution, data, abnormalArrivalType, se
         <Descriptions.Item label="Robotaxi 编号">{execution.robotaxi_id}</Descriptions.Item>
         <Descriptions.Item label="Robotaxi 状态">{getDisplayValue(robotaxi?.motion_status) || "无"}</Descriptions.Item>
         <Descriptions.Item label="行驶记录编号">{execution.route_execution_id}</Descriptions.Item>
-        <Descriptions.Item label="当前 Route">{route ? summarizeRoute(route) : execution.route_id}</Descriptions.Item>
-        <Descriptions.Item label="Route 起点">{originLocation.summary}</Descriptions.Item>
-        <Descriptions.Item label="Route 终点">{targetLocation.summary}</Descriptions.Item>
+        <Descriptions.Item label="当前路径">{route ? summarizeRoute(route) : execution.route_id}</Descriptions.Item>
+        <Descriptions.Item label="路径起点">{originLocation.summary}</Descriptions.Item>
+        <Descriptions.Item label="路径终点">{targetLocation.summary}</Descriptions.Item>
         <Descriptions.Item label="当前位置">{currentLocation.summary}</Descriptions.Item>
       </Descriptions>
       <div className="abnormal-field">
@@ -2028,6 +2153,9 @@ function renderDetailValue(key, value, row = null) {
   }
   if (isLocationDetailKey(key) && value && typeof value === "object") {
     return <CompactLocationDetail value={value} />;
+  }
+  if (key === "route_steps" && Array.isArray(value)) {
+    return <RouteStepsDetail routeSteps={value} />;
   }
   return <Text className="detail-value">{formatDetailValue(value, key, row) || "无"}</Text>;
 }
@@ -2067,6 +2195,28 @@ function CompactLocationDetail({ value }) {
   );
 }
 
+function RouteStepsDetail({ routeSteps }) {
+  if (!routeSteps || routeSteps.length === 0) return <Text className="detail-value">无路径步骤</Text>;
+  const firstCellId = routeSteps[0]?.cell_id || "未知起点";
+  const lastCellId = routeSteps[routeSteps.length - 1]?.cell_id || "未知终点";
+
+  return (
+    <div className="compact-location-detail">
+      <span>共 {routeSteps.length} 步：{firstCellId} → {lastCellId}</span>
+      <details>
+        <summary>查看完整路径步骤</summary>
+        <div className="route-step-list">
+          {routeSteps.map((step) => (
+            <div key={`${step.step_index}-${step.cell_id}`}>
+              {step.step_index} → {step.cell_id} → {step.road_segment_id || "无道路片段"} → {getDisplayValue(step.direction) || "未知方向"} → {step.distance_km ?? 0} km
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function summarizeObject(value) {
   const enabled = Object.entries(value)
     .filter(([, itemValue]) => itemValue === true)
@@ -2075,7 +2225,15 @@ function summarizeObject(value) {
 }
 
 function formatDetailValue(value, key, parentRow = null) {
-  if (Array.isArray(value)) return value.map((item) => formatDetailValue(item, key, parentRow)).join(", ");
+  if (key === "route_detail" && value && typeof value === "object") return summarizeRouteDetail(value);
+  if (key === "route_steps" && Array.isArray(value)) return summarizeRouteSteps(value);
+  if (key === "route_history" && Array.isArray(value)) return summarizeRouteHistory(value);
+  if (Array.isArray(value)) {
+    if (value.some((item) => item && typeof item === "object")) {
+      return value.map((item) => summarizeRecord(item)).join("；");
+    }
+    return value.map((item) => formatDetailValue(item, key, parentRow)).join(", ");
+  }
   if (typeof value === "boolean") return value ? "是" : "否";
   if (typeof value === "object" && value !== null) {
     return Object.entries(value)
@@ -2086,10 +2244,45 @@ function formatDetailValue(value, key, parentRow = null) {
 }
 
 function getFieldDisplayValue(key, value, row = null) {
+  if (key === "direction" && value === "UNKNOWN") return "未知方向";
   if (key === "check_result" && value === "FAILED") return "检查不通过";
   if (key === "event_result" && value === "FAILED") return "失败";
   if (isStatusField(key)) return getStatusDisplayValue(key, value, row);
   return getDisplayValue(value);
+}
+
+function summarizeRouteDetail(routeDetail) {
+  if (!routeDetail) return "无";
+  const routeId = routeDetail.route_id || "未生成";
+  const startCellId = routeDetail.start_cell_id || "未知起点";
+  const endCellId = routeDetail.end_cell_id || "未知终点";
+  const stepCount = routeDetail.route_step_count || routeDetail.route_steps?.length || 0;
+  const strategyId = routeDetail.route_strategy_id ? `，策略 ${routeDetail.route_strategy_id}` : "";
+  return `${routeId}：${startCellId} 到 ${endCellId}，共 ${stepCount} 步${strategyId}`;
+}
+
+function summarizeRouteSteps(routeSteps) {
+  if (!routeSteps || routeSteps.length === 0) return "无路径步骤";
+  const firstCellId = routeSteps[0]?.cell_id || "未知起点";
+  const lastCellId = routeSteps[routeSteps.length - 1]?.cell_id || "未知终点";
+  return `共 ${routeSteps.length} 步：${firstCellId} → ${lastCellId}`;
+}
+
+function summarizeRouteHistory(routeHistory) {
+  if (!routeHistory || routeHistory.length === 0) return "无路径历史";
+  const latest = routeHistory[routeHistory.length - 1];
+  const reason = latest?.route_change_reason ? getDisplayValue(latest.route_change_reason) : "无变化原因";
+  return `共 ${routeHistory.length} 次路径记录，最近一次：${latest?.route_id || "未生成"}，${reason}`;
+}
+
+function summarizeRecord(record) {
+  if (!record || typeof record !== "object") return formatDetailValue(record);
+  const primaryId = record.route_id || record.cell_id || record.road_segment_id || record.route_planning_run_id || record.task_id || record.event_id;
+  if (primaryId) return String(primaryId);
+  return Object.entries(record)
+    .slice(0, 3)
+    .map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`)
+    .join("，");
 }
 
 function isStatusField(key) {
@@ -2107,10 +2300,12 @@ function isStatusField(key) {
     "road_status",
     "node_status",
     "segment_status",
+    "service_area_status",
     "place_status",
     "strategy_status",
     "status",
     "result",
+    "planning_result",
   ].includes(key);
 }
 
@@ -2127,7 +2322,7 @@ function isDeploymentLike(row) {
 }
 
 function getColumnWidth(key) {
-  if (key.endsWith("_ids") || key === "cell_ids" || key === "road_segment_sequence") return 220;
+  if (key.endsWith("_ids") || key === "cell_ids" || key === "cell_sequence" || key === "road_segment_sequence") return 220;
   if (key.endsWith("_rule") || key === "route_update_rule") return 260;
   if (key === "strategy_name") return 220;
   if (key.includes("name") || key === "rule_name" || key === "description") return 180;
@@ -2151,8 +2346,11 @@ function getCellClass(cell, placeTypeByCellId) {
 }
 
 function routeCellIds(route, roadSegments) {
+  if (Array.isArray(route.route_steps) && route.route_steps.length > 0) {
+    return route.route_steps.map((step) => step.cell_id);
+  }
   const segmentById = new Map(roadSegments.map((segment) => [segment.road_segment_id, segment]));
-  return route.road_segment_sequence.flatMap((segmentId) => segmentById.get(segmentId)?.cell_ids || []);
+  return route.road_segment_sequence.flatMap((segmentId) => segmentById.get(segmentId)?.cell_sequence || []);
 }
 
 function parseCellId(cellId) {
@@ -2175,15 +2373,15 @@ async function bootstrap() {
     deploymentTaskValidation,
     taskTypeModule,
   ] = await Promise.all([
-    import("./data/mapInitialization.js?v=20260603-v006"),
-    import("./data/mapValidation.js?v=20260603-v006"),
-    import("./data/operationsCenterInitialization.js?v=20260603-v006"),
-    import("./data/operationsCenterValidation.js?v=20260603-v006"),
-    import("./data/cellContext.js?v=20260603-v006"),
-    import("./domain/fieldDictionary.js?v=20260603-v006"),
-    import("./data/readinessCheckTaskValidation.js"),
-    import("./data/deploymentTaskValidation.js"),
-    import("./domain/taskTypes.js"),
+    import("./data/mapInitialization.js?v=20260608-v017-route-management"),
+    import("./data/mapValidation.js?v=20260608-v017-route-management"),
+    import("./data/operationsCenterInitialization.js?v=20260608-v017-route-management"),
+    import("./data/operationsCenterValidation.js?v=20260608-v017-route-management"),
+    import("./data/cellContext.js?v=20260608-v017-route-management"),
+    import("./domain/fieldDictionary.js?v=20260608-v017-route-management"),
+    import("./data/readinessCheckTaskValidation.js?v=20260608-v017-route-management"),
+    import("./data/deploymentTaskValidation.js?v=20260608-v017-route-management"),
+    import("./domain/taskTypes.js?v=20260608-v017-route-management"),
   ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -2225,7 +2423,7 @@ function getDefaultDeploymentTarget(data) {
     data.serviceAreas.find((area) => area.vehicle_capabilities?.can_stage || area.vehicle_capabilities?.can_short_wait);
   if (!serviceArea) return null;
   return {
-    target_cell_id: serviceArea.covered_cell_ids[0],
+    target_cell_id: getCandidateServiceAreaCellIds(serviceArea)[0],
     target_service_area_id: serviceArea.service_area_id,
     target_zone_id: data.zones.find((zone) => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null,
   };
@@ -2237,21 +2435,32 @@ function createDeploymentRoute(task, data, options = {}) {
   const targetCellId = options.targetCellId || task.planned_target_cell_id || task.target_cell_id;
   const strategyId = options.strategyId || taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT;
   const serviceArea = data.serviceAreas.find((area) => area.service_area_id === targetServiceAreaId);
-  const segmentId = serviceArea?.segment_ids?.[0] || "RS-014";
+  const segmentId = serviceArea?.road_segment_ids?.[0] || "RS-014";
   const segment = data.roadSegments.find((item) => item.road_segment_id === segmentId);
   const totalDistance = segment?.distance_m || 50;
+  const routeSteps = createRouteStepsForRoute(segment ? [segment] : [], originCellId, targetCellId);
   return {
     route_id: nextDeploymentRouteId(),
+    route_version: 1,
     route_name: `${task.robotaxi_id} 投放到 ${targetServiceAreaId}`,
     map_id: data.maps[0].map_id,
     start_cell_id: originCellId,
     end_cell_id: targetCellId,
+    origin_cell_id: originCellId,
+    target_cell_id: targetCellId,
+    task_id: task.task_id,
+    route_execution_id: options.routeExecutionId || null,
+    route_planning_run_id: options.routePlanningRunId || null,
+    robotaxi_id: task.robotaxi_id,
     route_strategy_id: strategyId,
     road_segment_sequence: segment ? [segment.road_segment_id] : [],
+    route_steps: routeSteps,
+    total_step_count: routeSteps.length,
     related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
     total_distance_m: totalDistance,
     estimated_time_s: Math.max(1, Math.round(totalDistance / (40 * 1000 / 3600))),
     route_status: "Active",
+    failure_reason: null,
   };
 }
 
@@ -2272,7 +2481,7 @@ function createRouteHistoryEntry(route, routeChangeReason, arrivalExecutionResul
 function getAlternativeDeploymentTarget(data, serviceAreaId, excludedCellIds = []) {
   const serviceArea = data.serviceAreas.find((area) => area.service_area_id === serviceAreaId);
   const excluded = new Set(excludedCellIds.filter(Boolean));
-  const alternativeCellId = serviceArea?.covered_cell_ids?.find((cellId) => !excluded.has(cellId));
+  const alternativeCellId = getCandidateServiceAreaCellIds(serviceArea).find((cellId) => !excluded.has(cellId));
   if (!alternativeCellId) return null;
   return {
     target_cell_id: alternativeCellId,
@@ -2281,20 +2490,57 @@ function getAlternativeDeploymentTarget(data, serviceAreaId, excludedCellIds = [
   };
 }
 
-function createRoutePlanningStrategyRows(data, taskEventLogs) {
-  const routeById = new Map(data.routes.map((route) => [route.route_id, route]));
+function getCandidateServiceAreaCellIds(serviceArea) {
+  if (!serviceArea) return [];
+  return [
+    ...(serviceArea.standby_cell_ids || []),
+    ...(serviceArea.parking_cell_ids || []),
+    ...(serviceArea.temp_stop_cell_ids || []),
+    ...(serviceArea.pickup_cell_ids || []),
+    ...(serviceArea.dropoff_cell_ids || []),
+    ...(serviceArea.cell_ids || serviceArea.covered_cell_ids || []),
+  ].filter((cellId, index, list) => cellId && list.indexOf(cellId) === index);
+}
+
+function createRouteStepsForRoute(segments, originCellId, targetCellId) {
+  const cellItems = [];
+  segments.forEach((segment) => {
+    (segment.cell_sequence || segment.cell_ids || []).forEach((cellId) => {
+      if (cellItems[cellItems.length - 1]?.cell_id === cellId) return;
+      cellItems.push({ cell_id: cellId, road_segment_id: segment.road_segment_id });
+    });
+  });
+  const cells = [originCellId, ...cellItems.map((item) => item.cell_id), targetCellId]
+    .filter(Boolean)
+    .filter((cellId, index, list) => index === 0 || cellId !== list[index - 1]);
+  return cells.map((cellId, index) => {
+    const matched = cellItems.find((item) => item.cell_id === cellId);
+    return {
+      step_index: index,
+      cell_id: cellId,
+      road_segment_id: matched?.road_segment_id || segments[0]?.road_segment_id || null,
+      road_node_id: null,
+      direction: "UNKNOWN",
+      distance_km: index === 0 ? 0 : 0.05,
+      is_origin_step: index === 0,
+      is_target_step: index === cells.length - 1,
+    };
+  });
+}
+
+function createRoutePlanningStrategyRows(data, routePlanningRuns) {
   const routeByStrategyId = new Map();
   data.routes.forEach((route) => {
     if (!route.route_strategy_id) return;
     const current = routeByStrategyId.get(route.route_strategy_id) || 0;
     routeByStrategyId.set(route.route_strategy_id, current + 1);
   });
-  const eventCountByStrategyId = new Map();
-  taskEventLogs.forEach((event) => {
-    const routeStrategyId = routeById.get(event.route_id)?.route_strategy_id || event.route_strategy_id;
+  const runCountByStrategyId = new Map();
+  routePlanningRuns.forEach((run) => {
+    const routeStrategyId = run.route_strategy_id;
     if (!routeStrategyId) return;
-    const current = eventCountByStrategyId.get(routeStrategyId) || 0;
-    eventCountByStrategyId.set(routeStrategyId, current + 1);
+    const current = runCountByStrategyId.get(routeStrategyId) || 0;
+    runCountByStrategyId.set(routeStrategyId, current + 1);
   });
   return [
     {
@@ -2305,7 +2551,8 @@ function createRoutePlanningStrategyRows(data, taskEventLogs) {
       origin_rule: "使用运营投放任务起点位置",
       target_rule: "使用任务当前计划目标位置",
       service_area_scope_rule: "不改变任务目标服务区",
-      route_update_rule: "创建初始 Route，并创建 / 绑定行驶记录",
+      route_generation_rule: "基于道路片段的有序网格生成可执行路径步骤",
+      route_update_rule: "创建初始路径，并创建 / 绑定行驶记录",
       strategy_status: "Active",
     },
     {
@@ -2316,40 +2563,38 @@ function createRoutePlanningStrategyRows(data, taskEventLogs) {
       origin_rule: "使用 Robotaxi 当前异常到达位置",
       target_rule: "选择同服务区内其他目标位置，并排除当前异常点和当前目标点",
       service_area_scope_rule: "限制在当前任务目标服务区内",
-      route_update_rule: "更新同一个行驶记录的当前 Route，不创建新行驶记录",
+      route_generation_rule: "基于当前异常位置到替代目标重新生成可执行路径步骤",
+      route_update_rule: "更新同一个行驶记录的当前路径，不创建新行驶记录",
       strategy_status: "Active",
     },
   ].map((strategy) => ({
     ...strategy,
     strategy_usage_count: Math.max(
       routeByStrategyId.get(strategy.route_strategy_id) || 0,
-      eventCountByStrategyId.get(strategy.route_strategy_id) || 0,
+      runCountByStrategyId.get(strategy.route_strategy_id) || 0,
     ),
+    route_planning_run_count: runCountByStrategyId.get(strategy.route_strategy_id) || 0,
   }));
 }
 
-function createRoutePlanningEvents(taskEventLogs, data) {
-  const routeById = new Map(data.routes.map((route) => [route.route_id, route]));
-  return taskEventLogs
-    .filter((event) => event.event_type === taskTypes.TaskEventType.ROUTE_PLANNED)
-    .map((event) => {
-      const route = routeById.get(event.route_id);
-      return {
-        event_id: event.event_id,
-        route_strategy_id: route?.route_strategy_id || event.route_strategy_id || null,
-        route_id: event.route_id,
-        task_id: event.task_id,
-        robotaxi_id: event.robotaxi_id,
-        route_execution_id: event.route_execution_id,
-        event_result: event.event_result,
-        message: event.message,
-        created_at: event.created_at,
-      };
-    });
+function createRoutePlanningRun(options) {
+  return taskTypes.createRoutePlanningRun({
+    route_planning_run_id: options.routePlanningRunId || nextRoutePlanningRunId(),
+    route_strategy_id: options.routeStrategyId,
+    task_id: options.taskId,
+    route_execution_id: options.routeExecutionId,
+    robotaxi_id: options.robotaxiId,
+    origin_cell_id: options.originCellId,
+    target_cell_id: options.targetCellId,
+    result_route_id: options.resultRouteId,
+    planning_result: options.planningResult,
+    failure_reason: options.failureReason,
+    created_at: now(),
+  });
 }
 
 function getRouteExecutionCells(route, roadSegments, originCellId, targetCellId) {
-  const cells = routeCellIds(route, roadSegments);
+  const cells = route.route_steps?.map((step) => step.cell_id) || routeCellIds(route, roadSegments);
   return [...new Set([originCellId, ...cells, targetCellId].filter(Boolean))];
 }
 
@@ -2394,6 +2639,31 @@ function enrichRouteExecutionForDisplay(execution, data) {
     origin_location_detail: originLocation.detail,
     target_location_detail: targetLocation.detail,
     current_location_detail: currentLocation.detail,
+  };
+}
+
+function enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns) {
+  const planningRun = routePlanningRuns.find((run) =>
+    run.result_route_id === route.route_id || run.route_planning_run_id === route.route_planning_run_id
+  );
+  const execution = routeExecutions.find((item) =>
+    item.route_id === route.route_id || item.route_history?.some((history) => history.route_id === route.route_id)
+  );
+  const task = deploymentTasks.find((item) =>
+    item.route_id === route.route_id || item.task_id === route.task_id || item.task_id === execution?.task_id
+  );
+
+  return {
+    ...route,
+    route_version: route.route_version || 1,
+    task_id: route.task_id || planningRun?.task_id || execution?.task_id || task?.task_id || null,
+    route_execution_id: route.route_execution_id || planningRun?.route_execution_id || execution?.route_execution_id || null,
+    route_planning_run_id: route.route_planning_run_id || planningRun?.route_planning_run_id || null,
+    robotaxi_id: route.robotaxi_id || planningRun?.robotaxi_id || execution?.robotaxi_id || task?.robotaxi_id || null,
+    origin_cell_id: route.origin_cell_id || route.start_cell_id,
+    target_cell_id: route.target_cell_id || route.end_cell_id,
+    failure_reason: route.failure_reason || null,
+    route_step_count: route.route_steps?.length || route.total_step_count || 0,
   };
 }
 
@@ -2471,15 +2741,25 @@ function summarizeRoute(route) {
 function getRouteDetail(route) {
   return {
     route_id: route.route_id,
+    route_version: route.route_version,
     route_name: route.route_name,
-    start_cell_id: route.start_cell_id,
-    end_cell_id: route.end_cell_id,
+    origin_cell_id: route.origin_cell_id || route.start_cell_id,
+    target_cell_id: route.target_cell_id || route.end_cell_id,
+    start_cell_id: route.start_cell_id || route.origin_cell_id,
+    end_cell_id: route.end_cell_id || route.target_cell_id,
     route_strategy_id: route.route_strategy_id,
+    route_planning_run_id: route.route_planning_run_id,
+    task_id: route.task_id,
+    route_execution_id: route.route_execution_id,
+    robotaxi_id: route.robotaxi_id,
     road_segment_sequence: route.road_segment_sequence,
+    route_step_count: route.route_steps?.length || route.total_step_count || 0,
+    route_steps: route.route_steps,
     related_service_area_ids: route.related_service_area_ids,
     total_distance_m: route.total_distance_m,
     estimated_time_s: route.estimated_time_s,
     route_status: route.route_status,
+    failure_reason: route.failure_reason,
   };
 }
 
@@ -2518,6 +2798,11 @@ function nextDeploymentRouteId() {
   return `DRT-${String(deploymentRouteSequence).padStart(3, "0")}`;
 }
 
+function nextRoutePlanningRunId() {
+  routePlanningRunSequence += 1;
+  return `RPR-${String(routePlanningRunSequence).padStart(3, "0")}`;
+}
+
 function nextEventId() {
   eventSequence += 1;
   return `EVT-${String(eventSequence).padStart(3, "0")}`;
@@ -2542,6 +2827,7 @@ function loadRuntimeSnapshot(initialData) {
     readinessTasks: [],
     deploymentTasks: [],
     routeExecutions: [],
+    routePlanningRuns: [],
     taskEventLogs: [],
     activePage: "console",
     pageSelections: { console: { type: "map", id: initialData.maps[0].map_id } },
@@ -2555,11 +2841,13 @@ function loadRuntimeSnapshot(initialData) {
     const readinessTasks = Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : [];
     const deploymentTasks = normalizeRouteStrategyReferences(Array.isArray(snapshot.deploymentTasks) ? snapshot.deploymentTasks : []);
     const routeExecutions = normalizeRouteStrategyReferences(Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : []);
+    const routePlanningRuns = normalizeRouteStrategyReferences(Array.isArray(snapshot.routePlanningRuns) ? snapshot.routePlanningRuns : []);
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
+    routePlanningRunSequence = deriveSequence(routePlanningRuns, "route_planning_run_id", "RPR-");
     deploymentRouteSequence = deriveSequence(operationalData.routes || [], "route_id", "DRT-");
     eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
     return {
@@ -2567,6 +2855,7 @@ function loadRuntimeSnapshot(initialData) {
       readinessTasks,
       deploymentTasks,
       routeExecutions,
+      routePlanningRuns,
       taskEventLogs,
       activePage: snapshot.activePage || "console",
       pageSelections: {
@@ -2607,6 +2896,7 @@ function saveRuntimeSnapshot(snapshot) {
     window.localStorage.setItem(runtimeStorageKey, JSON.stringify({
       ...snapshot,
       taskSequence,
+      routePlanningRunSequence,
       eventSequence,
     }));
   } catch (error) {

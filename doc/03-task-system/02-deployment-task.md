@@ -83,7 +83,7 @@ Route / route_history
 
 - Route 可以在任务执行过程中被重新规划；
 - Route 重规划不应创建新的 RouteExecution；
-- 同一个 DeploymentTask 下，RouteExecution 通过 `current_route_id` 和 `route_history` 记录路径变化；
+- 同一个 DeploymentTask 下，RouteExecution 通过 `route_id` 和 `route_history` 记录当前路径与历史路径变化；
 - 只有当 DeploymentTask 完成、失败、取消，或 Robotaxi 切换到新的任务单时，当前 RouteExecution 才结束。
 
 ---
@@ -366,7 +366,7 @@ DeploymentTask = ARRIVAL_ABNORMAL
 ↓
 RoutePlanning 生成替代 Route
 ↓
-同一个 RouteExecution 更新 current_route_id / route_id
+同一个 RouteExecution 更新 route_id
 写入 route_history
 ↓
 DeploymentTask = MOVING

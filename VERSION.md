@@ -2,6 +2,22 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v017
+
+核心：完善路径规划输出、Route 管理和行驶记录管理结构。
+
+- RoadSegment 增加 `cell_sequence`、`allowed_direction`、`total_distance_km`，明确道路片段是有序、连续、有方向的可通行结构。
+- ServiceArea 升级为能力 Cell 模型，支持上车、下车、临停、停车、待命、占用和不可用点位表达。
+- Route 保持 `start_cell_id / end_cell_id / road_segment_sequence`，新增 `route_steps`，作为 RouteExecution 推进的可执行路径步骤。
+- 新增 RoutePlanningRun 路径规划执行记录对象，用于记录每次路径规划策略执行过程。
+- 路径规划管理页面下方记录由 TaskEventLog 派生改为展示 RoutePlanningRun。
+- Route 从地图空间静态对象迁移为路径规划输出结果，初始化阶段不再生成静态 Route。
+- Route 管理迁入 Robotaxi 管理，与行驶记录管理同级；Route 记录可反查任务、Robotaxi、行驶记录和路径规划执行记录。
+- 行驶记录菜单升级为行驶记录管理，当前实现运营行驶记录，并预留服务履约记录占位。
+- 保留并强化 RoadNode / 路口 Cell 不得被 ServiceArea 覆盖的规则。
+- 更新字段字典、初始化校验和前端展示字段，保持中文运营体验一致。
+- 新增本地检查与版本发布脚本，固化提交前检查和版本标签流程。
+
 ## v016
 
 核心：实现运营投放到达判断、异常到达重规划和路径规划策略记录。

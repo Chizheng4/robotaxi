@@ -80,6 +80,25 @@ export const RoutePlanningStrategy = {
   ABNORMAL_SAME_SERVICE_AREA: "RPS-002",
 };
 
+export const RoutePlanningResult = {
+  SUCCESS: "SUCCESS",
+  FAILED: "FAILED",
+};
+
+export const RoutePlanningFailureReason = {
+  NONE: "NONE",
+  ORIGIN_CELL_INVALID: "ORIGIN_CELL_INVALID",
+  TARGET_CELL_INVALID: "TARGET_CELL_INVALID",
+  TARGET_SERVICE_AREA_UNAVAILABLE: "TARGET_SERVICE_AREA_UNAVAILABLE",
+  NO_AVAILABLE_TARGET_CELL: "NO_AVAILABLE_TARGET_CELL",
+  NO_CONNECTED_ROAD_SEGMENT: "NO_CONNECTED_ROAD_SEGMENT",
+  ROAD_SEGMENT_BLOCKED: "ROAD_SEGMENT_BLOCKED",
+  ROAD_NODE_CONNECTION_INVALID: "ROAD_NODE_CONNECTION_INVALID",
+  ROUTE_STEPS_EMPTY: "ROUTE_STEPS_EMPTY",
+  ROUTE_STRATEGY_MISMATCH: "ROUTE_STRATEGY_MISMATCH",
+  UNKNOWN: "UNKNOWN",
+};
+
 export const RouteChangeReason = {
   INITIAL_PLANNING: "INITIAL_PLANNING",
   ABNORMAL_ARRIVAL_REPLAN: "ABNORMAL_ARRIVAL_REPLAN",
@@ -153,4 +172,8 @@ export function createRouteExecution(routeExecution) {
 
 export function createTaskEventLog(event) {
   return event;
+}
+
+export function createRoutePlanningRun(routePlanningRun) {
+  return routePlanningRun;
 }

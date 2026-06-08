@@ -20,6 +20,7 @@ export function validateDeploymentTasks(data) {
   const executionByTaskId = new Map((data.routeExecutions || []).map((execution) => [execution.task_id, execution]));
   const deploymentTasks = data.deploymentTasks || [];
   const routeExecutions = data.routeExecutions || [];
+  const routePlanningRuns = data.routePlanningRuns || [];
   const taskEventLogs = data.taskEventLogs || [];
 
   return [
@@ -106,7 +107,7 @@ export function validateDeploymentTasks(data) {
     ),
     check(
       "DEPLOYMENT_ROUTE_STRATEGY_MATCH",
-      "运营投放任务记录的路径规划策略必须与当前 Route 一致",
+      "运营投放任务记录的路径规划策略必须与当前路径一致",
       deploymentTasks.every((task) => {
         if (!task.route_id || !task.route_strategy_id) return true;
         return task.route_strategy_id === routeById.get(task.route_id)?.route_strategy_id;
@@ -146,7 +147,7 @@ export function validateDeploymentTasks(data) {
     ),
     check(
       "ROUTE_EXECUTION_STEP_RANGE",
-      "行驶记录当前步序号必须在 Route 总步数范围内",
+      "行驶记录当前步序号必须在路径总步数范围内",
       routeExecutions.every((execution) =>
         execution.current_step_index >= 0 && execution.current_step_index <= execution.total_step_count
       ),
@@ -177,7 +178,7 @@ export function validateDeploymentTasks(data) {
     ),
     check(
       "ROUTE_EXECUTION_ROUTE_STRATEGY_MATCH",
-      "行驶记录记录的路径规划策略必须与当前 Route 一致",
+      "行驶记录记录的路径规划策略必须与当前路径一致",
       routeExecutions.every((execution) => {
         if (!execution.route_id || !execution.route_strategy_id) return true;
         return execution.route_strategy_id === routeById.get(execution.route_id)?.route_strategy_id;
@@ -185,7 +186,7 @@ export function validateDeploymentTasks(data) {
     ),
     check(
       "ROUTE_EXECUTION_HISTORY_STRATEGY_MATCH",
-      "行驶记录路径历史中的路径规划策略必须与对应 Route 一致",
+      "行驶记录路径历史中的路径规划策略必须与对应路径一致",
       routeExecutions.every((execution) =>
         (execution.route_history || []).every((history) => {
           if (!history.route_id || !history.route_strategy_id) return true;
@@ -195,10 +196,23 @@ export function validateDeploymentTasks(data) {
     ),
     check(
       "ROUTE_PLANNING_EVENT_STRATEGY_MATCH",
-      "路径规划执行记录中的路径规划策略必须与生成的 Route 一致",
+      "路径规划执行记录中的路径规划策略必须与生成的路径一致",
       taskEventLogs.every((event) => {
         if (event.event_type !== TaskEventType.ROUTE_PLANNED || !event.route_id || !event.route_strategy_id) return true;
         return event.route_strategy_id === routeById.get(event.route_id)?.route_strategy_id;
+      }),
+    ),
+    check(
+      "ROUTE_PLANNING_RUN_ROUTE_REF",
+      "路径规划执行记录成功时必须关联生成的 Route",
+      routePlanningRuns.every((run) => run.planning_result !== "SUCCESS" || routeById.has(run.result_route_id)),
+    ),
+    check(
+      "ROUTE_PLANNING_RUN_STRATEGY_MATCH",
+      "路径规划执行记录的策略编号必须与生成的路径一致",
+      routePlanningRuns.every((run) => {
+        if (run.planning_result !== "SUCCESS" || !run.result_route_id) return true;
+        return run.route_strategy_id === routeById.get(run.result_route_id)?.route_strategy_id;
       }),
     ),
   ];

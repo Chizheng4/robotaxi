@@ -1,11 +1,11 @@
-import { CellType } from "../domain/types.js?v=20260603-v006";
+import { CellType } from "../domain/types.js?v=20260608-v017-route-management";
 
 export function validateMapSpace(data) {
   const cellById = new Map(data.cells.map((cell) => [cell.cell_id, cell]));
   const roadById = new Map(data.roads.map((road) => [road.road_id, road]));
   const nodeById = new Map(data.roadNodes.map((node) => [node.road_node_id, node]));
   const segmentById = new Map(data.roadSegments.map((segment) => [segment.road_segment_id, segment]));
-  const serviceCellIds = new Set(data.serviceAreas.flatMap((area) => area.covered_cell_ids));
+  const serviceCellIds = new Set(data.serviceAreas.flatMap((area) => area.cell_ids || area.covered_cell_ids));
   const roadNodeCellIds = new Set(data.roadNodes.map((node) => node.cell_id));
   const junctionNodeCellIds = new Set(
     data.roadNodes
@@ -30,12 +30,17 @@ export function validateMapSpace(data) {
     check(
       "ROAD_SEGMENT_CELLS_ROAD",
       "道路片段覆盖的网格必须是道路区域",
-      data.roadSegments.every((segment) => segment.cell_ids.every((cellId) => cellById.get(cellId)?.base_cell_type === CellType.ROAD)),
+      data.roadSegments.every((segment) => segment.cell_sequence.every((cellId) => cellById.get(cellId)?.base_cell_type === CellType.ROAD)),
     ),
     check(
       "ROAD_SEGMENT_CELLS_CONTINUOUS",
-      "道路片段覆盖的网格应连续",
-      data.roadSegments.every((segment) => areCellsContinuous(segment.cell_ids, cellById)),
+      "道路片段有序网格应连续",
+      data.roadSegments.every((segment) => areCellsContinuous(segment.cell_sequence, cellById)),
+    ),
+    check(
+      "ROAD_SEGMENT_ALLOWED_DIRECTION",
+      "道路片段必须明确允许通行方向",
+      data.roadSegments.every((segment) => Boolean(segment.allowed_direction)),
     ),
     check(
       "PLACE_CELLS_PLACE",
@@ -50,19 +55,26 @@ export function validateMapSpace(data) {
     check(
       "SERVICE_AREA_CELLS_ROAD",
       "服务区覆盖的网格必须是道路区域",
-      data.serviceAreas.every((area) => area.covered_cell_ids.every((cellId) => cellById.get(cellId)?.base_cell_type === CellType.ROAD)),
+      data.serviceAreas.every((area) => area.cell_ids.every((cellId) => cellById.get(cellId)?.base_cell_type === CellType.ROAD)),
     ),
     check(
       "SERVICE_AREA_SEGMENT_REF",
       "服务区必须关联道路片段",
-      data.serviceAreas.every((area) => area.segment_ids.length > 0 && area.segment_ids.every((segmentId) => segmentById.has(segmentId))),
+      data.serviceAreas.every((area) => area.road_segment_ids.length > 0 && area.road_segment_ids.every((segmentId) => segmentById.has(segmentId))),
     ),
     check(
-      "SERVICE_AREA_STOP_FOR_SERVICE",
-      "can_pickup 或 can_dropoff 为 true 时，can_stop_for_service 必须为 true",
+      "SERVICE_AREA_CAPABILITY_CELLS",
+      "服务区能力网格必须属于服务区覆盖范围",
       data.serviceAreas.every((area) => {
-        const needsStop = area.customer_capabilities.can_pickup || area.customer_capabilities.can_dropoff;
-        return !needsStop || area.vehicle_capabilities.can_stop_for_service;
+        const areaCellIds = new Set(area.cell_ids);
+        const capabilityCellIds = [
+          ...area.pickup_cell_ids,
+          ...area.dropoff_cell_ids,
+          ...area.temp_stop_cell_ids,
+          ...area.parking_cell_ids,
+          ...area.standby_cell_ids,
+        ];
+        return capabilityCellIds.every((cellId) => areaCellIds.has(cellId));
       }),
     ),
     check(
@@ -73,12 +85,12 @@ export function validateMapSpace(data) {
     check(
       "SERVICE_AREA_NO_ROAD_NODE_CELL",
       "服务区不得覆盖道路节点所在网格",
-      data.serviceAreas.every((area) => area.covered_cell_ids.every((cellId) => !roadNodeCellIds.has(cellId))),
+      data.serviceAreas.every((area) => area.cell_ids.every((cellId) => !roadNodeCellIds.has(cellId))),
     ),
     check(
       "SERVICE_AREA_NO_JUNCTION_CELL",
       "服务区不得覆盖连接两个及以上道路片段的路口网格",
-      data.serviceAreas.every((area) => area.covered_cell_ids.every((cellId) => !junctionNodeCellIds.has(cellId))),
+      data.serviceAreas.every((area) => area.cell_ids.every((cellId) => !junctionNodeCellIds.has(cellId))),
     ),
     check(
       "ZONE_PARENT_REF",
@@ -102,6 +114,11 @@ export function validateMapSpace(data) {
       "ROUTE_SEGMENTS_CONTINUOUS",
       "路径方案的道路片段序列必须连续",
       data.routes.every((route) => isSegmentSequenceContinuous(route.road_segment_sequence, segmentById)),
+    ),
+    check(
+      "ROUTE_STEPS_VALID",
+      "路径方案必须包含有序且连续的路径步骤",
+      data.routes.every((route) => areRouteStepsValid(route, cellById)),
     ),
     check(
       "ROUTE_SERVICE_ENDPOINTS",
@@ -134,6 +151,21 @@ function areCellsContinuous(cellIds, cellById) {
 
   const values = cells.map((cell) => (sameRow ? cell.col : cell.row)).sort((a, b) => a - b);
   return values.every((value, index) => index === 0 || value === values[index - 1] + 1);
+}
+
+function areRouteStepsValid(route, cellById) {
+  if (!Array.isArray(route.route_steps) || route.route_steps.length === 0) return false;
+  if (route.route_steps[0].cell_id !== route.start_cell_id) return false;
+  if (route.route_steps[route.route_steps.length - 1].cell_id !== route.end_cell_id) return false;
+  return route.route_steps.every((step, index) => {
+    if (step.step_index !== index) return false;
+    if (!cellById.has(step.cell_id)) return false;
+    if (index === 0) return true;
+    const previousCell = cellById.get(route.route_steps[index - 1].cell_id);
+    const currentCell = cellById.get(step.cell_id);
+    const distance = Math.abs(previousCell.row - currentCell.row) + Math.abs(previousCell.col - currentCell.col);
+    return distance === 1;
+  });
 }
 
 function isSubset(childIds, parentIds) {

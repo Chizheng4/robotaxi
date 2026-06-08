@@ -2,8 +2,8 @@ import {
   AvailabilityStatus,
   MotionStatus,
   WorkerStatus,
-} from "../domain/operationsCenterTypes.js?v=20260603-v006";
-import { PlaceType } from "../domain/types.js?v=20260603-v006";
+} from "../domain/operationsCenterTypes.js?v=20260608-v017-route-management";
+import { PlaceType } from "../domain/types.js?v=20260608-v017-route-management";
 
 export function validateOperationsCenter(data) {
   const mapIds = new Set(data.maps.map((map) => map.map_id));
@@ -40,8 +40,8 @@ export function validateOperationsCenter(data) {
       "运营中心关联的服务区必须位于附近接入道路",
       opsCenter?.service_area_ids.every((id) => {
         const area = serviceAreaById.get(id);
-        const onAccessRoad = area?.segment_ids.some((segmentId) => segmentById.get(segmentId)?.road_id === "RD-005");
-        return onAccessRoad && areCellGroupsNearby(opsCenter.cell_ids, area.covered_cell_ids);
+        const onAccessRoad = area?.road_segment_ids.some((segmentId) => segmentById.get(segmentId)?.road_id === "RD-005");
+        return onAccessRoad && areCellGroupsNearby(opsCenter.cell_ids, area.cell_ids);
       }),
     ),
     check("ROBOTAXI_COUNT", "Robotaxi 数量必须为 20", data.robotaxis.length === 20, `当前 ${data.robotaxis.length} 台 Robotaxi`),

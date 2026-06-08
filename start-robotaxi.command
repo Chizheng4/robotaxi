@@ -4,7 +4,7 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT="4173"
-URL="http://localhost:${PORT}/?v=20260606-v016-route-strategy-number"
+URL="http://localhost:${PORT}/?v=20260608-v017-route-management"
 LOG_FILE="${PROJECT_DIR}/.robotaxi-server.log"
 
 cd "$PROJECT_DIR"

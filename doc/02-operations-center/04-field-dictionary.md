@@ -84,8 +84,15 @@
 |origin_rule|起点选择规则|策略如何确定 Route 起点|
 |target_rule|终点选择规则|策略如何确定 Route 终点|
 |service_area_scope_rule|服务区范围规则|策略是否限制在指定 ServiceArea 内选择目标|
+|route_generation_rule|路径生成规则|策略如何基于 RoadSegment / RoadNode 生成 Route|
 |route_update_rule|路径更新规则|策略如何创建或更新 Route|
 |strategy_status|策略状态|路径规划策略状态|
+|route_planning_run_id|路径规划执行记录编号|每次路径规划策略执行的唯一编号|
+|result_route_id|生成路径编号|本次路径规划成功生成的 Route 编号|
+|planning_result|规划结果|本次路径规划成功或失败|
+|route_planning_run_count|路径规划执行次数|策略被执行的次数|
+|route_steps|路径步骤|Route 中可执行的 Cell Step 序列|
+|route_step_count|路径步骤数|Route 中步骤数量|
 |planned_target_zone_id|计划目标运营区域|运营投放任务计划投放 Zone，可为空|
 |planned_target_service_area_id|计划目标服务区|运营投放任务计划投放 ServiceArea|
 |planned_target_cell_id|计划目标位置|运营投放任务当前计划目标 Cell|

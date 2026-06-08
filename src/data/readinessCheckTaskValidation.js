@@ -45,7 +45,7 @@ export function validateReadinessCheckTasks(data) {
     ),
     check(
       "READINESS_TASK_WORKER_REF",
-      "已分配 Worker 的准入任务必须关联有效 Worker",
+      "已分配作业人员的准入任务必须关联有效作业人员",
       data.readinessCheckTasks.every((task) => !task.worker_id || workerById.has(task.worker_id)),
     ),
     check(

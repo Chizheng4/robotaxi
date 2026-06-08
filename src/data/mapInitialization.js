@@ -1,11 +1,15 @@
 import {
   CellType,
+  AllowedDirection,
   Direction,
   NodeType,
   PeakPattern,
   PlaceType,
   RoadType,
   RouteStatus,
+  SegmentStatus,
+  ServiceAreaStatus,
+  ServiceAreaType,
   Status,
   ZoneLevel,
   ZoneStatus,
@@ -19,7 +23,7 @@ import {
   createRoute,
   createServiceArea,
   createZone,
-} from "../domain/types.js?v=20260603-v006";
+} from "../domain/types.js?v=20260608-v017-route-management";
 
 const MAP_ID = "M-001";
 const CELL_SIZE_M = 50;
@@ -45,7 +49,7 @@ export function initializeMapSpace() {
   const roadSegments = createRoadSegments(map, roadNodes);
 
   roadSegments.forEach((segment) => {
-    segment.cell_ids.forEach((cellId) => setCellType(cellById, cellId, CellType.ROAD, true));
+    segment.cell_sequence.forEach((cellId) => setCellType(cellById, cellId, CellType.ROAD, true));
   });
 
   const roads = createRoads(map, roadSegments);
@@ -60,8 +64,6 @@ export function initializeMapSpace() {
   attachServiceAreasToPlaces(places, serviceAreas);
 
   const zones = createZones(map, cells, roadSegments, places, serviceAreas);
-  const routes = createRoutes(map, roadSegments);
-
   return {
     maps: [map],
     cells,
@@ -71,7 +73,7 @@ export function initializeMapSpace() {
     places,
     serviceAreas,
     zones,
-    routes,
+    routes: [],
   };
 }
 
@@ -168,6 +170,7 @@ function createRoadSegments(map, roadNodes) {
   return definitions.map(([segmentId, roadId, startNodeId, endNodeId, cellIds]) => {
     const startNode = nodeById.get(startNodeId);
     const endNode = nodeById.get(endNodeId);
+    const distanceM = distanceBetweenNodes(startNode, endNode, map.cell_size_m);
 
     return createRoadSegment({
       road_segment_id: segmentId,
@@ -176,11 +179,14 @@ function createRoadSegments(map, roadNodes) {
       start_node_id: startNodeId,
       end_node_id: endNodeId,
       cell_ids: cellIds,
-      distance_m: distanceBetweenNodes(startNode, endNode, map.cell_size_m),
-      direction: Direction.TWO_WAY,
+      cell_sequence: cellIds,
+      distance_m: distanceM,
+      total_distance_km: distanceM / 1000,
+      direction: inferSegmentDirection(startNode, endNode),
+      allowed_direction: AllowedDirection.BIDIRECTIONAL,
       speed_limit_kmh: 40,
       traversable: true,
-      segment_status: Status.ACTIVE,
+      segment_status: SegmentStatus.ACTIVE,
       service_area_ids: [],
     });
   });
@@ -210,56 +216,59 @@ function createPlaces(map) {
 }
 
 function createServiceAreas(map) {
-  const serviceDefaults = {
-    customer_capabilities: {
-      can_pickup: true,
-      can_dropoff: true,
-      can_wait: true,
-    },
-    vehicle_capabilities: {
-      can_stop_for_service: true,
-      can_short_wait: true,
-      can_stage: false,
-      can_long_park: false,
-    },
-    max_vehicle_capacity: 3,
-  };
-
-  const stageDefaults = {
-    customer_capabilities: {
-      can_pickup: false,
-      can_dropoff: false,
-      can_wait: false,
-    },
-    vehicle_capabilities: {
-      can_stop_for_service: false,
-      can_short_wait: true,
-      can_stage: true,
-      can_long_park: false,
-    },
-    max_vehicle_capacity: 6,
-  };
-
   const definitions = [
-    ["SA-001", "住宅区东侧接驾区", ["RS-001"], rangeCells({ col: 10, rowStart: 5, rowEnd: 7 }), serviceDefaults],
-    ["SA-002", "办公区西侧接驾区", ["RS-004"], rangeCells({ col: 25, rowStart: 5, rowEnd: 7 }), serviceDefaults],
-    ["SA-003", "商业中心北侧上下客区", ["RS-008"], rangeCells({ row: 12, colStart: 17, colEnd: 20 }), serviceDefaults],
-    ["SA-004", "医院学校东侧上下客区", ["RS-010"], rangeCells({ row: 28, colStart: 5, colEnd: 8 }), serviceDefaults],
-    ["SA-005", "地铁站南侧接驳区", ["RS-012"], rangeCells({ row: 28, colStart: 26, colEnd: 27 }), serviceDefaults],
-    ["SA-006", "运营中心接入道路待命区", ["RS-014"], rangeCells({ row: 35, colStart: 28, colEnd: 30 }), stageDefaults],
+    ["SA-001", "住宅区东侧接驾区", ServiceAreaType.PICKUP_DROPOFF, ["RS-001"], rangeCells({ col: 10, rowStart: 5, rowEnd: 7 }), "service", 3],
+    ["SA-002", "办公区西侧接驾区", ServiceAreaType.PICKUP_DROPOFF, ["RS-004"], rangeCells({ col: 25, rowStart: 5, rowEnd: 7 }), "service", 3],
+    ["SA-003", "商业中心北侧上下客区", ServiceAreaType.MIXED, ["RS-008"], rangeCells({ row: 12, colStart: 17, colEnd: 20 }), "service", 4],
+    ["SA-004", "医院学校东侧上下客区", ServiceAreaType.PICKUP_DROPOFF, ["RS-010"], rangeCells({ row: 28, colStart: 5, colEnd: 8 }), "service", 4],
+    ["SA-005", "地铁站南侧接驳区", ServiceAreaType.MIXED, ["RS-012"], rangeCells({ row: 28, colStart: 26, colEnd: 27 }), "service", 2],
+    ["SA-006", "运营中心接入道路待命区", ServiceAreaType.OPS_CENTER_AREA, ["RS-014"], rangeCells({ row: 35, colStart: 28, colEnd: 30 }), "stage", 6],
   ];
 
-  return definitions.map(([serviceAreaId, name, segmentIds, coveredCellIds, defaults]) => createServiceArea({
-    service_area_id: serviceAreaId,
-    map_id: map.map_id,
-    name,
-    segment_ids: segmentIds,
-    covered_cell_ids: coveredCellIds,
-    customer_capabilities: { ...defaults.customer_capabilities },
-    vehicle_capabilities: { ...defaults.vehicle_capabilities },
-    max_vehicle_capacity: defaults.max_vehicle_capacity,
-    status: Status.ACTIVE,
-  }));
+  return definitions.map(([serviceAreaId, serviceAreaName, serviceAreaType, segmentIds, cellIds, capabilityMode, capacity]) => {
+    const pickupCellIds = capabilityMode === "service" ? [cellIds[0]] : [];
+    const dropoffCellIds = capabilityMode === "service" ? [cellIds[0]] : [];
+    const tempStopCellIds = capabilityMode === "service" ? cellIds : [cellIds[0]];
+    const parkingCellIds = capabilityMode === "stage" ? cellIds.slice(1) : [];
+    const standbyCellIds = capabilityMode === "stage" ? cellIds : cellIds.slice(1);
+
+    return createServiceArea({
+      service_area_id: serviceAreaId,
+      map_id: map.map_id,
+      service_area_name: serviceAreaName,
+      service_area_type: serviceAreaType,
+      service_area_status: ServiceAreaStatus.ACTIVE,
+      cell_ids: cellIds,
+      segment_ids: segmentIds,
+      road_segment_ids: segmentIds,
+      place_ids: [],
+      zone_id: null,
+      pickup_cell_ids: pickupCellIds,
+      dropoff_cell_ids: dropoffCellIds,
+      temp_stop_cell_ids: tempStopCellIds,
+      parking_cell_ids: parkingCellIds,
+      standby_cell_ids: standbyCellIds,
+      occupied_cell_ids: [],
+      unavailable_cell_ids: [],
+      capacity,
+      current_robotaxi_count: 0,
+      name: serviceAreaName,
+      covered_cell_ids: cellIds,
+      max_vehicle_capacity: capacity,
+      status: ServiceAreaStatus.ACTIVE,
+      customer_capabilities: {
+        can_pickup: pickupCellIds.length > 0,
+        can_dropoff: dropoffCellIds.length > 0,
+        can_wait: standbyCellIds.length > 0,
+      },
+      vehicle_capabilities: {
+        can_stop_for_service: pickupCellIds.length > 0 || dropoffCellIds.length > 0,
+        can_short_wait: tempStopCellIds.length > 0,
+        can_stage: standbyCellIds.length > 0,
+        can_long_park: parkingCellIds.length > 0,
+      },
+    });
+  });
 }
 
 function createZones(map, cells, roadSegments, places, serviceAreas) {
@@ -286,13 +295,13 @@ function createZones(map, cells, roadSegments, places, serviceAreas) {
       zone_status: ZoneStatus.TESTING,
       cell_ids: cells.filter((cell) => cellSet.has(cell.cell_id)).map((cell) => cell.cell_id),
       road_segment_ids: roadSegments
-        .filter((segment) => segment.cell_ids.some((cellId) => cellSet.has(cellId)))
+        .filter((segment) => segment.cell_sequence.some((cellId) => cellSet.has(cellId)))
         .map((segment) => segment.road_segment_id),
       place_ids: places
         .filter((place) => place.cell_ids.some((cellId) => cellSet.has(cellId)))
         .map((place) => place.place_id),
       service_area_ids: serviceAreas
-        .filter((area) => area.covered_cell_ids.some((cellId) => cellSet.has(cellId)))
+        .filter((area) => area.cell_ids.some((cellId) => cellSet.has(cellId)))
         .map((area) => area.service_area_id),
       sub_zone_ids: parentZoneId ? [] : zoneIds.filter((id) => id !== zoneId),
     });
@@ -311,6 +320,7 @@ function createRoutes(map, roadSegments) {
 
   return definitions.map(([routeId, startCellId, endCellId, segmentSequence, serviceAreaIds, routeName]) => {
     const totalDistance = segmentSequence.reduce((sum, segmentId) => sum + segmentById.get(segmentId).distance_m, 0);
+    const routeSteps = createRouteStepsFromSegments(segmentSequence, roadSegments, startCellId, endCellId);
 
     return createRoute({
       route_id: routeId,
@@ -319,6 +329,8 @@ function createRoutes(map, roadSegments) {
       start_cell_id: startCellId,
       end_cell_id: endCellId,
       road_segment_sequence: segmentSequence,
+      route_steps: routeSteps,
+      total_step_count: routeSteps.length,
       related_service_area_ids: serviceAreaIds,
       total_distance_m: totalDistance,
       estimated_time_s: Math.round(totalDistance / (40 * 1000 / 3600)),
@@ -330,7 +342,7 @@ function createRoutes(map, roadSegments) {
 function attachServiceAreasToSegments(roadSegments, serviceAreas) {
   roadSegments.forEach((segment) => {
     segment.service_area_ids = serviceAreas
-      .filter((area) => area.segment_ids.includes(segment.road_segment_id))
+      .filter((area) => area.road_segment_ids.includes(segment.road_segment_id))
       .map((area) => area.service_area_id);
   });
 }
@@ -362,6 +374,66 @@ function distanceBetweenNodes(startNode, endNode, cellSizeM) {
   const rowDelta = Math.abs(startNode.row - endNode.row);
   const colDelta = Math.abs(startNode.col - endNode.col);
   return Math.max(rowDelta, colDelta) * cellSizeM;
+}
+
+function inferSegmentDirection(startNode, endNode) {
+  if (startNode.col === endNode.col) return startNode.row <= endNode.row ? Direction.SOUTH : Direction.NORTH;
+  if (startNode.row === endNode.row) return startNode.col <= endNode.col ? Direction.EAST : Direction.WEST;
+  return Direction.MIXED;
+}
+
+function createRouteStepsFromSegments(segmentSequence, roadSegments, startCellId, endCellId) {
+  const segmentById = new Map(roadSegments.map((segment) => [segment.road_segment_id, segment]));
+  const pathCells = [];
+
+  segmentSequence.forEach((segmentId, index) => {
+    const segment = segmentById.get(segmentId);
+    if (!segment) return;
+
+    const previousCellId = pathCells[pathCells.length - 1]?.cell_id || startCellId;
+    const nextSegment = segmentById.get(segmentSequence[index + 1]);
+    const segmentStartCellId = index === 0 ? startCellId : previousCellId;
+    const segmentEndCellId = nextSegment ? sharedEndpointCellId(segment, nextSegment) : endCellId;
+    const segmentPath = sliceSegmentCells(segment.cell_sequence, segmentStartCellId, segmentEndCellId);
+
+    segmentPath.forEach((cellId) => {
+      if (pathCells[pathCells.length - 1]?.cell_id === cellId) return;
+      pathCells.push({ cell_id: cellId, road_segment_id: segmentId });
+    });
+  });
+
+  return pathCells.map((item, index) => {
+    return {
+      step_index: index,
+      cell_id: item.cell_id,
+      road_segment_id: item.road_segment_id,
+      road_node_id: null,
+      direction: Direction.UNKNOWN,
+      distance_km: index === 0 ? 0 : CELL_SIZE_M / 1000,
+      is_origin_step: index === 0,
+      is_target_step: index === pathCells.length - 1,
+    };
+  });
+}
+
+function sharedEndpointCellId(segment, nextSegment) {
+  const segmentEndpoints = [
+    segment.cell_sequence[0],
+    segment.cell_sequence[segment.cell_sequence.length - 1],
+  ];
+  const nextEndpoints = new Set([
+    nextSegment.cell_sequence[0],
+    nextSegment.cell_sequence[nextSegment.cell_sequence.length - 1],
+  ]);
+  return segmentEndpoints.find((cellId) => nextEndpoints.has(cellId)) || segmentEndpoints[segmentEndpoints.length - 1];
+}
+
+function sliceSegmentCells(cellSequence, startCellId, endCellId) {
+  const startIndex = cellSequence.indexOf(startCellId);
+  const endIndex = cellSequence.indexOf(endCellId);
+  if (startIndex < 0 || endIndex < 0) return cellSequence;
+  if (startIndex <= endIndex) return cellSequence.slice(startIndex, endIndex + 1);
+  return cellSequence.slice(endIndex, startIndex + 1).reverse();
 }
 
 function rangeCells({ row, col, rowStart, rowEnd, colStart, colEnd }) {

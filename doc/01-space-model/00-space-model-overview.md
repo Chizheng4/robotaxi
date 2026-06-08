@@ -24,8 +24,7 @@ Map
 ├── RoadSegment
 ├── Place
 ├── ServiceArea
-├── Zone
-└── Route
+└── Zone
 ```
 
 目标是在不依赖真实地图的前提下，构建一个可支撑 Robotaxi 运营模拟的空间基础模型。
@@ -54,7 +53,7 @@ Robotaxi 运营发生在空间中，因此空间模型需要表达：
     
 - 运营管理区域；
     
-- 路径结果。
+- 路径规划可依赖的底层空间与道路网络。
     
 
 核心职责如下：
@@ -67,7 +66,6 @@ Robotaxi 运营发生在空间中，因此空间模型需要表达：
 |Place|地点 / 需求来源|需求来源|
 |ServiceArea|服务区域|服务发生范围|
 |Zone|运营区域|运营管理区域|
-|Route|路径方案|路径结果|
 
 ---
 
@@ -81,8 +79,7 @@ Map
 │       └── RoadNode
 ├── Place
 ├── ServiceArea
-├── Zone
-└── Route
+└── Zone
 ```
 
 对象之间的关系：
@@ -345,16 +342,17 @@ Zone 是运营管理对象
 
 ---
 
-### 4.9 Route
+### 4.9 Route 迁移说明
 
-Route（路径方案）表示车辆在道路网络中的移动路径结果。
+Route 不再作为空间模型中的静态对象维护。
+
+Route 是路径规划策略执行后的路径结果，由 RoutePlanningStrategy / RoutePlanningRun 生成，并由 RouteExecution 引用和执行。
+
+Route 主定义见：
 
 ```text
-Route
-└── RoadSegment Sequence
+doc/05-dispatch-trip/02-route.md
 ```
-
-Route 基于 RoadSegment 生成，用于描述车辆从一个 ROAD Cell 到另一个 ROAD Cell 的移动路径。若该路径用于上车、下车或等待等服务动作，起终点 ROAD Cell 必须被 ServiceArea 覆盖。
 
 ---
 
@@ -378,8 +376,7 @@ Map
 ├── RoadSegment
 ├── Place
 ├── ServiceArea
-├── Zone
-└── Route
+└── Zone
 ```
 
 对应关系：
@@ -388,7 +385,7 @@ Map
 |---|---|
 |Zone|Zone|
 |OperatingLocation|ServiceArea|
-|Route|RoadSegment + Route|
+|Route|已迁移为路径规划结果，见 doc/05-dispatch-trip/02-route.md|
 
 新增对象：
 

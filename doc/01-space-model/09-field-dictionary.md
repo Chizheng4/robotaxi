@@ -105,9 +105,12 @@
 |map_id|地图编号|持久化字段|所属 Map|
 |start_node_id|起点道路节点|持久化字段|起点 RoadNode|
 |end_node_id|终点道路节点|持久化字段|终点 RoadNode|
-|cell_ids|覆盖道路网格|持久化字段|覆盖的 ROAD Cell 列表|
+|cell_ids|覆盖道路网格|兼容字段|覆盖的 ROAD Cell 列表，当前阶段保留兼容|
+|cell_sequence|有序道路网格|持久化字段|按通行顺序排列的 ROAD Cell 列表|
 |distance_m|道路片段长度（米）|持久化字段|道路片段长度|
-|direction|通行方向|持久化字段|道路方向（双向 / 单向）|
+|total_distance_km|道路片段长度（公里）|持久化字段|道路片段长度，公里单位|
+|direction|通行方向|持久化字段|cell_sequence 默认方向|
+|allowed_direction|允许通行方向|持久化字段|允许正向、反向、双向或关闭|
 |speed_limit_kmh|限速（公里 / 小时）|持久化字段|道路限速|
 |traversable|是否可通行|持久化字段|车辆是否可通行|
 |segment_status|道路片段状态|持久化字段|道路片段状态|
@@ -137,21 +140,25 @@
 |---|---|---|---|
 |service_area_id|服务区域编号|持久化字段|服务区域唯一编号|
 |map_id|地图编号|持久化字段|所属 Map|
-|name|服务区域名称|持久化字段|服务区域名称|
-|segment_ids|关联道路片段列表|持久化字段|关联 RoadSegment 列表|
-|covered_cell_ids|覆盖道路网格|持久化字段|覆盖的 ROAD Cell 列表|
-|customer_capabilities|客户侧服务能力|持久化字段|客户可执行操作|
-|vehicle_capabilities|车辆侧停靠能力|持久化字段|车辆可执行操作|
-|max_vehicle_capacity|最大车辆容量|持久化字段|最大可停车辆数|
-|status|服务区域状态|持久化字段|服务区域状态|
-
-### 8.1 customer_capabilities：客户侧服务能力
-
-|属性英文名|中文名|字段性质|含义|
-|---|---|---|---|
-|can_pickup|允许上车|持久化字段|是否允许用户上车|
-|can_dropoff|允许下车|持久化字段|是否允许用户下车|
-|can_wait|允许用户等待|持久化字段|是否允许用户等待服务|
+|service_area_name|服务区域名称|持久化字段|服务区域名称|
+|service_area_type|服务区域类型|持久化字段|主要服务区用途|
+|service_area_status|服务区域状态|持久化字段|服务区域当前状态|
+|cell_ids|覆盖道路网格|持久化字段|服务区覆盖的 ROAD Cell 列表|
+|road_segment_ids|关联道路片段列表|持久化字段|关联 RoadSegment 列表|
+|place_ids|关联地点列表|持久化字段|关联 Place 列表，可为空|
+|zone_id|运营区域编号|持久化字段|所属 Zone，可为空|
+|pickup_cell_ids|可上车网格|持久化字段|支持上车的 Cell 列表|
+|dropoff_cell_ids|可下车网格|持久化字段|支持下车的 Cell 列表|
+|temp_stop_cell_ids|可临停网格|持久化字段|支持临停的 Cell 列表|
+|parking_cell_ids|可停车网格|持久化字段|支持停车的 Cell 列表|
+|standby_cell_ids|可待命网格|持久化字段|支持待命的 Cell 列表|
+|occupied_cell_ids|已占用网格|运行态字段|当前已被占用的 Cell 列表|
+|unavailable_cell_ids|不可用网格|运行态字段|当前不可用的 Cell 列表|
+|capacity|车辆容量|持久化字段|最大可容纳 Robotaxi 数量|
+|current_robotaxi_count|当前 Robotaxi 数量|运行态字段|当前位于该服务区的 Robotaxi 数量|
+|name|服务区域名称|兼容字段|兼容旧前端展示|
+|segment_ids|关联道路片段列表|兼容字段|兼容旧初始化与校验|
+|covered_cell_ids|覆盖道路网格|兼容字段|兼容旧地图绘制|
 
 ### 8.2 vehicle_capabilities：车辆侧停靠能力
 
@@ -183,20 +190,13 @@
 
 ---
 
-## 10. Route：路径方案
+## 10. Route：迁移说明
 
-|属性英文名|中文名|字段性质|含义|
-|---|---|---|---|
-|route_id|路径编号|持久化字段|路径唯一编号|
-|route_name|路径说明|持久化字段|便于用户理解路径用途的中文说明|
-|map_id|地图编号|持久化字段|所属 Map|
-|start_cell_id|起点网格|持久化字段|路径起点 Cell|
-|end_cell_id|终点网格|持久化字段|路径终点 Cell|
-|road_segment_sequence|道路片段序列|持久化字段|路径经过的 RoadSegment 有序列表|
-|related_service_area_ids|相关服务区域列表|持久化字段|路径相关 ServiceArea|
-|total_distance_m|总距离（米）|持久化字段|路径总距离|
-|estimated_time_s|预计时间（秒）|持久化字段|路径预计行驶时间|
-|route_status|路径状态|持久化字段|路径状态|
+Route 不再作为空间模型中的静态对象维护。
+
+Route 是路径规划策略执行后的路径结果，主定义迁移至：
+
+`doc/05-dispatch-trip/02-route.md`
 
 ---
 

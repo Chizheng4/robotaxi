@@ -2,66 +2,77 @@
 
 ## 1. 定义
 
-Road（道路）表示 Map 中的一条完整道路，用于表达道路名称和道路语义。
+Road 表示 Map 中的一条完整道路，用于表达道路名称和道路语义。
 
 ```text
-中山大道
-天河路
-机场高速
-大学城外环路
+Road = 由若干 RoadSegment 构成的完整道路
 ```
 
-Road 由多个 RoadSegment 组成，不作为路径计算和调度的基础单元。
+Road 主要用于组织道路语义，不作为路径计算或调度的最小单元。
 
 ---
 
-## 2. 结构
+## 2. 核心作用
+
+- 聚合多个 RoadSegment，形成完整道路；
+
+- 提供道路名称、类型和状态信息；
+
+- 支持 RoutePlanning 与 RouteExecution 进行路径计算。
+
+
+---
+
+## 3. 结构
 
 ```text
 Road
 └── RoadSegment
 ```
 
-一个 Road 可以包含多个 RoadSegment。
+- 一个 Road 可以包含多个 RoadSegment；
+
+- RoadSegment 是实际的可通行片段。
+
 
 ---
 
-## 3. 核心属性
+## 4. 核心属性
 
-|属性英文名|中文名|含义|
-|---|---|---|
-|road_id|道路编号|道路唯一编号|
-|map_id|地图编号|所属 Map|
-|road_name|道路名称|道路名称|
-|road_type|道路类型|道路等级或道路场景类型|
-|road_status|道路状态|道路整体状态|
-|road_segment_ids|道路片段列表|包含的 RoadSegment 列表|
-
----
-
-## 4. road_type
-
-|road_type|中文名|含义|
-|---|---|---|
-|MAIN_ROAD|主干路|区域内主要通行道路|
-|SECONDARY_ROAD|次干路|连接主干路和局部空间的次级道路|
-|INTERNAL_ROAD|内部道路|园区、小区、商场等内部道路|
-|ACCESS_ROAD|接入道路|连接地点、服务区或支路的接入道路|
+|属性|含义|
+|---|---|
+|road_id|道路唯一编号|
+|map_id|所属 Map|
+|road_name|道路名称|
+|road_type|道路类型（MAIN / SECONDARY / INTERNAL / ACCESS）|
+|road_status|道路状态（Planned / Active / Restricted / Closed）|
+|road_segment_ids|包含的 RoadSegment 列表|
 
 ---
 
-## 5. road_status
+## 5. road_type
 
-|road_status|中文名|含义|
-|---|---|---|
-|Planned|规划中|尚未投入使用|
-|Active|可使用|可参与运营模拟|
-|Restricted|限制使用|部分场景或时段受限|
-|Closed|关闭|不可使用|
+|road_type|含义|
+|---|---|
+|MAIN_ROAD|主干路|
+|SECONDARY_ROAD|次干路|
+|INTERNAL_ROAD|内部道路|
+|ACCESS_ROAD|接入道路|
 
 ---
 
-## 6. 示例数据
+## 6. road_status
+
+| road_status | 含义   |
+| ----------- | ---- |
+| Planned     | 规划中  |
+| Active      | 可使用  |
+| Restricted  | 限制使用 |
+| Closed      | 关闭   |
+
+---
+
+## 7. 示例数据
 
 ```json
 {
@@ -76,7 +87,7 @@ Road
 
 ---
 
-## 7. 关联关系
+## 8. 与其他对象关系
 
 |对象|关系|
 |---|---|
@@ -86,11 +97,13 @@ Road
 
 ---
 
-## 8. 核心原则
+## 9. 核心原则
 
 ```text
 Road = 完整道路
-RoadSegment = 可计算道路片段
+RoadSegment = 可通行片段
 ```
 
-Road 负责道路语义组织，RoadSegment 负责实际通行与计算。
+- Road 用于道路语义组织；
+
+- RoadSegment 用于实际路径计算与调度。
