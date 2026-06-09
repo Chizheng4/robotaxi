@@ -1,4 +1,4 @@
-import { getDisplayValue } from "../domain/fieldDictionary.js?v=20260608-v017-route-management";
+import { getDisplayValue } from "../domain/fieldDictionary.js?v=20260608-v018-bfs-route-planning";
 
 export function createCellContext(cell, data) {
   const relatedRoadSegments = data.roadSegments.filter((segment) => segment.cell_sequence.includes(cell.cell_id));

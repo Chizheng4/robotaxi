@@ -9,7 +9,7 @@ import {
   createOpsCenter,
   createRobotaxi,
   createWorker,
-} from "../domain/operationsCenterTypes.js?v=20260608-v017-route-management";
+} from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
 
 const ROBOTAXI_COUNT = 20;
 const WORKER_COUNT = 10;

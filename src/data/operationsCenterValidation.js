@@ -2,8 +2,8 @@ import {
   AvailabilityStatus,
   MotionStatus,
   WorkerStatus,
-} from "../domain/operationsCenterTypes.js?v=20260608-v017-route-management";
-import { PlaceType } from "../domain/types.js?v=20260608-v017-route-management";
+} from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
+import { PlaceType } from "../domain/types.js?v=20260608-v018-bfs-route-planning";
 
 export function validateOperationsCenter(data) {
   const mapIds = new Set(data.maps.map((map) => map.map_id));

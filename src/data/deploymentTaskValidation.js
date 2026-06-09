@@ -208,6 +208,11 @@ export function validateDeploymentTasks(data) {
       routePlanningRuns.every((run) => run.planning_result !== "SUCCESS" || routeById.has(run.result_route_id)),
     ),
     check(
+      "ROUTE_PLANNING_RUN_HAS_ALGORITHM",
+      "路径规划执行记录必须记录路径规划算法",
+      routePlanningRuns.every((run) => Boolean(run.planning_algorithm)),
+    ),
+    check(
       "ROUTE_PLANNING_RUN_STRATEGY_MATCH",
       "路径规划执行记录的策略编号必须与生成的路径一致",
       routePlanningRuns.every((run) => {

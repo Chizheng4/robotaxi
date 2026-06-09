@@ -117,6 +117,8 @@ Task 可以触发 Route 变化
 |completed_at|完成时间|
 |failure_reason|失败原因，可为空|
 
+说明：`planned_target_*` 表示关联任务创建时的原始计划目标；`target_cell_id / target_service_area_id` 表示当前 Route 目标，会随异常到达后的替代路径规划更新。
+
 ---
 
 ## 6. execution_status
@@ -140,6 +142,8 @@ Task 可以触发 Route 变化
 - 到达后必须由运营人员或后续系统模拟反馈正常到达 / 异常到达；
 - 选择异常到达后，行驶记录必须进入 `ARRIVAL_ABNORMAL`，不再继续显示正常到达 / 异常到达操作；
 - 异常到达后的路径规划入口在 DeploymentTask，由任务单驱动更新同一个行驶记录；
+- 正常到达之前可以多次异常到达并多次更新当前 Route，但每次替代目标必须排除本任务中已经异常到达过的目标点；
+- 如果同 ServiceArea 内没有可用替代目标，路径规划执行记录应显示失败，行驶记录保持 `ARRIVAL_ABNORMAL`，等待后续运营决策能力闭环；
 - 当前阶段不实现自动行驶、暂停恢复和完整重规划系统。
 
 ---
@@ -338,6 +342,21 @@ Robotaxi 继续行驶
 
 ```text
 same_service_area_retry_allowed = true
+```
+
+重复异常规则：
+
+```text
+ARRIVED
+↓
+异常到达
+↓
+ARRIVAL_ABNORMAL
+↓
+DeploymentTask 触发异常到达重规划
+↓
+成功：RouteExecution 更新为新 Route 并进入 MOVING
+失败：RouteExecution 保持 ARRIVAL_ABNORMAL，等待后续运营决策
 ```
 
 ---

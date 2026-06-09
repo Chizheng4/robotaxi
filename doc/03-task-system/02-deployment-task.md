@@ -135,6 +135,8 @@ DeploymentTask 必须区分：
 |planned_target_zone_id|计划目标 Zone，可为空|
 |planned_target_service_area_id|计划目标 ServiceArea|
 |planned_target_cell_id|计划目标 Cell|
+|target_service_area_id|当前目标 ServiceArea，会随异常重规划更新|
+|target_cell_id|当前目标 Cell，会随异常重规划更新|
 |actual_target_service_area_id|实际停靠 ServiceArea，可为空|
 |actual_target_cell_id|实际停靠 Cell，可为空|
 |arrival_behavior|到达后的驻留要求|
@@ -142,7 +144,7 @@ DeploymentTask 必须区分：
 |arrival_execution_result|Robotaxi 到达执行结果|
 |failure_reason|失败原因，可为空|
 
-兼容说明：当前代码中的 `target_zone_id`、`target_service_area_id`、`target_cell_id` 是旧版目标字段，后续应逐步收敛到 `planned_target_*`。
+说明：`planned_target_*` 表示任务创建时的原始计划目标；`target_service_area_id / target_cell_id` 表示当前目标，会在异常到达后的替代路径规划成功后更新。
 
 ---
 
@@ -380,9 +382,11 @@ Robotaxi 继续行驶
 - 异常到达后的路径规划不创建新的 DeploymentTask；
 - 异常到达后的路径规划不创建新的 RouteExecution；
 - 新 Route 的起点是 Robotaxi 当前异常到达位置；
-- 新 Route 的目标是同一 ServiceArea 内的其他点位，并排除当前异常到达点、原计划目标点和当前目标点；
+- 新 Route 的目标是同一 ServiceArea 内的其他点位，并排除当前异常到达点、原计划目标点、当前目标点和本任务中已经异常到达过的目标点；
 - 新 Route 生成后，DeploymentTask 和 RouteExecution 的当前目标必须同步更新；
-- 该流程重复执行，直到 Robotaxi 正常到达并完成投放，或确认无法形成有效投放结果。
+- 该流程可以重复执行，直到 Robotaxi 正常到达并完成投放，或路径规划策略找不到同 ServiceArea 内的可用替代目标；
+- 当同 ServiceArea 内没有可用替代目标时，RoutePlanningRun 应记录 `FAILED` 和失败原因，DeploymentTask 暂时保持 `ARRIVAL_ABNORMAL`，等待后续运营决策系统进行终止、重新分配或其他闭环处理；
+- 当前阶段不立即实现运营决策系统终止任务或重新分配任务。
 
 ---
 

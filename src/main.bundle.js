@@ -199,7 +199,7 @@ const tableConfig = {
   deploymentTasks: {
     title: "运营投放任务",
     description: "用于将可运营 Robotaxi 投放到指定服务区或待命位置。",
-    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "planned_target_cell_id", "actual_target_cell_id", "arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "planned_target_service_area_id", "actual_target_service_area_id", "route_id", "route_strategy_id", "route_summary", "created_at"]
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "planned_target_service_area_id", "target_service_area_id", "actual_target_service_area_id", "route_id", "route_strategy_id", "route_summary", "created_at"]
   },
   routeExecutions: {
     title: "运营行驶记录",
@@ -214,12 +214,12 @@ const tableConfig = {
   routePlanningStrategies: {
     title: "路径规划策略",
     description: "用于管理路径规划策略对象，定义不同场景下如何生成路径。",
-    columns: ["route_strategy_id", "strategy_name", "strategy_type", "trigger_task_status", "origin_rule", "target_rule", "service_area_scope_rule", "route_generation_rule", "route_update_rule", "strategy_status", "strategy_usage_count", "route_planning_run_count"]
+    columns: ["route_strategy_id", "strategy_name", "strategy_type", "planning_algorithm", "trigger_task_status", "origin_rule", "target_rule", "service_area_scope_rule", "route_generation_rule", "route_update_rule", "strategy_status", "strategy_usage_count", "route_planning_run_count"]
   },
   routePlanningRuns: {
     title: "策略执行管理",
     description: "记录每次路径规划策略执行过程。",
-    columns: ["route_planning_run_id", "route_strategy_id", "task_id", "route_execution_id", "robotaxi_id", "origin_cell_id", "target_cell_id", "result_route_id", "planning_result", "failure_reason", "created_at"]
+    columns: ["route_planning_run_id", "planning_result", "route_strategy_id", "planning_algorithm", "task_id", "route_execution_id", "robotaxi_id", "origin_cell_id", "target_cell_id", "result_route_id", "failure_reason", "created_at"]
   },
   serviceFulfillmentRecords: {
     title: "服务履约记录",
@@ -295,6 +295,7 @@ const statusFieldByPage = {
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
   routePlanningStrategies: "strategy_status",
+  routePlanningRuns: "planning_result",
   robotaxis: "availability_status",
   validations: "result"
 };
@@ -308,8 +309,9 @@ const legendItems = [["cell-empty", "空白网格"], ["cell-road", "道路网格
 const readinessStatusOptions = ["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING", "COMPLETED", "CANCELLED", "FAILED"];
 const deploymentStatusOptions = ["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "COMPLETED", "CANCELLED", "FAILED"];
 const routeExecutionStatusOptions = ["WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED", "COMPLETED", "FAILED", "CANCELLED"];
+const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v017-route-management";
+const runtimeStorageKey = "robotaxi.runtime.v018-bfs-route-planning";
 const defaultPageFilters = {
   keyword: "",
   statusValue: null,
@@ -933,6 +935,35 @@ function App() {
       routeExecutionId,
       routePlanningRunId
     });
+    if (route.route_steps.length === 0) {
+      setRoutePlanningRuns(items => [createRoutePlanningRun({
+        routePlanningRunId,
+        routeStrategyId: route.route_strategy_id,
+        planningAlgorithm: route.planning_algorithm,
+        taskId: task.task_id,
+        routeExecutionId: null,
+        robotaxiId: task.robotaxi_id,
+        originCellId: task.origin_cell_id,
+        targetCellId: task.planned_target_cell_id || task.target_cell_id,
+        resultRouteId: null,
+        planningResult: taskTypes.RoutePlanningResult.FAILED,
+        failureReason: route.failure_reason
+      }), ...items]);
+      setDeploymentTasks(tasks => tasks.map(item => item.task_id === task.task_id ? {
+        ...item,
+        task_status: taskTypes.DeploymentTaskStatus.FAILED,
+        failure_reason: route.failure_reason
+      } : item));
+      addLog({
+        event_type: taskTypes.TaskEventType.DEPLOYMENT_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        robotaxi_id: task.robotaxi_id,
+        route_strategy_id: route.route_strategy_id,
+        message: `${task.task_id} 路径规划失败：${getDisplayValue(route.failure_reason)}`
+      });
+      return;
+    }
     const routeCells = getRouteExecutionCells(route, data.roadSegments, task.origin_cell_id, task.planned_target_cell_id || task.target_cell_id);
     const execution = taskTypes.createRouteExecution({
       route_execution_id: routeExecutionId,
@@ -979,6 +1010,7 @@ function App() {
     setRoutePlanningRuns(items => [createRoutePlanningRun({
       routePlanningRunId,
       routeStrategyId: route.route_strategy_id,
+      planningAlgorithm: route.planning_algorithm,
       taskId: task.task_id,
       routeExecutionId: execution.route_execution_id,
       robotaxiId: task.robotaxi_id,
@@ -1010,15 +1042,17 @@ function App() {
     const execution = routeExecutions.find(item => item.task_id === task.task_id);
     if (!execution || task.blocked_handling_policy !== taskTypes.BlockedHandlingPolicy.SAME_SERVICE_AREA_RETRY) return;
     const currentCellId = execution.current_cell_id;
-    const target = getAlternativeDeploymentTarget(data, task.planned_target_service_area_id || task.target_service_area_id, [currentCellId, task.planned_target_cell_id, task.target_cell_id]);
+    const excludedCellIds = [currentCellId, task.planned_target_cell_id, task.target_cell_id, task.actual_target_cell_id, execution.actual_target_cell_id, ...(execution.route_history || []).map(history => history.target_cell_id)];
+    const target = getAlternativeDeploymentTarget(data, task.planned_target_service_area_id || task.target_service_area_id, excludedCellIds);
     if (!target) {
       setDeploymentTasks(tasks => tasks.map(item => item.task_id === task.task_id ? {
         ...item,
-        task_status: taskTypes.DeploymentTaskStatus.FAILED,
-        failure_reason: taskTypes.ArrivalExecutionResult.TARGET_SERVICE_AREA_UNAVAILABLE
+        task_status: taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL,
+        failure_reason: taskTypes.RoutePlanningFailureReason.NO_AVAILABLE_TARGET_CELL
       } : item));
       setRoutePlanningRuns(items => [createRoutePlanningRun({
         routeStrategyId: taskTypes.RoutePlanningStrategy.ABNORMAL_SAME_SERVICE_AREA,
+        planningAlgorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
         taskId: task.task_id,
         routeExecutionId: execution.route_execution_id,
         robotaxiId: task.robotaxi_id,
@@ -1029,12 +1063,12 @@ function App() {
         failureReason: taskTypes.RoutePlanningFailureReason.NO_AVAILABLE_TARGET_CELL
       }), ...items]);
       addLog({
-        event_type: taskTypes.TaskEventType.DEPLOYMENT_FAILED,
+        event_type: taskTypes.TaskEventType.ROUTE_PLANNING_FAILED,
         event_result: taskTypes.TaskEventResult.FAILED,
         task_id: task.task_id,
         robotaxi_id: task.robotaxi_id,
         route_execution_id: execution.route_execution_id,
-        message: `${task.task_id} 未找到同服务区替代目标`
+        message: `${task.task_id} 未找到同服务区替代目标，路径规划执行失败`
       });
       return;
     }
@@ -1046,6 +1080,36 @@ function App() {
       strategyId: taskTypes.RoutePlanningStrategy.ABNORMAL_SAME_SERVICE_AREA,
       routePlanningRunId: nextRoutePlanningRunId()
     });
+    if (route.route_steps.length === 0) {
+      setDeploymentTasks(tasks => tasks.map(item => item.task_id === task.task_id ? {
+        ...item,
+        task_status: taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL,
+        failure_reason: route.failure_reason
+      } : item));
+      setRoutePlanningRuns(items => [createRoutePlanningRun({
+        routePlanningRunId: route.route_planning_run_id,
+        routeStrategyId: route.route_strategy_id,
+        planningAlgorithm: route.planning_algorithm,
+        taskId: task.task_id,
+        routeExecutionId: execution.route_execution_id,
+        robotaxiId: task.robotaxi_id,
+        originCellId: currentCellId,
+        targetCellId: target.target_cell_id,
+        resultRouteId: null,
+        planningResult: taskTypes.RoutePlanningResult.FAILED,
+        failureReason: route.failure_reason
+      }), ...items]);
+      addLog({
+        event_type: taskTypes.TaskEventType.ROUTE_PLANNING_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        robotaxi_id: task.robotaxi_id,
+        route_execution_id: execution.route_execution_id,
+        route_strategy_id: route.route_strategy_id,
+        message: `${task.task_id} 异常到达后路径规划失败：${getDisplayValue(route.failure_reason)}`
+      });
+      return;
+    }
     const routeCells = getRouteExecutionCells(route, data.roadSegments, currentCellId, target.target_cell_id);
     setOperationalData(current => ({
       ...current,
@@ -1063,9 +1127,6 @@ function App() {
       route_strategy_id: route.route_strategy_id,
       execution_status: taskTypes.RouteExecutionStatus.MOVING,
       origin_cell_id: currentCellId,
-      planned_target_zone_id: target.target_zone_id,
-      planned_target_service_area_id: target.target_service_area_id,
-      planned_target_cell_id: target.target_cell_id,
       target_cell_id: target.target_cell_id,
       target_service_area_id: target.target_service_area_id,
       actual_target_service_area_id: null,
@@ -1084,6 +1145,7 @@ function App() {
     setRoutePlanningRuns(items => [createRoutePlanningRun({
       routePlanningRunId: route.route_planning_run_id,
       routeStrategyId: route.route_strategy_id,
+      planningAlgorithm: route.planning_algorithm,
       taskId: task.task_id,
       routeExecutionId: execution.route_execution_id,
       robotaxiId: task.robotaxi_id,
@@ -1098,9 +1160,6 @@ function App() {
       task_status: taskTypes.DeploymentTaskStatus.MOVING,
       route_id: route.route_id,
       route_strategy_id: route.route_strategy_id,
-      planned_target_zone_id: target.target_zone_id,
-      planned_target_service_area_id: target.target_service_area_id,
-      planned_target_cell_id: target.target_cell_id,
       target_cell_id: target.target_cell_id,
       target_service_area_id: target.target_service_area_id,
       actual_target_service_area_id: null,
@@ -1260,12 +1319,16 @@ function App() {
       ...item,
       execution_status: taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL,
       arrival_execution_result: arrivalResult,
+      actual_target_service_area_id: item.target_service_area_id || item.current_target_service_area_id,
+      actual_target_cell_id: item.current_cell_id,
       failure_reason: arrivalResult
     } : item));
     setDeploymentTasks(tasks => tasks.map(item => item.task_id === task.task_id ? {
       ...item,
       task_status: taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL,
       arrival_execution_result: arrivalResult,
+      actual_target_service_area_id: item.target_service_area_id || item.planned_target_service_area_id,
+      actual_target_cell_id: execution.current_cell_id,
       failure_reason: arrivalResult
     } : item));
     addLog({
@@ -1528,8 +1591,8 @@ function RecordTable({
     page: page,
     totalCount: rows.length,
     displayCount: displayRows.length,
-    eventCount: eventRows?.length || 0,
-    appliedFilters: hasEventPanel ? appliedFilters : null
+    eventCount: hasEventPanel ? eventRows?.length || 0 : null,
+    appliedFilters: appliedFilters
   }), isReadinessPage && /*#__PURE__*/React.createElement(Modal, {
     title: "\u63D0\u4EA4\u5F02\u5E38\u68C0\u67E5\u7ED3\u679C",
     open: Boolean(abnormalTask),
@@ -1707,10 +1770,10 @@ function ModuleFooter({
   appliedFilters
 }) {
   const hasFilter = appliedFilters && (appliedFilters.keyword || appliedFilters.statusValue || appliedFilters.triggerType);
-  if (["readinessTasks", "deploymentTasks", "routeExecutions", "routePlanningStrategies"].includes(page)) {
+  if (["readinessTasks", "deploymentTasks", "routeExecutions", "routePlanningStrategies", "routePlanningRuns"].includes(page)) {
     return /*#__PURE__*/React.createElement("div", {
       className: "module-footer"
-    }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u663E\u793A ", displayCount, " / \u5168\u90E8 ", totalCount), /*#__PURE__*/React.createElement("span", null, "\u4E8B\u4EF6 ", eventCount), /*#__PURE__*/React.createElement("span", null, hasFilter ? "已应用筛选条件" : "未应用筛选"));
+    }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u663E\u793A ", displayCount, " / \u5168\u90E8 ", totalCount), eventCount !== null && /*#__PURE__*/React.createElement("span", null, "\u4E8B\u4EF6 ", eventCount), /*#__PURE__*/React.createElement("span", null, hasFilter ? "已应用筛选条件" : "未应用筛选"));
   }
   return /*#__PURE__*/React.createElement("div", {
     className: "module-footer"
@@ -2393,7 +2456,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, operationsCenterValidation, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v017-route-management"), import("./data/mapValidation.js?v=20260608-v017-route-management"), import("./data/operationsCenterInitialization.js?v=20260608-v017-route-management"), import("./data/operationsCenterValidation.js?v=20260608-v017-route-management"), import("./data/cellContext.js?v=20260608-v017-route-management"), import("./domain/fieldDictionary.js?v=20260608-v017-route-management"), import("./data/readinessCheckTaskValidation.js?v=20260608-v017-route-management"), import("./data/deploymentTaskValidation.js?v=20260608-v017-route-management"), import("./domain/taskTypes.js?v=20260608-v017-route-management")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, operationsCenterValidation, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260608-v018-bfs-route-planning"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -2431,11 +2494,10 @@ function createDeploymentRoute(task, data, options = {}) {
   const originCellId = options.originCellId || task.origin_cell_id;
   const targetCellId = options.targetCellId || task.planned_target_cell_id || task.target_cell_id;
   const strategyId = options.strategyId || taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT;
-  const serviceArea = data.serviceAreas.find(area => area.service_area_id === targetServiceAreaId);
-  const segmentId = serviceArea?.road_segment_ids?.[0] || "RS-014";
-  const segment = data.roadSegments.find(item => item.road_segment_id === segmentId);
-  const totalDistance = segment?.distance_m || 50;
-  const routeSteps = createRouteStepsForRoute(segment ? [segment] : [], originCellId, targetCellId);
+  const planningAlgorithm = taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH;
+  const routePlan = createBfsRoutePlan(data, originCellId, targetCellId);
+  const routeSteps = routePlan.route_steps;
+  const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps[0]?.cell_size_m || 50);
   return {
     route_id: nextDeploymentRouteId(),
     route_version: 1,
@@ -2450,14 +2512,15 @@ function createDeploymentRoute(task, data, options = {}) {
     route_planning_run_id: options.routePlanningRunId || null,
     robotaxi_id: task.robotaxi_id,
     route_strategy_id: strategyId,
-    road_segment_sequence: segment ? [segment.road_segment_id] : [],
+    planning_algorithm: planningAlgorithm,
+    road_segment_sequence: routePlan.road_segment_sequence,
     route_steps: routeSteps,
     total_step_count: routeSteps.length,
     related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
     total_distance_m: totalDistance,
     estimated_time_s: Math.max(1, Math.round(totalDistance / (40 * 1000 / 3600))),
-    route_status: "Active",
-    failure_reason: null
+    route_status: routeSteps.length > 0 ? "Active" : "Failed",
+    failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT
   };
 }
 function createRouteHistoryEntry(route, routeChangeReason, arrivalExecutionResult) {
@@ -2488,31 +2551,155 @@ function getCandidateServiceAreaCellIds(serviceArea) {
   if (!serviceArea) return [];
   return [...(serviceArea.standby_cell_ids || []), ...(serviceArea.parking_cell_ids || []), ...(serviceArea.temp_stop_cell_ids || []), ...(serviceArea.pickup_cell_ids || []), ...(serviceArea.dropoff_cell_ids || []), ...(serviceArea.cell_ids || serviceArea.covered_cell_ids || [])].filter((cellId, index, list) => cellId && list.indexOf(cellId) === index);
 }
-function createRouteStepsForRoute(segments, originCellId, targetCellId) {
-  const cellItems = [];
-  segments.forEach(segment => {
-    (segment.cell_sequence || segment.cell_ids || []).forEach(cellId => {
-      if (cellItems[cellItems.length - 1]?.cell_id === cellId) return;
-      cellItems.push({
-        cell_id: cellId,
-        road_segment_id: segment.road_segment_id
-      });
-    });
-  });
-  const cells = [originCellId, ...cellItems.map(item => item.cell_id), targetCellId].filter(Boolean).filter((cellId, index, list) => index === 0 || cellId !== list[index - 1]);
-  return cells.map((cellId, index) => {
-    const matched = cellItems.find(item => item.cell_id === cellId);
+function createBfsRoutePlan(data, originCellId, targetCellId) {
+  const cellById = new Map(data.cells.map(cell => [cell.cell_id, cell]));
+  const roadNodeByCellId = new Map(data.roadNodes.map(node => [node.cell_id, node]));
+  const graph = buildRoadCellGraph(data.roadSegments);
+  const graphCellIds = [...graph.keys()];
+  if (!originCellId || !targetCellId || graphCellIds.length === 0) {
+    return {
+      road_segment_sequence: [],
+      route_steps: []
+    };
+  }
+  const originConnector = connectEndpointToGraph(originCellId, graph, cellById);
+  const targetConnector = connectEndpointToGraph(targetCellId, graph, cellById);
+  if (!originConnector || !targetConnector) {
+    return {
+      road_segment_sequence: [],
+      route_steps: []
+    };
+  }
+  const graphPath = findBfsCellPath(graph, originConnector.graphCellId, targetConnector.graphCellId);
+  if (graphPath.length === 0) {
+    return {
+      road_segment_sequence: [],
+      route_steps: []
+    };
+  }
+  const targetConnectorCells = [...targetConnector.connectorCells].reverse().slice(1);
+  const routeCellIds = [...originConnector.connectorCells, ...graphPath.slice(1), ...targetConnectorCells].filter((cellId, index, list) => cellId && (index === 0 || cellId !== list[index - 1]));
+  const routeSteps = routeCellIds.map((cellId, index) => {
+    const nextCellId = routeCellIds[index + 1];
+    const edge = nextCellId ? graph.get(cellId)?.find(item => item.to === nextCellId) : null;
+    const previousEdge = index > 0 ? graph.get(routeCellIds[index - 1])?.find(item => item.to === cellId) : null;
+    const roadNode = roadNodeByCellId.get(cellId);
     return {
       step_index: index,
       cell_id: cellId,
-      road_segment_id: matched?.road_segment_id || segments[0]?.road_segment_id || null,
-      road_node_id: null,
-      direction: "UNKNOWN",
-      distance_km: index === 0 ? 0 : 0.05,
+      road_segment_id: edge?.road_segment_id || previousEdge?.road_segment_id || null,
+      road_node_id: roadNode?.road_node_id || null,
+      direction: nextCellId ? inferStepDirection(cellById.get(cellId), cellById.get(nextCellId)) : "UNKNOWN",
+      distance_km: index === 0 ? 0 : (data.maps[0]?.cell_size_m || 50) / 1000,
       is_origin_step: index === 0,
-      is_target_step: index === cells.length - 1
+      is_target_step: index === routeCellIds.length - 1
     };
   });
+  return {
+    road_segment_sequence: routeSteps.map(step => step.road_segment_id).filter((segmentId, index, list) => segmentId && list.indexOf(segmentId) === index),
+    route_steps: routeSteps
+  };
+}
+function buildRoadCellGraph(roadSegments) {
+  const graph = new Map();
+  roadSegments.filter(segment => segment.segment_status !== "BLOCKED" && segment.segment_status !== "CLOSED" && segment.allowed_direction !== "CLOSED").forEach(segment => {
+    const cellSequence = segment.cell_sequence || segment.cell_ids || [];
+    cellSequence.forEach(cellId => ensureGraphNode(graph, cellId));
+    for (let index = 0; index < cellSequence.length - 1; index += 1) {
+      const from = cellSequence[index];
+      const to = cellSequence[index + 1];
+      if (segment.allowed_direction === "FORWARD" || segment.allowed_direction === "BIDIRECTIONAL") {
+        addGraphEdge(graph, from, to, segment.road_segment_id);
+      }
+      if (segment.allowed_direction === "BACKWARD" || segment.allowed_direction === "BIDIRECTIONAL") {
+        addGraphEdge(graph, to, from, segment.road_segment_id);
+      }
+    }
+  });
+  return graph;
+}
+function ensureGraphNode(graph, cellId) {
+  if (!graph.has(cellId)) graph.set(cellId, []);
+}
+function addGraphEdge(graph, from, to, roadSegmentId) {
+  ensureGraphNode(graph, from);
+  ensureGraphNode(graph, to);
+  if (graph.get(from).some(edge => edge.to === to && edge.road_segment_id === roadSegmentId)) return;
+  graph.get(from).push({
+    to,
+    road_segment_id: roadSegmentId
+  });
+}
+function connectEndpointToGraph(endpointCellId, graph, cellById) {
+  if (graph.has(endpointCellId)) {
+    return {
+      graphCellId: endpointCellId,
+      connectorCells: [endpointCellId]
+    };
+  }
+  const endpointCell = cellById.get(endpointCellId);
+  if (!endpointCell) return null;
+  const nearestGraphCellId = [...graph.keys()].map(cellId => ({
+    cellId,
+    distance: manhattanDistance(endpointCell, cellById.get(cellId))
+  })).sort((a, b) => a.distance - b.distance)[0]?.cellId;
+  if (!nearestGraphCellId) return null;
+  const nearestGraphCell = cellById.get(nearestGraphCellId);
+  return {
+    graphCellId: nearestGraphCellId,
+    connectorCells: createManhattanConnector(endpointCell, nearestGraphCell)
+  };
+}
+function createManhattanConnector(startCell, endCell) {
+  const cells = [];
+  let row = startCell.row;
+  let col = startCell.col;
+  cells.push(cellIdFromCoord(row, col));
+  while (row !== endCell.row) {
+    row += row < endCell.row ? 1 : -1;
+    cells.push(cellIdFromCoord(row, col));
+  }
+  while (col !== endCell.col) {
+    col += col < endCell.col ? 1 : -1;
+    cells.push(cellIdFromCoord(row, col));
+  }
+  return cells;
+}
+function findBfsCellPath(graph, originCellId, targetCellId) {
+  const queue = [originCellId];
+  const previous = new Map([[originCellId, null]]);
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === targetCellId) break;
+    (graph.get(current) || []).forEach(edge => {
+      if (previous.has(edge.to)) return;
+      previous.set(edge.to, current);
+      queue.push(edge.to);
+    });
+  }
+  if (!previous.has(targetCellId)) return [];
+  const path = [];
+  let current = targetCellId;
+  while (current) {
+    path.unshift(current);
+    current = previous.get(current);
+  }
+  return path;
+}
+function manhattanDistance(cellA, cellB) {
+  if (!cellA || !cellB) return Number.POSITIVE_INFINITY;
+  return Math.abs(cellA.row - cellB.row) + Math.abs(cellA.col - cellB.col);
+}
+function inferStepDirection(cellA, cellB) {
+  if (!cellA || !cellB) return "UNKNOWN";
+  if (cellA.row > cellB.row) return "NORTH";
+  if (cellA.row < cellB.row) return "SOUTH";
+  if (cellA.col > cellB.col) return "WEST";
+  if (cellA.col < cellB.col) return "EAST";
+  return "UNKNOWN";
+}
+function cellIdFromCoord(row, col) {
+  return `C-${String(row).padStart(2, "0")}-${String(col).padStart(2, "0")}`;
 }
 function createRoutePlanningStrategyRows(data, routePlanningRuns) {
   const routeByStrategyId = new Map();
@@ -2532,22 +2719,24 @@ function createRoutePlanningStrategyRows(data, routePlanningRuns) {
     route_strategy_id: "RPS-001",
     strategy_name: "初始运营投放路径规划策略",
     strategy_type: "INITIAL_DEPLOYMENT_ROUTE",
+    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
     trigger_task_status: "WAITING_ROUTE",
     origin_rule: "使用运营投放任务起点位置",
     target_rule: "使用任务当前计划目标位置",
     service_area_scope_rule: "不改变任务目标服务区",
-    route_generation_rule: "基于道路片段的有序网格生成可执行路径步骤",
+    route_generation_rule: "基于道路片段有序网格、道路节点连接和 BFS 网格图搜索生成可执行路径步骤",
     route_update_rule: "创建初始路径，并创建 / 绑定行驶记录",
     strategy_status: "Active"
   }, {
     route_strategy_id: "RPS-002",
     strategy_name: "异常到达同服务区替代路径规划策略",
     strategy_type: "ABNORMAL_ARRIVAL_SAME_SERVICE_AREA_REPLAN",
+    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
     trigger_task_status: "ARRIVAL_ABNORMAL",
     origin_rule: "使用 Robotaxi 当前异常到达位置",
     target_rule: "选择同服务区内其他目标位置，并排除当前异常点和当前目标点",
     service_area_scope_rule: "限制在当前任务目标服务区内",
-    route_generation_rule: "基于当前异常位置到替代目标重新生成可执行路径步骤",
+    route_generation_rule: "基于当前异常位置、同服务区替代目标和 BFS 网格图搜索重新生成可执行路径步骤",
     route_update_rule: "更新同一个行驶记录的当前路径，不创建新行驶记录",
     strategy_status: "Active"
   }].map(strategy => ({
@@ -2560,6 +2749,7 @@ function createRoutePlanningRun(options) {
   return taskTypes.createRoutePlanningRun({
     route_planning_run_id: options.routePlanningRunId || nextRoutePlanningRunId(),
     route_strategy_id: options.routeStrategyId,
+    planning_algorithm: options.planningAlgorithm || taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
     task_id: options.taskId,
     route_execution_id: options.routeExecutionId,
     robotaxi_id: options.robotaxiId,
@@ -2880,6 +3070,7 @@ function getOrderedStatusValues(page) {
   if (page === "readinessTasks") return readinessStatusOptions;
   if (page === "deploymentTasks") return deploymentStatusOptions;
   if (page === "routeExecutions") return routeExecutionStatusOptions;
+  if (page === "routePlanningRuns") return routePlanningResultOptions;
   return [];
 }
 function createStatusOptions(rows, statusField, orderedValues = [], statusContext = null) {

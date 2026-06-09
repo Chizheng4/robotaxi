@@ -23,7 +23,7 @@ import {
   createRoute,
   createServiceArea,
   createZone,
-} from "../domain/types.js?v=20260608-v017-route-management";
+} from "../domain/types.js?v=20260608-v018-bfs-route-planning";
 
 const MAP_ID = "M-001";
 const CELL_SIZE_M = 50;

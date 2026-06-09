@@ -1,4 +1,4 @@
-import { CellType } from "../domain/types.js?v=20260608-v017-route-management";
+import { CellType } from "../domain/types.js?v=20260608-v018-bfs-route-planning";
 
 export function validateMapSpace(data) {
   const cellById = new Map(data.cells.map((cell) => [cell.cell_id, cell]));

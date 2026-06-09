@@ -2,6 +2,20 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v018
+
+核心：统一字段字典，升级路径规划为 BFS 网格图搜索，并修正投放任务目标语义。
+
+- 新增 `doc/common/field-dictionary.md` 作为全系统统一字段字典，原空间模型和运营中心字段字典改为迁移说明。
+- RoutePlanningStrategy 明确为可被调用的路径规划服务，只接收输入并返回规划结果，不直接改变 Task、RouteExecution 或 Robotaxi 状态。
+- 路径规划策略和策略执行记录新增 `planning_algorithm`，当前统一为 `BFS_CELL_GRAPH`。
+- 运营投放 Route 生成由简单道路片段拼接升级为基于 RoadSegment 有序 Cell、通行方向和道路状态的 BFS Cell Graph。
+- 异常到达重规划支持在同一 DeploymentTask / RouteExecution 内多次循环，直到正常到达或同服务区无可用替代目标。
+- 当同 ServiceArea 内没有可用替代目标时，RoutePlanningRun 记录失败，DeploymentTask 暂停在 `ARRIVAL_ABNORMAL` 等待后续运营决策闭环。
+- 修正 `planned_target_*` 语义：计划目标保持任务创建时的原始目标，异常重规划只更新 `target_*` 当前目标和实际到达字段。
+- 策略执行管理页面按统一对象列表布局补齐状态分类和底部统计，支持按规划结果查看成功 / 失败记录。
+- 更新 DeploymentTask、RouteExecution、RoutePlanningStrategy 文档，补齐计划目标、当前目标、实际目标和异常重规划失败边界。
+
 ## v017
 
 核心：完善路径规划输出、Route 管理和行驶记录管理结构。
