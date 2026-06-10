@@ -233,6 +233,7 @@
 |current_cell_id|当前所在网格|运行态字段|车辆当前位置|
 |current_route_id|当前路径|运行态字段|当前执行 Route，可为空|
 |current_task_id|当前任务|运行态字段|当前关联 Task，可为空|
+|current_order_id|当前服务订单|运行态字段|当前关联 ServiceOrder，可为空|
 |current_task_type|当前任务类型|聚合展示字段|由 current_task_id 关联 Task 推导|
 |current_task_status|当前任务状态|聚合展示字段|由 current_task_id 关联 Task 推导|
 |current_route_execution_id|当前行驶记录|聚合展示字段|当前关联 RouteExecution，可为空，展示推导字段|
@@ -271,6 +272,8 @@
 |strategy_type|路径规划策略类型|持久化字段|路径规划策略类型|
 |planning_algorithm|路径规划算法|持久化字段|路径规划策略当前使用的算法，例如 BFS_CELL_GRAPH，后续可扩展为 Dijkstra、A* 或真实地图 Routing Engine|
 |trigger_task_status|触发任务状态|持久化字段|策略触发时的 Task 状态|
+|trigger_order_status|触发订单状态|持久化字段|策略触发时的 ServiceOrder 状态，可为空|
+|trigger_trip_status|触发行程状态|持久化字段|策略触发时的 Trip 状态，可为空|
 |origin_rule|起点选择规则|持久化字段|策略如何确定 Route 起点|
 |target_rule|终点选择规则|持久化字段|策略如何确定 Route 终点|
 |service_area_scope_rule|服务区范围规则|持久化字段|策略是否限制在指定 ServiceArea 内选择目标|
@@ -281,6 +284,15 @@
 |result_route_id|生成路径编号|持久化字段|本次路径规划成功生成的 Route 编号|
 |planning_result|规划结果|运行态字段|本次路径规划成功或失败|
 |route_planning_run_count|路径规划执行次数|聚合展示字段|策略被执行的次数|
+|task_id|任务编号|持久化字段|关联 Task，可为空|
+|route_execution_id|行驶记录编号|持久化字段|关联 RouteExecution，可为空|
+|service_order_id|服务订单编号|持久化字段|关联 ServiceOrder，可为空|
+|trip_id|服务履约记录编号|持久化字段|关联 Trip，可为空|
+|robotaxi_id|Robotaxi 编号|持久化字段|执行 Robotaxi|
+|origin_cell_id|起点位置|持久化字段|本次 Route 起点 Cell|
+|road_segment_sequence|道路片段序列|持久化字段|Route 经过的 RoadSegment 顺序|
+|total_distance_km|路径总距离（公里）|持久化字段|Route 总距离，供价格和运营分析使用|
+|estimated_duration_min|预估时长（分钟）|持久化字段|Route 预估耗时，供价格和运营分析使用|
 |route_steps|路径步骤|持久化字段|Route 中可执行的 Cell Step 序列|
 |route_step_count|路径步骤数|聚合展示字段|Route 中步骤数量|
 |planned_target_zone_id|计划目标运营区域|持久化字段|运营投放任务创建时的原始计划 Zone，可为空，异常重规划不得覆盖|
@@ -298,6 +310,8 @@
 |current_target_service_area_id|当前目标服务区|运行态字段|行驶记录当前 Route 指向的目标 ServiceArea|
 |route_history|路径历史|运行态字段|同一行驶记录中 Route 变化历史|
 |route_change_reason|路径变化原因|运行态字段|Route 被创建或替换的原因|
+|arrival_result|到达结果|运行态字段|记录正常到达或异常到达等执行反馈|
+|exception_type|异常类型|运行态字段|发生异常时的具体原因，可为空|
 |origin_location_summary|起点位置摘要|聚合展示字段|由起点 CellContext 推导|
 |target_location_summary|终点位置摘要|聚合展示字段|由终点 CellContext 推导|
 |current_location_summary|当前位置摘要|聚合展示字段|由当前 CellContext 推导|
@@ -314,7 +328,176 @@
 
 ---
 
-## 14. ValidationResult：初始化校验结果
+## 14. Customer：客户
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|customer_id|客户编号|持久化字段|Customer 唯一编号|
+|customer_name|客户名称|持久化字段|模拟客户名称|
+|customer_type|客户类型|持久化字段|客户业务类型|
+|default_order_channel|默认下单渠道|持久化字段|客户默认使用的订单渠道|
+|customer_status|客户状态|运行态字段|客户是否可用于模拟订单|
+|customer_origin_location_type|客户需求位置类型|运行态字段|本次订单创建时客户发起需求的位置类型|
+|customer_origin_place_id|客户需求地点|运行态字段|本次订单客户位置关联 Place，可为空|
+|customer_origin_road_segment_id|客户需求道路片段|运行态字段|本次订单客户位置关联 RoadSegment，可为空|
+|customer_origin_cell_id|客户需求位置|运行态字段|本次订单客户位置 Cell|
+
+说明：
+
+- Customer 是需求主体，不保存实时位置；
+- `customer_origin_*` 字段属于订单创建上下文，不应作为 Customer 的长期当前位置字段。
+
+---
+
+## 15. ServiceOrder：服务订单
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|service_order_id|服务订单编号|持久化字段|ServiceOrder 唯一编号|
+|order_channel|订单来源|持久化字段|服务订单来源渠道|
+|customer_id|客户编号|持久化字段|关联 Customer|
+|customer_origin_location_type|客户需求位置类型|运行态字段|本次订单创建时客户发起需求的位置类型|
+|customer_origin_place_id|客户需求地点|运行态字段|本次订单客户位置关联 Place，可为空|
+|customer_origin_road_segment_id|客户需求道路片段|运行态字段|本次订单客户位置关联 RoadSegment，可为空|
+|customer_origin_cell_id|客户需求位置|运行态字段|本次订单客户位置 Cell|
+|pickup_service_area_id|上车服务区|持久化字段|订单上车 ServiceArea|
+|pickup_cell_id|上车位置|持久化字段|订单上车 Cell|
+|dropoff_service_area_id|下车服务区|持久化字段|订单下车 ServiceArea|
+|dropoff_cell_id|下车位置|持久化字段|订单下车 Cell|
+|estimated_pricing_decision_id|预估价格决策编号|持久化字段|预估价格对应 PricingDecision|
+|final_pricing_decision_id|最终价格决策编号|运行态字段|最终结算对应 PricingDecision，可为空|
+|estimated_distance_km|预估距离（公里）|运行态字段|订单预估服务距离|
+|estimated_duration_min|预估时长（分钟）|运行态字段|订单预估服务时长|
+|estimated_price|预估价格|运行态字段|系统预估价格|
+|quoted_price|客户报价|运行态字段|客户确认前展示报价|
+|actual_distance_km|实际距离（公里）|运行态字段|服务完成后的实际距离|
+|actual_duration_min|实际时长（分钟）|运行态字段|服务完成后的实际时长|
+|final_price|最终价格|运行态字段|最终结算价格|
+|payment_status|支付状态|运行态字段|订单支付状态|
+|paid_amount|已支付金额|运行态字段|客户已支付金额|
+|payment_completed_at|支付完成时间|运行态字段|支付完成时间，可为空|
+|pricing_explanation|价格说明|运行态字段|面向客户展示的价格说明|
+|pricing_breakdown_snapshot|定价明细快照|运行态字段|保存价格构成快照|
+|order_status|订单状态|运行态字段|客户服务订单当前状态|
+|matched_robotaxi_id|匹配 Robotaxi|运行态字段|已匹配车辆，可为空|
+|order_matching_decision_id|订单匹配决策编号|运行态字段|关联 OrderMatchingDecision，可为空|
+|confirmed_at|客户确认时间|运行态字段|客户确认叫车时间|
+|matched_at|匹配时间|运行态字段|车辆匹配成功时间|
+|cancelled_at|取消时间|运行态字段|订单取消时间，可为空|
+
+说明：
+
+- ServiceOrder 表达客户服务承诺，不负责价格算法、车辆匹配算法、路径规划算法或实际行驶过程；
+- 订单来源 `order_channel` 与 Customer 的 `default_order_channel` 不是同一字段，前者是本次订单来源，后者是客户默认偏好。
+
+---
+
+## 16. Trip：服务履约记录
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|current_step_index|当前路径步骤|运行态字段|当前执行到 Route 的 Step 下标|
+|total_step_count|路径总步骤数|运行态字段|当前 Route 总 Step 数|
+|distance_traveled_km|已行驶距离（公里）|运行态字段|服务履约已行驶距离|
+|distance_remaining_km|剩余距离（公里）|运行态字段|当前 Route 剩余距离|
+|time_elapsed|已耗时|运行态字段|服务履约已耗时|
+|trip_status|服务履约状态|运行态字段|Trip 当前状态|
+|trip_phase|服务履约阶段|运行态字段|路径规划或异常处理时使用的 Trip 阶段表达|
+|started_at|开始时间|运行态字段|服务履约开始时间|
+|completed_at|完成时间|运行态字段|服务履约完成时间|
+|event_log|事件记录|运行态字段|服务履约事件数组|
+
+说明：
+
+- Trip 是服务订单履约记录；
+- Trip 与 RouteExecution 都可以引用 Route，但二者执行记录独立。
+
+---
+
+## 17. DemandSimulationStrategy：需求模拟策略
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|demand_simulation_strategy_id|需求模拟策略编号|持久化字段|DemandSimulationStrategy 唯一编号|
+|simulation_algorithm|需求模拟算法|持久化字段|需求模拟策略使用的算法|
+|demand_simulation_run_id|需求模拟执行记录编号|运行态字段|一次需求模拟策略执行记录|
+|location_type|位置类型|运行态字段|需求模拟选择的位置类型|
+|weight|权重|持久化字段|随机选择权重|
+
+说明：
+
+- 不再使用泛化的 `strategy_id` 表达需求模拟策略；
+- DemandSimulationStrategy 只返回模拟订单上下文，不直接创建 ServiceOrder。
+
+---
+
+## 18. PricingStrategy / PricingDecision：定价策略与定价决策
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|pricing_strategy_id|定价策略编号|持久化字段|PricingStrategy 唯一编号|
+|pricing_strategy_run_id|定价策略执行记录编号|运行态字段|一次定价策略执行记录|
+|pricing_decision_id|定价决策编号|运行态字段|PricingDecision 唯一编号|
+|pricing_algorithm|定价算法|持久化字段|定价策略使用的算法|
+|base_fare|起步价|持久化字段|基础起步价|
+|distance_unit_price|距离单价|持久化字段|每公里价格|
+|time_unit_price|时间单价|持久化字段|每分钟价格|
+|supply_demand_multiplier|供需调节系数|运行态字段|供需变化带来的价格系数|
+|time_period_multiplier|时段系数|运行态字段|不同时段价格系数|
+|service_area_multiplier|区域系数|运行态字段|不同服务区价格系数|
+|channel_multiplier|渠道系数|运行态字段|不同订单渠道价格系数|
+|pricing_stage|定价阶段|运行态字段|预估或最终结算|
+|base_price|基础价格|运行态字段|起步价、距离费和时间费合计|
+|distance_fee|距离费用|运行态字段|根据距离计算的费用|
+|time_fee|时间费用|运行态字段|根据时间计算的费用|
+|dynamic_multiplier|综合动态系数|运行态字段|综合后的动态价格系数|
+
+说明：
+
+- 定价可以调用路径估算能力获取距离和时长；
+- 价格预估阶段不默认生成可执行 Route，也不改变 ServiceOrder、Trip 或 Robotaxi 状态。
+
+---
+
+## 19. OrderMatchingStrategy / OrderMatchingDecision：订单匹配策略与订单匹配决策
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|order_matching_strategy_id|订单匹配策略编号|持久化字段|OrderMatchingStrategy 唯一编号|
+|order_matching_run_id|订单匹配执行记录编号|运行态字段|一次订单匹配策略执行记录|
+|order_matching_decision_id|订单匹配决策编号|运行态字段|OrderMatchingDecision 唯一编号|
+|matching_algorithm|匹配算法|持久化字段|订单匹配策略使用的算法|
+|candidate_filter_rule|候选车辆筛选规则|持久化字段|如何筛选候选 Robotaxi|
+|distance_rule|距离计算规则|持久化字段|候选车辆距离计算方式|
+|battery_rule|电量校验规则|持久化字段|候选车辆电量要求|
+|scoring_rule|评分规则|持久化字段|候选车辆评分规则|
+|candidate_robotaxi_count|候选车辆数量|运行态字段|初始候选车辆数量|
+|eligible_robotaxi_count|可用车辆数量|运行态字段|通过筛选的车辆数量|
+|selected_robotaxi_id|选中 Robotaxi|运行态字段|匹配成功选中的 Robotaxi|
+|matching_score|匹配评分|运行态字段|最终匹配评分|
+|decision_result|决策结果|运行态字段|匹配决策成功或失败|
+|decision_reason|决策说明|运行态字段|匹配结果说明|
+
+说明：
+
+- 订单匹配策略只返回匹配结果；
+- 是否更新 ServiceOrder、Robotaxi 或创建 Trip，由调用方业务流程决定。
+
+---
+
+## 20. 通用快照与时间字段
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|input_snapshot|输入快照|运行态字段|策略执行输入数据快照|
+|output_snapshot|输出快照|运行态字段|策略执行输出数据快照|
+|candidate_snapshot|候选对象快照|运行态字段|匹配策略候选集合快照|
+|run_result|执行结果|运行态字段|策略执行成功或失败|
+|created_at|创建时间|运行态字段|记录创建时间|
+
+---
+
+## 21. ValidationResult：初始化校验结果
 
 ValidationResult 不是空间业务对象，仅用于展示初始化校验结果。
 
@@ -327,7 +510,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 
 ---
 
-## 15. 枚举值字典
+## 22. 枚举值字典
 
 前端应将代码内部稳定使用的英文枚举值转换为中文，不直接向运营人员暴露代码值。
 
@@ -410,7 +593,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ARRIVAL_ABNORMAL|异常到达|
 |COMPLETED|已完成|
 |CANCELLED|已取消|
-|FAILED|异常失败|
+|FAILED|失败|
 |SUPPLY_ASSIGNMENT_DECISION|供给分配决策|
 |AUTO_BY_SERVICE_AREA|按服务区能力自动处理|
 |TEMP_STOP_AND_STANDBY|临停待命|
@@ -435,10 +618,55 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |INITIAL_DEPLOYMENT_ROUTE|初始运营投放路径|
 |ABNORMAL_ARRIVAL_SAME_SERVICE_AREA_REPLAN|异常到达同服务区替代路径|
 |BFS_CELL_GRAPH|BFS 网格图搜索|
+|INDIVIDUAL|普通个人客户|
+|BUSINESS|商务客户|
+|VISITOR|临时访客|
+|TEST_CUSTOMER|测试客户|
+|OWN_APP|自有 App|
+|PARTNER_APP|外部合作平台|
+|MANUAL_TEST|后台模拟测试|
+|OWN_APP_SIMULATED_ORDER|模拟自有 App 服务订单|
+|PARTNER_APP_SIMULATED_ORDER|模拟外部平台服务订单|
+|ACTIVE|可使用|
+|INACTIVE|不可使用|
+|ARCHIVED|已归档|
+|CREATED|已创建|
+|CALCULATING_PRICE|正在计算价格|
+|WAITING_CUSTOMER_CONFIRM|等待客户确认|
+|CUSTOMER_CANCELLED_BEFORE_CONFIRM|客户确认前取消|
+|WAITING_FOR_VEHICLE|等待匹配车辆|
+|VEHICLE_ASSIGNED|车辆已分配|
+|VEHICLE_ON_THE_WAY_TO_PICKUP|车辆前往上车点|
+|VEHICLE_ARRIVED_PICKUP|车辆已到达上车点|
+|WAITING_PASSENGER_BOARDING|等待乘客上车|
+|ON_THE_WAY_TO_DESTINATION|正在前往目的地|
+|PAYMENT_PROCESSING|支付处理中|
+|MATCH_FAILED|匹配失败|
+|TRIP_FAILED|行程执行失败|
+|PENDING|等待处理|
+|ASSIGNED|已分配|
+|ON_THE_WAY_PICKUP|接驾中|
+|ARRIVED_PICKUP|已到达上车点|
+|PASSENGER_ONBOARD|乘客已上车|
+|ON_THE_WAY_DESTINATION|载客行驶中|
+|ARRIVED_DESTINATION|已到达目的地|
+|PAID|已支付|
+|UNPAID|未支付|
+|ESTIMATE|预估|
+|FINAL|最终结算|
+|SUCCESS|成功|
+|BASIC_RANDOM_DEMAND_SIMULATION|基础随机需求模拟|
+|BASIC_WEIGHTED_RANDOM_SAMPLING|基础加权随机采样|
+|BASIC_RULE_BASED_DYNAMIC_PRICING|基础规则动态定价|
+|BASIC_NEAREST_AVAILABLE_ROBOTAXI|最近可用 Robotaxi 匹配|
+|SERVICE_ORDER_PICKUP_ROUTE|服务订单接驾路径|
+|SERVICE_ORDER_TRIP_ROUTE|服务订单载客路径|
+|DESTINATION_CHANGE_REPLAN|目的地变更重规划|
+|SERVICE_ROUTE_EXCEPTION_REPLAN|服务路径异常重规划|
 
 ---
 
-## 16. 前端显示规则
+## 23. 前端显示规则
 
 1. 代码、初始化数据和对象引用继续使用英文字段名；
 2. 前端表格列名、详情栏字段名、筛选项名称优先显示中文名；

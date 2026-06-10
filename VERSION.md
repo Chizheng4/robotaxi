@@ -2,6 +2,20 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v019
+
+核心：新增需求订单与服务履约方案设计，并集中统一字段字典和策略职责边界。
+
+- 新增 `04-demand-order` 文档目录，定义 Customer、ServiceOrder 与客户初始化方案。
+- 新增 Trip 服务履约记录文档，明确 Trip 是服务订单履约执行记录，不复用运营任务 RouteExecution。
+- 新增 DemandSimulationStrategy、PricingDecision、OrderMatchingDecision 方案设计，为后续需求模拟、定价、匹配和服务订单闭环预留结构。
+- 扩展 RoutePlanningStrategy，支持运营任务与服务订单两类路径规划场景，并新增 RPS-003 至 RPS-006 服务订单相关策略设计。
+- 明确 RoutePlanningStrategy 只是可调用路径规划能力，不直接改变 Task、ServiceOrder、Trip、RouteExecution 或 Robotaxi 状态。
+- 明确 RoutePlanningRun 由路径规划服务层记录，调用方负责创建 / 更新 Route 与业务对象状态。
+- 扩展统一字段字典，补齐 Customer、ServiceOrder、Trip、需求模拟、定价、订单匹配、订单状态和服务履约状态等字段与中文显示。
+- 统一 Customer.default_order_channel 与 ServiceOrder.order_channel 的字段边界，避免客户渠道偏好和本次订单来源混用。
+- 明确价格预估可以调用路径估算能力，但不默认生成可执行 Route，也不改变订单、履约或车辆状态。
+
 ## v018
 
 核心：统一字段字典，升级路径规划为 BFS 网格图搜索，并修正投放任务目标语义。
