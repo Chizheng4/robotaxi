@@ -30,8 +30,11 @@ let initializeMapSpace;
 let validateMapSpace;
 let initializeOperationsCenter;
 let initializeCustomers;
+let initializeDemandSimulation;
 let validateOperationsCenter;
 let validateCustomers;
+let validateDemandSimulation;
+let runDemandSimulation;
 let createCellContext;
 let getDetailTitle;
 let getDisplayValue;
@@ -44,6 +47,7 @@ let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
 let routePlanningRunSequence = 0;
+let demandSimulationRunSequence = 0;
 let eventSequence = 0;
 const unfinishedTaskStatuses = new Set(["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING"]);
 const unfinishedDeploymentStatuses = new Set(["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL"]);
@@ -74,6 +78,9 @@ const pageGroups = [{
   children: [{
     key: "customers",
     label: "客户管理"
+  }, {
+    key: "demandSimulationStrategies",
+    label: "需求模拟策略"
   }]
 }, {
   key: "opsCenter",
@@ -195,6 +202,16 @@ const tableConfig = {
     description: "客户是服务订单的需求发起主体，当前位置由订单创建时动态生成。",
     columns: ["customer_id", "customer_name", "customer_type", "default_order_channel", "customer_status", "created_at"]
   },
+  demandSimulationStrategies: {
+    title: "需求模拟策略",
+    description: "需求模拟策略用于生成客户、需求位置、上车点和下车点上下文。",
+    columns: ["demand_simulation_strategy_id", "strategy_name", "strategy_type", "simulation_algorithm", "location_type_weights", "strategy_status", "demand_simulation_run_count"]
+  },
+  demandSimulationRuns: {
+    title: "需求模拟执行记录",
+    description: "记录每次需求模拟策略执行结果。",
+    columns: ["demand_simulation_run_id", "simulation_result", "demand_simulation_strategy_id", "order_channel", "customer_id", "customer_origin_location_type", "customer_origin_cell_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "failure_reason", "created_at"]
+  },
   opsCenters: {
     title: "运营中心管理",
     description: "运营中心是 Robotaxi 进入运营闭环的供给侧设施。",
@@ -262,6 +279,8 @@ const pageObjectType = {
   zones: "zone",
   routes: "route",
   customers: "customer",
+  demandSimulationStrategies: "demandSimulationStrategy",
+  demandSimulationRuns: "demandSimulationRun",
   opsCenters: "opsCenter",
   workers: "worker",
   readinessTasks: "readinessTask",
@@ -285,6 +304,8 @@ const idFieldByType = {
   zone: "zone_id",
   route: "route_id",
   customer: "customer_id",
+  demandSimulationStrategy: "demand_simulation_strategy_id",
+  demandSimulationRun: "demand_simulation_run_id",
   opsCenter: "ops_center_id",
   worker: "worker_id",
   readinessTask: "task_id",
@@ -313,6 +334,7 @@ const statusFieldByPage = {
   routePlanningStrategies: "strategy_status",
   routePlanningRuns: "planning_result",
   customers: "customer_status",
+  demandSimulationStrategies: "strategy_status",
   robotaxis: "availability_status",
   validations: "result"
 };
@@ -329,7 +351,7 @@ const routeExecutionStatusOptions = ["WAITING_START", "MOVING", "ARRIVED", "ARRI
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v019-1-customer";
+const runtimeStorageKey = "robotaxi.runtime.v019-2-demand-simulation";
 const defaultPageFilters = {
   keyword: "",
   statusValue: null,
@@ -343,7 +365,8 @@ function App() {
   const initialData = useMemo(() => ({
     ...initializeMapSpace(),
     ...initializeOperationsCenter(),
-    ...initializeCustomers()
+    ...initializeCustomers(),
+    ...initializeDemandSimulation()
   }), []);
   const initialRuntime = useMemo(() => loadRuntimeSnapshot(initialData), [initialData]);
   const [operationalData, setOperationalData] = useState(initialRuntime.operationalData);
@@ -351,6 +374,7 @@ function App() {
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
+  const [demandSimulationRuns, setDemandSimulationRuns] = useState(initialRuntime.demandSimulationRuns);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const initialValidations = useMemo(() => [...validateMapSpace(initialData), ...validateOperationsCenter(initialData), ...validateCustomers(initialData)], [initialData]);
   const data = useMemo(() => ({
@@ -359,9 +383,10 @@ function App() {
     deploymentTasks,
     routeExecutions,
     routePlanningRuns,
+    demandSimulationRuns,
     taskEventLogs
-  }), [deploymentTasks, operationalData, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs]);
-  const validations = useMemo(() => [...initialValidations, ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
+  }), [demandSimulationRuns, deploymentTasks, operationalData, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs]);
+  const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
@@ -380,6 +405,8 @@ function App() {
     zones: data.zones,
     routes: data.routes.map(route => enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns)),
     customers: data.customers || [],
+    demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
+    demandSimulationRuns,
     opsCenters: data.opsCenters,
     workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks,
@@ -391,7 +418,7 @@ function App() {
     serviceFulfillmentRecords: [],
     robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     validations
-  }), [data, deploymentTasks, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -423,6 +450,8 @@ function App() {
       zone: data.zones,
       route: rowsByPage.routes,
       customer: data.customers || [],
+      demandSimulationStrategy: rowsByPage.demandSimulationStrategies,
+      demandSimulationRun: rowsByPage.demandSimulationRuns,
       routePlanningStrategy: rowsByPage.routePlanningStrategies,
       routePlanningRun: rowsByPage.routePlanningRuns,
       serviceFulfillmentRecord: rowsByPage.serviceFulfillmentRecords,
@@ -468,12 +497,13 @@ function App() {
       deploymentTasks,
       routeExecutions,
       routePlanningRuns,
+      demandSimulationRuns,
       taskEventLogs,
       activePage,
       pageSelections,
       pageUiState
     });
-  }, [activePage, deploymentTasks, operationalData, pageSelections, pageUiState, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs]);
+  }, [activePage, demandSimulationRuns, deploymentTasks, operationalData, pageSelections, pageUiState, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs]);
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -555,6 +585,7 @@ function App() {
       startCheck,
       submitCheckResult,
       createDeploymentTasks,
+      createDemandSimulationRun,
       planDeploymentRoute,
       viewRecordDetail,
       viewGeneratedRoute,
@@ -565,7 +596,8 @@ function App() {
       submitAbnormalArrival,
       data,
       taskEventLogs,
-      routePlanningRuns: rowsByPage.routePlanningRuns
+      routePlanningRuns: rowsByPage.routePlanningRuns,
+      demandSimulationRuns: rowsByPage.demandSimulationRuns
     }
   })), /*#__PURE__*/React.createElement("aside", {
     className: "detail-rail"
@@ -608,6 +640,7 @@ function App() {
     routeExecutionSequence = 0;
     deploymentRouteSequence = 0;
     routePlanningRunSequence = 0;
+    demandSimulationRunSequence = 0;
     eventSequence = 0;
     const nextSelection = {
       type: "map",
@@ -618,6 +651,7 @@ function App() {
     setDeploymentTasks([]);
     setRouteExecutions([]);
     setRoutePlanningRuns([]);
+    setDemandSimulationRuns([]);
     setTaskEventLogs([]);
     setActivePage("console");
     setOpenMenuKeys([]);
@@ -937,6 +971,20 @@ function App() {
       message: `已创建 ${task.robotaxi_id} 的运营投放任务`
     })), triggerLog, ...logs]);
     selectForPage("deploymentTasks", "deploymentTask", newTasks[0].task_id);
+  }
+  function createDemandSimulationRun() {
+    const strategy = data.demandSimulationStrategies?.find(item => item.demand_simulation_strategy_id === "DSS-001");
+    if (!strategy || strategy.strategy_status !== "ACTIVE") return;
+    const run = runDemandSimulation({
+      strategy,
+      data,
+      orderChannel: "OWN_APP_SIMULATED_ORDER",
+      runId: nextDemandSimulationRunId(),
+      randomSeed: `DSS-${Date.now()}-${demandSimulationRuns.length + 1}`,
+      createdAt: now()
+    });
+    setDemandSimulationRuns(items => [run, ...items]);
+    selectForPage("demandSimulationStrategies", "demandSimulationStrategy", strategy.demand_simulation_strategy_id);
   }
   function planDeploymentRoute(taskId) {
     const task = deploymentTasks.find(item => item.task_id === taskId);
@@ -1447,8 +1495,9 @@ function RecordTable({
   const isRouteExecutionPage = page === "routeExecutions";
   const isRoutePlanningPage = page === "routePlanningStrategies";
   const isRoutePlanningRunPage = page === "routePlanningRuns";
+  const isDemandSimulationPage = page === "demandSimulationStrategies";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage;
+  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage || isDemandSimulationPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -1476,9 +1525,9 @@ function RecordTable({
   }));
   const actionColumn = getActionColumn();
   const finalColumns = actionColumn ? [...columns, actionColumn] : columns;
-  const eventRows = isRoutePlanningPage ? actions.routePlanningRuns : actions.taskEventLogs;
-  const eventColumns = isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isRoutePlanningPage ? "route_planning_run_id" : "event_id";
+  const eventRows = isDemandSimulationPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : actions.taskEventLogs;
+  const eventColumns = isDemandSimulationPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isDemandSimulationPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
   return /*#__PURE__*/React.createElement("section", {
@@ -1562,7 +1611,13 @@ function RecordTable({
     size: "small",
     type: "primary",
     onClick: actions.createDeploymentTasks
-  }, "\u751F\u6210\u6295\u653E\u4EFB\u52A1")), /*#__PURE__*/React.createElement(Table, {
+  }, "\u751F\u6210\u6295\u653E\u4EFB\u52A1")), isDemandSimulationPage && /*#__PURE__*/React.createElement("div", {
+    className: "list-action-bar"
+  }, /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    type: "primary",
+    onClick: actions.createDemandSimulationRun
+  }, "\u751F\u6210\u6A21\u62DF\u9700\u6C42")), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: idField,
     columns: finalColumns,
@@ -1591,7 +1646,7 @@ function RecordTable({
     title: "\u62D6\u52A8\u8C03\u6574\u4E8B\u4EF6\u533A\u9AD8\u5EA6"
   }), /*#__PURE__*/React.createElement("div", {
     className: "event-log-title"
-  }, isRoutePlanningPage ? "路径规划执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
+  }, isDemandSimulationPage ? "需求模拟执行记录" : isRoutePlanningPage ? "路径规划执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: eventRowKey,
     columns: eventColumns.map(key => ({
@@ -1791,7 +1846,7 @@ function ModuleFooter({
   appliedFilters
 }) {
   const hasFilter = appliedFilters && (appliedFilters.keyword || appliedFilters.statusValue || appliedFilters.triggerType);
-  if (["readinessTasks", "deploymentTasks", "routeExecutions", "routePlanningStrategies", "routePlanningRuns"].includes(page)) {
+  if (["readinessTasks", "deploymentTasks", "routeExecutions", "routePlanningStrategies", "routePlanningRuns", "demandSimulationStrategies"].includes(page)) {
     return /*#__PURE__*/React.createElement("div", {
       className: "module-footer"
     }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u663E\u793A ", displayCount, " / \u5168\u90E8 ", totalCount), eventCount !== null && /*#__PURE__*/React.createElement("span", null, "\u4E8B\u4EF6 ", eventCount), /*#__PURE__*/React.createElement("span", null, hasFilter ? "已应用筛选条件" : "未应用筛选"));
@@ -2376,7 +2431,9 @@ function RouteStepsDetail({
 }
 function summarizeObject(value) {
   const enabled = Object.entries(value).filter(([, itemValue]) => itemValue === true).map(([key]) => getFieldLabel(key));
-  return enabled.length > 0 ? enabled.join(", ") : "无";
+  if (enabled.length > 0) return enabled.join(", ");
+  const entries = Object.entries(value).filter(([, itemValue]) => itemValue !== null && itemValue !== undefined && itemValue !== false).map(([key, itemValue]) => `${getFieldLabel(key)}: ${getDisplayValue(itemValue)}`);
+  return entries.length > 0 ? entries.join("; ") : "无";
 }
 function formatDetailValue(value, key, parentRow = null) {
   if (key === "route_detail" && value && typeof value === "object") return summarizeRouteDetail(value);
@@ -2429,7 +2486,7 @@ function summarizeRecord(record) {
   return Object.entries(record).slice(0, 3).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`).join("，");
 }
 function isStatusField(key) {
-  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "customer_status"].includes(key);
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "customer_status"].includes(key);
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";
@@ -2481,13 +2538,16 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, operationsCenterValidation, customerValidation, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260608-v018-bfs-route-planning"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, demandSimulationEngine, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260608-v018-bfs-route-planning"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
   initializeCustomers = customerInitialization.initializeCustomers;
+  initializeDemandSimulation = demandSimulationInitialization.initializeDemandSimulation;
   validateOperationsCenter = operationsCenterValidation.validateOperationsCenter;
   validateCustomers = customerValidation.validateCustomers;
+  validateDemandSimulation = demandSimulationValidation.validateDemandSimulation;
+  runDemandSimulation = demandSimulationEngine.runDemandSimulation;
   createCellContext = cellContext.createCellContext;
   getDetailTitle = fieldDictionary.getDetailTitle;
   getDisplayValue = fieldDictionary.getDisplayValue;
@@ -2772,6 +2832,23 @@ function createRoutePlanningStrategyRows(data, routePlanningRuns) {
     route_planning_run_count: runCountByStrategyId.get(strategy.route_strategy_id) || 0
   }));
 }
+function createDemandSimulationStrategyRows(data, demandSimulationRuns) {
+  const runCountByStrategyId = new Map();
+  const successCountByStrategyId = new Map();
+  demandSimulationRuns.forEach(run => {
+    const strategyId = run.demand_simulation_strategy_id;
+    if (!strategyId) return;
+    runCountByStrategyId.set(strategyId, (runCountByStrategyId.get(strategyId) || 0) + 1);
+    if (run.simulation_result === "SUCCESS") {
+      successCountByStrategyId.set(strategyId, (successCountByStrategyId.get(strategyId) || 0) + 1);
+    }
+  });
+  return (data.demandSimulationStrategies || []).map(strategy => ({
+    ...strategy,
+    demand_simulation_run_count: runCountByStrategyId.get(strategy.demand_simulation_strategy_id) || 0,
+    demand_simulation_success_count: successCountByStrategyId.get(strategy.demand_simulation_strategy_id) || 0
+  }));
+}
 function createRoutePlanningRun(options) {
   return taskTypes.createRoutePlanningRun({
     route_planning_run_id: options.routePlanningRunId || nextRoutePlanningRunId(),
@@ -2964,6 +3041,10 @@ function nextRoutePlanningRunId() {
   routePlanningRunSequence += 1;
   return `RPR-${String(routePlanningRunSequence).padStart(3, "0")}`;
 }
+function nextDemandSimulationRunId() {
+  demandSimulationRunSequence += 1;
+  return `DSR-${String(demandSimulationRunSequence).padStart(3, "0")}`;
+}
 function nextEventId() {
   eventSequence += 1;
   return `EVT-${String(eventSequence).padStart(3, "0")}`;
@@ -2999,6 +3080,7 @@ function loadRuntimeSnapshot(initialData) {
     deploymentTasks: [],
     routeExecutions: [],
     routePlanningRuns: [],
+    demandSimulationRuns: [],
     taskEventLogs: [],
     activePage: "console",
     pageSelections: {
@@ -3018,12 +3100,14 @@ function loadRuntimeSnapshot(initialData) {
     const deploymentTasks = normalizeRouteStrategyReferences(Array.isArray(snapshot.deploymentTasks) ? snapshot.deploymentTasks : []);
     const routeExecutions = normalizeRouteStrategyReferences(Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : []);
     const routePlanningRuns = normalizeRouteStrategyReferences(Array.isArray(snapshot.routePlanningRuns) ? snapshot.routePlanningRuns : []);
+    const demandSimulationRuns = Array.isArray(snapshot.demandSimulationRuns) ? snapshot.demandSimulationRuns : [];
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
     routePlanningRunSequence = deriveSequence(routePlanningRuns, "route_planning_run_id", "RPR-");
+    demandSimulationRunSequence = deriveSequence(demandSimulationRuns, "demand_simulation_run_id", "DSR-");
     deploymentRouteSequence = deriveSequence(operationalData.routes || [], "route_id", "DRT-");
     eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
     return {
@@ -3032,6 +3116,7 @@ function loadRuntimeSnapshot(initialData) {
       deploymentTasks,
       routeExecutions,
       routePlanningRuns,
+      demandSimulationRuns,
       taskEventLogs,
       activePage: snapshot.activePage || "console",
       pageSelections: {
@@ -3070,6 +3155,7 @@ function saveRuntimeSnapshot(snapshot) {
       ...snapshot,
       taskSequence,
       routePlanningRunSequence,
+      demandSimulationRunSequence,
       eventSequence
     }));
   } catch (error) {

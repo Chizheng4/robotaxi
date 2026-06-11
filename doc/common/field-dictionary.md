@@ -268,8 +268,8 @@
 |route_summary|路径摘要|聚合展示字段|Route 的简要展示信息|
 |route_detail|路径详情|聚合展示字段|Route 的结构化详情|
 |route_strategy_id|路径规划策略编号|持久化字段|路径规划策略对象 ID，用于 Route、任务单、行驶记录和策略事件引用|
-|strategy_name|路径规划策略名称|持久化字段|路径规划策略中文名称|
-|strategy_type|路径规划策略类型|持久化字段|路径规划策略类型|
+|strategy_name|策略名称|持久化字段|策略中文名称，适用于路径规划、需求模拟、定价、匹配等策略对象|
+|strategy_type|策略类型|持久化字段|策略类型，适用于路径规划、需求模拟、定价、匹配等策略对象|
 |planning_algorithm|路径规划算法|持久化字段|路径规划策略当前使用的算法，例如 BFS_CELL_GRAPH，后续可扩展为 Dijkstra、A* 或真实地图 Routing Engine|
 |trigger_task_status|触发任务状态|持久化字段|策略触发时的 Task 状态|
 |trigger_order_status|触发订单状态|持久化字段|策略触发时的 ServiceOrder 状态，可为空|
@@ -319,6 +319,7 @@
 |target_location_detail|终点位置详情|聚合展示字段|终点结构化位置上下文|
 |current_location_detail|当前位置详情|聚合展示字段|当前位置结构化位置上下文|
 |failure_reason|失败原因|运行态字段|失败时的原因说明|
+|description|说明|持久化字段|对象、策略或记录的说明文本|
 
 说明：
 
@@ -421,8 +422,13 @@
 |demand_simulation_strategy_id|需求模拟策略编号|持久化字段|DemandSimulationStrategy 唯一编号|
 |simulation_algorithm|需求模拟算法|持久化字段|需求模拟策略使用的算法|
 |demand_simulation_run_id|需求模拟执行记录编号|运行态字段|一次需求模拟策略执行记录|
+|simulation_result|模拟结果|运行态字段|需求模拟执行成功或失败|
+|location_type_weights|位置类型权重|持久化字段|需求位置类型随机选择权重|
+|demand_simulation_run_count|需求模拟执行次数|聚合展示字段|策略被执行的次数|
+|demand_simulation_success_count|需求模拟成功次数|聚合展示字段|策略执行成功次数|
 |location_type|位置类型|运行态字段|需求模拟选择的位置类型|
 |weight|权重|持久化字段|随机选择权重|
+|random_seed|随机种子|运行态字段|本次需求模拟使用的随机种子|
 
 说明：
 
@@ -657,6 +663,12 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |SUCCESS|成功|
 |BASIC_RANDOM_DEMAND_SIMULATION|基础随机需求模拟|
 |BASIC_WEIGHTED_RANDOM_SAMPLING|基础加权随机采样|
+|NO_ACTIVE_CUSTOMER|没有可用客户|
+|NO_AVAILABLE_PLACE|没有可用地点|
+|NO_AVAILABLE_ROAD_SEGMENT|没有可用道路片段|
+|CUSTOMER_LOCATION_INVALID|客户需求位置无效|
+|NO_AVAILABLE_PICKUP_CELL|没有可用上车点|
+|NO_AVAILABLE_DROPOFF_CELL|没有可用下车点|
 |BASIC_RULE_BASED_DYNAMIC_PRICING|基础规则动态定价|
 |BASIC_NEAREST_AVAILABLE_ROBOTAXI|最近可用 Robotaxi 匹配|
 |SERVICE_ORDER_PICKUP_ROUTE|服务订单接驾路径|
