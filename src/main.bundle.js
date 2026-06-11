@@ -29,7 +29,9 @@ const {
 let initializeMapSpace;
 let validateMapSpace;
 let initializeOperationsCenter;
+let initializeCustomers;
 let validateOperationsCenter;
+let validateCustomers;
 let createCellContext;
 let getDetailTitle;
 let getDisplayValue;
@@ -65,6 +67,13 @@ const pageGroups = [{
       key: "routePlanningRuns",
       label: "策略执行管理"
     }]
+  }]
+}, {
+  key: "demandOrder",
+  label: "需求订单管理",
+  children: [{
+    key: "customers",
+    label: "客户管理"
   }]
 }, {
   key: "opsCenter",
@@ -181,6 +190,11 @@ const tableConfig = {
     description: "Route 是路径规划策略执行后生成的路径结果，供运营行驶记录引用。",
     columns: ["route_id", "route_version", "route_strategy_id", "route_planning_run_id", "task_id", "route_execution_id", "robotaxi_id", "origin_cell_id", "target_cell_id", "road_segment_sequence", "route_step_count", "route_status", "failure_reason"]
   },
+  customers: {
+    title: "客户管理",
+    description: "客户是服务订单的需求发起主体，当前位置由订单创建时动态生成。",
+    columns: ["customer_id", "customer_name", "customer_type", "default_order_channel", "customer_status", "created_at"]
+  },
   opsCenters: {
     title: "运营中心管理",
     description: "运营中心是 Robotaxi 进入运营闭环的供给侧设施。",
@@ -247,6 +261,7 @@ const pageObjectType = {
   serviceAreas: "serviceArea",
   zones: "zone",
   routes: "route",
+  customers: "customer",
   opsCenters: "opsCenter",
   workers: "worker",
   readinessTasks: "readinessTask",
@@ -269,6 +284,7 @@ const idFieldByType = {
   serviceArea: "service_area_id",
   zone: "zone_id",
   route: "route_id",
+  customer: "customer_id",
   opsCenter: "ops_center_id",
   worker: "worker_id",
   readinessTask: "task_id",
@@ -296,6 +312,7 @@ const statusFieldByPage = {
   routeExecutions: "execution_status",
   routePlanningStrategies: "strategy_status",
   routePlanningRuns: "planning_result",
+  customers: "customer_status",
   robotaxis: "availability_status",
   validations: "result"
 };
@@ -310,8 +327,9 @@ const readinessStatusOptions = ["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING
 const deploymentStatusOptions = ["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "COMPLETED", "CANCELLED", "FAILED"];
 const routeExecutionStatusOptions = ["WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED", "COMPLETED", "FAILED", "CANCELLED"];
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
+const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v018-bfs-route-planning";
+const runtimeStorageKey = "robotaxi.runtime.v019-1-customer";
 const defaultPageFilters = {
   keyword: "",
   statusValue: null,
@@ -324,7 +342,8 @@ const legacyRouteStrategyIdMap = {
 function App() {
   const initialData = useMemo(() => ({
     ...initializeMapSpace(),
-    ...initializeOperationsCenter()
+    ...initializeOperationsCenter(),
+    ...initializeCustomers()
   }), []);
   const initialRuntime = useMemo(() => loadRuntimeSnapshot(initialData), [initialData]);
   const [operationalData, setOperationalData] = useState(initialRuntime.operationalData);
@@ -333,7 +352,7 @@ function App() {
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
-  const initialValidations = useMemo(() => [...validateMapSpace(initialData), ...validateOperationsCenter(initialData)], [initialData]);
+  const initialValidations = useMemo(() => [...validateMapSpace(initialData), ...validateOperationsCenter(initialData), ...validateCustomers(initialData)], [initialData]);
   const data = useMemo(() => ({
     ...operationalData,
     readinessCheckTasks: readinessTasks,
@@ -360,6 +379,7 @@ function App() {
     serviceAreas: data.serviceAreas,
     zones: data.zones,
     routes: data.routes.map(route => enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns)),
+    customers: data.customers || [],
     opsCenters: data.opsCenters,
     workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks,
@@ -402,6 +422,7 @@ function App() {
       serviceArea: data.serviceAreas,
       zone: data.zones,
       route: rowsByPage.routes,
+      customer: data.customers || [],
       routePlanningStrategy: rowsByPage.routePlanningStrategies,
       routePlanningRun: rowsByPage.routePlanningRuns,
       serviceFulfillmentRecord: rowsByPage.serviceFulfillmentRecords,
@@ -2408,10 +2429,14 @@ function summarizeRecord(record) {
   return Object.entries(record).slice(0, 3).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`).join("，");
 }
 function isStatusField(key) {
-  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result"].includes(key);
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "customer_status"].includes(key);
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";
+  if (key === "customer_status" && value === "ACTIVE") return "可参与订单模拟";
+  if (key === "customer_status" && value === "TEST_ONLY") return "仅测试使用";
+  if (key === "customer_status" && value === "INACTIVE") return "不参与订单模拟";
+  if (key === "customer_status" && value === "BLOCKED") return "被限制下单";
   if (value === "WAITING_START" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution")) return "等待行驶";
   if (value === "WAITING_START" && isDeploymentLike(row)) return "等待行驶";
   if (value === "MOVING" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution" || isDeploymentLike(row))) return "行驶中";
@@ -2456,11 +2481,13 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, operationsCenterValidation, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260608-v018-bfs-route-planning"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, operationsCenterValidation, customerValidation, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260608-v018-bfs-route-planning"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
+  initializeCustomers = customerInitialization.initializeCustomers;
   validateOperationsCenter = operationsCenterValidation.validateOperationsCenter;
+  validateCustomers = customerValidation.validateCustomers;
   createCellContext = cellContext.createCellContext;
   getDetailTitle = fieldDictionary.getDetailTitle;
   getDisplayValue = fieldDictionary.getDisplayValue;
@@ -3071,6 +3098,7 @@ function getOrderedStatusValues(page) {
   if (page === "deploymentTasks") return deploymentStatusOptions;
   if (page === "routeExecutions") return routeExecutionStatusOptions;
   if (page === "routePlanningRuns") return routePlanningResultOptions;
+  if (page === "customers") return customerStatusOptions;
   return [];
 }
 function createStatusOptions(rows, statusField, orderedValues = [], statusContext = null) {

@@ -16,6 +16,7 @@ export const objectDictionary = {
   routeExecution: { label: "行驶记录", detailTitle: "行驶记录详情" },
   routePlanningStrategy: { label: "路径规划策略", detailTitle: "路径规划策略详情" },
   routePlanningRun: { label: "路径规划执行记录", detailTitle: "路径规划执行详情" },
+  customer: { label: "客户", detailTitle: "客户详情" },
   taskEventLog: { label: "任务事件日志", detailTitle: "任务事件详情" },
   validation: { label: "初始化校验结果", detailTitle: "校验规则详情" },
 };
@@ -223,6 +224,11 @@ export const fieldDictionary = {
   result_route_id: "生成路径编号",
   planning_result: "规划结果",
   route_planning_run_count: "路径规划执行次数",
+  customer_id: "客户编号",
+  customer_name: "客户名称",
+  customer_type: "客户类型",
+  default_order_channel: "默认下单渠道",
+  customer_status: "客户状态",
   current_step_index: "当前步序号",
   total_step_count: "总步数",
   distance_traveled_km: "已行驶距离（公里）",
@@ -424,6 +430,15 @@ export const valueDictionary = {
   SKIPPED: "跳过",
   PASS: "通过",
   FAIL: "未通过",
+  INDIVIDUAL: "普通个人客户",
+  BUSINESS: "商务客户",
+  VISITOR: "临时访客",
+  TEST_CUSTOMER: "测试客户",
+  OWN_APP: "自有 App",
+  PARTNER_APP: "外部合作平台",
+  MANUAL_TEST: "后台模拟测试",
+  INACTIVE: "不参与模拟",
+  TEST_ONLY: "仅测试使用",
 };
 
 export function getDisplayValue(value) {
