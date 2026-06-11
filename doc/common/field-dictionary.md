@@ -477,6 +477,35 @@
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |order_matching_strategy_id|订单匹配策略编号|持久化字段|OrderMatchingStrategy 唯一编号|
+|order_matching_run_id|匹配执行记录编号|运行态字段|一次订单匹配策略执行记录|
+|order_matching_decision_id|匹配决策编号|运行态字段|OrderMatchingDecision 唯一编号|
+|matching_algorithm|匹配算法|持久化字段|订单匹配策略使用的算法|
+|candidate_filter_rule|候选筛选规则|持久化字段|候选 Robotaxi 筛选规则|
+|distance_rule|距离计算规则|持久化字段|接驾距离计算规则|
+|battery_rule|电量校验规则|持久化字段|候选车辆最低电量要求|
+|scoring_rule|评分规则|持久化字段|候选车辆排序和评分规则|
+|min_battery_threshold|最低电量阈值|持久化字段|可参与匹配的最低电量百分比|
+|candidate_robotaxi_count|候选车辆数量|运行态字段|进入匹配策略的候选车辆数量|
+|eligible_robotaxi_count|可匹配车辆数量|运行态字段|通过筛选的车辆数量|
+|selected_robotaxi_id|选中 Robotaxi|运行态字段|匹配决策选中的 Robotaxi，可为空|
+|candidate_snapshot|候选车辆快照|运行态字段|本次匹配候选车辆及评分快照|
+|estimated_pickup_distance_km|预估接驾距离（公里）|运行态字段|选中 Robotaxi 到上车点的预估距离|
+|estimated_pickup_duration_min|预估接驾时长（分钟）|运行态字段|选中 Robotaxi 到上车点的预估时间|
+|matching_score|匹配评分|运行态字段|本次匹配决策评分|
+|decision_result|决策结果|运行态字段|OrderMatchingDecision 决策结果|
+|decision_reason|决策说明|运行态字段|本次匹配成功或失败说明|
+
+说明：
+
+- OrderMatchingStrategy 只负责返回匹配结果；
+- 调用方根据 OrderMatchingDecision 更新 ServiceOrder 和 Robotaxi；
+- Trip 创建留到服务履约阶段，不在当前最小匹配闭环中提前实现。
+
+---
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|order_matching_strategy_id|订单匹配策略编号|持久化字段|OrderMatchingStrategy 唯一编号|
 |order_matching_run_id|订单匹配执行记录编号|运行态字段|一次订单匹配策略执行记录|
 |order_matching_decision_id|订单匹配决策编号|运行态字段|OrderMatchingDecision 唯一编号|
 |matching_algorithm|匹配算法|持久化字段|订单匹配策略使用的算法|

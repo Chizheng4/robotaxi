@@ -60,6 +60,8 @@ function createRobotaxis(opsCenter) {
       current_cell_id: opsCenter.cell_ids[index % opsCenter.cell_ids.length],
       current_route_id: null,
       current_task_id: null,
+      current_order_id: null,
+      available_for_dispatch: false,
     });
   });
 }

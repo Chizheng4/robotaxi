@@ -32,15 +32,19 @@ let initializeOperationsCenter;
 let initializeCustomers;
 let initializeDemandSimulation;
 let initializePricing;
+let initializeOrderMatching;
 let validateOperationsCenter;
 let validateCustomers;
 let validateDemandSimulation;
 let validateServiceOrders;
 let validatePricing;
+let validateOrderMatching;
 let runDemandSimulation;
 let runPricingEstimate;
+let runOrderMatching;
 let serviceOrderTypes;
 let pricingTypes;
+let orderMatchingTypes;
 let createCellContext;
 let getDetailTitle;
 let getDisplayValue;
@@ -57,6 +61,8 @@ let demandSimulationRunSequence = 0;
 let serviceOrderSequence = 0;
 let pricingStrategyRunSequence = 0;
 let pricingDecisionSequence = 0;
+let orderMatchingRunSequence = 0;
+let orderMatchingDecisionSequence = 0;
 let eventSequence = 0;
 const unfinishedTaskStatuses = new Set(["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING"]);
 const unfinishedDeploymentStatuses = new Set(["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL"]);
@@ -92,6 +98,19 @@ const pageGroups = [{
     }, {
       key: "pricingDecisions",
       label: "定价决策管理"
+    }]
+  }, {
+    key: "orderMatchingManagement",
+    label: "订单匹配管理",
+    children: [{
+      key: "orderMatchingStrategies",
+      label: "订单匹配策略"
+    }, {
+      key: "orderMatchingRuns",
+      label: "匹配执行管理"
+    }, {
+      key: "orderMatchingDecisions",
+      label: "匹配决策管理"
     }]
   }]
 }, {
@@ -239,8 +258,8 @@ const tableConfig = {
   },
   serviceOrders: {
     title: "服务订单管理",
-    description: "服务订单记录客户发起的出行服务需求，当前阶段只完成订单创建闭环。",
-    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_run_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "estimated_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "payment_status", "created_at"]
+    description: "服务订单记录客户发起的出行服务需求，当前支持创建、定价和车辆匹配。",
+    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_run_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "estimated_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "matched_robotaxi_id", "order_matching_decision_id", "payment_status", "created_at"]
   },
   opsCenters: {
     title: "运营中心管理",
@@ -297,6 +316,21 @@ const tableConfig = {
     description: "记录服务订单使用的价格结果。",
     columns: ["pricing_decision_id", "pricing_result", "pricing_strategy_run_id", "pricing_strategy_id", "service_order_id", "estimated_distance_km", "estimated_duration_min", "base_price", "dynamic_multiplier", "quoted_price", "pricing_stage", "created_at"]
   },
+  orderMatchingStrategies: {
+    title: "订单匹配策略",
+    description: "订单匹配策略定义服务订单如何选择可用 Robotaxi。",
+    columns: ["order_matching_strategy_id", "strategy_name", "strategy_type", "matching_algorithm", "candidate_filter_rule", "distance_rule", "battery_rule", "scoring_rule", "min_battery_threshold", "strategy_status", "order_matching_run_count"]
+  },
+  orderMatchingRuns: {
+    title: "匹配执行管理",
+    description: "记录每次订单匹配策略执行过程。",
+    columns: ["order_matching_run_id", "run_result", "order_matching_strategy_id", "matching_algorithm", "service_order_id", "pickup_cell_id", "candidate_robotaxi_count", "eligible_robotaxi_count", "selected_robotaxi_id", "failure_reason", "created_at"]
+  },
+  orderMatchingDecisions: {
+    title: "匹配决策管理",
+    description: "记录服务订单匹配 Robotaxi 的决策结果。",
+    columns: ["order_matching_decision_id", "decision_result", "order_matching_run_id", "order_matching_strategy_id", "service_order_id", "selected_robotaxi_id", "estimated_pickup_distance_km", "estimated_pickup_duration_min", "matching_score", "failure_reason", "created_at"]
+  },
   serviceFulfillmentRecords: {
     title: "服务履约记录",
     description: "预留给未来 ServiceOrder / Trip 履约过程记录；当前阶段不实现业务数据。",
@@ -305,7 +339,7 @@ const tableConfig = {
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_route_id", "current_route_execution_id", "unavailable_reason"]
+    columns: ["robotaxi_id", "fleet_id", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "available_for_dispatch", "current_route_id", "current_route_execution_id", "unavailable_reason"]
   },
   validations: {
     title: "初始化校验",
@@ -338,6 +372,9 @@ const pageObjectType = {
   pricingStrategies: "pricingStrategy",
   pricingStrategyRuns: "pricingStrategyRun",
   pricingDecisions: "pricingDecision",
+  orderMatchingStrategies: "orderMatchingStrategy",
+  orderMatchingRuns: "orderMatchingRun",
+  orderMatchingDecisions: "orderMatchingDecision",
   serviceFulfillmentRecords: "serviceFulfillmentRecord",
   robotaxis: "robotaxi",
   validations: "validation"
@@ -367,6 +404,9 @@ const idFieldByType = {
   pricingStrategy: "pricing_strategy_id",
   pricingStrategyRun: "pricing_strategy_run_id",
   pricingDecision: "pricing_decision_id",
+  orderMatchingStrategy: "order_matching_strategy_id",
+  orderMatchingRun: "order_matching_run_id",
+  orderMatchingDecision: "order_matching_decision_id",
   serviceFulfillmentRecord: "placeholder",
   robotaxi: "robotaxi_id",
   validation: "rule_id"
@@ -389,6 +429,9 @@ const statusFieldByPage = {
   pricingStrategies: "strategy_status",
   pricingStrategyRuns: "run_result",
   pricingDecisions: "pricing_result",
+  orderMatchingStrategies: "strategy_status",
+  orderMatchingRuns: "run_result",
+  orderMatchingDecisions: "decision_result",
   customers: "customer_status",
   demandSimulationStrategies: "strategy_status",
   serviceOrders: "order_status",
@@ -407,10 +450,11 @@ const deploymentStatusOptions = ["WAITING_ROUTE", "WAITING_START", "MOVING", "AR
 const routeExecutionStatusOptions = ["WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED", "COMPLETED", "FAILED", "CANCELLED"];
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const pricingResultOptions = ["SUCCESS", "FAILED"];
+const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
-const serviceOrderStatusOptions = ["CREATED", "CALCULATING_PRICE", "WAITING_CUSTOMER_CONFIRM", "WAITING_FOR_VEHICLE", "MATCHING_FAILED", "CANCELLED", "COMPLETED", "FAILED"];
+const serviceOrderStatusOptions = ["CREATED", "CALCULATING_PRICE", "WAITING_CUSTOMER_CONFIRM", "WAITING_FOR_VEHICLE", "VEHICLE_ASSIGNED", "MATCH_FAILED", "MATCHING_FAILED", "CANCELLED", "COMPLETED", "FAILED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v019-4-pricing";
+const runtimeStorageKey = "robotaxi.runtime.v019-5-order-matching";
 const defaultPageFilters = {
   keyword: "",
   statusValue: null,
@@ -426,7 +470,8 @@ function App() {
     ...initializeOperationsCenter(),
     ...initializeCustomers(),
     ...initializeDemandSimulation(),
-    ...initializePricing()
+    ...initializePricing(),
+    ...initializeOrderMatching()
   }), []);
   const initialRuntime = useMemo(() => loadRuntimeSnapshot(initialData), [initialData]);
   const [operationalData, setOperationalData] = useState(initialRuntime.operationalData);
@@ -438,6 +483,8 @@ function App() {
   const [serviceOrders, setServiceOrders] = useState(initialRuntime.serviceOrders);
   const [pricingStrategyRuns, setPricingStrategyRuns] = useState(initialRuntime.pricingStrategyRuns);
   const [pricingDecisions, setPricingDecisions] = useState(initialRuntime.pricingDecisions);
+  const [orderMatchingRuns, setOrderMatchingRuns] = useState(initialRuntime.orderMatchingRuns);
+  const [orderMatchingDecisions, setOrderMatchingDecisions] = useState(initialRuntime.orderMatchingDecisions);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const initialValidations = useMemo(() => [...validateMapSpace(initialData), ...validateOperationsCenter(initialData), ...validateCustomers(initialData)], [initialData]);
   const data = useMemo(() => ({
@@ -450,9 +497,11 @@ function App() {
     serviceOrders,
     pricingStrategyRuns,
     pricingDecisions,
+    orderMatchingRuns,
+    orderMatchingDecisions,
     taskEventLogs
-  }), [demandSimulationRuns, deploymentTasks, operationalData, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs]);
-  const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateServiceOrders(data), ...validatePricing(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
+  }), [demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs]);
+  const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateServiceOrders(data), ...validatePricing(data), ...validateOrderMatching(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
@@ -485,10 +534,13 @@ function App() {
     pricingStrategies: createPricingStrategyRows(data, pricingStrategyRuns),
     pricingStrategyRuns,
     pricingDecisions,
+    orderMatchingStrategies: createOrderMatchingStrategyRows(data, orderMatchingRuns),
+    orderMatchingRuns,
+    orderMatchingDecisions,
     serviceFulfillmentRecords: [],
     robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     validations
-  }), [data, demandSimulationRuns, deploymentTasks, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -528,6 +580,9 @@ function App() {
       pricingStrategy: rowsByPage.pricingStrategies,
       pricingStrategyRun: rowsByPage.pricingStrategyRuns,
       pricingDecision: rowsByPage.pricingDecisions,
+      orderMatchingStrategy: rowsByPage.orderMatchingStrategies,
+      orderMatchingRun: rowsByPage.orderMatchingRuns,
+      orderMatchingDecision: rowsByPage.orderMatchingDecisions,
       serviceFulfillmentRecord: rowsByPage.serviceFulfillmentRecords,
       opsCenter: data.opsCenters,
       worker: data.workers,
@@ -575,12 +630,14 @@ function App() {
       serviceOrders,
       pricingStrategyRuns,
       pricingDecisions,
+      orderMatchingRuns,
+      orderMatchingDecisions,
       taskEventLogs,
       activePage,
       pageSelections,
       pageUiState
     });
-  }, [activePage, demandSimulationRuns, deploymentTasks, operationalData, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs]);
+  }, [activePage, demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs]);
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -665,6 +722,8 @@ function App() {
       createDemandSimulationRun,
       createServiceOrderFromDemand,
       estimateServiceOrderPrice,
+      confirmServiceOrder,
+      matchServiceOrder,
       planDeploymentRoute,
       viewRecordDetail,
       viewGeneratedRoute,
@@ -677,7 +736,8 @@ function App() {
       taskEventLogs,
       routePlanningRuns: rowsByPage.routePlanningRuns,
       demandSimulationRuns: rowsByPage.demandSimulationRuns,
-      pricingStrategyRuns: rowsByPage.pricingStrategyRuns
+      pricingStrategyRuns: rowsByPage.pricingStrategyRuns,
+      orderMatchingRuns: rowsByPage.orderMatchingRuns
     }
   })), /*#__PURE__*/React.createElement("aside", {
     className: "detail-rail"
@@ -724,6 +784,8 @@ function App() {
     serviceOrderSequence = 0;
     pricingStrategyRunSequence = 0;
     pricingDecisionSequence = 0;
+    orderMatchingRunSequence = 0;
+    orderMatchingDecisionSequence = 0;
     eventSequence = 0;
     const nextSelection = {
       type: "map",
@@ -738,6 +800,8 @@ function App() {
     setServiceOrders([]);
     setPricingStrategyRuns([]);
     setPricingDecisions([]);
+    setOrderMatchingRuns([]);
+    setOrderMatchingDecisions([]);
     setTaskEventLogs([]);
     setActivePage("console");
     setOpenMenuKeys([]);
@@ -942,6 +1006,7 @@ function App() {
       robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === task.robotaxi_id ? {
         ...robotaxi,
         availability_status: "IN_INSPECTION",
+        available_for_dispatch: false,
         current_task_id: taskId
       } : robotaxi),
       workers: current.workers.map(item => item.worker_id === worker.worker_id ? {
@@ -992,6 +1057,7 @@ function App() {
       robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === task.robotaxi_id ? {
         ...robotaxi,
         availability_status: passed ? "AVAILABLE" : "UNAVAILABLE",
+        available_for_dispatch: passed,
         unavailable_reason: passed ? null : issueType,
         current_task_id: null
       } : robotaxi),
@@ -1160,6 +1226,60 @@ function App() {
       order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_CUSTOMER_CONFIRM,
       failure_reason: null
     } : order));
+    selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
+  }
+  function confirmServiceOrder(serviceOrderId) {
+    const serviceOrder = serviceOrders.find(item => item.service_order_id === serviceOrderId);
+    if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_CUSTOMER_CONFIRM) return;
+    setServiceOrders(items => items.map(order => order.service_order_id === serviceOrderId ? {
+      ...order,
+      order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_FOR_VEHICLE,
+      confirmed_at: now(),
+      failure_reason: null
+    } : order));
+    selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
+  }
+  function matchServiceOrder(serviceOrderId) {
+    const serviceOrder = serviceOrders.find(item => item.service_order_id === serviceOrderId);
+    if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_FOR_VEHICLE) return;
+    const strategy = data.orderMatchingStrategies?.find(item => item.order_matching_strategy_id === "OMS-001");
+    const result = runOrderMatching({
+      strategy,
+      serviceOrder,
+      data,
+      orderMatchingRunId: nextOrderMatchingRunId(),
+      orderMatchingDecisionId: nextOrderMatchingDecisionId(),
+      createdAt: now()
+    });
+    setOrderMatchingRuns(items => [result.run, ...items]);
+    setOrderMatchingDecisions(items => [result.decision, ...items]);
+    if (!result.decision || result.decision.decision_result !== orderMatchingTypes.OrderMatchingResult.SUCCESS) {
+      setServiceOrders(items => items.map(order => order.service_order_id === serviceOrderId ? {
+        ...order,
+        order_matching_decision_id: result.decision?.order_matching_decision_id || null,
+        order_status: serviceOrderTypes.ServiceOrderStatus.MATCH_FAILED,
+        failure_reason: result.run.failure_reason
+      } : order));
+      selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
+      return;
+    }
+    const selectedRobotaxiId = result.decision.selected_robotaxi_id;
+    setServiceOrders(items => items.map(order => order.service_order_id === serviceOrderId ? {
+      ...order,
+      matched_robotaxi_id: selectedRobotaxiId,
+      order_matching_decision_id: result.decision.order_matching_decision_id,
+      order_status: serviceOrderTypes.ServiceOrderStatus.VEHICLE_ASSIGNED,
+      matched_at: now(),
+      failure_reason: null
+    } : order));
+    setOperationalData(current => ({
+      ...current,
+      robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === selectedRobotaxiId ? {
+        ...robotaxi,
+        current_order_id: serviceOrderId,
+        available_for_dispatch: false
+      } : robotaxi)
+    }));
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
   function planDeploymentRoute(taskId) {
@@ -1675,8 +1795,10 @@ function RecordTable({
   const isServiceOrderPage = page === "serviceOrders";
   const isPricingPage = page === "pricingStrategies";
   const isPricingRunPage = page === "pricingStrategyRuns";
+  const isOrderMatchingPage = page === "orderMatchingStrategies";
+  const isOrderMatchingRunPage = page === "orderMatchingRuns";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage || isDemandSimulationPage || isPricingPage;
+  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage || isDemandSimulationPage || isPricingPage || isOrderMatchingPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -1704,9 +1826,9 @@ function RecordTable({
   }));
   const actionColumn = getActionColumn();
   const finalColumns = actionColumn ? [...columns, actionColumn] : columns;
-  const eventRows = isDemandSimulationPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : actions.taskEventLogs;
-  const eventColumns = isDemandSimulationPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isDemandSimulationPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : "event_id";
+  const eventRows = isDemandSimulationPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventColumns = isDemandSimulationPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isDemandSimulationPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
   return /*#__PURE__*/React.createElement("section", {
@@ -1834,7 +1956,7 @@ function RecordTable({
     title: "\u62D6\u52A8\u8C03\u6574\u4E8B\u4EF6\u533A\u9AD8\u5EA6"
   }), /*#__PURE__*/React.createElement("div", {
     className: "event-log-title"
-  }, isDemandSimulationPage ? "需求模拟执行记录" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
+  }, isDemandSimulationPage ? "需求模拟执行记录" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: eventRowKey,
     columns: eventColumns.map(key => ({
@@ -1971,7 +2093,7 @@ function RecordTable({
         })
       };
     }
-    if (isPricingRunPage) {
+    if (isPricingRunPage || isOrderMatchingRunPage) {
       return {
         key: "actions",
         title: "操作",
@@ -2152,7 +2274,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "task",
       label: "任务状态",
-      keys: ["current_task_id", "current_task_type", "current_task_status", "current_route_id"]
+      keys: ["current_task_id", "current_task_type", "current_task_status", "current_order_id", "current_route_id"]
     }, {
       key: "location",
       label: "位置上下文",
@@ -2569,6 +2691,16 @@ function renderServiceOrderActions(row, actions) {
       onClick: () => actions.estimateServiceOrderPrice(row.service_order_id)
     }, "\u4EF7\u683C\u9884\u4F30");
   }
+  if (row.order_status === "WAITING_CUSTOMER_CONFIRM") {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.confirmServiceOrder(row.service_order_id)
+    }, "\u5BA2\u6237\u786E\u8BA4");
+  }
+  if (row.order_status === "WAITING_FOR_VEHICLE") {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.matchServiceOrder(row.service_order_id)
+    }, "\u8BA2\u5355\u5339\u914D");
+  }
   return renderViewDetailAction(row, actions);
 }
 function renderAbnormalArrivalModalBody(execution, data, abnormalArrivalType, setAbnormalArrivalType) {
@@ -2733,7 +2865,7 @@ function summarizeRecord(record) {
   return Object.entries(record).slice(0, 3).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`).join("，");
 }
 function isStatusField(key) {
-  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "customer_status", "order_status", "payment_status"].includes(key);
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "payment_status"].includes(key);
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";
@@ -2787,22 +2919,26 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, demandSimulationEngine, pricingEngine, serviceOrderTypeModule, pricingTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260611-v019-3-service-order"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./domain/serviceOrderTypes.js?v=20260611-v019-3-service-order"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260611-v019-4-pricing"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260611-v019-3-service-order"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260611-v019-3-service-order"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260611-v019-5-order-matching"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
   initializeCustomers = customerInitialization.initializeCustomers;
   initializeDemandSimulation = demandSimulationInitialization.initializeDemandSimulation;
   initializePricing = pricingInitialization.initializePricing;
+  initializeOrderMatching = orderMatchingInitialization.initializeOrderMatching;
   validateOperationsCenter = operationsCenterValidation.validateOperationsCenter;
   validateCustomers = customerValidation.validateCustomers;
   validateDemandSimulation = demandSimulationValidation.validateDemandSimulation;
   validateServiceOrders = serviceOrderValidation.validateServiceOrders;
   validatePricing = pricingValidation.validatePricing;
+  validateOrderMatching = orderMatchingValidation.validateOrderMatching;
   runDemandSimulation = demandSimulationEngine.runDemandSimulation;
   runPricingEstimate = pricingEngine.runPricingEstimate;
+  runOrderMatching = orderMatchingEngine.runOrderMatching;
   serviceOrderTypes = serviceOrderTypeModule;
   pricingTypes = pricingTypeModule;
+  orderMatchingTypes = orderMatchingTypeModule;
   createCellContext = cellContext.createCellContext;
   getDetailTitle = fieldDictionary.getDetailTitle;
   getDisplayValue = fieldDictionary.getDisplayValue;
@@ -2820,7 +2956,7 @@ function isCandidateRobotaxi(robotaxi, tasks) {
   return robotaxi.availability_status === "PENDING_INSPECTION" && !tasks.some(task => task.robotaxi_id === robotaxi.robotaxi_id && unfinishedTaskStatuses.has(task.task_status));
 }
 function isDeploymentCandidateRobotaxi(robotaxi, deploymentTasks) {
-  return robotaxi.availability_status === "AVAILABLE" && !deploymentTasks.some(task => task.robotaxi_id === robotaxi.robotaxi_id && unfinishedDeploymentStatuses.has(task.task_status));
+  return robotaxi.availability_status === "AVAILABLE" && !robotaxi.current_order_id && !deploymentTasks.some(task => task.robotaxi_id === robotaxi.robotaxi_id && unfinishedDeploymentStatuses.has(task.task_status));
 }
 function getDefaultDeploymentTarget(data) {
   const serviceArea = data.serviceAreas.find(area => area.service_area_id === "SA-006") || data.serviceAreas.find(area => area.vehicle_capabilities?.can_stage || area.vehicle_capabilities?.can_short_wait);
@@ -3117,6 +3253,18 @@ function createPricingStrategyRows(data, pricingStrategyRuns) {
     pricing_strategy_run_count: runCountByStrategyId.get(strategy.pricing_strategy_id) || 0
   }));
 }
+function createOrderMatchingStrategyRows(data, orderMatchingRuns) {
+  const runCountByStrategyId = new Map();
+  orderMatchingRuns.forEach(run => {
+    const strategyId = run.order_matching_strategy_id;
+    if (!strategyId) return;
+    runCountByStrategyId.set(strategyId, (runCountByStrategyId.get(strategyId) || 0) + 1);
+  });
+  return (data.orderMatchingStrategies || []).map(strategy => ({
+    ...strategy,
+    order_matching_run_count: runCountByStrategyId.get(strategy.order_matching_strategy_id) || 0
+  }));
+}
 function createRoutePlanningRun(options) {
   return taskTypes.createRoutePlanningRun({
     route_planning_run_id: options.routePlanningRunId || nextRoutePlanningRunId(),
@@ -3325,6 +3473,14 @@ function nextPricingDecisionId() {
   pricingDecisionSequence += 1;
   return `PD-${String(pricingDecisionSequence).padStart(3, "0")}`;
 }
+function nextOrderMatchingRunId() {
+  orderMatchingRunSequence += 1;
+  return `OMR-${String(orderMatchingRunSequence).padStart(3, "0")}`;
+}
+function nextOrderMatchingDecisionId() {
+  orderMatchingDecisionSequence += 1;
+  return `OMD-${String(orderMatchingDecisionSequence).padStart(3, "0")}`;
+}
 function nextEventId() {
   eventSequence += 1;
   return `EVT-${String(eventSequence).padStart(3, "0")}`;
@@ -3364,6 +3520,8 @@ function loadRuntimeSnapshot(initialData) {
     serviceOrders: [],
     pricingStrategyRuns: [],
     pricingDecisions: [],
+    orderMatchingRuns: [],
+    orderMatchingDecisions: [],
     taskEventLogs: [],
     activePage: "console",
     pageSelections: {
@@ -3387,6 +3545,8 @@ function loadRuntimeSnapshot(initialData) {
     const serviceOrders = Array.isArray(snapshot.serviceOrders) ? snapshot.serviceOrders : [];
     const pricingStrategyRuns = Array.isArray(snapshot.pricingStrategyRuns) ? snapshot.pricingStrategyRuns : [];
     const pricingDecisions = Array.isArray(snapshot.pricingDecisions) ? snapshot.pricingDecisions : [];
+    const orderMatchingRuns = Array.isArray(snapshot.orderMatchingRuns) ? snapshot.orderMatchingRuns : [];
+    const orderMatchingDecisions = Array.isArray(snapshot.orderMatchingDecisions) ? snapshot.orderMatchingDecisions : [];
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
@@ -3397,6 +3557,8 @@ function loadRuntimeSnapshot(initialData) {
     serviceOrderSequence = deriveSequence(serviceOrders, "service_order_id", "SO-");
     pricingStrategyRunSequence = deriveSequence(pricingStrategyRuns, "pricing_strategy_run_id", "DPR-");
     pricingDecisionSequence = deriveSequence(pricingDecisions, "pricing_decision_id", "PD-");
+    orderMatchingRunSequence = deriveSequence(orderMatchingRuns, "order_matching_run_id", "OMR-");
+    orderMatchingDecisionSequence = deriveSequence(orderMatchingDecisions, "order_matching_decision_id", "OMD-");
     deploymentRouteSequence = deriveSequence(operationalData.routes || [], "route_id", "DRT-");
     eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
     return {
@@ -3409,6 +3571,8 @@ function loadRuntimeSnapshot(initialData) {
       serviceOrders,
       pricingStrategyRuns,
       pricingDecisions,
+      orderMatchingRuns,
+      orderMatchingDecisions,
       taskEventLogs,
       activePage: snapshot.activePage || "console",
       pageSelections: {
@@ -3451,6 +3615,8 @@ function saveRuntimeSnapshot(snapshot) {
       serviceOrderSequence,
       pricingStrategyRunSequence,
       pricingDecisionSequence,
+      orderMatchingRunSequence,
+      orderMatchingDecisionSequence,
       eventSequence
     }));
   } catch (error) {
@@ -3481,6 +3647,8 @@ function getOrderedStatusValues(page) {
   if (page === "routePlanningRuns") return routePlanningResultOptions;
   if (page === "pricingStrategyRuns") return pricingResultOptions;
   if (page === "pricingDecisions") return pricingResultOptions;
+  if (page === "orderMatchingRuns") return orderMatchingResultOptions;
+  if (page === "orderMatchingDecisions") return orderMatchingResultOptions;
   if (page === "customers") return customerStatusOptions;
   if (page === "serviceOrders") return serviceOrderStatusOptions;
   return [];

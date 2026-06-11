@@ -50,6 +50,7 @@ export function validateOperationsCenter(data) {
     check("ROBOTAXI_PENDING_INSPECTION", "每台 Robotaxi 初始状态必须为待运维检查", data.robotaxis.every((robotaxi) => robotaxi.availability_status === AvailabilityStatus.PENDING_INSPECTION)),
     check("ROBOTAXI_PARKED", "每台 Robotaxi 初始运动状态必须为停车中", data.robotaxis.every((robotaxi) => robotaxi.motion_status === MotionStatus.PARKED)),
     check("ROBOTAXI_NO_INITIAL_TASK", "每台 Robotaxi 初始 current_task_id 必须为空", data.robotaxis.every((robotaxi) => robotaxi.current_task_id === null)),
+    check("ROBOTAXI_NO_INITIAL_ORDER", "每台 Robotaxi 初始 current_order_id 必须为空", data.robotaxis.every((robotaxi) => robotaxi.current_order_id === null)),
     check("ROBOTAXI_NO_INITIAL_ROUTE", "每台 Robotaxi 初始 current_route_id 必须为空", data.robotaxis.every((robotaxi) => robotaxi.current_route_id === null)),
     check(
       "ROBOTAXI_RANGE_CALCULATION",
