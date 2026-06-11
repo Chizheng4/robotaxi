@@ -447,6 +447,7 @@
 |pricing_strategy_run_id|定价策略执行记录编号|运行态字段|一次定价策略执行记录|
 |pricing_decision_id|定价决策编号|运行态字段|PricingDecision 唯一编号|
 |pricing_algorithm|定价算法|持久化字段|定价策略使用的算法|
+|strategy_type|策略类型|持久化字段|定价策略类型|
 |base_fare|起步价|持久化字段|基础起步价|
 |distance_unit_price|距离单价|持久化字段|每公里价格|
 |time_unit_price|时间单价|持久化字段|每分钟价格|
@@ -455,6 +456,10 @@
 |service_area_multiplier|区域系数|运行态字段|不同服务区价格系数|
 |channel_multiplier|渠道系数|运行态字段|不同订单渠道价格系数|
 |pricing_stage|定价阶段|运行态字段|预估或最终结算|
+|input_snapshot|输入快照|运行态字段|本次定价策略执行输入|
+|output_snapshot|输出快照|运行态字段|本次定价策略执行输出|
+|run_result|执行结果|运行态字段|PricingStrategyRun 执行结果|
+|pricing_result|定价结果|运行态字段|PricingDecision 定价结果|
 |base_price|基础价格|运行态字段|起步价、距离费和时间费合计|
 |distance_fee|距离费用|运行态字段|根据距离计算的费用|
 |time_fee|时间费用|运行态字段|根据时间计算的费用|

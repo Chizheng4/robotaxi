@@ -2,6 +2,18 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v019.4
+
+核心：实现基础定价决策闭环。
+
+- 新增 PricingStrategy、PricingStrategyRun、PricingDecision 类型、初始化策略、定价引擎和校验规则。
+- 在 `运营决策中心` 下新增 `定价管理`，包含定价策略、定价执行管理、定价决策管理。
+- 初始化 `DPS-001` 基础动态定价策略，使用 `BASIC_RULE_BASED_DYNAMIC_PRICING`。
+- 服务订单在 `订单已创建` 状态下支持 `价格预估` 操作。
+- 价格预估生成 PricingStrategyRun 与 PricingDecision，并把报价、预估距离、预估时长、价格说明和定价决策编号写回 ServiceOrder。
+- 定价成功后 ServiceOrder 进入 `等待客户确认`，不生成正式可执行 Route，不改变 Robotaxi 或 Trip。
+- 补齐定价相关字段和值的中文展示，并更新统一字段字典。
+
 ## v019.3
 
 核心：实现 ServiceOrder 创建闭环。
