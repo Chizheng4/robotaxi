@@ -2,6 +2,17 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v019.7
+
+核心：让 Trip 服务履约接入路径规划。
+
+- 新增 `RPS-003` 服务订单接驾路径规划策略和 `RPS-004` 服务订单载客路径规划策略。
+- Trip 执行 `开始接驾` 时生成接驾 Route 与 RoutePlanningRun，并写入 Trip 当前路径和路径历史。
+- Trip 执行 `开始载客` 时生成载客 Route 与 RoutePlanningRun，并写入 Trip 当前路径和路径历史。
+- Route、RoutePlanningRun 支持反查 ServiceOrder 与 Trip，Route 管理页可查看服务履约相关路径。
+- Trip 校验增加 Route、RoutePlanningRun、route_history 策略一致性和路径起终点校验。
+- Route 详情和 Trip 详情补充服务订单、Trip、路径摘要和路径详情展示。
+
 ## v019.6
 
 核心：实现 Trip 服务履约最小闭环。

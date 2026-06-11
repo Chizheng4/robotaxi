@@ -78,6 +78,8 @@ export const ArrivalExecutionResult = {
 export const RoutePlanningStrategy = {
   INITIAL_DEPLOYMENT: "RPS-001",
   ABNORMAL_SAME_SERVICE_AREA: "RPS-002",
+  SERVICE_ORDER_PICKUP: "RPS-003",
+  SERVICE_ORDER_DESTINATION: "RPS-004",
 };
 
 export const RoutePlanningAlgorithm = {
@@ -106,6 +108,8 @@ export const RoutePlanningFailureReason = {
 export const RouteChangeReason = {
   INITIAL_PLANNING: "INITIAL_PLANNING",
   ABNORMAL_ARRIVAL_REPLAN: "ABNORMAL_ARRIVAL_REPLAN",
+  SERVICE_ORDER_PICKUP_PLANNING: "SERVICE_ORDER_PICKUP_PLANNING",
+  SERVICE_ORDER_DESTINATION_PLANNING: "SERVICE_ORDER_DESTINATION_PLANNING",
 };
 
 export const DeploymentFailureReason = {
