@@ -1,1 +1,4 @@
 .obsidian/
+
+# Robotaxi server logs
+.robotaxi-server.log
