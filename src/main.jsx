@@ -455,9 +455,9 @@ const routeExecutionStatusOptions = [
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
-const tripStatusOptions = ["PENDING", "ASSIGNED", "ON_THE_WAY_PICKUP", "ARRIVED_PICKUP", "PASSENGER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "COMPLETED", "FAILED", "CANCELLED"];
+const tripStatusOptions = ["PENDING", "ASSIGNED", "ON_THE_WAY_PICKUP", "ARRIVED_PICKUP", "PASSENGER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "WAITING_OPERATION_DECISION", "COMPLETED", "FAILED", "CANCELLED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
-const serviceOrderStatusOptions = ["CREATED", "CALCULATING_PRICE", "WAITING_CUSTOMER_CONFIRM", "WAITING_FOR_VEHICLE", "VEHICLE_ASSIGNED", "VEHICLE_ON_THE_WAY_TO_PICKUP", "WAITING_PASSENGER_BOARDING", "PASSENGER_ONBOARD", "ON_THE_WAY_TO_DESTINATION", "ARRIVED_DESTINATION", "MATCH_FAILED", "MATCHING_FAILED", "CANCELLED", "COMPLETED", "FAILED"];
+const serviceOrderStatusOptions = ["CREATED", "CALCULATING_PRICE", "WAITING_CUSTOMER_CONFIRM", "WAITING_FOR_VEHICLE", "VEHICLE_ASSIGNED", "VEHICLE_ON_THE_WAY_TO_PICKUP", "WAITING_PASSENGER_BOARDING", "PASSENGER_ONBOARD", "ON_THE_WAY_TO_DESTINATION", "ARRIVED_DESTINATION", "WAITING_OPERATION_DECISION", "MATCH_FAILED", "MATCHING_FAILED", "CANCELLED", "COMPLETED", "FAILED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
 const runtimeStorageKey = "robotaxi.runtime.v019-7-service-route";
 const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null };
@@ -736,6 +736,8 @@ function App() {
                   createTripForOrder,
                   viewTripForServiceOrder,
                   advanceTrip,
+                  replanTripDestination,
+                  replanTripRouteException,
                   planDeploymentRoute,
                   viewRecordDetail,
                   viewGeneratedRoute,
@@ -1364,6 +1366,7 @@ function App() {
       trip_status: tripTypes.TripStatus.PENDING,
       trip_phase: tripTypes.TripPhase.PICKUP,
       arrival_execution_result: null,
+      exception_type: null,
       route_id: null,
       route_planning_run_id: null,
       route_history: [],
@@ -1399,6 +1402,63 @@ function App() {
     }));
     setServiceOrders((items) => items.map((order) => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, nextTrip) : order));
     selectForPage("serviceFulfillmentRecords", "trip", tripId);
+  }
+
+  function replanTripDestination(tripId) {
+    const trip = trips.find((item) => item.trip_id === tripId);
+    if (!trip || trip.trip_status !== tripTypes.TripStatus.ON_THE_WAY_DESTINATION) return;
+    const target = getAlternativeServiceOrderDestination(data, trip);
+    const result = replanTripRoute(trip, {
+      targetCellId: target?.target_cell_id || null,
+      targetServiceAreaId: target?.target_service_area_id || null,
+      strategyId: taskTypes.RoutePlanningStrategy.SERVICE_ORDER_DESTINATION_CHANGE,
+      routeChangeReason: taskTypes.RouteChangeReason.DESTINATION_CHANGE_REPLAN,
+      exceptionType: "DESTINATION_CHANGE_REPLAN",
+      failureReason: target ? null : taskTypes.RoutePlanningFailureReason.NO_AVAILABLE_TARGET_CELL,
+    });
+    applyTripReplanResult(trip, result);
+  }
+
+  function replanTripRouteException(tripId) {
+    const trip = trips.find((item) => item.trip_id === tripId);
+    if (!trip || ![tripTypes.TripStatus.ON_THE_WAY_PICKUP, tripTypes.TripStatus.ON_THE_WAY_DESTINATION].includes(trip.trip_status)) return;
+    const isPickupPhase = trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP;
+    const result = replanTripRoute(trip, {
+      targetCellId: isPickupPhase ? trip.pickup_cell_id : trip.dropoff_cell_id,
+      targetServiceAreaId: isPickupPhase ? trip.pickup_service_area_id : trip.dropoff_service_area_id,
+      strategyId: taskTypes.RoutePlanningStrategy.SERVICE_ROUTE_EXCEPTION_REPLAN,
+      routeChangeReason: taskTypes.RouteChangeReason.SERVICE_ROUTE_EXCEPTION_REPLAN,
+      exceptionType: "SERVICE_ROUTE_EXCEPTION_REPLAN",
+      failureReason: null,
+    });
+    applyTripReplanResult(trip, result);
+  }
+
+  function applyTripReplanResult(trip, result) {
+    setRoutePlanningRuns((items) => [result.routePlanningRun, ...items]);
+    if (result.route) {
+      setOperationalData((current) => ({
+        ...current,
+        routes: [result.route, ...current.routes],
+        robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === trip.robotaxi_id ? {
+          ...robotaxi,
+          current_route_id: result.route.route_id,
+          motion_status: "MOVING",
+          current_order_id: trip.service_order_id,
+          available_for_dispatch: false,
+        } : robotaxi),
+      }));
+      setTrips((items) => items.map((item) => item.trip_id === trip.trip_id ? result.nextTrip : item));
+      setServiceOrders((items) => items.map((order) => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, result.nextTrip) : order));
+    } else {
+      setTrips((items) => items.map((item) => item.trip_id === trip.trip_id ? result.waitingTrip : item));
+      setServiceOrders((items) => items.map((order) => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, result.waitingTrip) : order));
+      setOperationalData((current) => ({
+        ...current,
+        robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, result.waitingTrip) : robotaxi),
+      }));
+    }
+    selectForPage("serviceFulfillmentRecords", "trip", trip.trip_id);
   }
 
   function planDeploymentRoute(taskId) {
@@ -2430,7 +2490,7 @@ function getDetailTabs(selectedType) {
     return [
       { key: "basic", label: "履约信息", keys: ["trip_id", "trip_status", "trip_phase", "service_order_id", "robotaxi_id", "created_at"] },
       { key: "location", label: "服务位置", keys: ["pickup_service_area_id", "pickup_cell_id", "pickup_location_summary", "pickup_location_detail", "dropoff_service_area_id", "dropoff_cell_id", "dropoff_location_summary", "dropoff_location_detail", "current_cell_id", "current_location_summary", "current_location_detail"] },
-      { key: "progress", label: "履约进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result"] },
+      { key: "progress", label: "履约进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"] },
       { key: "route", label: "路径关联", keys: ["route_id", "route_planning_run_id", "route_summary", "route_detail", "route_history"] },
       { key: "time", label: "状态时间", keys: ["started_at", "completed_at", "failure_reason", "event_log"] },
     ];
@@ -2739,12 +2799,27 @@ function renderTripActions(row, actions) {
   const actionLabelByStatus = {
     PENDING: "开始接驾",
     ASSIGNED: "开始接驾",
-    ON_THE_WAY_PICKUP: "到达上车点",
     ARRIVED_PICKUP: "乘客上车",
     PASSENGER_ONBOARD: "开始载客",
-    ON_THE_WAY_DESTINATION: "到达目的地",
     ARRIVED_DESTINATION: "完成服务",
   };
+  if (row.trip_status === "ON_THE_WAY_PICKUP") {
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => actions.advanceTrip(row.trip_id)}>到达上车点</RowActionButton>
+        <RowActionButton type="default" danger onClick={() => actions.replanTripRouteException(row.trip_id)}>路径异常</RowActionButton>
+      </RowActionGroup>
+    );
+  }
+  if (row.trip_status === "ON_THE_WAY_DESTINATION") {
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => actions.advanceTrip(row.trip_id)}>到达目的地</RowActionButton>
+        <RowActionButton type="default" onClick={() => actions.replanTripDestination(row.trip_id)}>变更目的地</RowActionButton>
+        <RowActionButton type="default" danger onClick={() => actions.replanTripRouteException(row.trip_id)}>路径异常</RowActionButton>
+      </RowActionGroup>
+    );
+  }
   const label = actionLabelByStatus[row.trip_status];
   if (label) {
     return <RowActionButton onClick={() => actions.advanceTrip(row.trip_id)}>{label}</RowActionButton>;
@@ -3067,19 +3142,19 @@ async function bootstrap() {
     import("./data/serviceOrderValidation.js?v=20260611-v019-6-trip"),
     import("./data/pricingValidation.js?v=20260611-v019-4-pricing"),
     import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"),
-    import("./data/tripValidation.js?v=20260611-v019-7-service-route"),
+    import("./data/tripValidation.js?v=20260611-v019-8-trip-exception"),
     import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"),
     import("./data/pricingEngine.js?v=20260611-v019-4-pricing"),
     import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"),
-    import("./domain/serviceOrderTypes.js?v=20260611-v019-6-trip"),
+    import("./domain/serviceOrderTypes.js?v=20260611-v019-8-trip-exception"),
     import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"),
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
-    import("./domain/tripTypes.js?v=20260611-v019-7-service-route"),
+    import("./domain/tripTypes.js?v=20260611-v019-8-trip-exception"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/fieldDictionary.js?v=20260611-v019-7-service-route"),
+    import("./domain/fieldDictionary.js?v=20260611-v019-8-trip-exception"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/taskTypes.js?v=20260611-v019-7-service-route"),
+    import("./domain/taskTypes.js?v=20260611-v019-8-trip-exception"),
   ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -3241,6 +3316,33 @@ function getAlternativeDeploymentTarget(data, serviceAreaId, excludedCellIds = [
     target_service_area_id: serviceArea.service_area_id,
     target_zone_id: data.zones.find((zone) => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null,
   };
+}
+
+function getAlternativeServiceOrderDestination(data, trip) {
+  const excluded = new Set([
+    trip.current_cell_id,
+    trip.pickup_cell_id,
+    trip.dropoff_cell_id,
+    ...(Array.isArray(trip.route_history) ? trip.route_history.map((history) => history.target_cell_id) : []),
+  ].filter(Boolean));
+  const sameServiceArea = data.serviceAreas.find((area) => area.service_area_id === trip.dropoff_service_area_id);
+  const sameAreaCell = (sameServiceArea?.dropoff_cell_ids || []).find((cellId) => !excluded.has(cellId));
+  if (sameAreaCell) {
+    return {
+      target_cell_id: sameAreaCell,
+      target_service_area_id: sameServiceArea.service_area_id,
+    };
+  }
+  for (const serviceArea of data.serviceAreas) {
+    const targetCellId = (serviceArea.dropoff_cell_ids || []).find((cellId) => !excluded.has(cellId));
+    if (targetCellId) {
+      return {
+        target_cell_id: targetCellId,
+        target_service_area_id: serviceArea.service_area_id,
+      };
+    }
+  }
+  return null;
 }
 
 function getCandidateServiceAreaCellIds(serviceArea) {
@@ -3477,6 +3579,32 @@ function createRoutePlanningStrategyRows(data, routePlanningRuns) {
       service_area_scope_rule: "目标限制为订单下车服务区",
       route_generation_rule: "基于上车位置、下车位置和 BFS 网格图搜索生成载客路径步骤",
       route_update_rule: "创建服务载客路径，并写入 Trip 当前 Route 与 route_history",
+      strategy_status: "Active",
+    },
+    {
+      route_strategy_id: "RPS-005",
+      strategy_name: "服务订单目的地变更重规划策略",
+      strategy_type: "DESTINATION_CHANGE_REPLAN",
+      planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
+      trigger_task_status: "ON_THE_WAY_DESTINATION",
+      origin_rule: "使用 Robotaxi 当前所在位置",
+      target_rule: "选择新的下车位置，优先同服务区可下车点",
+      service_area_scope_rule: "优先订单当前下车服务区，必要时扩展到其他服务区",
+      route_generation_rule: "基于当前位置、新目的地和 BFS 网格图搜索生成新的载客路径步骤",
+      route_update_rule: "创建新服务路径，更新 Trip 当前目标位置与 route_history",
+      strategy_status: "Active",
+    },
+    {
+      route_strategy_id: "RPS-006",
+      strategy_name: "服务路径异常重规划策略",
+      strategy_type: "SERVICE_ROUTE_EXCEPTION_REPLAN",
+      planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
+      trigger_task_status: "ON_THE_WAY_DESTINATION",
+      origin_rule: "使用 Robotaxi 当前异常位置",
+      target_rule: "继续使用 Trip 当前下车位置",
+      service_area_scope_rule: "不改变订单当前下车服务区",
+      route_generation_rule: "基于异常位置、当前目的地和 BFS 网格图搜索重新生成服务路径步骤",
+      route_update_rule: "创建新服务路径并追加 Trip route_history",
       strategy_status: "Active",
     },
   ].map((strategy) => ({
@@ -3897,6 +4025,103 @@ function createTripRouteUpdate(trip, nextTrip, data) {
   };
 }
 
+function replanTripRoute(trip, options) {
+  const routePlanningRunId = nextRoutePlanningRunId();
+  if (!options.targetCellId) {
+    const routePlanningRun = createRoutePlanningRun({
+      routePlanningRunId,
+      routeStrategyId: options.strategyId,
+      planningAlgorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
+      taskId: null,
+      serviceOrderId: trip.service_order_id,
+      tripId: trip.trip_id,
+      routeExecutionId: null,
+      robotaxiId: trip.robotaxi_id,
+      originCellId: trip.current_cell_id,
+      targetCellId: null,
+      resultRouteId: null,
+      planningResult: taskTypes.RoutePlanningResult.FAILED,
+      failureReason: options.failureReason || taskTypes.RoutePlanningFailureReason.NO_AVAILABLE_TARGET_CELL,
+    });
+    return {
+      routePlanningRun,
+      waitingTrip: createWaitingDecisionTrip(trip, options, routePlanningRun.failure_reason),
+    };
+  }
+
+  const route = createTripRoute(trip, data, {
+    originCellId: trip.current_cell_id,
+    targetCellId: options.targetCellId,
+    targetServiceAreaId: options.targetServiceAreaId,
+    strategyId: options.strategyId,
+    routePlanningRunId,
+  });
+  const routePlanningRun = createRoutePlanningRun({
+    routePlanningRunId,
+    routeStrategyId: route.route_strategy_id,
+    planningAlgorithm: route.planning_algorithm,
+    taskId: null,
+    serviceOrderId: trip.service_order_id,
+    tripId: trip.trip_id,
+    routeExecutionId: null,
+    robotaxiId: trip.robotaxi_id,
+    originCellId: route.origin_cell_id,
+    targetCellId: route.target_cell_id,
+    resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
+    planningResult: route.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
+    failureReason: route.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : route.failure_reason,
+  });
+  if (route.route_steps.length === 0) {
+    return {
+      routePlanningRun,
+      waitingTrip: createWaitingDecisionTrip(trip, options, route.failure_reason),
+    };
+  }
+
+  const routeHistory = [
+    ...(Array.isArray(trip.route_history) ? trip.route_history : []),
+    createRouteHistoryEntry(route, options.routeChangeReason, options.exceptionType),
+  ];
+  return {
+    route,
+    routePlanningRun,
+    nextTrip: {
+      ...trip,
+      route_id: route.route_id,
+      route_planning_run_id: routePlanningRun.route_planning_run_id,
+      route_history: routeHistory,
+      dropoff_cell_id: options.routeChangeReason === taskTypes.RouteChangeReason.DESTINATION_CHANGE_REPLAN ? options.targetCellId : trip.dropoff_cell_id,
+      dropoff_service_area_id: options.routeChangeReason === taskTypes.RouteChangeReason.DESTINATION_CHANGE_REPLAN ? options.targetServiceAreaId : trip.dropoff_service_area_id,
+      current_step_index: 0,
+      total_step_count: Math.max(0, route.route_steps.length - 1),
+      distance_remaining_km: route.total_distance_m / 1000,
+      arrival_execution_result: options.exceptionType,
+      exception_type: options.exceptionType,
+      failure_reason: null,
+    },
+  };
+}
+
+function createWaitingDecisionTrip(trip, options, failureReason) {
+  return {
+    ...trip,
+    trip_status: tripTypes.TripStatus.WAITING_OPERATION_DECISION,
+    arrival_execution_result: options.exceptionType || null,
+    exception_type: options.exceptionType || null,
+    failure_reason: failureReason,
+    event_log: [
+      ...(Array.isArray(trip.event_log) ? trip.event_log : []),
+      {
+        event_time: now(),
+        previous_status: trip.trip_status,
+        next_status: tripTypes.TripStatus.WAITING_OPERATION_DECISION,
+        event_type: options.exceptionType || "ROUTE_PLANNING_FAILED",
+        event_result: taskTypes.RoutePlanningResult.FAILED,
+      },
+    ],
+  };
+}
+
 function getTripRouteRequest(trip) {
   if (["PENDING", "ASSIGNED"].includes(trip.trip_status)) {
     return {
@@ -3922,13 +4147,14 @@ function getTripRouteRequest(trip) {
 function updateRobotaxiForTrip(robotaxi, trip) {
   const movingStatuses = ["ON_THE_WAY_PICKUP", "ON_THE_WAY_DESTINATION"];
   const completed = trip.trip_status === "COMPLETED";
+  const waitingDecision = trip.trip_status === "WAITING_OPERATION_DECISION";
   return {
     ...robotaxi,
     current_cell_id: trip.current_cell_id || robotaxi.current_cell_id,
     current_route_id: completed ? null : trip.route_id || robotaxi.current_route_id,
     current_order_id: completed ? null : trip.service_order_id,
     availability_status: completed ? "AVAILABLE" : robotaxi.availability_status,
-    motion_status: completed ? "STOPPED" : movingStatuses.includes(trip.trip_status) ? "MOVING" : "STOPPED",
+    motion_status: completed || waitingDecision ? "STOPPED" : movingStatuses.includes(trip.trip_status) ? "MOVING" : "STOPPED",
     available_for_dispatch: completed,
   };
 }
@@ -3940,6 +4166,7 @@ function updateServiceOrderForTrip(order, trip) {
     PASSENGER_ONBOARD: "PASSENGER_ONBOARD",
     ON_THE_WAY_DESTINATION: "ON_THE_WAY_TO_DESTINATION",
     ARRIVED_DESTINATION: "ARRIVED_DESTINATION",
+    WAITING_OPERATION_DECISION: "WAITING_OPERATION_DECISION",
     COMPLETED: "COMPLETED",
   };
   const nextOrderStatus = statusByTripStatus[trip.trip_status] || order.order_status;

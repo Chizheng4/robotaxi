@@ -421,6 +421,7 @@
 |trip_status|服务履约状态|运行态字段|Trip 当前状态|
 |trip_phase|服务履约阶段|运行态字段|路径规划或异常处理时使用的 Trip 阶段表达|
 |arrival_execution_result|到达执行结果|运行态字段|目的地到达后的执行结果，可为空|
+|exception_type|异常类型|运行态字段|服务履约异常或重规划触发原因，可为空|
 |route_id|路径编号|运行态字段|Trip 当前引用 Route，可为空|
 |route_planning_run_id|路径规划执行记录编号|运行态字段|Trip 当前引用路径规划执行记录，可为空|
 |route_history|路径历史|运行态字段|Trip 履约过程中的路径历史，可为空数组|
@@ -676,11 +677,14 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ABNORMAL_ARRIVAL_REPLAN|异常到达后重新规划|
 |SERVICE_ORDER_PICKUP_PLANNING|服务订单接驾路径规划|
 |SERVICE_ORDER_DESTINATION_PLANNING|服务订单载客路径规划|
+|DESTINATION_CHANGE_REPLAN|目的地变更重规划|
+|SERVICE_ROUTE_EXCEPTION_REPLAN|服务路径异常重规划|
 |ROUTE_BLOCKED_REPLAN|路径阻塞后重新规划|
 |INITIAL_DEPLOYMENT_ROUTE|初始运营投放路径|
 |ABNORMAL_ARRIVAL_SAME_SERVICE_AREA_REPLAN|异常到达同服务区替代路径|
 |SERVICE_ORDER_PICKUP_ROUTE|服务订单接驾路径|
 |SERVICE_ORDER_DESTINATION_ROUTE|服务订单载客路径|
+|WAITING_OPERATION_DECISION|等待运营决策|
 |BFS_CELL_GRAPH|BFS 网格图搜索|
 |INDIVIDUAL|普通个人客户|
 |BUSINESS|商务客户|
@@ -729,8 +733,6 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |NO_AVAILABLE_DROPOFF_CELL|没有可用下车点|
 |BASIC_RULE_BASED_DYNAMIC_PRICING|基础规则动态定价|
 |BASIC_NEAREST_AVAILABLE_ROBOTAXI|最近可用 Robotaxi 匹配|
-|DESTINATION_CHANGE_REPLAN|目的地变更重规划|
-|SERVICE_ROUTE_EXCEPTION_REPLAN|服务路径异常重规划|
 
 ---
 
