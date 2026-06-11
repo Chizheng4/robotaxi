@@ -133,7 +133,7 @@ Trip
 2. 支持创建自有平台服务订单；
 3. 支持创建外部平台服务订单；
 4. 调用需求模拟策略生成订单上下文；
-5. ServiceOrder 进入创建、计价中、等待客户确认等状态；
+5. ServiceOrder 创建后进入 `CREATED`，计价中和等待客户确认留给 v019.4 定价阶段触发；
 6. 订单详情展示客户、上车位置、下车位置、来源渠道。
 
 不做：
@@ -369,12 +369,12 @@ v019.x.2
 ## 8. 当前执行指针
 
 ```text
-current_iteration = v019.3
-current_goal = ServiceOrder 创建闭环
-current_status = v019.2_completed_waiting_auto_continue
+current_iteration = v019.4
+current_goal = 定价决策
+current_status = v019.3_completed_waiting_auto_continue
 ```
 
-`v019.1 Customer 基础` 和 `v019.2 需求模拟策略` 已完成，下一步自动执行从 `v019.3 ServiceOrder 创建闭环` 开始。
+`v019.1 Customer 基础`、`v019.2 需求模拟策略` 和 `v019.3 ServiceOrder 创建闭环` 已完成，下一步自动执行从 `v019.4 定价决策` 开始。
 
 ---
 

@@ -34,7 +34,9 @@ let initializeDemandSimulation;
 let validateOperationsCenter;
 let validateCustomers;
 let validateDemandSimulation;
+let validateServiceOrders;
 let runDemandSimulation;
+let serviceOrderTypes;
 let createCellContext;
 let getDetailTitle;
 let getDisplayValue;
@@ -48,6 +50,7 @@ let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
 let routePlanningRunSequence = 0;
 let demandSimulationRunSequence = 0;
+let serviceOrderSequence = 0;
 let eventSequence = 0;
 const unfinishedTaskStatuses = new Set(["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING"]);
 const unfinishedDeploymentStatuses = new Set(["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL"]);
@@ -81,6 +84,9 @@ const pageGroups = [{
   }, {
     key: "demandSimulationStrategies",
     label: "需求模拟策略"
+  }, {
+    key: "serviceOrders",
+    label: "服务订单管理"
   }]
 }, {
   key: "opsCenter",
@@ -212,6 +218,11 @@ const tableConfig = {
     description: "记录每次需求模拟策略执行结果。",
     columns: ["demand_simulation_run_id", "simulation_result", "demand_simulation_strategy_id", "order_channel", "customer_id", "customer_origin_location_type", "customer_origin_cell_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "failure_reason", "created_at"]
   },
+  serviceOrders: {
+    title: "服务订单管理",
+    description: "服务订单记录客户发起的出行服务需求，当前阶段只完成订单创建闭环。",
+    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_run_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "payment_status", "created_at"]
+  },
   opsCenters: {
     title: "运营中心管理",
     description: "运营中心是 Robotaxi 进入运营闭环的供给侧设施。",
@@ -281,6 +292,7 @@ const pageObjectType = {
   customers: "customer",
   demandSimulationStrategies: "demandSimulationStrategy",
   demandSimulationRuns: "demandSimulationRun",
+  serviceOrders: "serviceOrder",
   opsCenters: "opsCenter",
   workers: "worker",
   readinessTasks: "readinessTask",
@@ -306,6 +318,7 @@ const idFieldByType = {
   customer: "customer_id",
   demandSimulationStrategy: "demand_simulation_strategy_id",
   demandSimulationRun: "demand_simulation_run_id",
+  serviceOrder: "service_order_id",
   opsCenter: "ops_center_id",
   worker: "worker_id",
   readinessTask: "task_id",
@@ -335,6 +348,7 @@ const statusFieldByPage = {
   routePlanningRuns: "planning_result",
   customers: "customer_status",
   demandSimulationStrategies: "strategy_status",
+  serviceOrders: "order_status",
   robotaxis: "availability_status",
   validations: "result"
 };
@@ -350,8 +364,9 @@ const deploymentStatusOptions = ["WAITING_ROUTE", "WAITING_START", "MOVING", "AR
 const routeExecutionStatusOptions = ["WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED", "COMPLETED", "FAILED", "CANCELLED"];
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
+const serviceOrderStatusOptions = ["CREATED", "CALCULATING_PRICE", "WAITING_CUSTOMER_CONFIRM", "WAITING_FOR_VEHICLE", "MATCHING_FAILED", "CANCELLED", "COMPLETED", "FAILED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v019-2-demand-simulation";
+const runtimeStorageKey = "robotaxi.runtime.v019-3-service-order";
 const defaultPageFilters = {
   keyword: "",
   statusValue: null,
@@ -375,6 +390,7 @@ function App() {
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
   const [demandSimulationRuns, setDemandSimulationRuns] = useState(initialRuntime.demandSimulationRuns);
+  const [serviceOrders, setServiceOrders] = useState(initialRuntime.serviceOrders);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const initialValidations = useMemo(() => [...validateMapSpace(initialData), ...validateOperationsCenter(initialData), ...validateCustomers(initialData)], [initialData]);
   const data = useMemo(() => ({
@@ -384,9 +400,10 @@ function App() {
     routeExecutions,
     routePlanningRuns,
     demandSimulationRuns,
+    serviceOrders,
     taskEventLogs
-  }), [demandSimulationRuns, deploymentTasks, operationalData, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs]);
-  const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
+  }), [demandSimulationRuns, deploymentTasks, operationalData, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs]);
+  const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateServiceOrders(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
@@ -407,6 +424,7 @@ function App() {
     customers: data.customers || [],
     demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
     demandSimulationRuns,
+    serviceOrders,
     opsCenters: data.opsCenters,
     workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks,
@@ -418,7 +436,7 @@ function App() {
     serviceFulfillmentRecords: [],
     robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     validations
-  }), [data, demandSimulationRuns, deploymentTasks, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -452,6 +470,7 @@ function App() {
       customer: data.customers || [],
       demandSimulationStrategy: rowsByPage.demandSimulationStrategies,
       demandSimulationRun: rowsByPage.demandSimulationRuns,
+      serviceOrder: rowsByPage.serviceOrders,
       routePlanningStrategy: rowsByPage.routePlanningStrategies,
       routePlanningRun: rowsByPage.routePlanningRuns,
       serviceFulfillmentRecord: rowsByPage.serviceFulfillmentRecords,
@@ -498,12 +517,13 @@ function App() {
       routeExecutions,
       routePlanningRuns,
       demandSimulationRuns,
+      serviceOrders,
       taskEventLogs,
       activePage,
       pageSelections,
       pageUiState
     });
-  }, [activePage, demandSimulationRuns, deploymentTasks, operationalData, pageSelections, pageUiState, readinessTasks, routeExecutions, routePlanningRuns, taskEventLogs]);
+  }, [activePage, demandSimulationRuns, deploymentTasks, operationalData, pageSelections, pageUiState, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs]);
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -586,6 +606,7 @@ function App() {
       submitCheckResult,
       createDeploymentTasks,
       createDemandSimulationRun,
+      createServiceOrderFromDemand,
       planDeploymentRoute,
       viewRecordDetail,
       viewGeneratedRoute,
@@ -641,6 +662,7 @@ function App() {
     deploymentRouteSequence = 0;
     routePlanningRunSequence = 0;
     demandSimulationRunSequence = 0;
+    serviceOrderSequence = 0;
     eventSequence = 0;
     const nextSelection = {
       type: "map",
@@ -652,6 +674,7 @@ function App() {
     setRouteExecutions([]);
     setRoutePlanningRuns([]);
     setDemandSimulationRuns([]);
+    setServiceOrders([]);
     setTaskEventLogs([]);
     setActivePage("console");
     setOpenMenuKeys([]);
@@ -985,6 +1008,60 @@ function App() {
     });
     setDemandSimulationRuns(items => [run, ...items]);
     selectForPage("demandSimulationStrategies", "demandSimulationStrategy", strategy.demand_simulation_strategy_id);
+  }
+  function createServiceOrderFromDemand(orderChannel) {
+    const strategy = data.demandSimulationStrategies?.find(item => item.demand_simulation_strategy_id === "DSS-001");
+    if (!strategy || strategy.strategy_status !== "ACTIVE") return;
+    const run = runDemandSimulation({
+      strategy,
+      data,
+      orderChannel,
+      runId: nextDemandSimulationRunId(),
+      randomSeed: `SO-${Date.now()}-${serviceOrders.length + 1}`,
+      createdAt: now()
+    });
+    setDemandSimulationRuns(items => [run, ...items]);
+    if (run.simulation_result !== "SUCCESS") return;
+    const order = serviceOrderTypes.createServiceOrder({
+      service_order_id: nextServiceOrderId(),
+      order_channel: orderChannel,
+      customer_id: run.customer_id,
+      demand_simulation_run_id: run.demand_simulation_run_id,
+      customer_origin_location_type: run.customer_origin_location_type,
+      customer_origin_place_id: run.customer_origin_place_id,
+      customer_origin_road_segment_id: run.customer_origin_road_segment_id,
+      customer_origin_cell_id: run.customer_origin_cell_id,
+      pickup_service_area_id: run.pickup_service_area_id,
+      pickup_cell_id: run.pickup_cell_id,
+      dropoff_service_area_id: run.dropoff_service_area_id,
+      dropoff_cell_id: run.dropoff_cell_id,
+      estimated_pricing_decision_id: null,
+      final_pricing_decision_id: null,
+      estimated_distance_km: null,
+      estimated_duration_min: null,
+      estimated_price: null,
+      quoted_price: null,
+      actual_distance_km: null,
+      actual_duration_min: null,
+      final_price: null,
+      payment_status: serviceOrderTypes.PaymentStatus.NOT_REQUIRED,
+      paid_amount: 0,
+      payment_completed_at: null,
+      pricing_explanation: "等待定价决策",
+      pricing_breakdown_snapshot: null,
+      order_status: serviceOrderTypes.ServiceOrderStatus.CREATED,
+      matched_robotaxi_id: null,
+      order_matching_decision_id: null,
+      trip_id: null,
+      created_at: now(),
+      confirmed_at: null,
+      matched_at: null,
+      completed_at: null,
+      cancelled_at: null,
+      failure_reason: null
+    });
+    setServiceOrders(items => [order, ...items]);
+    selectForPage("serviceOrders", "serviceOrder", order.service_order_id);
   }
   function planDeploymentRoute(taskId) {
     const task = deploymentTasks.find(item => item.task_id === taskId);
@@ -1496,6 +1573,7 @@ function RecordTable({
   const isRoutePlanningPage = page === "routePlanningStrategies";
   const isRoutePlanningRunPage = page === "routePlanningRuns";
   const isDemandSimulationPage = page === "demandSimulationStrategies";
+  const isServiceOrderPage = page === "serviceOrders";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
   const hasEventPanel = isTaskOperationPage || isRoutePlanningPage || isDemandSimulationPage;
   const config = tableConfig[page];
@@ -1617,7 +1695,16 @@ function RecordTable({
     size: "small",
     type: "primary",
     onClick: actions.createDemandSimulationRun
-  }, "\u751F\u6210\u6A21\u62DF\u9700\u6C42")), /*#__PURE__*/React.createElement(Table, {
+  }, "\u751F\u6210\u6A21\u62DF\u9700\u6C42")), isServiceOrderPage && /*#__PURE__*/React.createElement("div", {
+    className: "list-action-bar"
+  }, /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    type: "primary",
+    onClick: () => actions.createServiceOrderFromDemand("OWN_APP_SIMULATED_ORDER")
+  }, "\u521B\u5EFA\u81EA\u6709\u5E73\u53F0\u670D\u52A1\u8BA2\u5355"), /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    onClick: () => actions.createServiceOrderFromDemand("PARTNER_APP_SIMULATED_ORDER")
+  }, "\u521B\u5EFA\u5916\u90E8\u5E73\u53F0\u670D\u52A1\u8BA2\u5355")), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: idField,
     columns: finalColumns,
@@ -1769,6 +1856,20 @@ function RecordTable({
         })
       };
     }
+    if (isServiceOrderPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 120,
+        render: (_, row) => renderViewDetailAction(row, {
+          ...actions,
+          page,
+          objectType,
+          idField
+        })
+      };
+    }
     return null;
   }
   function openAbnormalModal(task) {
@@ -1846,7 +1947,7 @@ function ModuleFooter({
   appliedFilters
 }) {
   const hasFilter = appliedFilters && (appliedFilters.keyword || appliedFilters.statusValue || appliedFilters.triggerType);
-  if (["readinessTasks", "deploymentTasks", "routeExecutions", "routePlanningStrategies", "routePlanningRuns", "demandSimulationStrategies"].includes(page)) {
+  if (["readinessTasks", "deploymentTasks", "routeExecutions", "routePlanningStrategies", "routePlanningRuns", "demandSimulationStrategies", "serviceOrders"].includes(page)) {
     return /*#__PURE__*/React.createElement("div", {
       className: "module-footer"
     }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u663E\u793A ", displayCount, " / \u5168\u90E8 ", totalCount), eventCount !== null && /*#__PURE__*/React.createElement("span", null, "\u4E8B\u4EF6 ", eventCount), /*#__PURE__*/React.createElement("span", null, hasFilter ? "已应用筛选条件" : "未应用筛选"));
@@ -1900,7 +2001,7 @@ function DetailPanel({
   }));
 }
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution", "serviceOrder"].includes(selectedType);
 }
 function TabbedDetail({
   selectedObject,
@@ -2025,6 +2126,29 @@ function getDetailTabs(selectedType) {
       key: "progress",
       label: "执行进度",
       keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent", "started_at", "completed_at", "failure_reason"]
+    }];
+  }
+  if (selectedType === "serviceOrder") {
+    return [{
+      key: "basic",
+      label: "订单信息",
+      keys: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_run_id", "payment_status", "created_at"]
+    }, {
+      key: "location",
+      label: "需求位置",
+      keys: ["customer_origin_location_type", "customer_origin_place_id", "customer_origin_road_segment_id", "customer_origin_cell_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id"]
+    }, {
+      key: "pricing",
+      label: "定价信息",
+      keys: ["estimated_pricing_decision_id", "final_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "estimated_price", "quoted_price", "pricing_explanation", "pricing_breakdown_snapshot"]
+    }, {
+      key: "matching",
+      label: "匹配履约",
+      keys: ["matched_robotaxi_id", "order_matching_decision_id", "trip_id", "actual_distance_km", "actual_duration_min", "final_price", "paid_amount"]
+    }, {
+      key: "time",
+      label: "状态时间",
+      keys: ["confirmed_at", "matched_at", "completed_at", "cancelled_at", "payment_completed_at", "failure_reason"]
     }];
   }
   return [];
@@ -2486,7 +2610,7 @@ function summarizeRecord(record) {
   return Object.entries(record).slice(0, 3).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`).join("，");
 }
 function isStatusField(key) {
-  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "customer_status"].includes(key);
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "customer_status", "order_status", "payment_status"].includes(key);
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";
@@ -2494,6 +2618,8 @@ function getStatusDisplayValue(key, value, row = null) {
   if (key === "customer_status" && value === "TEST_ONLY") return "仅测试使用";
   if (key === "customer_status" && value === "INACTIVE") return "不参与订单模拟";
   if (key === "customer_status" && value === "BLOCKED") return "被限制下单";
+  if (key === "order_status" && value === "FAILED") return "订单失败";
+  if (key === "payment_status" && value === "FAILED") return "支付失败";
   if (value === "WAITING_START" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution")) return "等待行驶";
   if (value === "WAITING_START" && isDeploymentLike(row)) return "等待行驶";
   if (value === "MOVING" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution" || isDeploymentLike(row))) return "行驶中";
@@ -2538,7 +2664,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, demandSimulationEngine, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260608-v018-bfs-route-planning"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, demandSimulationEngine, serviceOrderTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260611-v019-3-service-order"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./domain/serviceOrderTypes.js?v=20260611-v019-3-service-order"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260611-v019-3-service-order"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -2547,7 +2673,9 @@ async function bootstrap() {
   validateOperationsCenter = operationsCenterValidation.validateOperationsCenter;
   validateCustomers = customerValidation.validateCustomers;
   validateDemandSimulation = demandSimulationValidation.validateDemandSimulation;
+  validateServiceOrders = serviceOrderValidation.validateServiceOrders;
   runDemandSimulation = demandSimulationEngine.runDemandSimulation;
+  serviceOrderTypes = serviceOrderTypeModule;
   createCellContext = cellContext.createCellContext;
   getDetailTitle = fieldDictionary.getDetailTitle;
   getDisplayValue = fieldDictionary.getDisplayValue;
@@ -3045,6 +3173,10 @@ function nextDemandSimulationRunId() {
   demandSimulationRunSequence += 1;
   return `DSR-${String(demandSimulationRunSequence).padStart(3, "0")}`;
 }
+function nextServiceOrderId() {
+  serviceOrderSequence += 1;
+  return `SO-${String(serviceOrderSequence).padStart(3, "0")}`;
+}
 function nextEventId() {
   eventSequence += 1;
   return `EVT-${String(eventSequence).padStart(3, "0")}`;
@@ -3081,6 +3213,7 @@ function loadRuntimeSnapshot(initialData) {
     routeExecutions: [],
     routePlanningRuns: [],
     demandSimulationRuns: [],
+    serviceOrders: [],
     taskEventLogs: [],
     activePage: "console",
     pageSelections: {
@@ -3101,6 +3234,7 @@ function loadRuntimeSnapshot(initialData) {
     const routeExecutions = normalizeRouteStrategyReferences(Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : []);
     const routePlanningRuns = normalizeRouteStrategyReferences(Array.isArray(snapshot.routePlanningRuns) ? snapshot.routePlanningRuns : []);
     const demandSimulationRuns = Array.isArray(snapshot.demandSimulationRuns) ? snapshot.demandSimulationRuns : [];
+    const serviceOrders = Array.isArray(snapshot.serviceOrders) ? snapshot.serviceOrders : [];
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
@@ -3108,6 +3242,7 @@ function loadRuntimeSnapshot(initialData) {
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
     routePlanningRunSequence = deriveSequence(routePlanningRuns, "route_planning_run_id", "RPR-");
     demandSimulationRunSequence = deriveSequence(demandSimulationRuns, "demand_simulation_run_id", "DSR-");
+    serviceOrderSequence = deriveSequence(serviceOrders, "service_order_id", "SO-");
     deploymentRouteSequence = deriveSequence(operationalData.routes || [], "route_id", "DRT-");
     eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
     return {
@@ -3117,6 +3252,7 @@ function loadRuntimeSnapshot(initialData) {
       routeExecutions,
       routePlanningRuns,
       demandSimulationRuns,
+      serviceOrders,
       taskEventLogs,
       activePage: snapshot.activePage || "console",
       pageSelections: {
@@ -3156,6 +3292,7 @@ function saveRuntimeSnapshot(snapshot) {
       taskSequence,
       routePlanningRunSequence,
       demandSimulationRunSequence,
+      serviceOrderSequence,
       eventSequence
     }));
   } catch (error) {
@@ -3185,6 +3322,7 @@ function getOrderedStatusValues(page) {
   if (page === "routeExecutions") return routeExecutionStatusOptions;
   if (page === "routePlanningRuns") return routePlanningResultOptions;
   if (page === "customers") return customerStatusOptions;
+  if (page === "serviceOrders") return serviceOrderStatusOptions;
   return [];
 }
 function createStatusOptions(rows, statusField, orderedValues = [], statusContext = null) {

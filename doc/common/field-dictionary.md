@@ -357,6 +357,7 @@
 |service_order_id|服务订单编号|持久化字段|ServiceOrder 唯一编号|
 |order_channel|订单来源|持久化字段|服务订单来源渠道|
 |customer_id|客户编号|持久化字段|关联 Customer|
+|demand_simulation_run_id|需求模拟执行记录编号|运行态字段|创建该 ServiceOrder 时使用的 DemandSimulationRun|
 |customer_origin_location_type|客户需求位置类型|运行态字段|本次订单创建时客户发起需求的位置类型|
 |customer_origin_place_id|客户需求地点|运行态字段|本次订单客户位置关联 Place，可为空|
 |customer_origin_road_segment_id|客户需求道路片段|运行态字段|本次订单客户位置关联 RoadSegment，可为空|
@@ -382,6 +383,7 @@
 |order_status|订单状态|运行态字段|客户服务订单当前状态|
 |matched_robotaxi_id|匹配 Robotaxi|运行态字段|已匹配车辆，可为空|
 |order_matching_decision_id|订单匹配决策编号|运行态字段|关联 OrderMatchingDecision，可为空|
+|trip_id|服务履约记录编号|运行态字段|关联 Trip，可为空|
 |confirmed_at|客户确认时间|运行态字段|客户确认叫车时间|
 |matched_at|匹配时间|运行态字段|车辆匹配成功时间|
 |cancelled_at|取消时间|运行态字段|订单取消时间，可为空|
