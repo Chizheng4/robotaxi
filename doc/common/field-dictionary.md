@@ -399,13 +399,31 @@
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
-|current_step_index|当前路径步骤|运行态字段|当前执行到 Route 的 Step 下标|
-|total_step_count|路径总步骤数|运行态字段|当前 Route 总 Step 数|
+|trip_id|服务履约记录编号|运行态字段|Trip 唯一编号|
+|service_order_id|服务订单编号|运行态字段|Trip 关联的 ServiceOrder|
+|robotaxi_id|Robotaxi 编号|运行态字段|执行服务履约的 Robotaxi|
+|pickup_service_area_id|上车服务区|运行态字段|服务履约上车 ServiceArea|
+|pickup_cell_id|上车位置|运行态字段|服务履约上车 Cell|
+|dropoff_service_area_id|下车服务区|运行态字段|服务履约下车 ServiceArea|
+|dropoff_cell_id|下车位置|运行态字段|服务履约下车 Cell|
+|current_cell_id|当前所在网格|运行态字段|Robotaxi 当前履约位置 Cell|
+|pickup_location_summary|上车位置摘要|聚合展示字段|上车位置的结构化摘要|
+|dropoff_location_summary|下车位置摘要|聚合展示字段|下车位置的结构化摘要|
+|current_location_summary|当前位置摘要|聚合展示字段|当前位置的结构化摘要|
+|pickup_location_detail|上车位置详情|聚合展示字段|上车位置的结构化上下文|
+|dropoff_location_detail|下车位置详情|聚合展示字段|下车位置的结构化上下文|
+|current_location_detail|当前位置详情|聚合展示字段|当前位置的结构化上下文|
+|current_step_index|当前步序号|运行态字段|当前执行到 Route 的 Step 下标|
+|total_step_count|总步数|运行态字段|当前 Route 总 Step 数|
 |distance_traveled_km|已行驶距离（公里）|运行态字段|服务履约已行驶距离|
 |distance_remaining_km|剩余距离（公里）|运行态字段|当前 Route 剩余距离|
 |time_elapsed|已耗时|运行态字段|服务履约已耗时|
 |trip_status|服务履约状态|运行态字段|Trip 当前状态|
 |trip_phase|服务履约阶段|运行态字段|路径规划或异常处理时使用的 Trip 阶段表达|
+|arrival_execution_result|到达执行结果|运行态字段|目的地到达后的执行结果，可为空|
+|route_id|路径编号|运行态字段|Trip 当前引用 Route，可为空|
+|route_planning_run_id|路径规划执行记录编号|运行态字段|Trip 当前引用路径规划执行记录，可为空|
+|route_history|路径历史|运行态字段|Trip 履约过程中的路径历史，可为空数组|
 |started_at|开始时间|运行态字段|服务履约开始时间|
 |completed_at|完成时间|运行态字段|服务履约完成时间|
 |event_log|事件记录|运行态字段|服务履约事件数组|
@@ -499,7 +517,7 @@
 
 - OrderMatchingStrategy 只负责返回匹配结果；
 - 调用方根据 OrderMatchingDecision 更新 ServiceOrder 和 Robotaxi；
-- Trip 创建留到服务履约阶段，不在当前最小匹配闭环中提前实现。
+- 匹配成功后由服务履约流程创建 Trip，并由 Trip 后续反馈 ServiceOrder 与 Robotaxi 状态。
 
 ---
 

@@ -16,12 +16,14 @@ let validateDemandSimulation;
 let validateServiceOrders;
 let validatePricing;
 let validateOrderMatching;
+let validateTrips;
 let runDemandSimulation;
 let runPricingEstimate;
 let runOrderMatching;
 let serviceOrderTypes;
 let pricingTypes;
 let orderMatchingTypes;
+let tripTypes;
 let createCellContext;
 let getDetailTitle;
 let getDisplayValue;
@@ -40,6 +42,7 @@ let pricingStrategyRunSequence = 0;
 let pricingDecisionSequence = 0;
 let orderMatchingRunSequence = 0;
 let orderMatchingDecisionSequence = 0;
+let tripSequence = 0;
 let eventSequence = 0;
 
 const unfinishedTaskStatuses = new Set([
@@ -285,8 +288,8 @@ const tableConfig = {
   },
   serviceFulfillmentRecords: {
     title: "服务履约记录",
-    description: "预留给未来 ServiceOrder / Trip 履约过程记录；当前阶段不实现业务数据。",
-    columns: ["placeholder"],
+    description: "服务履约记录用于模拟 Robotaxi 执行客户服务订单的接驾、载客和完成过程。",
+    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "route_id", "created_at"],
   },
   robotaxis: {
     title: "Robotaxi 管理",
@@ -328,7 +331,7 @@ const pageObjectType = {
   orderMatchingStrategies: "orderMatchingStrategy",
   orderMatchingRuns: "orderMatchingRun",
   orderMatchingDecisions: "orderMatchingDecision",
-  serviceFulfillmentRecords: "serviceFulfillmentRecord",
+  serviceFulfillmentRecords: "trip",
   robotaxis: "robotaxi",
   validations: "validation",
 };
@@ -361,7 +364,7 @@ const idFieldByType = {
   orderMatchingStrategy: "order_matching_strategy_id",
   orderMatchingRun: "order_matching_run_id",
   orderMatchingDecision: "order_matching_decision_id",
-  serviceFulfillmentRecord: "placeholder",
+  trip: "trip_id",
   robotaxi: "robotaxi_id",
   validation: "rule_id",
 };
@@ -387,6 +390,7 @@ const statusFieldByPage = {
   orderMatchingStrategies: "strategy_status",
   orderMatchingRuns: "run_result",
   orderMatchingDecisions: "decision_result",
+  serviceFulfillmentRecords: "trip_status",
   customers: "customer_status",
   demandSimulationStrategies: "strategy_status",
   serviceOrders: "order_status",
@@ -450,10 +454,11 @@ const routeExecutionStatusOptions = [
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
+const tripStatusOptions = ["PENDING", "ASSIGNED", "ON_THE_WAY_PICKUP", "ARRIVED_PICKUP", "PASSENGER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "COMPLETED", "FAILED", "CANCELLED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
-const serviceOrderStatusOptions = ["CREATED", "CALCULATING_PRICE", "WAITING_CUSTOMER_CONFIRM", "WAITING_FOR_VEHICLE", "VEHICLE_ASSIGNED", "MATCH_FAILED", "MATCHING_FAILED", "CANCELLED", "COMPLETED", "FAILED"];
+const serviceOrderStatusOptions = ["CREATED", "CALCULATING_PRICE", "WAITING_CUSTOMER_CONFIRM", "WAITING_FOR_VEHICLE", "VEHICLE_ASSIGNED", "VEHICLE_ON_THE_WAY_TO_PICKUP", "WAITING_PASSENGER_BOARDING", "PASSENGER_ONBOARD", "ON_THE_WAY_TO_DESTINATION", "ARRIVED_DESTINATION", "MATCH_FAILED", "MATCHING_FAILED", "CANCELLED", "COMPLETED", "FAILED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
-const runtimeStorageKey = "robotaxi.runtime.v019-5-order-matching";
+const runtimeStorageKey = "robotaxi.runtime.v019-6-trip";
 const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null };
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
@@ -481,6 +486,7 @@ function App() {
   const [pricingDecisions, setPricingDecisions] = useState(initialRuntime.pricingDecisions);
   const [orderMatchingRuns, setOrderMatchingRuns] = useState(initialRuntime.orderMatchingRuns);
   const [orderMatchingDecisions, setOrderMatchingDecisions] = useState(initialRuntime.orderMatchingDecisions);
+  const [trips, setTrips] = useState(initialRuntime.trips);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const initialValidations = useMemo(() => [
     ...validateMapSpace(initialData),
@@ -499,14 +505,16 @@ function App() {
     pricingDecisions,
     orderMatchingRuns,
     orderMatchingDecisions,
+    trips,
     taskEventLogs,
-  }), [demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs]);
+  }), [demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips]);
   const validations = useMemo(() => [
     ...initialValidations,
     ...validateDemandSimulation(data),
     ...validateServiceOrders(data),
     ...validatePricing(data),
     ...validateOrderMatching(data),
+    ...validateTrips(data),
     ...validateReadinessCheckTasks(data),
     ...validateDeploymentTasks(data),
   ], [data, initialValidations]);
@@ -546,10 +554,10 @@ function App() {
     orderMatchingStrategies: createOrderMatchingStrategyRows(data, orderMatchingRuns),
     orderMatchingRuns,
     orderMatchingDecisions,
-    serviceFulfillmentRecords: [],
+    serviceFulfillmentRecords: trips.map((trip) => enrichTripForDisplay(trip, data)),
     robotaxis: data.robotaxis.map((robotaxi) => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     validations,
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -598,7 +606,7 @@ function App() {
       orderMatchingStrategy: rowsByPage.orderMatchingStrategies,
       orderMatchingRun: rowsByPage.orderMatchingRuns,
       orderMatchingDecision: rowsByPage.orderMatchingDecisions,
-      serviceFulfillmentRecord: rowsByPage.serviceFulfillmentRecords,
+      trip: rowsByPage.serviceFulfillmentRecords,
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: readinessTasks,
@@ -646,12 +654,13 @@ function App() {
       pricingDecisions,
       orderMatchingRuns,
       orderMatchingDecisions,
+      trips,
       taskEventLogs,
       activePage,
       pageSelections,
       pageUiState,
     });
-  }, [activePage, demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs]);
+  }, [activePage, demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips]);
 
   return (
     <Layout className="ops-shell">
@@ -723,6 +732,9 @@ function App() {
                   estimateServiceOrderPrice,
                   confirmServiceOrder,
                   matchServiceOrder,
+                  createTripForOrder,
+                  viewTripForServiceOrder,
+                  advanceTrip,
                   planDeploymentRoute,
                   viewRecordDetail,
                   viewGeneratedRoute,
@@ -792,6 +804,7 @@ function App() {
     pricingDecisionSequence = 0;
     orderMatchingRunSequence = 0;
     orderMatchingDecisionSequence = 0;
+    tripSequence = 0;
     eventSequence = 0;
     const nextSelection = { type: "map", id: initialData.maps[0].map_id };
     setOperationalData(initialData);
@@ -805,6 +818,7 @@ function App() {
     setPricingDecisions([]);
     setOrderMatchingRuns([]);
     setOrderMatchingDecisions([]);
+    setTrips([]);
     setTaskEventLogs([]);
     setActivePage("console");
     setOpenMenuKeys([]);
@@ -1279,6 +1293,12 @@ function App() {
       matched_at: now(),
       failure_reason: null,
     } : order));
+    const trip = createTripRecord({ serviceOrder, robotaxiId: selectedRobotaxiId });
+    setTrips((items) => [trip, ...items]);
+    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
+      ...order,
+      trip_id: trip.trip_id,
+    } : order));
     setOperationalData((current) => ({
       ...current,
       robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === selectedRobotaxiId ? {
@@ -1288,6 +1308,83 @@ function App() {
       } : robotaxi),
     }));
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
+  }
+
+  function createTripForOrder(serviceOrderId) {
+    const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
+    if (!serviceOrder || serviceOrder.trip_id || !serviceOrder.matched_robotaxi_id) return;
+    const trip = createTripRecord({ serviceOrder, robotaxiId: serviceOrder.matched_robotaxi_id });
+    setTrips((items) => [trip, ...items]);
+    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
+      ...order,
+      trip_id: trip.trip_id,
+    } : order));
+    selectForPage("serviceFulfillmentRecords", "trip", trip.trip_id);
+  }
+
+  function viewTripForServiceOrder(serviceOrder) {
+    const trip = trips.find((item) =>
+      item.trip_id === serviceOrder.trip_id ||
+      item.service_order_id === serviceOrder.service_order_id
+    );
+    if (!trip) {
+      viewRecordDetail("serviceOrders", "serviceOrder", serviceOrder.service_order_id);
+      return;
+    }
+    const nextFilters = { keyword: trip.trip_id, statusValue: null, triggerType: null };
+    const nextSelection = { type: "trip", id: trip.trip_id };
+    setActivePage("serviceFulfillmentRecords");
+    setOpenMenuKeys(getOpenKeysForPage("serviceFulfillmentRecords"));
+    setSelected(nextSelection);
+    setDetailCollapsed(false);
+    setPageSelections((current) => ({ ...current, serviceFulfillmentRecords: nextSelection }));
+    setPageUiState((current) => ({
+      ...current,
+      serviceFulfillmentRecords: { filters: nextFilters, appliedFilters: nextFilters },
+    }));
+  }
+
+  function createTripRecord({ serviceOrder, robotaxiId }) {
+    return tripTypes.createTrip({
+      trip_id: nextTripId(),
+      service_order_id: serviceOrder.service_order_id,
+      robotaxi_id: robotaxiId,
+      pickup_cell_id: serviceOrder.pickup_cell_id,
+      pickup_service_area_id: serviceOrder.pickup_service_area_id,
+      dropoff_cell_id: serviceOrder.dropoff_cell_id,
+      dropoff_service_area_id: serviceOrder.dropoff_service_area_id,
+      current_cell_id: data.robotaxis.find((robotaxi) => robotaxi.robotaxi_id === robotaxiId)?.current_cell_id || serviceOrder.pickup_cell_id,
+      current_step_index: 0,
+      total_step_count: 0,
+      distance_traveled_km: 0,
+      distance_remaining_km: serviceOrder.estimated_distance_km || 0,
+      time_elapsed: "0",
+      trip_status: tripTypes.TripStatus.PENDING,
+      trip_phase: tripTypes.TripPhase.PICKUP,
+      arrival_execution_result: null,
+      route_id: null,
+      route_planning_run_id: null,
+      route_history: [],
+      event_log: [],
+      created_at: now(),
+      started_at: null,
+      completed_at: null,
+      failure_reason: null,
+    });
+  }
+
+  function advanceTrip(tripId) {
+    const trip = trips.find((item) => item.trip_id === tripId);
+    if (!trip) return;
+    const nextTrip = getNextTripState(trip);
+    if (!nextTrip) return;
+    setTrips((items) => items.map((item) => item.trip_id === tripId ? nextTrip : item));
+    setOperationalData((current) => ({
+      ...current,
+      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, nextTrip) : robotaxi),
+    }));
+    setServiceOrders((items) => items.map((order) => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, nextTrip) : order));
+    selectForPage("serviceFulfillmentRecords", "trip", tripId);
   }
 
   function planDeploymentRoute(taskId) {
@@ -1827,6 +1924,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isRoutePlanningRunPage = page === "routePlanningRuns";
   const isDemandSimulationPage = page === "demandSimulationStrategies";
   const isServiceOrderPage = page === "serviceOrders";
+  const isTripPage = page === "serviceFulfillmentRecords";
   const isPricingPage = page === "pricingStrategies";
   const isPricingRunPage = page === "pricingStrategyRuns";
   const isOrderMatchingPage = page === "orderMatchingStrategies";
@@ -2091,6 +2189,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderServiceOrderActions(row, { ...actions, page, objectType, idField }),
       };
     }
+    if (isTripPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 150,
+        render: (_, row) => renderTripActions(row, { ...actions, page, objectType, idField }),
+      };
+    }
     if (isPricingRunPage || isOrderMatchingRunPage) {
       return {
         key: "actions",
@@ -2166,7 +2273,7 @@ function ModuleFooter({ page, totalCount, displayCount, eventCount, appliedFilte
     appliedFilters.statusValue ||
     appliedFilters.triggerType
   );
-  if (["readinessTasks", "deploymentTasks", "routeExecutions", "routePlanningStrategies", "routePlanningRuns", "demandSimulationStrategies", "serviceOrders"].includes(page)) {
+  if (["readinessTasks", "deploymentTasks", "routeExecutions", "serviceFulfillmentRecords", "routePlanningStrategies", "routePlanningRuns", "demandSimulationStrategies", "serviceOrders"].includes(page)) {
     return (
       <div className="module-footer">
         <span>当前显示 {displayCount} / 全部 {totalCount}</span>
@@ -2223,7 +2330,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution", "serviceOrder"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution", "serviceOrder", "trip"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -2303,6 +2410,15 @@ function getDetailTabs(selectedType) {
       { key: "pricing", label: "定价信息", keys: ["estimated_pricing_decision_id", "final_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "estimated_price", "quoted_price", "pricing_explanation", "pricing_breakdown_snapshot"] },
       { key: "matching", label: "匹配履约", keys: ["matched_robotaxi_id", "order_matching_decision_id", "trip_id", "actual_distance_km", "actual_duration_min", "final_price", "paid_amount"] },
       { key: "time", label: "状态时间", keys: ["confirmed_at", "matched_at", "completed_at", "cancelled_at", "payment_completed_at", "failure_reason"] },
+    ];
+  }
+  if (selectedType === "trip") {
+    return [
+      { key: "basic", label: "履约信息", keys: ["trip_id", "trip_status", "trip_phase", "service_order_id", "robotaxi_id", "created_at"] },
+      { key: "location", label: "服务位置", keys: ["pickup_service_area_id", "pickup_cell_id", "pickup_location_summary", "pickup_location_detail", "dropoff_service_area_id", "dropoff_cell_id", "dropoff_location_summary", "dropoff_location_detail", "current_cell_id", "current_location_summary", "current_location_detail"] },
+      { key: "progress", label: "履约进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result"] },
+      { key: "route", label: "路径关联", keys: ["route_id", "route_planning_run_id", "route_history"] },
+      { key: "time", label: "状态时间", keys: ["started_at", "completed_at", "failure_reason", "event_log"] },
     ];
   }
   return [];
@@ -2596,6 +2712,29 @@ function renderServiceOrderActions(row, actions) {
   if (row.order_status === "WAITING_FOR_VEHICLE") {
     return <RowActionButton onClick={() => actions.matchServiceOrder(row.service_order_id)}>订单匹配</RowActionButton>;
   }
+  if (row.order_status === "VEHICLE_ASSIGNED") {
+    if (row.trip_id) {
+      return <RowActionButton onClick={() => actions.viewTripForServiceOrder(row)}>查看履约记录</RowActionButton>;
+    }
+    return <RowActionButton onClick={() => actions.createTripForOrder(row.service_order_id)}>创建履约记录</RowActionButton>;
+  }
+  return renderViewDetailAction(row, actions);
+}
+
+function renderTripActions(row, actions) {
+  const actionLabelByStatus = {
+    PENDING: "开始接驾",
+    ASSIGNED: "开始接驾",
+    ON_THE_WAY_PICKUP: "到达上车点",
+    ARRIVED_PICKUP: "乘客上车",
+    PASSENGER_ONBOARD: "开始载客",
+    ON_THE_WAY_DESTINATION: "到达目的地",
+    ARRIVED_DESTINATION: "完成服务",
+  };
+  const label = actionLabelByStatus[row.trip_status];
+  if (label) {
+    return <RowActionButton onClick={() => actions.advanceTrip(row.trip_id)}>{label}</RowActionButton>;
+  }
   return renderViewDetailAction(row, actions);
 }
 
@@ -2809,6 +2948,7 @@ function isStatusField(key) {
     "decision_result",
     "customer_status",
     "order_status",
+    "trip_status",
     "payment_status",
   ].includes(key);
 }
@@ -2886,12 +3026,14 @@ async function bootstrap() {
     serviceOrderValidation,
     pricingValidation,
     orderMatchingValidation,
+    tripValidation,
     demandSimulationEngine,
     pricingEngine,
     orderMatchingEngine,
     serviceOrderTypeModule,
     pricingTypeModule,
     orderMatchingTypeModule,
+    tripTypeModule,
     cellContext,
     fieldDictionary,
     readinessTaskValidation,
@@ -2908,17 +3050,19 @@ async function bootstrap() {
     import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/customerValidation.js?v=20260611-v019-1-customer"),
     import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"),
-    import("./data/serviceOrderValidation.js?v=20260611-v019-3-service-order"),
+    import("./data/serviceOrderValidation.js?v=20260611-v019-6-trip"),
     import("./data/pricingValidation.js?v=20260611-v019-4-pricing"),
     import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"),
+    import("./data/tripValidation.js?v=20260611-v019-6-trip"),
     import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"),
     import("./data/pricingEngine.js?v=20260611-v019-4-pricing"),
     import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"),
-    import("./domain/serviceOrderTypes.js?v=20260611-v019-3-service-order"),
+    import("./domain/serviceOrderTypes.js?v=20260611-v019-6-trip"),
     import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"),
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
+    import("./domain/tripTypes.js?v=20260611-v019-6-trip"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/fieldDictionary.js?v=20260611-v019-5-order-matching"),
+    import("./domain/fieldDictionary.js?v=20260611-v019-6-trip"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./domain/taskTypes.js?v=20260608-v018-bfs-route-planning"),
@@ -2937,12 +3081,14 @@ async function bootstrap() {
   validateServiceOrders = serviceOrderValidation.validateServiceOrders;
   validatePricing = pricingValidation.validatePricing;
   validateOrderMatching = orderMatchingValidation.validateOrderMatching;
+  validateTrips = tripValidation.validateTrips;
   runDemandSimulation = demandSimulationEngine.runDemandSimulation;
   runPricingEstimate = pricingEngine.runPricingEstimate;
   runOrderMatching = orderMatchingEngine.runOrderMatching;
   serviceOrderTypes = serviceOrderTypeModule;
   pricingTypes = pricingTypeModule;
   orderMatchingTypes = orderMatchingTypeModule;
+  tripTypes = tripTypeModule;
   createCellContext = cellContext.createCellContext;
   getDetailTitle = fieldDictionary.getDetailTitle;
   getDisplayValue = fieldDictionary.getDisplayValue;
@@ -3382,6 +3528,21 @@ function enrichRouteExecutionForDisplay(execution, data) {
   };
 }
 
+function enrichTripForDisplay(trip, data) {
+  const pickupLocation = getLocationInfo(trip.pickup_cell_id, data);
+  const dropoffLocation = getLocationInfo(trip.dropoff_cell_id, data);
+  const currentLocation = getLocationInfo(trip.current_cell_id, data);
+  return {
+    ...trip,
+    pickup_location_summary: pickupLocation.summary,
+    dropoff_location_summary: dropoffLocation.summary,
+    current_location_summary: currentLocation.summary,
+    pickup_location_detail: pickupLocation.detail,
+    dropoff_location_detail: dropoffLocation.detail,
+    current_location_detail: currentLocation.detail,
+  };
+}
+
 function enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns) {
   const planningRun = routePlanningRuns.find((run) =>
     run.result_route_id === route.route_id || run.route_planning_run_id === route.route_planning_run_id
@@ -3514,6 +3675,137 @@ function findCurrentTask(taskId, readinessTasks, deploymentTasks) {
     null;
 }
 
+function getNextTripState(trip) {
+  const status = tripTypes.TripStatus;
+  const phase = tripTypes.TripPhase;
+  const timestamp = now();
+  const baseEvent = {
+    event_time: timestamp,
+    previous_status: trip.trip_status,
+  };
+  const eventLog = Array.isArray(trip.event_log) ? trip.event_log : [];
+
+  if ([status.COMPLETED, status.FAILED, status.CANCELLED].includes(trip.trip_status)) return null;
+
+  const transitions = {
+    [status.PENDING]: {
+      trip_status: status.ON_THE_WAY_PICKUP,
+      trip_phase: phase.PICKUP,
+      current_cell_id: trip.current_cell_id,
+      started_at: trip.started_at || timestamp,
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2),
+    },
+    [status.ASSIGNED]: {
+      trip_status: status.ON_THE_WAY_PICKUP,
+      trip_phase: phase.PICKUP,
+      current_cell_id: trip.current_cell_id,
+      started_at: trip.started_at || timestamp,
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2),
+    },
+    [status.ON_THE_WAY_PICKUP]: {
+      trip_status: status.ARRIVED_PICKUP,
+      trip_phase: phase.PICKUP,
+      current_cell_id: trip.pickup_cell_id,
+      current_step_index: Math.max(trip.current_step_index || 0, 1),
+      total_step_count: Math.max(trip.total_step_count || 0, 4),
+      distance_traveled_km: roundDistance((trip.distance_traveled_km || 0) + 0.6),
+      distance_remaining_km: roundDistance(Math.max(0, trip.distance_remaining_km || 0)),
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 3),
+    },
+    [status.ARRIVED_PICKUP]: {
+      trip_status: status.PASSENGER_ONBOARD,
+      trip_phase: phase.PICKUP,
+      current_cell_id: trip.pickup_cell_id,
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
+    },
+    [status.PASSENGER_ONBOARD]: {
+      trip_status: status.ON_THE_WAY_DESTINATION,
+      trip_phase: phase.DESTINATION,
+      current_cell_id: trip.pickup_cell_id,
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
+    },
+    [status.ON_THE_WAY_DESTINATION]: {
+      trip_status: status.ARRIVED_DESTINATION,
+      trip_phase: phase.DESTINATION,
+      current_cell_id: trip.dropoff_cell_id,
+      current_step_index: Math.max(trip.total_step_count || 4, 4),
+      total_step_count: Math.max(trip.total_step_count || 0, 4),
+      distance_traveled_km: roundDistance(Math.max(trip.distance_traveled_km || 0, (trip.distance_traveled_km || 0) + (trip.distance_remaining_km || 0))),
+      distance_remaining_km: 0,
+      arrival_execution_result: "NORMAL_ARRIVAL",
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 8),
+    },
+    [status.ARRIVED_DESTINATION]: {
+      trip_status: status.COMPLETED,
+      trip_phase: phase.COMPLETED,
+      current_cell_id: trip.dropoff_cell_id,
+      distance_remaining_km: 0,
+      completed_at: timestamp,
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
+    },
+  };
+
+  const nextValues = transitions[trip.trip_status];
+  if (!nextValues) return null;
+
+  return {
+    ...trip,
+    ...nextValues,
+    event_log: [
+      ...eventLog,
+      {
+        ...baseEvent,
+        next_status: nextValues.trip_status,
+      },
+    ],
+  };
+}
+
+function updateRobotaxiForTrip(robotaxi, trip) {
+  const movingStatuses = ["ON_THE_WAY_PICKUP", "ON_THE_WAY_DESTINATION"];
+  const completed = trip.trip_status === "COMPLETED";
+  return {
+    ...robotaxi,
+    current_cell_id: trip.current_cell_id || robotaxi.current_cell_id,
+    current_order_id: completed ? null : trip.service_order_id,
+    availability_status: completed ? "AVAILABLE" : robotaxi.availability_status,
+    motion_status: completed ? "STOPPED" : movingStatuses.includes(trip.trip_status) ? "MOVING" : "STOPPED",
+    available_for_dispatch: completed,
+  };
+}
+
+function updateServiceOrderForTrip(order, trip) {
+  const statusByTripStatus = {
+    ON_THE_WAY_PICKUP: "VEHICLE_ON_THE_WAY_TO_PICKUP",
+    ARRIVED_PICKUP: "WAITING_PASSENGER_BOARDING",
+    PASSENGER_ONBOARD: "PASSENGER_ONBOARD",
+    ON_THE_WAY_DESTINATION: "ON_THE_WAY_TO_DESTINATION",
+    ARRIVED_DESTINATION: "ARRIVED_DESTINATION",
+    COMPLETED: "COMPLETED",
+  };
+  const nextOrderStatus = statusByTripStatus[trip.trip_status] || order.order_status;
+  const completed = trip.trip_status === "COMPLETED";
+  return {
+    ...order,
+    trip_id: trip.trip_id,
+    order_status: nextOrderStatus,
+    actual_distance_km: completed ? trip.distance_traveled_km : order.actual_distance_km,
+    actual_duration_min: completed ? Number.parseInt(trip.time_elapsed, 10) || order.actual_duration_min : order.actual_duration_min,
+    final_price: completed ? order.final_price || order.quoted_price || order.estimated_price || null : order.final_price,
+    completed_at: completed ? trip.completed_at || now() : order.completed_at,
+    failure_reason: null,
+  };
+}
+
+function addElapsedMinutes(value, minutes) {
+  const current = Number.parseInt(value, 10);
+  return String((Number.isFinite(current) ? current : 0) + minutes);
+}
+
+function roundDistance(value) {
+  return Number(Number(value || 0).toFixed(2));
+}
+
 function now() {
   return new Date().toISOString();
 }
@@ -3573,6 +3865,11 @@ function nextOrderMatchingDecisionId() {
   return `OMD-${String(orderMatchingDecisionSequence).padStart(3, "0")}`;
 }
 
+function nextTripId() {
+  tripSequence += 1;
+  return `TRIP-${String(tripSequence).padStart(3, "0")}`;
+}
+
 function nextEventId() {
   eventSequence += 1;
   return `EVT-${String(eventSequence).padStart(3, "0")}`;
@@ -3604,6 +3901,7 @@ function loadRuntimeSnapshot(initialData) {
     pricingDecisions: [],
     orderMatchingRuns: [],
     orderMatchingDecisions: [],
+    trips: [],
     taskEventLogs: [],
     activePage: "console",
     pageSelections: { console: { type: "map", id: initialData.maps[0].map_id } },
@@ -3624,6 +3922,7 @@ function loadRuntimeSnapshot(initialData) {
     const pricingDecisions = Array.isArray(snapshot.pricingDecisions) ? snapshot.pricingDecisions : [];
     const orderMatchingRuns = Array.isArray(snapshot.orderMatchingRuns) ? snapshot.orderMatchingRuns : [];
     const orderMatchingDecisions = Array.isArray(snapshot.orderMatchingDecisions) ? snapshot.orderMatchingDecisions : [];
+    const trips = Array.isArray(snapshot.trips) ? snapshot.trips : [];
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
@@ -3636,6 +3935,7 @@ function loadRuntimeSnapshot(initialData) {
     pricingDecisionSequence = deriveSequence(pricingDecisions, "pricing_decision_id", "PD-");
     orderMatchingRunSequence = deriveSequence(orderMatchingRuns, "order_matching_run_id", "OMR-");
     orderMatchingDecisionSequence = deriveSequence(orderMatchingDecisions, "order_matching_decision_id", "OMD-");
+    tripSequence = deriveSequence(trips, "trip_id", "TRIP-");
     deploymentRouteSequence = deriveSequence(operationalData.routes || [], "route_id", "DRT-");
     eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
     return {
@@ -3650,6 +3950,7 @@ function loadRuntimeSnapshot(initialData) {
       pricingDecisions,
       orderMatchingRuns,
       orderMatchingDecisions,
+      trips,
       taskEventLogs,
       activePage: snapshot.activePage || "console",
       pageSelections: {
@@ -3697,6 +3998,7 @@ function saveRuntimeSnapshot(snapshot) {
       pricingDecisionSequence,
       orderMatchingRunSequence,
       orderMatchingDecisionSequence,
+      tripSequence,
       eventSequence,
     }));
   } catch (error) {
@@ -3734,6 +4036,7 @@ function getOrderedStatusValues(page) {
   if (page === "orderMatchingDecisions") return orderMatchingResultOptions;
   if (page === "customers") return customerStatusOptions;
   if (page === "serviceOrders") return serviceOrderStatusOptions;
+  if (page === "serviceFulfillmentRecords") return tripStatusOptions;
   return [];
 }
 
