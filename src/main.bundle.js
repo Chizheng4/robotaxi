@@ -514,7 +514,8 @@ function App() {
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
   const [openMenuKeys, setOpenMenuKeys] = useState(getOpenKeysForPage(initialRuntime.activePage));
-  const [detailCollapsed, setDetailCollapsed] = useState(false);
+  const [workspacePages, setWorkspacePages] = useState(initialRuntime.workspacePages);
+  const [detailCollapsedByPage, setDetailCollapsedByPage] = useState(initialRuntime.detailCollapsedByPage);
   const [pageSelections, setPageSelections] = useState(initialRuntime.pageSelections);
   const [pageUiState, setPageUiState] = useState(initialRuntime.pageUiState);
   const rowsByPage = useMemo(() => ({
@@ -627,6 +628,7 @@ function App() {
   const topTitle = showConsoleSummary ? data.maps[0].map_name : activeConfig?.title || "业务记录";
   const topDescription = showConsoleSummary ? "模拟网格空间 / 道路 / 地点 / 服务区 / 运营中心" : activeConfig?.description;
   const activeRows = rowsByPage[activePage] || [];
+  const detailCollapsed = Boolean(detailCollapsedByPage[activePage]);
   useEffect(() => {
     saveRuntimeSnapshot({
       operationalData,
@@ -643,10 +645,12 @@ function App() {
       trips,
       taskEventLogs,
       activePage,
+      workspacePages,
+      detailCollapsedByPage,
       pageSelections,
       pageUiState
     });
-  }, [activePage, demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips]);
+  }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, workspacePages]);
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -705,7 +709,12 @@ function App() {
   }, "\u8BB0\u5F55 ", activeRows.length), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: resetRuntime
-  }, "\u91CD\u7F6E\u6A21\u62DF\u6570\u636E"))), /*#__PURE__*/React.createElement(Layout, {
+  }, "\u91CD\u7F6E\u6A21\u62DF\u6570\u636E"))), /*#__PURE__*/React.createElement(WorkspaceBar, {
+    pages: workspacePages,
+    activePage: activePage,
+    onActivate: activateWorkspacePage,
+    onClose: closeWorkspacePage
+  }), /*#__PURE__*/React.createElement(Layout, {
     className: detailCollapsed ? "workbench detail-collapsed" : "workbench"
   }, /*#__PURE__*/React.createElement(Content, {
     className: "work-content"
@@ -759,16 +768,14 @@ function App() {
     className: "detail-toggle-button",
     size: "small",
     title: "\u5C55\u5F00\u8BE6\u60C5",
-    onClick: () => setDetailCollapsed(false)
+    onClick: () => setDetailCollapsedForPage(activePage, false)
   }, "\u2039") : /*#__PURE__*/React.createElement(DetailPanel, {
     selectedObject: detailSelectedObject,
     selectedType: detailSelectedType,
-    onCollapse: () => setDetailCollapsed(true)
+    onCollapse: () => setDetailCollapsedForPage(activePage, true)
   })))));
   function handleMenuClick(key) {
-    setActivePage(key);
-    setOpenMenuKeys(getOpenKeysForPage(key));
-    setSelected(pageSelections[key] || getDefaultSelection(key, data));
+    activateWorkspacePage(key);
   }
   function handleMenuOpenChange(keys) {
     const latestKey = keys.find(key => !openMenuKeys.includes(key));
@@ -780,8 +787,8 @@ function App() {
     setOpenMenuKeys(keys.filter(key => getRootMenuKey(key) === rootKey));
   }
   function goToConsole() {
-    setActivePage("console");
-    setOpenMenuKeys([]);
+    setActivePageAndMenu("console");
+    setWorkspacePages(current => addWorkspacePage(current, "console"));
     const consoleSelection = pageSelections.console || {
       type: "map",
       id: data.maps[0].map_id
@@ -823,6 +830,8 @@ function App() {
     setActivePage("console");
     setOpenMenuKeys([]);
     setSelected(nextSelection);
+    setWorkspacePages(["console"]);
+    setDetailCollapsedByPage({});
     setPageSelections({
       console: nextSelection
     });
@@ -841,6 +850,7 @@ function App() {
       id
     };
     setSelected(nextSelection);
+    setWorkspacePages(current => addWorkspacePage(current, page));
     setPageSelections(current => ({
       ...current,
       [page]: nextSelection
@@ -848,7 +858,7 @@ function App() {
   }
   function viewRecordDetail(page, type, id) {
     selectForPage(page, type, id);
-    setDetailCollapsed(false);
+    setDetailCollapsedForPage(page, false);
   }
   function viewRouteExecutionForDeployment(task) {
     const execution = routeExecutions.find(item => item.task_id === task.task_id && item.robotaxi_id === task.robotaxi_id);
@@ -865,20 +875,23 @@ function App() {
       type: "routeExecution",
       id: execution.route_execution_id
     };
-    setActivePage("routeExecutions");
-    setOpenMenuKeys(getOpenKeysForPage("routeExecutions"));
+    setActivePageAndMenu("routeExecutions");
+    setWorkspacePages(current => addWorkspacePage(current, "routeExecutions"));
     setSelected(nextSelection);
-    setDetailCollapsed(false);
+    setDetailCollapsedForPage("routeExecutions", false);
     setPageSelections(current => ({
       ...current,
       routeExecutions: nextSelection
     }));
     setPageUiState(current => ({
       ...current,
-      routeExecutions: {
+      routeExecutions: createNextPageUiState(current.routeExecutions, {
         filters: nextFilters,
-        appliedFilters: nextFilters
-      }
+        appliedFilters: nextFilters,
+        pagination: {
+          current: 1
+        }
+      })
     }));
   }
   function viewGeneratedRoute(routePlanningRun) {
@@ -890,17 +903,17 @@ function App() {
       type: "route",
       id: routePlanningRun.result_route_id
     };
-    setActivePage("routes");
-    setOpenMenuKeys(getOpenKeysForPage("routes"));
+    setActivePageAndMenu("routes");
+    setWorkspacePages(current => addWorkspacePage(current, "routes"));
     setSelected(nextSelection);
-    setDetailCollapsed(false);
+    setDetailCollapsedForPage("routes", false);
     setPageSelections(current => ({
       ...current,
       routes: nextSelection
     }));
     setPageUiState(current => ({
       ...current,
-      routes: {
+      routes: createNextPageUiState(current.routes, {
         filters: {
           keyword: routePlanningRun.result_route_id,
           statusValue: null,
@@ -910,14 +923,46 @@ function App() {
           keyword: routePlanningRun.result_route_id,
           statusValue: null,
           triggerType: null
+        },
+        pagination: {
+          current: 1
         }
-      }
+      })
     }));
   }
   function updatePageUiState(page, nextState) {
     setPageUiState(current => ({
       ...current,
-      [page]: nextState
+      [page]: normalizePageUiState(nextState)
+    }));
+  }
+  function activateWorkspacePage(page) {
+    setActivePageAndMenu(page);
+    setWorkspacePages(current => addWorkspacePage(current, page));
+    setSelected(pageSelections[page] || getDefaultSelection(page, data));
+  }
+  function closeWorkspacePage(page) {
+    if (page === "console") return;
+    setWorkspacePages(current => {
+      const currentPages = normalizeWorkspacePages(current, activePage);
+      const closeIndex = currentPages.indexOf(page);
+      const nextPages = currentPages.filter(item => item !== page);
+      if (page === activePage) {
+        const nextPage = nextPages[Math.max(0, closeIndex - 1)] || "console";
+        setActivePageAndMenu(nextPage);
+        setSelected(pageSelections[nextPage] || getDefaultSelection(nextPage, data));
+      }
+      return nextPages.length > 0 ? nextPages : ["console"];
+    });
+  }
+  function setActivePageAndMenu(page) {
+    setActivePage(page);
+    setOpenMenuKeys(getOpenKeysForPage(page));
+  }
+  function setDetailCollapsedForPage(page, collapsedValue) {
+    setDetailCollapsedByPage(current => ({
+      ...current,
+      [page]: collapsedValue
     }));
   }
   function createManualTask() {
@@ -1337,20 +1382,23 @@ function App() {
       type: "trip",
       id: trip.trip_id
     };
-    setActivePage("serviceFulfillmentRecords");
-    setOpenMenuKeys(getOpenKeysForPage("serviceFulfillmentRecords"));
+    setActivePageAndMenu("serviceFulfillmentRecords");
+    setWorkspacePages(current => addWorkspacePage(current, "serviceFulfillmentRecords"));
     setSelected(nextSelection);
-    setDetailCollapsed(false);
+    setDetailCollapsedForPage("serviceFulfillmentRecords", false);
     setPageSelections(current => ({
       ...current,
       serviceFulfillmentRecords: nextSelection
     }));
     setPageUiState(current => ({
       ...current,
-      serviceFulfillmentRecords: {
+      serviceFulfillmentRecords: createNextPageUiState(current.serviceFulfillmentRecords, {
         filters: nextFilters,
-        appliedFilters: nextFilters
-      }
+        appliedFilters: nextFilters,
+        pagination: {
+          current: 1
+        }
+      })
     }));
   }
   function createTripRecord({
@@ -1959,6 +2007,46 @@ function App() {
     });
   }
 }
+function WorkspaceBar({
+  pages,
+  activePage,
+  onActivate,
+  onClose
+}) {
+  const normalizedPages = normalizeWorkspacePages(pages, activePage);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "workspace-bar",
+    "aria-label": "\u5DF2\u6253\u5F00\u4E1A\u52A1\u9875\u9762"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "workspace-scroll"
+  }, normalizedPages.map(page => {
+    const isActive = page === activePage;
+    const isPinned = page === "console";
+    return /*#__PURE__*/React.createElement("button", {
+      key: page,
+      type: "button",
+      className: isActive ? "workspace-tab active" : "workspace-tab",
+      onClick: () => onActivate(page),
+      title: getPageLabel(page)
+    }, /*#__PURE__*/React.createElement("span", null, getPageLabel(page)), !isPinned && /*#__PURE__*/React.createElement("span", {
+      role: "button",
+      tabIndex: 0,
+      className: "workspace-tab-close",
+      title: "\u5173\u95ED\u9875\u9762",
+      onClick: event => {
+        event.stopPropagation();
+        onClose(page);
+      },
+      onKeyDown: event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose(page);
+        }
+      }
+    }, "\xD7"));
+  })));
+}
 function RecordTable({
   page,
   rows,
@@ -1993,9 +2081,12 @@ function RecordTable({
   const [abnormalArrivalType, setAbnormalArrivalType] = useState(taskTypes?.ArrivalExecutionResult?.ARRIVED_WITH_TARGET_OCCUPIED || "ARRIVED_WITH_TARGET_OCCUPIED");
   const filters = uiState.filters;
   const appliedFilters = uiState.appliedFilters;
+  const pageSize = 14;
   const displayRows = useMemo(() => {
     return filterRecordRows(rows, config.columns, statusField, appliedFilters);
   }, [appliedFilters, config.columns, rows, statusField]);
+  const maxPage = Math.max(1, Math.ceil(displayRows.length / pageSize));
+  const currentPage = Math.min(uiState.pagination?.current || 1, maxPage);
   const orderedStatusValues = getOrderedStatusValues(page);
   const statusContext = page === "deploymentTasks" ? "deployment" : page === "routeExecutions" ? "routeExecution" : null;
   const statusOptions = useMemo(() => createStatusOptions(rows, statusField, orderedStatusValues, statusContext), [orderedStatusValues, rows, statusContext, statusField]);
@@ -2012,7 +2103,7 @@ function RecordTable({
   const eventRows = isDemandSimulationPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const eventColumns = isDemandSimulationPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
   const eventRowKey = isDemandSimulationPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
-  const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 238}px)` : "calc(100vh - 96px)";
+  const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 262}px)` : "calc(100vh - 120px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
   return /*#__PURE__*/React.createElement("section", {
     className: isReadinessPage ? "record-page-new readiness-page" : "record-page-new"
@@ -2076,9 +2167,11 @@ function RecordTable({
   })), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     type: "primary",
+    "aria-label": "\u67E5\u8BE2",
     onClick: () => applyFilters(filters)
   }, "\u67E5\u8BE2"), /*#__PURE__*/React.createElement(Button, {
     size: "small",
+    "aria-label": "\u91CD\u7F6E",
     onClick: resetFilters
   }, "\u91CD\u7F6E")), isReadinessPage && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "list-action-bar"
@@ -2116,7 +2209,8 @@ function RecordTable({
     columns: finalColumns,
     dataSource: displayRows,
     pagination: {
-      pageSize: 14,
+      current: currentPage,
+      pageSize,
       size: "small",
       showSizeChanger: false
     },
@@ -2127,7 +2221,8 @@ function RecordTable({
     rowClassName: row => selected?.type === objectType && selected?.id === row[idField] ? "active-table-row" : "",
     onRow: row => ({
       onClick: () => onSelect(objectType, row[idField])
-    })
+    }),
+    onChange: pagination => updatePagination(pagination.current)
   }), hasEventPanel && /*#__PURE__*/React.createElement("div", {
     className: "event-log-section",
     style: {
@@ -2329,10 +2424,13 @@ function RecordTable({
       ...defaultPageFilters,
       statusValue
     };
-    onUiStateChange({
+    onUiStateChange(createNextPageUiState(uiState, {
       filters: nextFilters,
-      appliedFilters: nextFilters
-    });
+      appliedFilters: nextFilters,
+      pagination: {
+        current: 1
+      }
+    }));
   }
   function resetFilters() {
     const resetValue = {
@@ -2340,22 +2438,34 @@ function RecordTable({
       statusValue: null,
       triggerType: null
     };
-    onUiStateChange({
+    onUiStateChange(createNextPageUiState(uiState, {
       filters: resetValue,
-      appliedFilters: resetValue
-    });
+      appliedFilters: resetValue,
+      pagination: {
+        current: 1
+      }
+    }));
   }
   function updateFilters(nextFilters) {
-    onUiStateChange({
-      ...uiState,
+    onUiStateChange(createNextPageUiState(uiState, {
       filters: nextFilters
-    });
+    }));
   }
   function applyFilters(nextFilters) {
-    onUiStateChange({
+    onUiStateChange(createNextPageUiState(uiState, {
       filters: nextFilters,
-      appliedFilters: nextFilters
-    });
+      appliedFilters: nextFilters,
+      pagination: {
+        current: 1
+      }
+    }));
+  }
+  function updatePagination(current) {
+    onUiStateChange(createNextPageUiState(uiState, {
+      pagination: {
+        current: current || 1
+      }
+    }));
   }
   function handleEventResizeStart(event) {
     event.preventDefault();
@@ -2388,7 +2498,7 @@ function ModuleFooter({
   }
   return /*#__PURE__*/React.createElement("div", {
     className: "module-footer"
-  }, /*#__PURE__*/React.createElement("span", null, "\u8BB0\u5F55 ", totalCount), /*#__PURE__*/React.createElement("span", null, "\u70B9\u51FB\u8868\u683C\u884C\u53EF\u5728\u53F3\u4FA7\u67E5\u770B\u8BE6\u60C5"));
+  }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u663E\u793A ", displayCount, " / \u5168\u90E8 ", totalCount), /*#__PURE__*/React.createElement("span", null, hasFilter ? "已应用筛选条件" : "未应用筛选"), /*#__PURE__*/React.createElement("span", null, "\u70B9\u51FB\u8868\u683C\u884C\u53EF\u5728\u53F3\u4FA7\u67E5\u770B\u8BE6\u60C5"));
 }
 function DetailPanel({
   selectedObject,
@@ -4172,8 +4282,53 @@ function createDefaultPageUiState() {
     },
     appliedFilters: {
       ...defaultPageFilters
+    },
+    pagination: {
+      current: 1
     }
   };
+}
+function normalizePageUiState(uiState) {
+  const fallback = createDefaultPageUiState();
+  return {
+    filters: {
+      ...fallback.filters,
+      ...(uiState?.filters || {})
+    },
+    appliedFilters: {
+      ...fallback.appliedFilters,
+      ...(uiState?.appliedFilters || {})
+    },
+    pagination: {
+      ...fallback.pagination,
+      ...(uiState?.pagination || {})
+    }
+  };
+}
+function createNextPageUiState(currentState, patch) {
+  const normalizedState = normalizePageUiState(currentState);
+  return normalizePageUiState({
+    ...normalizedState,
+    ...patch,
+    filters: patch.filters ? {
+      ...normalizedState.filters,
+      ...patch.filters
+    } : normalizedState.filters,
+    appliedFilters: patch.appliedFilters ? {
+      ...normalizedState.appliedFilters,
+      ...patch.appliedFilters
+    } : normalizedState.appliedFilters,
+    pagination: patch.pagination ? {
+      ...normalizedState.pagination,
+      ...patch.pagination
+    } : normalizedState.pagination
+  });
+}
+function normalizePageUiStateMap(pageUiState) {
+  return Object.entries(pageUiState || {}).reduce((result, [page, state]) => ({
+    ...result,
+    [page]: normalizePageUiState(state)
+  }), {});
 }
 function getDefaultSelection(page, data) {
   if (page === "console") return {
@@ -4188,6 +4343,34 @@ function getDefaultSelection(page, data) {
     type: null,
     id: null
   };
+}
+function getPageLabel(page) {
+  if (page === "console") return "运营中控台";
+  return tableConfig[page]?.title || findPageMenuLabel(page) || "业务页面";
+}
+function findPageMenuLabel(page) {
+  for (const group of pageGroups) {
+    for (const item of group.children || []) {
+      if (item.key === page) return item.label;
+      for (const child of item.children || []) {
+        if (child.key === page) return child.label;
+      }
+    }
+  }
+  return null;
+}
+function isLeafPage(page) {
+  return page === "console" || Boolean(pageObjectType[page] || tableConfig[page]);
+}
+function normalizeWorkspacePages(pages, activePage = "console") {
+  const nextPages = ["console"];
+  [...(Array.isArray(pages) ? pages : []), activePage].forEach(page => {
+    if (isLeafPage(page) && !nextPages.includes(page)) nextPages.push(page);
+  });
+  return nextPages;
+}
+function addWorkspacePage(pages, page) {
+  return normalizeWorkspacePages([...(Array.isArray(pages) ? pages : []), page], page);
 }
 function loadRuntimeSnapshot(initialData) {
   const fallback = {
@@ -4205,6 +4388,8 @@ function loadRuntimeSnapshot(initialData) {
     trips: [],
     taskEventLogs: [],
     activePage: "console",
+    workspacePages: ["console"],
+    detailCollapsedByPage: {},
     pageSelections: {
       console: {
         type: "map",
@@ -4260,6 +4445,8 @@ function loadRuntimeSnapshot(initialData) {
       trips,
       taskEventLogs,
       activePage: snapshot.activePage || "console",
+      workspacePages: normalizeWorkspacePages(snapshot.workspacePages, snapshot.activePage || "console"),
+      detailCollapsedByPage: snapshot.detailCollapsedByPage || {},
       pageSelections: {
         console: {
           type: "map",
@@ -4267,7 +4454,7 @@ function loadRuntimeSnapshot(initialData) {
         },
         ...(snapshot.pageSelections || {})
       },
-      pageUiState: snapshot.pageUiState || {}
+      pageUiState: normalizePageUiStateMap(snapshot.pageUiState)
     };
   } catch (error) {
     return fallback;
