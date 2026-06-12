@@ -2,6 +2,16 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v019.8.1
+
+核心：调整迭代管理文档结构。
+
+- 新增 `doc/iteration-rules.md`，作为迭代规则唯一入口。
+- 将已完成的 `v019-auto-execution-plan.md` 从旧位置迁移并归档至 `doc/common/iteration-history/major/`。
+- 新增 `doc/common/current-iteration/minor/minor-current-iteration.md` 作为当前小版本迭代占位文件。
+- 统一 `current-iteration` 命名，修正原 `current-teration` 拼写。
+- 本版本只调整迭代管理文档，不修改业务代码或前端功能。
+
 ## v019.8
 
 核心：实现服务履约异常与重规划最小闭环。
