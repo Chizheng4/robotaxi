@@ -2280,7 +2280,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isOrderMatchingPage = page === "orderMatchingStrategies";
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
+  const hasEventPanel = isTaskOperationPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -2314,9 +2314,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const eventRows = isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
-  const eventColumns = isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventRows = isTripPage ? createTripEventRows(rows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventColumns = isTripPage ? ["event_id", "event_time", "event_type", "event_result", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 262}px)` : "calc(100vh - 120px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
 
@@ -2419,7 +2419,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
       {hasEventPanel && (
         <div className="event-log-section" style={{ height: eventPanelHeight }}>
           <div className="event-log-resizer" onPointerDown={handleEventResizeStart} title="拖动调整事件区高度" />
-          <div className="event-log-title">{isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
+          <div className="event-log-title">{isTripPage ? "履约执行事件" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
           <Table
             size="small"
             rowKey={eventRowKey}
@@ -2643,6 +2643,22 @@ function ModuleFooter({ page, totalCount, displayCount, eventCount, appliedFilte
       <span>点击表格行可在右侧查看详情</span>
     </div>
   );
+}
+
+function createTripEventRows(trips = []) {
+  return trips.flatMap((trip) => (Array.isArray(trip.event_log) ? trip.event_log : []).map((event, index) => ({
+    event_id: `TRIP-EVT-${trip.trip_id}-${String(index + 1).padStart(3, "0")}`,
+    event_time: event.event_time || trip.created_at,
+    event_type: event.event_type || "TRIP_STATUS_CHANGED",
+    event_result: event.event_result || "SUCCESS",
+    trip_id: trip.trip_id,
+    service_order_id: trip.service_order_id,
+    robotaxi_id: trip.robotaxi_id,
+    route_id: event.route_id || trip.route_id,
+    cell_id: event.cell_id || trip.current_cell_id,
+    previous_status: event.previous_status || null,
+    next_status: event.next_status || null,
+  }))).sort((left, right) => String(right.event_time || "").localeCompare(String(left.event_time || "")));
 }
 
 function DetailPanel({ selectedObject, selectedType, onCollapse }) {

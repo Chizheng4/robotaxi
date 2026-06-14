@@ -2258,7 +2258,7 @@ function RecordTable({
   const isOrderMatchingPage = page === "orderMatchingStrategies";
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
+  const hasEventPanel = isTaskOperationPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -2289,9 +2289,9 @@ function RecordTable({
   }));
   const actionColumn = getActionColumn();
   const finalColumns = actionColumn ? [...columns, actionColumn] : columns;
-  const eventRows = isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
-  const eventColumns = isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventRows = isTripPage ? createTripEventRows(rows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventColumns = isTripPage ? ["event_id", "event_time", "event_type", "event_result", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 262}px)` : "calc(100vh - 120px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
   return /*#__PURE__*/React.createElement("section", {
@@ -2417,7 +2417,7 @@ function RecordTable({
     title: "\u62D6\u52A8\u8C03\u6574\u4E8B\u4EF6\u533A\u9AD8\u5EA6"
   }), /*#__PURE__*/React.createElement("div", {
     className: "event-log-title"
-  }, isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
+  }, isTripPage ? "履约执行事件" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: eventRowKey,
     columns: eventColumns.map(key => ({
@@ -2682,6 +2682,21 @@ function ModuleFooter({
   return /*#__PURE__*/React.createElement("div", {
     className: "module-footer"
   }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u663E\u793A ", displayCount, " / \u5168\u90E8 ", totalCount), /*#__PURE__*/React.createElement("span", null, hasFilter ? "已应用筛选条件" : "未应用筛选"), /*#__PURE__*/React.createElement("span", null, "\u70B9\u51FB\u8868\u683C\u884C\u53EF\u5728\u53F3\u4FA7\u67E5\u770B\u8BE6\u60C5"));
+}
+function createTripEventRows(trips = []) {
+  return trips.flatMap(trip => (Array.isArray(trip.event_log) ? trip.event_log : []).map((event, index) => ({
+    event_id: `TRIP-EVT-${trip.trip_id}-${String(index + 1).padStart(3, "0")}`,
+    event_time: event.event_time || trip.created_at,
+    event_type: event.event_type || "TRIP_STATUS_CHANGED",
+    event_result: event.event_result || "SUCCESS",
+    trip_id: trip.trip_id,
+    service_order_id: trip.service_order_id,
+    robotaxi_id: trip.robotaxi_id,
+    route_id: event.route_id || trip.route_id,
+    cell_id: event.cell_id || trip.current_cell_id,
+    previous_status: event.previous_status || null,
+    next_status: event.next_status || null
+  }))).sort((left, right) => String(right.event_time || "").localeCompare(String(left.event_time || "")));
 }
 function DetailPanel({
   selectedObject,
