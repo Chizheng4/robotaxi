@@ -1,5 +1,6 @@
 export const PricingAlgorithm = {
   BASIC_RULE_BASED_DYNAMIC_PRICING: "BASIC_RULE_BASED_DYNAMIC_PRICING",
+  BASIC_FINAL_FARE_CALCULATION: "BASIC_FINAL_FARE_CALCULATION",
 };
 
 export const PricingStrategyStatus = {

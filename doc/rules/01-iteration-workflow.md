@@ -16,6 +16,12 @@ Major 用于整体方案变更，例如：
 
 `doc/common/current-iteration/major/major-current-iteration.md`
 
+Major 自动执行计划文件：
+
+`doc/common/current-iteration/major/v{版本号}-auto-execution-plan.md`
+
+`major-current-iteration.md` 只作为当前大版本入口、占位或草案记录，不承载长期完整执行计划。用户直接在该文件中记录新大版本需求时，Codex 必须整理生成对应的 `v{版本号}-auto-execution-plan.md`，并将 `major-current-iteration.md` 改为指向该计划文件。
+
 历史归档目录：
 
 `doc/common/iteration-history/major/`
@@ -64,7 +70,7 @@ Minor 用于局部方案或局部功能修改，例如：
 
 Major 完成时必须：
 
-1. 将当前大版本计划文件从 `doc/common/current-iteration/major/` 移入 `doc/common/iteration-history/major/`；
+1. 将当前大版本计划文件 `v{版本号}-auto-execution-plan.md` 从 `doc/common/current-iteration/major/` 移入 `doc/common/iteration-history/major/`；
 2. 保留或更新 `doc/common/current-iteration/major/major-current-iteration.md`，明确当前暂无进行中的大版本计划，或指向新的大版本计划；
 3. 在 `VERSION.md` 中记录本次归档或将归档作为最后一个子版本的完成内容；
 4. 再执行提交和 tag。

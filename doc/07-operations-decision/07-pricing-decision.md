@@ -111,6 +111,7 @@ PricingDecision 是 ServiceOrder 使用的价格结果。
 |pricing_strategy_id|strategy_name|pricing_algorithm|
 |---|---|---|
 |DPS-001|基础动态定价策略|BASIC_RULE_BASED_DYNAMIC_PRICING|
+|DPS-002|基础最终费用计算策略|BASIC_FINAL_FARE_CALCULATION|
 
 当前阶段采用：
 
@@ -119,6 +120,12 @@ PricingDecision 是 ServiceOrder 使用的价格结果。
 ```
 
 暂不做完整利润最优化模型。
+
+说明：
+
+- `DPS-001` 用于服务订单价格预估；
+- `DPS-002` 用于服务订单结算阶段的最终费用计算；
+- 定价策略是可调用服务，只接收输入并返回 PricingStrategyRun / PricingDecision，不主动改变 ServiceOrder 状态。
 
 ---
 
@@ -193,6 +200,7 @@ strategy_status：
 |pricing_algorithm|使用的定价算法|
 |service_order_id|关联订单|
 |pricing_stage|ESTIMATE / FINAL|
+|price_estimation_route_id|价格预估阶段使用的 Route，可为空|
 |input_snapshot|输入快照|
 |output_snapshot|输出快照|
 |run_result|SUCCESS / FAILED|
@@ -213,6 +221,7 @@ strategy_status：
 |order_channel|订单渠道|
 |pickup_service_area_id|上车 ServiceArea|
 |dropoff_service_area_id|下车 ServiceArea|
+|price_estimation_route_id|价格预估路径编号，可为空|
 |estimated_distance_km|预估距离|
 |estimated_duration_min|预估时长|
 |actual_distance_km|实际距离，可为空|
@@ -233,6 +242,49 @@ strategy_status：
 |pricing_explanation|客户可读价格说明|
 |failure_reason|失败原因，可为空|
 |created_at|创建时间|
+
+---
+
+## 9. 价格预估 Route
+
+服务订单价格预估前应调用路径规划策略生成一条价格预估 Route。
+
+```text
+客户需求位置 -> 上车位置 -> 下车位置
+```
+
+价格预估 Route 的规则：
+
+1. `route_usage_type = PRICE_ESTIMATION`；
+2. 保存为一条 Route，避免在 Route 管理中出现两条估价路径造成理解成本；
+3. 通过 `route_segments` 记录客户需求位置到上车位置、上车位置到下车位置的分段信息；
+4. Dynamic Pricing 使用该 Route 的总距离和预估时长生成报价；
+5. PricingStrategy 不主动改变 ServiceOrder，调用方负责把 PricingDecision 写回订单。
+
+---
+
+## 10. 最终费用计算
+
+服务订单进入结算阶段后，不应直接复用报价作为最终费用。
+
+结算应调用最终费用计算策略：
+
+```text
+FinalFareCalculationStrategy / 最终费用计算策略
+```
+
+当前实现中使用：
+
+|pricing_strategy_id|中文名|用途|
+|---|---|---|
+|DPS-002|基础最终费用计算策略|根据实际行驶距离、实际耗时和报价快照生成最终费用|
+
+输出结果写入：
+
+```text
+final_pricing_decision_id
+final_price
+```
 
 ---
 

@@ -35,6 +35,17 @@
 
 用户可以只修改文档，不需要在对话中重复描述完整方案。
 
+用户通常有两种大版本输入方式：
+
+1. 直接新增或更新业务方案设计文档；
+2. 直接在 `doc/common/current-iteration/major/major-current-iteration.md` 中记录新的大版本需求草案。
+
+当用户采用第 2 种方式时，Codex 不应把完整大版本计划长期保留在 `major-current-iteration.md` 中，而应在用户确认后整理为：
+
+`doc/common/current-iteration/major/v{版本号}-auto-execution-plan.md`
+
+并将 `major-current-iteration.md` 更新为当前大版本入口，指向该自动执行计划文件。
+
 Codex 收到分析请求后，默认只读取：
 
 1. `git status --short`
@@ -89,7 +100,7 @@ Codex 输出差异分析时，默认使用以下结构：
 
 执行计划写入：
 
-- major：`doc/common/current-iteration/major/`
+- major：`doc/common/current-iteration/major/v{版本号}-auto-execution-plan.md`，同时更新 `doc/common/current-iteration/major/major-current-iteration.md` 作为入口
 - minor：`doc/common/current-iteration/minor/minor-current-iteration.md`
 
 major 和 minor 不得混用。

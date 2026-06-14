@@ -22,6 +22,21 @@ export function initializePricing() {
         strategy_status: PricingStrategyStatus.ACTIVE,
         created_at: "2026-06-11T00:00:00.000Z",
       }),
+      createPricingStrategy({
+        pricing_strategy_id: "DPS-002",
+        strategy_name: "基础最终费用计算策略",
+        strategy_type: "FINAL_FARE_CALCULATION",
+        pricing_algorithm: PricingAlgorithm.BASIC_FINAL_FARE_CALCULATION,
+        base_fare: 3,
+        distance_unit_price: 0.6,
+        time_unit_price: 0.2,
+        supply_demand_multiplier: 1,
+        time_period_multiplier: 1,
+        service_area_multiplier: 1,
+        channel_multiplier: 1,
+        strategy_status: PricingStrategyStatus.ACTIVE,
+        created_at: "2026-06-14T00:00:00.000Z",
+      }),
     ],
   };
 }

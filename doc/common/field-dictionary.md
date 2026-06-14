@@ -298,11 +298,14 @@
 |trip_id|服务履约记录编号|持久化字段|关联 Trip，可为空|
 |robotaxi_id|Robotaxi 编号|持久化字段|执行 Robotaxi|
 |origin_cell_id|起点位置|持久化字段|本次 Route 起点 Cell|
+|route_usage_type|路径用途类型|持久化字段|区分价格预估路径、运营行驶路径、服务接驾路径、服务送达路径、服务重规划路径等 Route 用途|
 |road_segment_sequence|道路片段序列|持久化字段|Route 经过的 RoadSegment 顺序|
 |total_distance_km|路径总距离（公里）|持久化字段|Route 总距离，供价格和运营分析使用|
 |estimated_duration_min|预估时长（分钟）|持久化字段|Route 预估耗时，供价格和运营分析使用|
 |route_steps|路径步骤|持久化字段|Route 中可执行的 Cell Step 序列|
-|route_step_count|路径步骤数|聚合展示字段|Route 中步骤数量|
+|route_step_count|移动步数|聚合展示字段|Route 中实际移动步数，等于 route_steps.length - 1，起点 Step 不计为移动|
+|route_segments|路径分段|持久化字段|用于价格预估等复合路径，表达客户位置到上车位置、上车位置到下车位置等分段|
+|movement_step_index|移动步序|聚合展示字段|前端展示移动步骤时使用的序号，隐藏 route_steps[0] 起点行|
 |planned_target_zone_id|计划目标运营区域|持久化字段|运营投放任务创建时的原始计划 Zone，可为空，异常重规划不得覆盖|
 |planned_target_service_area_id|计划目标服务区|持久化字段|运营投放任务创建时的原始计划 ServiceArea，异常重规划不得覆盖|
 |planned_target_cell_id|计划目标位置|持久化字段|运营投放任务创建时的原始计划 Cell，异常重规划不得覆盖|
@@ -426,7 +429,7 @@
 |dropoff_location_detail|下车位置详情|聚合展示字段|下车位置的结构化上下文|
 |current_location_detail|当前位置详情|聚合展示字段|当前位置的结构化上下文|
 |current_step_index|当前步序号|运行态字段|当前执行到 Route 的 Step 下标|
-|total_step_count|总步数|运行态字段|当前 Route 总 Step 数|
+|total_step_count|总移动步数|运行态字段|当前 Route 实际移动步数，等于 route_steps.length - 1|
 |distance_traveled_km|已行驶距离（公里）|运行态字段|服务履约已行驶距离|
 |distance_remaining_km|剩余距离（公里）|运行态字段|当前 Route 剩余距离|
 |time_elapsed|已耗时|运行态字段|服务履约已耗时|
@@ -500,6 +503,7 @@
 |pricing_strategy_id|定价策略编号|持久化字段|PricingStrategy 唯一编号|
 |pricing_strategy_run_id|定价策略执行记录编号|运行态字段|一次定价策略执行记录|
 |pricing_decision_id|定价决策编号|运行态字段|PricingDecision 唯一编号|
+|price_estimation_route_id|价格预估路径编号|运行态字段|价格预估阶段调用路径规划策略生成的 Route 编号|
 |pricing_algorithm|定价算法|持久化字段|定价策略使用的算法|
 |strategy_type|策略类型|持久化字段|定价策略类型|
 |base_fare|起步价|持久化字段|基础起步价|
@@ -521,8 +525,9 @@
 
 说明：
 
-- 定价可以调用路径估算能力获取距离和时长；
-- 价格预估阶段不默认生成可执行 Route，也不改变 ServiceOrder、Trip 或 Robotaxi 状态。
+- 定价可以调用路径规划策略生成价格预估 Route，并使用该 Route 的距离和时长作为输入；
+- 价格预估 Route 需要进入 Route 管理，并通过 `route_usage_type = PRICE_ESTIMATION` 与执行类路径区分；
+- 定价策略只返回定价执行和定价结果，不主动改变 ServiceOrder、Trip 或 Robotaxi 状态。
 
 ---
 

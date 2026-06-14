@@ -6,7 +6,7 @@ import {
   createPricingStrategyRun,
 } from "../domain/pricingTypes.js?v=20260611-v019-4-pricing";
 
-export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrategyRunId, pricingDecisionId, createdAt }) {
+export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrategyRunId, pricingDecisionId, createdAt, routeEstimate = null }) {
   if (!strategy || strategy.strategy_status !== "ACTIVE") {
     return createFailedResult({ strategy, serviceOrder, pricingStrategyRunId, createdAt, failureReason: PricingFailureReason.PRICING_STRATEGY_NOT_FOUND });
   }
@@ -14,7 +14,7 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
     return createFailedResult({ strategy, serviceOrder, pricingStrategyRunId, createdAt, failureReason: PricingFailureReason.PRICING_CONFIG_MISSING });
   }
 
-  const estimate = estimateRoute(data, serviceOrder.pickup_cell_id, serviceOrder.dropoff_cell_id);
+  const estimate = routeEstimate || estimateRoute(data, serviceOrder.pickup_cell_id, serviceOrder.dropoff_cell_id);
   if (!estimate) {
     return createFailedResult({ strategy, serviceOrder, pricingStrategyRunId, createdAt, failureReason: PricingFailureReason.ROUTE_ESTIMATION_FAILED });
   }
@@ -30,6 +30,7 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
   );
   const quotedPrice = roundMoney(basePrice * dynamicMultiplier);
   const pricingBreakdown = {
+    price_estimation_route_id: estimate.route_id || null,
     base_fare: strategy.base_fare,
     estimated_distance_km: estimate.estimated_distance_km,
     distance_unit_price: strategy.distance_unit_price,
@@ -51,6 +52,7 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
       pickup_cell_id: serviceOrder.pickup_cell_id,
       dropoff_cell_id: serviceOrder.dropoff_cell_id,
       order_channel: serviceOrder.order_channel,
+      price_estimation_route_id: estimate.route_id || null,
     },
     output_snapshot: pricingBreakdown,
     run_result: PricingResult.SUCCESS,
@@ -66,6 +68,7 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
     order_channel: serviceOrder.order_channel,
     pickup_service_area_id: serviceOrder.pickup_service_area_id,
     dropoff_service_area_id: serviceOrder.dropoff_service_area_id,
+    price_estimation_route_id: estimate.route_id || null,
     estimated_distance_km: estimate.estimated_distance_km,
     estimated_duration_min: estimate.estimated_duration_min,
     actual_distance_km: null,
@@ -83,7 +86,7 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
     pricing_stage: PricingStage.ESTIMATE,
     pricing_result: PricingResult.SUCCESS,
     pricing_breakdown_snapshot: pricingBreakdown,
-    pricing_explanation: "本次价格由起步价、预估里程、预估时间和当前动态系数组成。",
+    pricing_explanation: "本次价格由价格预估路径距离、预估时间、起步价和当前动态系数组成。",
     failure_reason: null,
     created_at: createdAt,
   });
