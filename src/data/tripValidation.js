@@ -1,4 +1,4 @@
-import { TripStatus } from "../domain/tripTypes.js?v=20260611-v019-8-trip-exception";
+import { TripStatus } from "../domain/tripTypes.js?v=20260614-v020-4-trip-flow";
 
 export function validateTrips(data) {
   const trips = data.trips || [];

@@ -475,7 +475,7 @@ const routeExecutionStatusOptions = ["WAITING_START", "MOVING", "ARRIVED", "ARRI
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
-const tripStatusOptions = ["PENDING", "ASSIGNED", "ON_THE_WAY_PICKUP", "ARRIVED_PICKUP", "PASSENGER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "WAITING_OPERATION_DECISION", "COMPLETED", "FAILED", "CANCELLED"];
+const tripStatusOptions = ["WAITING_ROUTE", "ON_THE_WAY_PICKUP", "WAITING_CUSTOMER_BOARDING", "CUSTOMER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "SETTLING", "WAITING_OPERATION_DECISION", "COMPLETED", "FAILED", "CANCELLED", "PENDING", "ASSIGNED", "ARRIVED_PICKUP", "PASSENGER_ONBOARD"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
 const serviceOrderStatusOptions = ["WAITING_PRICE_ESTIMATE", "WAITING_ROBOTAXI_CALL", "WAITING_ROBOTAXI_ASSIGNMENT", "ROBOTAXI_ASSIGNMENT_FAILED", "ON_THE_WAY_PICKUP", "WAITING_CUSTOMER_BOARDING", "CUSTOMER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "SETTLING", "WAITING_PAYMENT", "COMPLETED", "WAITING_OPERATION_DECISION", "CANCELLED", "FAILED", "CREATED", "WAITING_CUSTOMER_CONFIRM", "WAITING_FOR_VEHICLE", "VEHICLE_ASSIGNED", "MATCH_FAILED", "MATCHING_FAILED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
@@ -1433,7 +1433,7 @@ function App() {
       distance_traveled_km: 0,
       distance_remaining_km: serviceOrder.estimated_distance_km || 0,
       time_elapsed: "0",
-      trip_status: tripTypes.TripStatus.PENDING,
+      trip_status: tripTypes.TripStatus.WAITING_ROUTE,
       trip_phase: tripTypes.TripPhase.PICKUP,
       arrival_execution_result: null,
       exception_type: null,
@@ -3053,16 +3053,19 @@ function renderServiceOrderActions(row, actions) {
 }
 function renderTripActions(row, actions) {
   const actionLabelByStatus = {
-    PENDING: "开始接驾",
-    ASSIGNED: "开始接驾",
-    ARRIVED_PICKUP: "乘客上车",
-    PASSENGER_ONBOARD: "开始载客",
-    ARRIVED_DESTINATION: "完成服务"
+    WAITING_ROUTE: "路径规划",
+    PENDING: "路径规划",
+    ASSIGNED: "路径规划",
+    WAITING_CUSTOMER_BOARDING: "确认上车",
+    ARRIVED_PICKUP: "确认上车",
+    CUSTOMER_ONBOARD: "路径规划",
+    PASSENGER_ONBOARD: "路径规划",
+    ARRIVED_DESTINATION: "客户下车"
   };
   if (row.trip_status === "ON_THE_WAY_PICKUP") {
     return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.advanceTrip(row.trip_id)
-    }, "\u5230\u8FBE\u4E0A\u8F66\u70B9"), /*#__PURE__*/React.createElement(RowActionButton, {
+    }, "\u7EE7\u7EED\u884C\u9A76"), /*#__PURE__*/React.createElement(RowActionButton, {
       type: "default",
       danger: true,
       onClick: () => actions.replanTripRouteException(row.trip_id)
@@ -3071,7 +3074,7 @@ function renderTripActions(row, actions) {
   if (row.trip_status === "ON_THE_WAY_DESTINATION") {
     return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.advanceTrip(row.trip_id)
-    }, "\u5230\u8FBE\u76EE\u7684\u5730"), /*#__PURE__*/React.createElement(RowActionButton, {
+    }, "\u7EE7\u7EED\u884C\u9A76"), /*#__PURE__*/React.createElement(RowActionButton, {
       type: "default",
       onClick: () => actions.replanTripDestination(row.trip_id)
     }, "\u53D8\u66F4\u76EE\u7684\u5730"), /*#__PURE__*/React.createElement(RowActionButton, {
@@ -3304,7 +3307,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-3-service-order"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260611-v019-8-trip-exception"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-3-service-order"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260611-v019-8-trip-exception"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260614-v020-3-service-order"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260611-v019-8-trip-exception")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-3-service-order"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-3-service-order"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260614-v020-4-trip-flow"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260611-v019-8-trip-exception")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -3984,6 +3987,13 @@ function getNextTripState(trip) {
   const eventLog = Array.isArray(trip.event_log) ? trip.event_log : [];
   if ([status.COMPLETED, status.FAILED, status.CANCELLED].includes(trip.trip_status)) return null;
   const transitions = {
+    [status.WAITING_ROUTE]: {
+      trip_status: status.ON_THE_WAY_PICKUP,
+      trip_phase: phase.PICKUP,
+      current_cell_id: trip.current_cell_id,
+      started_at: trip.started_at || timestamp,
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2)
+    },
     [status.PENDING]: {
       trip_status: status.ON_THE_WAY_PICKUP,
       trip_phase: phase.PICKUP,
@@ -3999,7 +4009,7 @@ function getNextTripState(trip) {
       time_elapsed: addElapsedMinutes(trip.time_elapsed, 2)
     },
     [status.ON_THE_WAY_PICKUP]: {
-      trip_status: status.ARRIVED_PICKUP,
+      trip_status: status.WAITING_CUSTOMER_BOARDING,
       trip_phase: phase.PICKUP,
       current_cell_id: trip.pickup_cell_id,
       current_step_index: Math.max(trip.current_step_index || 0, 1),
@@ -4009,8 +4019,20 @@ function getNextTripState(trip) {
       time_elapsed: addElapsedMinutes(trip.time_elapsed, 3)
     },
     [status.ARRIVED_PICKUP]: {
-      trip_status: status.PASSENGER_ONBOARD,
+      trip_status: status.CUSTOMER_ONBOARD,
       trip_phase: phase.PICKUP,
+      current_cell_id: trip.pickup_cell_id,
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1)
+    },
+    [status.WAITING_CUSTOMER_BOARDING]: {
+      trip_status: status.CUSTOMER_ONBOARD,
+      trip_phase: phase.PICKUP,
+      current_cell_id: trip.pickup_cell_id,
+      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1)
+    },
+    [status.CUSTOMER_ONBOARD]: {
+      trip_status: status.ON_THE_WAY_DESTINATION,
+      trip_phase: phase.DESTINATION,
       current_cell_id: trip.pickup_cell_id,
       time_elapsed: addElapsedMinutes(trip.time_elapsed, 1)
     },
@@ -4032,11 +4054,10 @@ function getNextTripState(trip) {
       time_elapsed: addElapsedMinutes(trip.time_elapsed, 8)
     },
     [status.ARRIVED_DESTINATION]: {
-      trip_status: status.COMPLETED,
+      trip_status: status.SETTLING,
       trip_phase: phase.COMPLETED,
       current_cell_id: trip.dropoff_cell_id,
       distance_remaining_km: 0,
-      completed_at: timestamp,
       time_elapsed: addElapsedMinutes(trip.time_elapsed, 1)
     }
   };
@@ -4186,7 +4207,7 @@ function createWaitingDecisionTrip(trip, options, failureReason) {
   };
 }
 function getTripRouteRequest(trip) {
-  if (["PENDING", "ASSIGNED"].includes(trip.trip_status)) {
+  if (["WAITING_ROUTE", "PENDING", "ASSIGNED"].includes(trip.trip_status)) {
     return {
       originCellId: trip.current_cell_id,
       targetCellId: trip.pickup_cell_id,
@@ -4195,7 +4216,7 @@ function getTripRouteRequest(trip) {
       routeChangeReason: taskTypes.RouteChangeReason.SERVICE_ORDER_PICKUP_PLANNING
     };
   }
-  if (trip.trip_status === "PASSENGER_ONBOARD") {
+  if (["CUSTOMER_ONBOARD", "PASSENGER_ONBOARD"].includes(trip.trip_status)) {
     return {
       originCellId: trip.current_cell_id || trip.pickup_cell_id,
       targetCellId: trip.dropoff_cell_id,
@@ -4209,7 +4230,7 @@ function getTripRouteRequest(trip) {
 function updateRobotaxiForTrip(robotaxi, trip) {
   const movingStatuses = ["ON_THE_WAY_PICKUP", "ON_THE_WAY_DESTINATION"];
   const completed = trip.trip_status === "COMPLETED";
-  const waitingDecision = trip.trip_status === "WAITING_OPERATION_DECISION";
+  const waitingDecision = ["WAITING_OPERATION_DECISION", "SETTLING"].includes(trip.trip_status);
   return {
     ...robotaxi,
     current_cell_id: trip.current_cell_id || robotaxi.current_cell_id,
@@ -4223,10 +4244,13 @@ function updateRobotaxiForTrip(robotaxi, trip) {
 function updateServiceOrderForTrip(order, trip) {
   const statusByTripStatus = {
     ON_THE_WAY_PICKUP: "ON_THE_WAY_PICKUP",
+    WAITING_CUSTOMER_BOARDING: "WAITING_CUSTOMER_BOARDING",
     ARRIVED_PICKUP: "WAITING_CUSTOMER_BOARDING",
+    CUSTOMER_ONBOARD: "CUSTOMER_ONBOARD",
     PASSENGER_ONBOARD: "CUSTOMER_ONBOARD",
     ON_THE_WAY_DESTINATION: "ON_THE_WAY_DESTINATION",
     ARRIVED_DESTINATION: "ARRIVED_DESTINATION",
+    SETTLING: "SETTLING",
     WAITING_OPERATION_DECISION: "WAITING_OPERATION_DECISION",
     COMPLETED: "COMPLETED"
   };
