@@ -14,6 +14,7 @@
 |`doc/rules/03-field-dictionary-rules.md`|字段字典、状态枚举、中文展示规则|
 |`doc/rules/04-frontend-ux-rules.md`|B 端运营平台前端体验与页面布局规则|
 |`doc/rules/05-codex-execution-rules.md`|Codex 执行、暂停、验证和禁止行为规则|
+|`doc/rules/06-document-driven-iteration-rules.md`|文档差异驱动的分析、确认和自动执行协议|
 
 ## 2. 默认读取顺序
 
@@ -54,6 +55,7 @@ Codex 每轮迭代默认先读取：
 5. 每个稳定版本必须更新 `VERSION.md`、提交并打 tag。
 6. 不删除历史版本，不覆盖历史归档，不重写无关文件。
 7. 自动计划可以连续执行，但遇到范围扩大、业务冲突或不可验证问题必须暂停确认。
+8. 用户更新文档后，可按文档差异驱动协议进入分析、确认、执行闭环，避免重复读取无关文件。
 
 ## 6. 规则维护原则
 
