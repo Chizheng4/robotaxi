@@ -815,3 +815,66 @@ Robotaxi.current_order_id = null
 25. 未来整体运营体系完成后，可增加自动订单生成能力；
     
 26. 自动订单
+
+---
+
+## 21. v020 修订：服务订单状态与快照规则
+
+ServiceOrder 是客户服务承诺单据，状态应优先表达客户和运营人员可以理解的业务阶段。
+
+当前阶段目标状态：
+
+|状态值|中文显示|主要动作|
+|---|---|---|
+|WAITING_PRICE_ESTIMATE|待估价|价格预估|
+|WAITING_ROBOTAXI_CALL|待呼叫 Robotaxi|立即呼叫 Robotaxi|
+|WAITING_ROBOTAXI_ASSIGNMENT|待分配|分配 Robotaxi|
+|ROBOTAXI_ASSIGNMENT_FAILED|分配 Robotaxi 失败|重新分配或等待后续取消能力|
+|ON_THE_WAY_PICKUP|前往上车点|查看服务履约记录|
+|WAITING_CUSTOMER_BOARDING|待客户上车|确认上车|
+|CUSTOMER_ONBOARD|客户已上车|查看服务履约记录|
+|ON_THE_WAY_DESTINATION|前往目的地|查看服务履约记录|
+|ARRIVED_DESTINATION|已到达目的地|结算|
+|SETTLING|结算中|生成最终价格|
+|WAITING_PAYMENT|待支付|支付|
+|COMPLETED|已完成|查看详情|
+
+### 21.1 价格快照
+
+客户看到的报价必须固化在 ServiceOrder 中。订单创建后的报价快照字段包括：
+
+```text
+quote_base_fare
+quote_distance_unit_price
+quote_time_unit_price
+estimated_distance_km
+estimated_duration_min
+quoted_price
+pricing_explanation
+pricing_breakdown_snapshot
+estimated_pricing_decision_id
+```
+
+这些字段用于表达客户当时看到并确认的报价，不应因为策略或结果对象后续变化而被覆盖。
+
+### 21.2 服务履约关系
+
+匹配 Robotaxi 成功后，ServiceOrder 创建 Trip。ServiceOrder 从“前往上车点”开始由 Trip 反馈状态：
+
+```text
+ServiceOrder
+↓
+Trip
+↓
+RoutePlanningRun / Route
+↓
+Trip 事件反馈
+↓
+ServiceOrder 状态更新
+```
+
+Trip 是服务履约记录，不复用运营投放的 RouteExecution。
+
+### 21.3 当前阶段不做
+
+当前阶段暂不实现复杂取消订单、修改上车点、真实支付通道和账单对象。支付只做最小模拟，用于让 ServiceOrder 能从待支付闭环到已完成。

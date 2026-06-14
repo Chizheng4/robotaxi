@@ -234,10 +234,18 @@
 |current_route_id|当前路径|运行态字段|当前执行 Route，可为空|
 |current_task_id|当前任务|运行态字段|当前关联 Task，可为空|
 |current_order_id|当前服务订单|运行态字段|当前关联 ServiceOrder，可为空|
+|current_order_status|当前服务订单状态|聚合展示字段|由 current_order_id 关联 ServiceOrder 推导|
 |current_task_type|当前任务类型|聚合展示字段|由 current_task_id 关联 Task 推导|
 |current_task_status|当前任务状态|聚合展示字段|由 current_task_id 关联 Task 推导|
 |current_route_execution_id|当前行驶记录|聚合展示字段|当前关联 RouteExecution，可为空，展示推导字段|
 |location_summary|位置摘要|聚合展示字段|由 current_cell_id 通过 CellContext 推导|
+
+说明：
+
+- `current_order_id` 表达服务订单占用，优先级高于运营任务；
+- `current_task_id` 表达运营供给侧任务占用；
+- Robotaxi 不能同时存在 `current_order_id` 和 `current_task_id`；
+- 前端当前任务展示应优先展示服务订单，其次展示运营任务。
 
 ---
 
@@ -358,6 +366,7 @@
 |order_channel|订单来源|持久化字段|服务订单来源渠道|
 |customer_id|客户编号|持久化字段|关联 Customer|
 |demand_simulation_run_id|需求模拟执行记录编号|运行态字段|创建该 ServiceOrder 时使用的 DemandSimulationRun|
+|demand_simulation_result_id|需求模拟结果编号|运行态字段|创建该 ServiceOrder 时使用的 DemandSimulationResult|
 |customer_origin_location_type|客户需求位置类型|运行态字段|本次订单创建时客户发起需求的位置类型|
 |customer_origin_place_id|客户需求地点|运行态字段|本次订单客户位置关联 Place，可为空|
 |customer_origin_road_segment_id|客户需求道路片段|运行态字段|本次订单客户位置关联 RoadSegment，可为空|
@@ -368,6 +377,9 @@
 |dropoff_cell_id|下车位置|持久化字段|订单下车 Cell|
 |estimated_pricing_decision_id|预估价格决策编号|持久化字段|预估价格对应 PricingDecision|
 |final_pricing_decision_id|最终价格决策编号|运行态字段|最终结算对应 PricingDecision，可为空|
+|quote_base_fare|报价起步价|运行态字段|客户看到报价时使用的起步价快照|
+|quote_distance_unit_price|报价距离单价|运行态字段|客户看到报价时使用的距离单价快照|
+|quote_time_unit_price|报价时间单价|运行态字段|客户看到报价时使用的时间单价快照|
 |estimated_distance_km|预估距离（公里）|运行态字段|订单预估服务距离|
 |estimated_duration_min|预估时长（分钟）|运行态字段|订单预估服务时长|
 |estimated_price|预估价格|运行态字段|系统预估价格|
@@ -455,6 +467,29 @@
 
 - 不再使用泛化的 `strategy_id` 表达需求模拟策略；
 - DemandSimulationStrategy 只返回模拟订单上下文，不直接创建 ServiceOrder。
+
+### 17.1 DemandSimulationResult：需求模拟结果
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|demand_simulation_result_id|需求模拟结果编号|运行态字段|DemandSimulationResult 唯一编号|
+|demand_simulation_run_id|需求模拟执行记录编号|运行态字段|关联 DemandSimulationRun|
+|demand_simulation_strategy_id|需求模拟策略编号|持久化字段|本次结果使用的需求模拟策略|
+|customer_id|客户编号|持久化字段|本次模拟选择的客户|
+|customer_origin_location_type|客户需求位置类型|运行态字段|本次模拟的客户需求位置类型|
+|customer_origin_cell_id|客户需求位置|运行态字段|本次模拟的客户需求位置 Cell|
+|pickup_service_area_id|上车服务区|运行态字段|映射得到的上车 ServiceArea|
+|pickup_cell_id|上车位置|运行态字段|映射得到的上车 Cell|
+|dropoff_service_area_id|下车服务区|运行态字段|模拟得到的下车 ServiceArea|
+|dropoff_cell_id|下车位置|运行态字段|模拟得到的下车 Cell|
+|simulation_result|模拟结果|运行态字段|SUCCESS 或 FAILED|
+|failure_reason|失败原因|运行态字段|失败时记录原因，可为空|
+
+说明：
+
+- DemandSimulationResult 是需求模拟策略执行后的业务结果；
+- ServiceOrder 创建流程根据 DemandSimulationResult 创建订单；
+- DemandSimulationStrategy 和 DemandSimulationRun 不直接创建 ServiceOrder。
 
 ---
 
@@ -648,8 +683,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |BUSY|忙碌|
 |OFF_DUTY|非工作中|
 |DEPLOYMENT|运营投放|
-|WAITING_ROUTE|等待路径|
-|WAITING_START|等待行驶|
+|WAITING_ROUTE|待路径规划|
+|WAITING_START|待行驶|
 |ARRIVED|已到达|
 |ARRIVAL_ABNORMAL|异常到达|
 |COMPLETED|已完成|
@@ -699,6 +734,10 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |INACTIVE|不可使用|
 |ARCHIVED|已归档|
 |CREATED|已创建|
+|WAITING_PRICE_ESTIMATE|待估价|
+|WAITING_ROBOTAXI_CALL|待呼叫 Robotaxi|
+|WAITING_ROBOTAXI_ASSIGNMENT|待分配|
+|ROBOTAXI_ASSIGNMENT_FAILED|分配 Robotaxi 失败|
 |CALCULATING_PRICE|正在计算价格|
 |WAITING_CUSTOMER_CONFIRM|等待客户确认|
 |CUSTOMER_CANCELLED_BEFORE_CONFIRM|客户确认前取消|
@@ -707,17 +746,21 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |VEHICLE_ON_THE_WAY_TO_PICKUP|车辆前往上车点|
 |VEHICLE_ARRIVED_PICKUP|车辆已到达上车点|
 |WAITING_PASSENGER_BOARDING|等待乘客上车|
+|WAITING_CUSTOMER_BOARDING|待客户上车|
+|CUSTOMER_ONBOARD|客户已上车|
+|ON_THE_WAY_PICKUP|前往上车点|
 |ON_THE_WAY_TO_DESTINATION|正在前往目的地|
+|ON_THE_WAY_DESTINATION|前往目的地|
+|ARRIVED_DESTINATION|已到达目的地|
+|SETTLING|结算中|
+|WAITING_PAYMENT|待支付|
 |PAYMENT_PROCESSING|支付处理中|
 |MATCH_FAILED|匹配失败|
 |TRIP_FAILED|行程执行失败|
 |PENDING|等待处理|
 |ASSIGNED|已分配|
-|ON_THE_WAY_PICKUP|接驾中|
 |ARRIVED_PICKUP|已到达上车点|
 |PASSENGER_ONBOARD|乘客已上车|
-|ON_THE_WAY_DESTINATION|载客行驶中|
-|ARRIVED_DESTINATION|已到达目的地|
 |PAID|已支付|
 |UNPAID|未支付|
 |ESTIMATE|预估|

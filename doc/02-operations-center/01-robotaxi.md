@@ -333,3 +333,39 @@ Robotaxi = 自动驾驶 AI 汽车资产
 
 Robotaxi 本体不承载完整业务流程。
 业务动作、任务阶段、任务切换和任务优先级由后续 Task 体系表达。
+
+---
+
+## 15. v020 修订：服务订单与运营任务互斥
+
+Robotaxi 不能同时执行服务订单和运营相关任务单。
+
+服务订单是最高优先级占用。当 Robotaxi 已绑定 ServiceOrder 时：
+
+```text
+current_order_id != null
+```
+
+则不允许再分配运营投放、准入、运维等供给侧任务：
+
+```text
+current_task_id 必须为空
+```
+
+Robotaxi 可保留两组运行态字段，便于后续扩展：
+
+|字段|中文名|说明|
+|---|---|---|
+|current_order_id|当前服务订单|表达客户服务订单占用|
+|current_order_status|当前服务订单状态|由 ServiceOrder 推导展示|
+|current_task_id|当前运营任务|表达运营供给侧任务占用|
+|current_task_type|当前运营任务类型|由 Task 推导展示|
+|current_task_status|当前运营任务状态|由 Task 推导展示|
+
+前端展示时，如果存在 `current_order_id`，应优先展示服务订单占用；只有没有服务订单时，才展示运营任务占用。
+
+校验规则必须检查：
+
+```text
+NOT (current_order_id != null AND current_task_id != null)
+```

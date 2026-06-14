@@ -454,3 +454,29 @@ RouteExecution 记录实际如何执行 Route。
 ```
 
 行驶记录的核心价值是让 Robotaxi 的移动过程可观察、可操作、可计算，并为后续调度、计划、任务和经营指标提供基础数据。
+
+---
+
+## 19. v020 修订：运营行驶记录路径规划职责
+
+RouteExecution 是运营行驶记录，是运营投放任务下 Robotaxi 行驶过程的执行记录。
+
+v020 起，运营投放的路径规划入口迁移到 RouteExecution：
+
+|状态值|中文显示|可执行操作|
+|---|---|---|
+|WAITING_ROUTE|待路径规划|路径规划|
+|MOVING|行驶中|继续行驶|
+|ARRIVED|已到达|正常到达 / 异常到达|
+|ARRIVAL_ABNORMAL|异常到达|路径规划|
+|COMPLETED|已完成|查看详情|
+|FAILED|失败|查看详情|
+
+规则：
+
+1. RouteExecution 在 `WAITING_ROUTE` 时调用 RoutePlanningStrategy；
+2. RoutePlanningStrategy 只返回 Route，不修改调用方状态；
+3. RouteExecution 根据 RoutePlanningRun 和 Route 更新 `route_id`、`route_history`、`origin_cell_id`、`target_cell_id`；
+4. 初始路径规划成功后，RouteExecution 进入 `MOVING`；
+5. 异常到达后的路径规划仍更新同一个 RouteExecution，不创建新的运营行驶记录；
+6. 当同服务区没有可用替代目标时，RoutePlanningRun 和 RouteExecution 应记录失败，DeploymentTask 暂时保持异常到达等待后续运营决策。

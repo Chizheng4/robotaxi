@@ -507,3 +507,46 @@ RouteExecution 记录本任务下实际怎么走；
 Robotaxi 到达后决定实际停在哪里；
 运营决策系统负责异常后的重新决策。
 ```
+
+---
+
+## 20. v020 修订：运营投放与运营行驶记录职责边界
+
+DeploymentTask 是运营供给侧投放任务单，负责表达“把哪台 Robotaxi 投放到哪个运营目标位置”。
+
+RouteExecution 是运营行驶记录，负责表达“这台 Robotaxi 在该任务下实际如何规划路径、如何行驶、如何反馈到达结果”。
+
+|对象|职责|
+|---|---|
+|DeploymentTask|保存投放目标、计划目标位置、当前任务状态和到达结果|
+|RouteExecution|保存路径规划、当前 Route、route_history、行驶位置和行驶事件|
+
+初始投放流程调整为：
+
+```text
+创建 DeploymentTask
+↓
+DeploymentTask 进入 WAITING_ROUTE
+↓
+创建 / 绑定 RouteExecution
+↓
+DeploymentTask 进入 WAITING_START（待行驶）
+↓
+RouteExecution 进入 WAITING_ROUTE（待路径规划）
+↓
+RouteExecution 执行路径规划
+↓
+RouteExecution 继续行驶
+↓
+RouteExecution 到达或异常到达
+↓
+反馈 DeploymentTask
+```
+
+说明：
+
+- DeploymentTask 不直接执行路径规划；
+- DeploymentTask 的“查看行驶记录”用于跳转并选中对应 RouteExecution；
+- 初始路径规划和异常到达后的重规划都由 RouteExecution 调用 RoutePlanningStrategy；
+- RoutePlanningStrategy 只返回 Route，不主动改变 DeploymentTask 或 RouteExecution 状态；
+- 调用方 RouteExecution 根据 RoutePlanningRun / Route 结果更新自身，再反馈 DeploymentTask。

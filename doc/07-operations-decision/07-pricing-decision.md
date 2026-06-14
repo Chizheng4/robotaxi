@@ -611,3 +611,32 @@ PricingDecision
 13. PricingDecision 必须保存 pricing_breakdown_snapshot；
     
 14. ServiceOrder 只保存定价结果，不计算价格。
+
+---
+
+## 24. v020 修订：订单报价快照规则
+
+PricingDecision 是一次定价策略执行后的价格结果，ServiceOrder 是客户可见的服务承诺单据。
+
+当客户已经看到报价后，订单中的报价信息必须固化为快照。后续 PricingStrategy 配置变化、PricingDecision 重新计算或其他模块更新，都不得改变客户已经看到并用于决策的订单报价。
+
+ServiceOrder 应保存本次报价快照，包括：
+
+|字段|中文名|说明|
+|---|---|---|
+|quote_base_fare|报价起步价|客户看到报价时使用的起步价|
+|quote_distance_unit_price|报价距离单价|客户看到报价时使用的距离单价|
+|quote_time_unit_price|报价时间单价|客户看到报价时使用的时间单价|
+|estimated_distance_km|预估距离|客户看到报价时使用的预估距离|
+|estimated_duration_min|预估时长|客户看到报价时使用的预估时长|
+|quoted_price|客户报价|客户确认前看到的报价金额|
+|pricing_explanation|价格说明|客户可读的价格说明|
+|pricing_breakdown_snapshot|定价明细快照|本次价格构成快照|
+|estimated_pricing_decision_id|预估定价决策编号|本次报价对应的 PricingDecision|
+
+说明：
+
+- `base_fare / distance_unit_price / time_unit_price` 属于 PricingStrategy 或 PricingDecision 的计算字段；
+- `quote_base_fare / quote_distance_unit_price / quote_time_unit_price` 属于 ServiceOrder 的订单快照字段；
+- 客户确认订单后，应以 ServiceOrder 保存的报价快照作为信任依据；
+- 最终结算价格可重新生成 PricingDecision，但必须保留预估报价快照，不覆盖原始报价。

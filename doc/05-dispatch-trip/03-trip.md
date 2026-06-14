@@ -251,3 +251,44 @@ Trip 执行全流程均生成 TaskEventLog。
 8. Trip 中事件记录由 TaskEventLog 保存；
     
 9. Trip 与 RouteExecution 区分：Trip 为服务履约，RouteExecution 为运营行驶。
+
+---
+
+## 12. v020 修订：服务履约行驶状态
+
+Trip 是服务订单履约记录，负责服务订单中的接驾、客户上车、载客前往目的地、到达、结算前反馈。
+
+Trip 不创建 RouteExecution，也不复用运营行驶记录。Trip 自身引用 Route，并通过 `route_history` 记录服务履约过程中的路径变化。
+
+目标状态：
+
+|状态值|中文显示|说明|
+|---|---|---|
+|WAITING_ROUTE|待路径规划|当前阶段需要生成服务履约 Route|
+|ON_THE_WAY_PICKUP|前往上车点|Robotaxi 正在接驾|
+|ARRIVED_PICKUP|已到达上车点|等待客户上车|
+|WAITING_CUSTOMER_BOARDING|待客户上车|等待客户确认上车|
+|CUSTOMER_ONBOARD|客户已上车|准备规划或执行去目的地路径|
+|ON_THE_WAY_DESTINATION|前往目的地|Robotaxi 正在载客行驶|
+|ARRIVED_DESTINATION|已到达目的地|等待结算与支付|
+|WAITING_OPERATION_DECISION|等待运营决策|异常情况下等待后续能力处理|
+|COMPLETED|已完成|履约完成|
+|FAILED|失败|履约失败|
+|CANCELLED|已取消|履约取消|
+
+### 12.1 服务履约与 ServiceOrder 反馈
+
+Trip 状态变化应反馈 ServiceOrder：
+
+|Trip 状态|ServiceOrder 状态|
+|---|---|
+|ON_THE_WAY_PICKUP|ON_THE_WAY_PICKUP|
+|ARRIVED_PICKUP / WAITING_CUSTOMER_BOARDING|WAITING_CUSTOMER_BOARDING|
+|CUSTOMER_ONBOARD|CUSTOMER_ONBOARD|
+|ON_THE_WAY_DESTINATION|ON_THE_WAY_DESTINATION|
+|ARRIVED_DESTINATION|ARRIVED_DESTINATION|
+|COMPLETED|COMPLETED|
+
+### 12.2 当前阶段不做
+
+当前阶段暂不实现变更上车点。后续如增加该能力，应由 ServiceOrder 或专门的服务变更流程触发，不应由 Trip 自行改变客户订单承诺。

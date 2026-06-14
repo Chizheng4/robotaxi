@@ -279,3 +279,56 @@ DemandSimulationRun 可以记录 random_seed。
 simulation_result = FAILED
 不创建 ServiceOrder
 ```
+
+---
+
+## 6. v020 修订：需求模拟结果对象
+
+为保持策略对象结构统一，需求模拟链路采用以下三层结构：
+
+```text
+DemandSimulationStrategy
+↓
+DemandSimulationRun
+↓
+DemandSimulationResult
+```
+
+|对象|中文名|职责|
+|---|---|---|
+|DemandSimulationStrategy|需求模拟策略|定义需求模拟算法和规则|
+|DemandSimulationRun|需求模拟执行记录|记录一次策略调用、输入快照、输出快照和执行结果|
+|DemandSimulationResult|需求模拟结果|保存本次模拟得到的客户、需求位置、上车点和下车点|
+
+DemandSimulationResult 是策略执行后的业务结果对象，类似：
+
+```text
+RoutePlanningStrategy → RoutePlanningRun → Route
+PricingStrategy → PricingStrategyRun → PricingDecision
+OrderMatchingStrategy → OrderMatchingRun → OrderMatchingDecision
+```
+
+### 6.1 DemandSimulationResult 核心字段
+
+|字段|中文名|说明|
+|---|---|---|
+|demand_simulation_result_id|需求模拟结果编号|本次需求模拟结果唯一编号|
+|demand_simulation_run_id|需求模拟执行记录编号|关联 DemandSimulationRun|
+|demand_simulation_strategy_id|需求模拟策略编号|本次执行使用的策略|
+|customer_id|客户编号|本次模拟选择的客户|
+|customer_origin_location_type|客户需求位置类型|客户发起需求的位置类型|
+|customer_origin_cell_id|客户需求位置|客户发起需求所在 Cell|
+|pickup_service_area_id|上车服务区|映射得到的上车 ServiceArea|
+|pickup_cell_id|上车位置|映射得到的上车 Cell|
+|dropoff_service_area_id|下车服务区|模拟得到的下车 ServiceArea|
+|dropoff_cell_id|下车位置|模拟得到的下车 Cell|
+|simulation_result|模拟结果|SUCCESS / FAILED|
+|failure_reason|失败原因|失败时记录原因|
+
+### 6.2 调用原则
+
+需求模拟策略是服务订单创建流程调用的策略服务。
+
+当前阶段不提供独立的“生成真实需求”功能按钮。前端可以展示需求模拟策略、执行记录和结果，但真实业务单据仍由 ServiceOrder 创建流程根据 DemandSimulationResult 创建。
+
+策略本身只接收输入并返回结果，不主动创建 ServiceOrder，也不改变 ServiceOrder、Robotaxi、Trip 或其他调用方状态。
