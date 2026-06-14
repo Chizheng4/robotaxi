@@ -31,6 +31,7 @@ export const DeploymentTaskStatus = {
 };
 
 export const RouteExecutionStatus = {
+  WAITING_ROUTE: "WAITING_ROUTE",
   WAITING_START: "WAITING_START",
   MOVING: "MOVING",
   ARRIVED: "ARRIVED",

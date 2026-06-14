@@ -36,9 +36,8 @@ export function validateDeploymentTasks(data) {
     ),
     check(
       "DEPLOYMENT_WAITING_START_HAS_ROUTE",
-      "等待行驶、行驶中或已完成的运营投放任务必须已有 Route",
+      "行驶中或已完成的运营投放任务必须已有 Route",
       deploymentTasks.every((task) => ![
-        DeploymentTaskStatus.WAITING_START,
         DeploymentTaskStatus.MOVING,
         DeploymentTaskStatus.ARRIVED,
         DeploymentTaskStatus.ARRIVAL_ABNORMAL,
@@ -57,10 +56,10 @@ export function validateDeploymentTasks(data) {
     ),
     check(
       "DEPLOYMENT_WAITING_START_EXECUTION_STATUS",
-      "等待行驶的运营投放任务必须对应等待行驶的行驶记录",
+      "等待行驶的运营投放任务必须对应待路径规划的行驶记录",
       deploymentTasks.every((task) => {
         if (task.task_status !== DeploymentTaskStatus.WAITING_START) return true;
-        return executionByTaskId.get(task.task_id)?.execution_status === RouteExecutionStatus.WAITING_START;
+        return executionByTaskId.get(task.task_id)?.execution_status === RouteExecutionStatus.WAITING_ROUTE;
       }),
     ),
     check(
@@ -98,7 +97,6 @@ export function validateDeploymentTasks(data) {
       "DEPLOYMENT_ROUTE_HAS_STRATEGY",
       "已有路径的运营投放任务必须记录路径规划策略",
       deploymentTasks.every((task) => ![
-        DeploymentTaskStatus.WAITING_START,
         DeploymentTaskStatus.MOVING,
         DeploymentTaskStatus.ARRIVED,
         DeploymentTaskStatus.ARRIVAL_ABNORMAL,
@@ -144,6 +142,11 @@ export function validateDeploymentTasks(data) {
           robotaxi?.current_task_id === null &&
           robotaxi?.current_route_id === null;
       }),
+    ),
+    check(
+      "ROBOTAXI_ORDER_TASK_MUTEX",
+      "Robotaxi 不能同时绑定服务订单和运营任务",
+      (data.robotaxis || []).every((robotaxi) => !(robotaxi.current_order_id && robotaxi.current_task_id)),
     ),
     check(
       "ROUTE_EXECUTION_STEP_RANGE",

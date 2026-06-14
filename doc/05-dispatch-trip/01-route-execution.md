@@ -127,10 +127,11 @@ Task 可以触发 Route 变化
 
 |execution_status|含义|下一步动作|
 |---|---|---|
-|WAITING_START|等待行驶|开始行驶|
+|WAITING_ROUTE|待路径规划|路径规划|
+|WAITING_START|等待行驶|历史兼容状态，当前运营投放不再使用|
 |MOVING|正在按当前 Route 行驶|继续行驶|
 |ARRIVED|已到达当前 Route 目标点，等待到达结果处理|正常到达 / 异常到达|
-|ARRIVAL_ABNORMAL|异常到达，等待任务单重新路径规划|查看详情|
+|ARRIVAL_ABNORMAL|异常到达，等待行驶记录重新路径规划|路径规划|
 |PAUSED|暂停行驶|查看详情，暂停恢复为后续能力|
 |COMPLETED|行驶记录已完成|查看详情|
 |FAILED|执行失败|查看异常|
@@ -141,7 +142,7 @@ Task 可以触发 Route 变化
 - `ARRIVED` 表示行驶记录到达当前 Route 目标点，但不代表 DeploymentTask 已完成；
 - 到达后必须由运营人员或后续系统模拟反馈正常到达 / 异常到达；
 - 选择异常到达后，行驶记录必须进入 `ARRIVAL_ABNORMAL`，不再继续显示正常到达 / 异常到达操作；
-- 异常到达后的路径规划入口在 DeploymentTask，由任务单驱动更新同一个行驶记录；
+- 异常到达后的路径规划入口在 RouteExecution，由行驶记录驱动更新自身当前 Route，再反馈 DeploymentTask；
 - 正常到达之前可以多次异常到达并多次更新当前 Route，但每次替代目标必须排除本任务中已经异常到达过的目标点；
 - 如果同 ServiceArea 内没有可用替代目标，路径规划执行记录应显示失败，行驶记录保持 `ARRIVAL_ABNORMAL`，等待后续运营决策能力闭环；
 - 当前阶段不实现自动行驶、暂停恢复和完整重规划系统。
@@ -154,10 +155,12 @@ Task 可以触发 Route 变化
 
 |execution_status|可用功能|操作结果|
 |---|---|---|
-|WAITING_START|开始行驶|进入 MOVING，并反馈 DeploymentTask 进入 MOVING|
+|WAITING_ROUTE|路径规划|生成 Route 后进入 MOVING，并反馈 DeploymentTask 进入 MOVING|
+|WAITING_START|开始行驶|历史兼容动作，当前运营投放不再使用|
 |MOVING|继续行驶|推进一个 Route step；到达当前目标点时进入 ARRIVED|
 |ARRIVED|正常到达|反馈 DeploymentTask 正常到达并完成|
 |ARRIVED|异常到达|弹窗选择异常类型，反馈 DeploymentTask 进入 ARRIVAL_ABNORMAL|
+|ARRIVAL_ABNORMAL|路径规划|按同服务区替代目标策略生成新 Route，成功后进入 MOVING|
 |PAUSED|查看详情|当前 demo 暂不提供暂停恢复操作|
 |COMPLETED|查看详情|无状态变化|
 |FAILED|查看异常|无状态变化|
@@ -167,7 +170,7 @@ Task 可以触发 Route 变化
 
 - `正常到达` 和 `异常到达` 只在 Robotaxi 已到达当前 Route 目标点时显示；
 - `异常到达` 必须弹窗确认异常类型；
-- 异常到达后的替代路径规划发生在 DeploymentTask 的 `ARRIVAL_ABNORMAL` 状态中。
+- 异常到达后的替代路径规划发生在 RouteExecution 的 `ARRIVAL_ABNORMAL` 状态中，DeploymentTask 只接收反馈。
 
 ---
 

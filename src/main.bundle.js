@@ -471,7 +471,7 @@ const cellClass = {
 const legendItems = [["cell-empty", "空白网格"], ["cell-road", "道路网格"], ["place-residential-swatch", "住宅地点"], ["place-office-swatch", "办公地点"], ["place-commercial-swatch", "商业地点"], ["place-hospital-swatch", "医院学校"], ["place-metro-station-swatch", "地铁接驳"], ["place-ops-center-swatch", "运营中心地点"], ["service-area-swatch", "服务区域"], ["ops-center-swatch", "运营中心覆盖"], ["route-swatch", "选中路径"], ["road-node-swatch", "道路节点"]];
 const readinessStatusOptions = ["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING", "COMPLETED", "CANCELLED", "FAILED"];
 const deploymentStatusOptions = ["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "COMPLETED", "CANCELLED", "FAILED"];
-const routeExecutionStatusOptions = ["WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED", "COMPLETED", "FAILED", "CANCELLED"];
+const routeExecutionStatusOptions = ["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED", "COMPLETED", "FAILED", "CANCELLED"];
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
@@ -769,7 +769,7 @@ function App() {
       advanceTrip,
       replanTripDestination,
       replanTripRouteException,
-      planDeploymentRoute,
+      planRouteExecutionRoute,
       viewRecordDetail,
       viewGeneratedRoute,
       viewRouteExecutionForDeployment,
@@ -910,6 +910,22 @@ function App() {
       routeExecutions: createNextPageUiState(current.routeExecutions, {
         filters: nextFilters,
         appliedFilters: nextFilters,
+        pagination: {
+          current: 1
+        }
+      })
+    }));
+  }
+  function focusRouteExecutionStatus(statusValue) {
+    setPageUiState(current => ({
+      ...current,
+      routeExecutions: createNextPageUiState(current.routeExecutions, {
+        filters: {
+          statusValue
+        },
+        appliedFilters: {
+          statusValue
+        },
         pagination: {
           current: 1
         }
@@ -1187,14 +1203,18 @@ function App() {
       return;
     }
     const newTasks = candidates.map(robotaxi => createDeploymentTask(robotaxi, target));
+    const newExecutions = newTasks.map(task => createDeploymentRouteExecution(task));
     setDeploymentTasks(tasks => [...newTasks, ...tasks]);
+    setRouteExecutions(items => [...newExecutions, ...items]);
     setOperationalData(current => ({
       ...current,
       robotaxis: current.robotaxis.map(robotaxi => {
         const task = newTasks.find(item => item.robotaxi_id === robotaxi.robotaxi_id);
         return task ? {
           ...robotaxi,
-          current_task_id: task.task_id
+          current_task_id: task.task_id,
+          current_route_id: null,
+          motion_status: "PARKED"
         } : robotaxi;
       })
     }));
@@ -1205,6 +1225,14 @@ function App() {
       robotaxi_id: task.robotaxi_id,
       trigger_type: task.trigger_type,
       message: `已创建 ${task.robotaxi_id} 的运营投放任务`
+    })), ...newExecutions.map(execution => createEventLog({
+      event_type: taskTypes.TaskEventType.TASK_CREATED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: execution.task_id,
+      robotaxi_id: execution.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      trigger_type: taskTypes.TriggerType.MANUAL,
+      message: `已创建 ${execution.robotaxi_id} 的运营行驶记录 ${execution.route_execution_id}`
     })), triggerLog, ...logs]);
     selectForPage("deploymentTasks", "deploymentTask", newTasks[0].task_id);
   }
@@ -1574,22 +1602,22 @@ function App() {
     }
     selectForPage("serviceFulfillmentRecords", "trip", trip.trip_id);
   }
-  function planDeploymentRoute(taskId) {
-    const task = deploymentTasks.find(item => item.task_id === taskId);
-    if (!task) return;
-    if (task.task_status === taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL) {
-      planAbnormalArrivalRoute(task);
+  function planRouteExecutionRoute(routeExecutionId) {
+    const execution = routeExecutions.find(item => item.route_execution_id === routeExecutionId);
+    const task = deploymentTasks.find(item => item.task_id === execution?.task_id);
+    if (!execution || !task) return;
+    if (execution.execution_status === taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL) {
+      planAbnormalArrivalRoute(execution, task);
       return;
     }
-    if (task.task_status !== taskTypes.DeploymentTaskStatus.WAITING_ROUTE) return;
-    const routeExecutionId = nextRouteExecutionId();
+    if (execution.execution_status !== taskTypes.RouteExecutionStatus.WAITING_ROUTE) return;
     const routePlanningRunId = nextRoutePlanningRunId();
     const route = createDeploymentRoute(task, data, {
-      originCellId: task.origin_cell_id,
-      targetCellId: task.planned_target_cell_id || task.target_cell_id,
-      targetServiceAreaId: task.planned_target_service_area_id || task.target_service_area_id,
+      originCellId: execution.current_cell_id || task.origin_cell_id,
+      targetCellId: execution.planned_target_cell_id || task.planned_target_cell_id || task.target_cell_id,
+      targetServiceAreaId: execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id,
       strategyId: taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT,
-      routeExecutionId,
+      routeExecutionId: execution.route_execution_id,
       routePlanningRunId
     });
     if (route.route_steps.length === 0) {
@@ -1598,14 +1626,19 @@ function App() {
         routeStrategyId: route.route_strategy_id,
         planningAlgorithm: route.planning_algorithm,
         taskId: task.task_id,
-        routeExecutionId: null,
+        routeExecutionId: execution.route_execution_id,
         robotaxiId: task.robotaxi_id,
-        originCellId: task.origin_cell_id,
-        targetCellId: task.planned_target_cell_id || task.target_cell_id,
+        originCellId: execution.current_cell_id || task.origin_cell_id,
+        targetCellId: execution.planned_target_cell_id || task.planned_target_cell_id || task.target_cell_id,
         resultRouteId: null,
         planningResult: taskTypes.RoutePlanningResult.FAILED,
         failureReason: route.failure_reason
       }), ...items]);
+      setRouteExecutions(items => items.map(item => item.route_execution_id === execution.route_execution_id ? {
+        ...item,
+        execution_status: taskTypes.RouteExecutionStatus.FAILED,
+        failure_reason: route.failure_reason
+      } : item));
       setDeploymentTasks(tasks => tasks.map(item => item.task_id === task.task_id ? {
         ...item,
         task_status: taskTypes.DeploymentTaskStatus.FAILED,
@@ -1621,38 +1654,7 @@ function App() {
       });
       return;
     }
-    const routeCells = getRouteExecutionCells(route, data.roadSegments, task.origin_cell_id, task.planned_target_cell_id || task.target_cell_id);
-    const execution = taskTypes.createRouteExecution({
-      route_execution_id: routeExecutionId,
-      task_id: task.task_id,
-      task_type: task.task_type,
-      robotaxi_id: task.robotaxi_id,
-      route_id: route.route_id,
-      route_strategy_id: route.route_strategy_id,
-      execution_status: taskTypes.RouteExecutionStatus.WAITING_START,
-      origin_cell_id: task.origin_cell_id,
-      planned_target_zone_id: task.planned_target_zone_id || task.target_zone_id,
-      planned_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
-      planned_target_cell_id: task.planned_target_cell_id || task.target_cell_id,
-      target_cell_id: task.planned_target_cell_id || task.target_cell_id,
-      target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
-      actual_target_service_area_id: null,
-      actual_target_cell_id: null,
-      current_cell_id: routeCells[0] || task.origin_cell_id,
-      current_step_index: 0,
-      total_step_count: Math.max(0, routeCells.length - 1),
-      route_cell_ids: routeCells,
-      same_service_area_retry_allowed: true,
-      current_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
-      route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
-      distance_traveled_km: 0,
-      distance_remaining_km: route.total_distance_m / 1000,
-      time_elapsed: "0",
-      battery_consumed_percent: 0,
-      started_at: null,
-      completed_at: null,
-      failure_reason: null
-    });
+    const routeCells = getRouteExecutionCells(route, data.roadSegments, execution.current_cell_id || task.origin_cell_id, execution.planned_target_cell_id || task.planned_target_cell_id || task.target_cell_id);
     setOperationalData(current => ({
       ...current,
       routes: [route, ...current.routes],
@@ -1660,10 +1662,32 @@ function App() {
         ...robotaxi,
         current_task_id: task.task_id,
         current_route_id: route.route_id,
-        motion_status: "PARKED"
+        motion_status: "MOVING"
       } : robotaxi)
     }));
-    setRouteExecutions(items => [execution, ...items]);
+    setRouteExecutions(items => items.map(item => item.route_execution_id === execution.route_execution_id ? {
+      ...item,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      execution_status: taskTypes.RouteExecutionStatus.MOVING,
+      origin_cell_id: execution.current_cell_id || task.origin_cell_id,
+      target_cell_id: execution.planned_target_cell_id || task.planned_target_cell_id || task.target_cell_id,
+      target_service_area_id: execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
+      current_step_index: 0,
+      total_step_count: Math.max(0, routeCells.length - 1),
+      route_cell_ids: routeCells,
+      current_target_service_area_id: execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id,
+      route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
+      distance_traveled_km: 0,
+      distance_remaining_km: route.total_distance_m / 1000,
+      time_elapsed: "0",
+      battery_consumed_percent: 0,
+      started_at: now(),
+      completed_at: null,
+      failure_reason: null
+    } : item));
     setRoutePlanningRuns(items => [createRoutePlanningRun({
       routePlanningRunId,
       routeStrategyId: route.route_strategy_id,
@@ -1671,17 +1695,18 @@ function App() {
       taskId: task.task_id,
       routeExecutionId: execution.route_execution_id,
       robotaxiId: task.robotaxi_id,
-      originCellId: task.origin_cell_id,
-      targetCellId: task.planned_target_cell_id || task.target_cell_id,
+      originCellId: execution.current_cell_id || task.origin_cell_id,
+      targetCellId: execution.planned_target_cell_id || task.planned_target_cell_id || task.target_cell_id,
       resultRouteId: route.route_id,
       planningResult: taskTypes.RoutePlanningResult.SUCCESS,
       failureReason: taskTypes.RoutePlanningFailureReason.NONE
     }), ...items]);
     setDeploymentTasks(tasks => tasks.map(item => item.task_id === execution.task_id ? {
       ...item,
-      task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
+      task_status: taskTypes.DeploymentTaskStatus.MOVING,
       route_id: route.route_id,
-      route_strategy_id: route.route_strategy_id
+      route_strategy_id: route.route_strategy_id,
+      started_at: now()
     } : item));
     addLog({
       event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
@@ -1691,12 +1716,12 @@ function App() {
       route_execution_id: execution.route_execution_id,
       route_id: route.route_id,
       route_strategy_id: route.route_strategy_id,
-      message: `${task.task_id} 已生成模拟路径 ${route.route_id} 和行驶记录 ${execution.route_execution_id}`
+      message: `${task.task_id} 的行驶记录 ${execution.route_execution_id} 已生成模拟路径 ${route.route_id}，进入行驶中`
     });
+    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.MOVING);
     selectForPage("routeExecutions", "routeExecution", execution.route_execution_id);
   }
-  function planAbnormalArrivalRoute(task) {
-    const execution = routeExecutions.find(item => item.task_id === task.task_id);
+  function planAbnormalArrivalRoute(execution, task) {
     if (!execution || task.blocked_handling_policy !== taskTypes.BlockedHandlingPolicy.SAME_SERVICE_AREA_RETRY) return;
     const currentCellId = execution.current_cell_id;
     const excludedCellIds = [currentCellId, task.planned_target_cell_id, task.target_cell_id, task.actual_target_cell_id, execution.actual_target_cell_id, ...(execution.route_history || []).map(history => history.target_cell_id)];
@@ -1832,6 +1857,7 @@ function App() {
       route_strategy_id: route.route_strategy_id,
       message: `${task.task_id} 异常到达后已生成替代路径 ${route.route_id}`
     });
+    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.MOVING);
     selectForPage("routeExecutions", "routeExecution", execution.route_execution_id);
   }
   function startRouteExecution(routeExecutionId) {
@@ -1919,6 +1945,7 @@ function App() {
         route_execution_id: execution.route_execution_id,
         message: `${execution.robotaxi_id} 已到达当前路径目标，等待到达结果`
       });
+      focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVED);
       return;
     }
     addLog({
@@ -1928,6 +1955,7 @@ function App() {
       robotaxi_id: execution.robotaxi_id,
       message: `${execution.robotaxi_id} 继续行驶至 ${nextCellId}`
     });
+    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.MOVING);
   }
   function submitNormalArrival(routeExecutionId) {
     const execution = routeExecutions.find(item => item.route_execution_id === routeExecutionId);
@@ -1967,6 +1995,7 @@ function App() {
       route_execution_id: execution.route_execution_id,
       message: `${execution.robotaxi_id} 正常到达，运营投放完成`
     });
+    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.COMPLETED);
   }
   function submitAbnormalArrival(routeExecutionId, arrivalResult) {
     const execution = routeExecutions.find(item => item.route_execution_id === routeExecutionId);
@@ -1996,6 +2025,7 @@ function App() {
       route_execution_id: execution.route_execution_id,
       message: `${execution.robotaxi_id} 异常到达：${getDisplayValue(arrivalResult)}`
     });
+    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL);
   }
   function addLog(log) {
     setTaskEventLogs(logs => [createEventLog(log), ...logs]);
@@ -2025,7 +2055,7 @@ function App() {
     return taskTypes.createDeploymentTask({
       task_id: nextDeploymentTaskId(),
       task_type: taskTypes.TaskType.DEPLOYMENT,
-      task_status: taskTypes.DeploymentTaskStatus.WAITING_ROUTE,
+      task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
       task_priority: taskTypes.TaskPriority.LOW,
       trigger_type: taskTypes.TriggerType.MANUAL,
       source_type: taskTypes.TaskSourceType.MANUAL_OPERATION,
@@ -2047,6 +2077,39 @@ function App() {
       route_strategy_id: null,
       interruptible: true,
       created_at: now(),
+      started_at: null,
+      completed_at: null,
+      failure_reason: null
+    });
+  }
+  function createDeploymentRouteExecution(task) {
+    return taskTypes.createRouteExecution({
+      route_execution_id: nextRouteExecutionId(),
+      task_id: task.task_id,
+      task_type: task.task_type,
+      robotaxi_id: task.robotaxi_id,
+      route_id: null,
+      route_strategy_id: null,
+      execution_status: taskTypes.RouteExecutionStatus.WAITING_ROUTE,
+      origin_cell_id: task.origin_cell_id,
+      planned_target_zone_id: task.planned_target_zone_id || task.target_zone_id,
+      planned_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
+      planned_target_cell_id: task.planned_target_cell_id || task.target_cell_id,
+      target_cell_id: task.planned_target_cell_id || task.target_cell_id,
+      target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
+      current_cell_id: task.origin_cell_id,
+      current_step_index: 0,
+      total_step_count: 0,
+      route_cell_ids: [],
+      same_service_area_retry_allowed: true,
+      current_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
+      route_history: [],
+      distance_traveled_km: 0,
+      distance_remaining_km: 0,
+      time_elapsed: "0",
+      battery_consumed_percent: 0,
       started_at: null,
       completed_at: null,
       failure_reason: null
@@ -3026,12 +3089,7 @@ function renderReadinessActions(row, actions) {
   return renderViewDetailAction(row, actions);
 }
 function renderDeploymentActions(row, actions) {
-  if (["WAITING_ROUTE", "ARRIVAL_ABNORMAL"].includes(row.task_status)) {
-    return /*#__PURE__*/React.createElement(RowActionButton, {
-      onClick: () => actions.planDeploymentRoute(row.task_id)
-    }, "\u8DEF\u5F84\u89C4\u5212");
-  }
-  if (["WAITING_START", "MOVING", "ARRIVED"].includes(row.task_status)) {
+  if (["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL"].includes(row.task_status)) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.viewRouteExecutionForDeployment(row)
     }, "\u67E5\u770B\u884C\u9A76\u8BB0\u5F55");
@@ -3039,6 +3097,11 @@ function renderDeploymentActions(row, actions) {
   return renderViewDetailAction(row, actions);
 }
 function renderRouteExecutionActions(row, actions) {
+  if (["WAITING_ROUTE", "ARRIVAL_ABNORMAL"].includes(row.execution_status)) {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.planRouteExecutionRoute(row.route_execution_id)
+    }, "\u8DEF\u5F84\u89C4\u5212");
+  }
   if (row.execution_status === "WAITING_START") {
     return /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.startRouteExecution(row.route_execution_id)
@@ -3057,9 +3120,6 @@ function renderRouteExecutionActions(row, actions) {
       danger: true,
       onClick: () => actions.openAbnormalArrivalModal(row)
     }, "\u5F02\u5E38\u5230\u8FBE"));
-  }
-  if (row.execution_status === "ARRIVAL_ABNORMAL") {
-    return renderViewDetailAction(row, actions);
   }
   return renderViewDetailAction(row, actions);
 }
@@ -3365,7 +3425,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260614-v020-4-trip-flow"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./domain/taskTypes.js?v=20260611-v019-8-trip-exception")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260614-v020-6-route-execution"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -3966,7 +4026,7 @@ function enrichRobotaxiForDetail(robotaxi, data, readinessTasks, deploymentTasks
   };
 }
 function findCurrentRouteExecution(robotaxi, routeExecutions) {
-  return routeExecutions.find(execution => execution.robotaxi_id === robotaxi.robotaxi_id && ["WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED"].includes(execution.execution_status));
+  return routeExecutions.find(execution => execution.robotaxi_id === robotaxi.robotaxi_id && ["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED"].includes(execution.execution_status));
 }
 function summarizeRobotaxiLocation(cellContext) {
   if (!cellContext) return "未知位置";
