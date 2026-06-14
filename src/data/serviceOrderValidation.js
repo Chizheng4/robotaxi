@@ -1,4 +1,4 @@
-import { PaymentStatus, ServiceOrderChannel, ServiceOrderStatus } from "../domain/serviceOrderTypes.js?v=20260614-v020-3-service-order";
+import { PaymentStatus, ServiceOrderChannel, ServiceOrderStatus } from "../domain/serviceOrderTypes.js?v=20260614-v020-5-settlement";
 
 export function validateServiceOrders(data) {
   const orders = data.serviceOrders || [];

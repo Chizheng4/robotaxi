@@ -762,6 +762,8 @@ function App() {
                   estimateServiceOrderPrice,
                   callRobotaxiForServiceOrder,
                   matchServiceOrder,
+                  settleServiceOrder,
+                  payServiceOrder,
                   createTripForOrder,
                   viewTripForServiceOrder,
                   advanceTrip,
@@ -1384,6 +1386,54 @@ function App() {
       trip_id: trip.trip_id,
     } : order));
     selectForPage("serviceFulfillmentRecords", "trip", trip.trip_id);
+  }
+
+  function settleServiceOrder(serviceOrderId) {
+    const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
+    if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.SETTLING) return;
+    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
+      ...order,
+      order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT,
+      payment_status: serviceOrderTypes.PaymentStatus.WAITING_PAYMENT,
+      final_price: order.final_price || order.quoted_price || order.estimated_price || 0,
+      failure_reason: null,
+    } : order));
+    selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
+  }
+
+  function payServiceOrder(serviceOrderId) {
+    const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
+    if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT) return;
+    const completedAt = now();
+    const finalPrice = serviceOrder.final_price || serviceOrder.quoted_price || serviceOrder.estimated_price || 0;
+    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
+      ...order,
+      order_status: serviceOrderTypes.ServiceOrderStatus.COMPLETED,
+      payment_status: serviceOrderTypes.PaymentStatus.PAID,
+      paid_amount: finalPrice,
+      payment_completed_at: completedAt,
+      completed_at: completedAt,
+      final_price: finalPrice,
+      failure_reason: null,
+    } : order));
+    setTrips((items) => items.map((trip) => trip.service_order_id === serviceOrderId ? {
+      ...trip,
+      trip_status: tripTypes.TripStatus.COMPLETED,
+      trip_phase: tripTypes.TripPhase.COMPLETED,
+      completed_at: completedAt,
+    } : trip));
+    setOperationalData((current) => ({
+      ...current,
+      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.current_order_id === serviceOrderId ? {
+        ...robotaxi,
+        current_order_id: null,
+        current_route_id: null,
+        availability_status: "AVAILABLE",
+        motion_status: "STOPPED",
+        available_for_dispatch: true,
+      } : robotaxi),
+    }));
+    selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
 
   function viewTripForServiceOrder(serviceOrder) {
@@ -2902,6 +2952,12 @@ function renderServiceOrderActions(row, actions) {
     }
     return <RowActionButton onClick={() => actions.createTripForOrder(row.service_order_id)}>创建履约记录</RowActionButton>;
   }
+  if (row.order_status === "SETTLING") {
+    return <RowActionButton onClick={() => actions.settleServiceOrder(row.service_order_id)}>结算</RowActionButton>;
+  }
+  if (row.order_status === "WAITING_PAYMENT") {
+    return <RowActionButton onClick={() => actions.payServiceOrder(row.service_order_id)}>支付</RowActionButton>;
+  }
   return renderViewDetailAction(row, actions);
 }
 
@@ -3252,14 +3308,14 @@ async function bootstrap() {
     import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/customerValidation.js?v=20260611-v019-1-customer"),
     import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"),
-    import("./data/serviceOrderValidation.js?v=20260614-v020-3-service-order"),
+    import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"),
     import("./data/pricingValidation.js?v=20260611-v019-4-pricing"),
     import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"),
     import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"),
     import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"),
     import("./data/pricingEngine.js?v=20260611-v019-4-pricing"),
     import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"),
-    import("./domain/serviceOrderTypes.js?v=20260614-v020-3-service-order"),
+    import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"),
     import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"),
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"),
