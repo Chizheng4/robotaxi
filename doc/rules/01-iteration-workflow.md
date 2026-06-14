@@ -14,7 +14,7 @@ Major 用于整体方案变更，例如：
 
 当前迭代目录：
 
-`doc/common/current-iteration/major/`
+`doc/common/current-iteration/major/major-current-iteration.md`
 
 历史归档目录：
 

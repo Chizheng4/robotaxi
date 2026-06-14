@@ -30,7 +30,7 @@ Codex 每轮迭代默认先读取：
 
 大版本当前迭代：
 
-`doc/common/current-iteration/major/`
+`doc/common/current-iteration/major/major-current-iteration.md`
 
 小版本当前迭代：
 
