@@ -75,12 +75,21 @@ const pageGroups = [
         ],
       },
       {
+        key: "demandSimulationManagement",
+        label: "需求模拟管理",
+        children: [
+          { key: "demandSimulationStrategies", label: "需求模拟策略" },
+          { key: "demandSimulationRuns", label: "需求模拟执行" },
+          { key: "demandSimulationResults", label: "需求模拟结果" },
+        ],
+      },
+      {
         key: "pricingManagement",
-        label: "定价管理",
+        label: "动态定价管理",
         children: [
           { key: "pricingStrategies", label: "定价策略" },
-          { key: "pricingStrategyRuns", label: "定价执行管理" },
-          { key: "pricingDecisions", label: "定价决策管理" },
+          { key: "pricingStrategyRuns", label: "定价执行" },
+          { key: "pricingDecisions", label: "定价结果" },
         ],
       },
       {
@@ -99,7 +108,6 @@ const pageGroups = [
     label: "需求订单管理",
     children: [
       { key: "customers", label: "客户管理" },
-      { key: "demandSimulationStrategies", label: "需求模拟策略" },
       { key: "serviceOrders", label: "服务订单管理" },
     ],
   },
@@ -208,14 +216,19 @@ const tableConfig = {
     columns: ["demand_simulation_strategy_id", "strategy_name", "strategy_type", "simulation_algorithm", "location_type_weights", "strategy_status", "demand_simulation_run_count"],
   },
   demandSimulationRuns: {
-    title: "需求模拟执行记录",
-    description: "记录每次需求模拟策略执行结果。",
+    title: "需求模拟执行",
+    description: "记录每次需求模拟策略执行过程。",
     columns: ["demand_simulation_run_id", "simulation_result", "demand_simulation_strategy_id", "order_channel", "customer_id", "customer_origin_location_type", "customer_origin_cell_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "failure_reason", "created_at"],
+  },
+  demandSimulationResults: {
+    title: "需求模拟结果",
+    description: "需求模拟结果是策略执行后返回给服务订单创建流程的订单上下文。",
+    columns: ["demand_simulation_result_id", "simulation_result", "demand_simulation_run_id", "demand_simulation_strategy_id", "order_channel", "customer_id", "customer_origin_location_type", "customer_origin_cell_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "failure_reason", "created_at"],
   },
   serviceOrders: {
     title: "服务订单管理",
     description: "服务订单记录客户发起的出行服务需求，当前支持创建、定价和车辆匹配。",
-    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_run_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "estimated_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "matched_robotaxi_id", "order_matching_decision_id", "payment_status", "created_at"],
+    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "demand_simulation_run_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id", "estimated_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "matched_robotaxi_id", "order_matching_decision_id", "payment_status", "created_at"],
   },
   opsCenters: {
     title: "运营中心管理",
@@ -263,12 +276,12 @@ const tableConfig = {
     columns: ["pricing_strategy_id", "strategy_name", "strategy_type", "pricing_algorithm", "base_fare", "distance_unit_price", "time_unit_price", "dynamic_multiplier", "strategy_status", "pricing_strategy_run_count"],
   },
   pricingStrategyRuns: {
-    title: "定价执行管理",
+    title: "定价执行",
     description: "记录每次定价策略执行过程。",
     columns: ["pricing_strategy_run_id", "run_result", "pricing_strategy_id", "pricing_algorithm", "service_order_id", "pricing_stage", "failure_reason", "created_at"],
   },
   pricingDecisions: {
-    title: "定价决策管理",
+    title: "定价结果",
     description: "记录服务订单使用的价格结果。",
     columns: ["pricing_decision_id", "pricing_result", "pricing_strategy_run_id", "pricing_strategy_id", "service_order_id", "estimated_distance_km", "estimated_duration_min", "base_price", "dynamic_multiplier", "quoted_price", "pricing_stage", "created_at"],
   },
@@ -317,6 +330,7 @@ const pageObjectType = {
   customers: "customer",
   demandSimulationStrategies: "demandSimulationStrategy",
   demandSimulationRuns: "demandSimulationRun",
+  demandSimulationResults: "demandSimulationResult",
   serviceOrders: "serviceOrder",
   opsCenters: "opsCenter",
   workers: "worker",
@@ -350,6 +364,7 @@ const idFieldByType = {
   customer: "customer_id",
   demandSimulationStrategy: "demand_simulation_strategy_id",
   demandSimulationRun: "demand_simulation_run_id",
+  demandSimulationResult: "demand_simulation_result_id",
   serviceOrder: "service_order_id",
   opsCenter: "ops_center_id",
   worker: "worker_id",
@@ -394,6 +409,8 @@ const statusFieldByPage = {
   serviceFulfillmentRecords: "trip_status",
   customers: "customer_status",
   demandSimulationStrategies: "strategy_status",
+  demandSimulationRuns: "simulation_result",
+  demandSimulationResults: "simulation_result",
   serviceOrders: "order_status",
   robotaxis: "availability_status",
   validations: "result",
@@ -541,6 +558,7 @@ function App() {
     customers: data.customers || [],
     demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
     demandSimulationRuns,
+    demandSimulationResults: createDemandSimulationResultRows(demandSimulationRuns),
     serviceOrders,
     opsCenters: data.opsCenters,
     workers: data.workers.map((worker) => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
@@ -599,6 +617,7 @@ function App() {
       customer: data.customers || [],
       demandSimulationStrategy: rowsByPage.demandSimulationStrategies,
       demandSimulationRun: rowsByPage.demandSimulationRuns,
+      demandSimulationResult: rowsByPage.demandSimulationResults,
       serviceOrder: rowsByPage.serviceOrders,
       routePlanningStrategy: rowsByPage.routePlanningStrategies,
       routePlanningRun: rowsByPage.routePlanningRuns,
@@ -739,7 +758,6 @@ function App() {
                   startCheck,
                   submitCheckResult,
                   createDeploymentTasks,
-                  createDemandSimulationRun,
                   createServiceOrderFromDemand,
                   estimateServiceOrderPrice,
                   confirmServiceOrder,
@@ -1185,21 +1203,6 @@ function App() {
     selectForPage("deploymentTasks", "deploymentTask", newTasks[0].task_id);
   }
 
-  function createDemandSimulationRun() {
-    const strategy = data.demandSimulationStrategies?.find((item) => item.demand_simulation_strategy_id === "DSS-001");
-    if (!strategy || strategy.strategy_status !== "ACTIVE") return;
-    const run = runDemandSimulation({
-      strategy,
-      data,
-      orderChannel: "OWN_APP_SIMULATED_ORDER",
-      runId: nextDemandSimulationRunId(),
-      randomSeed: `DSS-${Date.now()}-${demandSimulationRuns.length + 1}`,
-      createdAt: now(),
-    });
-    setDemandSimulationRuns((items) => [run, ...items]);
-    selectForPage("demandSimulationStrategies", "demandSimulationStrategy", strategy.demand_simulation_strategy_id);
-  }
-
   function createServiceOrderFromDemand(orderChannel) {
     const strategy = data.demandSimulationStrategies?.find((item) => item.demand_simulation_strategy_id === "DSS-001");
     if (!strategy || strategy.strategy_status !== "ACTIVE") return;
@@ -1219,6 +1222,7 @@ function App() {
       order_channel: orderChannel,
       customer_id: run.customer_id,
       demand_simulation_run_id: run.demand_simulation_run_id,
+      demand_simulation_result_id: getDemandSimulationResultId(run.demand_simulation_run_id),
       customer_origin_location_type: run.customer_origin_location_type,
       customer_origin_place_id: run.customer_origin_place_id,
       customer_origin_road_segment_id: run.customer_origin_road_segment_id,
@@ -2085,7 +2089,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isRouteExecutionPage = page === "routeExecutions";
   const isRoutePlanningPage = page === "routePlanningStrategies";
   const isRoutePlanningRunPage = page === "routePlanningRuns";
-  const isDemandSimulationPage = page === "demandSimulationStrategies";
+  const isDemandSimulationStrategyPage = page === "demandSimulationStrategies";
   const isServiceOrderPage = page === "serviceOrders";
   const isTripPage = page === "serviceFulfillmentRecords";
   const isPricingPage = page === "pricingStrategies";
@@ -2093,7 +2097,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isOrderMatchingPage = page === "orderMatchingStrategies";
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage || isDemandSimulationPage || isPricingPage || isOrderMatchingPage;
+  const hasEventPanel = isTaskOperationPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -2127,9 +2131,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const eventRows = isDemandSimulationPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
-  const eventColumns = isDemandSimulationPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isDemandSimulationPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventRows = isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventColumns = isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 262}px)` : "calc(100vh - 120px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
 
@@ -2212,11 +2216,6 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <Button size="small" type="primary" onClick={actions.createDeploymentTasks}>生成投放任务</Button>
         </div>
       )}
-      {isDemandSimulationPage && (
-        <div className="list-action-bar">
-          <Button size="small" type="primary" onClick={actions.createDemandSimulationRun}>生成模拟需求</Button>
-        </div>
-      )}
       {isServiceOrderPage && (
         <div className="list-action-bar">
           <Button size="small" type="primary" onClick={() => actions.createServiceOrderFromDemand("OWN_APP_SIMULATED_ORDER")}>创建自有平台服务订单</Button>
@@ -2237,7 +2236,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
       {hasEventPanel && (
         <div className="event-log-section" style={{ height: eventPanelHeight }}>
           <div className="event-log-resizer" onPointerDown={handleEventResizeStart} title="拖动调整事件区高度" />
-          <div className="event-log-title">{isDemandSimulationPage ? "需求模拟执行记录" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
+          <div className="event-log-title">{isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
           <Table
             size="small"
             rowKey={eventRowKey}
@@ -3731,6 +3730,34 @@ function createDemandSimulationStrategyRows(data, demandSimulationRuns) {
     demand_simulation_run_count: runCountByStrategyId.get(strategy.demand_simulation_strategy_id) || 0,
     demand_simulation_success_count: successCountByStrategyId.get(strategy.demand_simulation_strategy_id) || 0,
   }));
+}
+
+function createDemandSimulationResultRows(demandSimulationRuns) {
+  return (demandSimulationRuns || []).map((run) => ({
+    demand_simulation_result_id: getDemandSimulationResultId(run.demand_simulation_run_id),
+    demand_simulation_run_id: run.demand_simulation_run_id,
+    demand_simulation_strategy_id: run.demand_simulation_strategy_id,
+    strategy_name: run.strategy_name,
+    simulation_algorithm: run.simulation_algorithm,
+    simulation_result: run.simulation_result,
+    order_channel: run.order_channel,
+    customer_id: run.customer_id,
+    customer_origin_location_type: run.customer_origin_location_type,
+    customer_origin_place_id: run.customer_origin_place_id,
+    customer_origin_road_segment_id: run.customer_origin_road_segment_id,
+    customer_origin_cell_id: run.customer_origin_cell_id,
+    pickup_service_area_id: run.pickup_service_area_id,
+    pickup_cell_id: run.pickup_cell_id,
+    dropoff_service_area_id: run.dropoff_service_area_id,
+    dropoff_cell_id: run.dropoff_cell_id,
+    failure_reason: run.failure_reason,
+    created_at: run.created_at,
+  }));
+}
+
+function getDemandSimulationResultId(runId) {
+  const serial = String(runId || "").match(/\d+$/)?.[0] || "000";
+  return `DSRES-${serial.padStart(3, "0")}`;
 }
 
 function createPricingStrategyRows(data, pricingStrategyRuns) {
