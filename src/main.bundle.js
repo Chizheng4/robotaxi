@@ -3451,8 +3451,8 @@ function getStatusDisplayValue(key, value, row = null) {
   if (key === "customer_status" && value === "BLOCKED") return "被限制下单";
   if (key === "order_status" && value === "FAILED") return "订单失败";
   if (key === "payment_status" && value === "FAILED") return "支付失败";
-  if (value === "WAITING_START" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution")) return "等待行驶";
-  if (value === "WAITING_START" && isDeploymentLike(row)) return "等待行驶";
+  if (value === "WAITING_START" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution")) return "待行驶";
+  if (value === "WAITING_START" && isDeploymentLike(row)) return "待行驶";
   if (value === "MOVING" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution" || isDeploymentLike(row))) return "行驶中";
   return getDisplayValue(value);
 }
@@ -4673,12 +4673,13 @@ function updateServiceOrderForTrip(order, trip) {
   };
   const nextOrderStatus = statusByTripStatus[trip.trip_status] || order.order_status;
   const completed = trip.trip_status === "COMPLETED";
+  const hasActualTripResult = ["ARRIVED_DESTINATION", "SETTLING", "COMPLETED"].includes(trip.trip_status);
   return {
     ...order,
     trip_id: trip.trip_id,
     order_status: nextOrderStatus,
-    actual_distance_km: completed ? trip.distance_traveled_km : order.actual_distance_km,
-    actual_duration_min: completed ? Number.parseInt(trip.time_elapsed, 10) || order.actual_duration_min : order.actual_duration_min,
+    actual_distance_km: hasActualTripResult ? trip.distance_traveled_km : order.actual_distance_km,
+    actual_duration_min: hasActualTripResult ? Number.parseInt(trip.time_elapsed, 10) || order.actual_duration_min : order.actual_duration_min,
     final_price: completed ? order.final_price || order.quoted_price || order.estimated_price || null : order.final_price,
     completed_at: completed ? trip.completed_at || now() : order.completed_at,
     failure_reason: null
@@ -5017,7 +5018,7 @@ function getOrderedStatusValues(page) {
 }
 function createStatusOptions(rows, statusField, orderedValues = [], statusContext = null) {
   if (!statusField) return [];
-  const values = [...orderedValues, ...rows.map(row => row[statusField]).filter(Boolean)];
+  const values = orderedValues.length > 0 ? orderedValues : rows.map(row => row[statusField]).filter(Boolean);
   return [...new Set(values)].map(value => ({
     value,
     label: getStatusDisplayValue(statusField, value, rows.find(row => row[statusField] === value) || {

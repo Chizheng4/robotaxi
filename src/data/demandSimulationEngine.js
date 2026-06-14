@@ -122,6 +122,13 @@ function chooseOrigin(locationType, data, random) {
 function findNearestPickup(originCellId, data, random) {
   const originCell = getCell(originCellId, data);
   if (!originCell) return null;
+  const originServiceArea = findServiceAreaContainingCell(originCellId, data);
+  if (originServiceArea) {
+    return {
+      pickup_service_area_id: originServiceArea.service_area_id,
+      pickup_cell_id: originCellId,
+    };
+  }
   const candidates = getPickupCandidates(data)
     .map((candidate) => ({
       ...candidate,
@@ -136,6 +143,22 @@ function findNearestPickup(originCellId, data, random) {
     pickup_service_area_id: selected.service_area_id,
     pickup_cell_id: selected.pickup_cell_id,
   };
+}
+
+function findServiceAreaContainingCell(cellId, data) {
+  return (data.serviceAreas || [])
+    .filter((area) => area.service_area_status === "ACTIVE")
+    .find((area) => {
+      const areaCellIds = [
+        ...(area.pickup_cell_ids || []),
+        ...(area.dropoff_cell_ids || []),
+        ...(area.temp_stop_cell_ids || []),
+        ...(area.parking_cell_ids || []),
+        ...(area.standby_cell_ids || []),
+        ...(area.cell_ids || area.covered_cell_ids || []),
+      ];
+      return areaCellIds.includes(cellId) && isAvailableCell(area, cellId, true);
+    });
 }
 
 function chooseDropoff(data, pickupServiceAreaId, random) {

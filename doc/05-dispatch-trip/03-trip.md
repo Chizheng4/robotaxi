@@ -57,8 +57,8 @@ Trip 不负责：
 |dropoff_cell_id|下车 Cell|
 |dropoff_service_area_id|下车 ServiceArea|
 |current_cell_id|当前 Cell|
-|current_step_index|当前执行到 Route 的 Step|
-|total_step_count|Route 总 Step 数|
+|current_step_index|当前执行到 Route 的 Step 下标，0 表示仍在起点，尚未执行移动 step|
+|total_step_count|Route 总移动步数，等于 route_steps.length - 1|
 |distance_traveled_km|已行驶距离|
 |distance_remaining_km|剩余距离|
 |time_elapsed|已耗时|

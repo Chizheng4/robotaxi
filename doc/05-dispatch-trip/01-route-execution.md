@@ -104,8 +104,8 @@ Task 可以触发 Route 变化
 |actual_target_service_area_id|实际停靠 ServiceArea，完成后写入|
 |actual_target_cell_id|实际停靠 Cell，完成后写入|
 |current_cell_id|当前 Cell|
-|current_step_index|当前执行到 Route 的第几个 step|
-|total_step_count|Route 总 step 数|
+|current_step_index|当前执行到 Route 的 step 下标，0 表示仍在起点，尚未执行移动 step|
+|total_step_count|Route 总移动步数，等于 route_steps.length - 1|
 |distance_traveled_km|已行驶距离|
 |distance_remaining_km|剩余距离|
 |time_elapsed|已耗时|
