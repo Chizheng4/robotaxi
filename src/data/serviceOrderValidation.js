@@ -7,6 +7,8 @@ export function validateServiceOrders(data) {
   const demandResults = new Set((data.demandSimulationRuns || []).map((item) => getDemandSimulationResultId(item.demand_simulation_run_id)));
   const serviceAreas = new Map((data.serviceAreas || []).map((item) => [item.service_area_id, item]));
   const cells = new Set((data.cells || []).map((item) => item.cell_id));
+  const routes = new Map((data.routes || []).map((item) => [item.route_id, item]));
+  const pricingDecisions = new Map((data.pricingDecisions || []).map((item) => [item.pricing_decision_id, item]));
   const orderIds = new Set();
   const rules = [];
 
@@ -22,6 +24,9 @@ export function validateServiceOrders(data) {
     rules.push(validateRef(`SO-DROPOFF-SA-${order.service_order_id}`, "下车服务区必须存在", order.dropoff_service_area_id, serviceAreas));
     rules.push(validateRef(`SO-PICKUP-CELL-${order.service_order_id}`, "上车位置必须存在", order.pickup_cell_id, cells));
     rules.push(validateRef(`SO-DROPOFF-CELL-${order.service_order_id}`, "下车位置必须存在", order.dropoff_cell_id, cells));
+    rules.push(validateOptionalRef(`SO-PRICE-ROUTE-${order.service_order_id}`, "价格预估路径必须存在", order.price_estimation_route_id, routes));
+    rules.push(validateOptionalRef(`SO-ESTIMATE-PD-${order.service_order_id}`, "预估价格决策必须存在", order.estimated_pricing_decision_id, pricingDecisions));
+    rules.push(validateOptionalRef(`SO-FINAL-PD-${order.service_order_id}`, "最终价格决策必须存在", order.final_pricing_decision_id, pricingDecisions));
     rules.push(validateServiceAreaCell(order, serviceAreas, "pickup"));
     rules.push(validateServiceAreaCell(order, serviceAreas, "dropoff"));
     rules.push(validateCreatedStage(order));
@@ -51,7 +56,7 @@ function validateServiceAreaCell(order, serviceAreas, type) {
   const serviceAreaId = type === "pickup" ? order.pickup_service_area_id : order.dropoff_service_area_id;
   const cellId = type === "pickup" ? order.pickup_cell_id : order.dropoff_cell_id;
   const serviceArea = serviceAreas.get(serviceAreaId);
-  const allowedCells = type === "pickup" ? serviceArea?.pickup_cell_ids : serviceArea?.dropoff_cell_ids;
+  const allowedCells = type === "pickup" ? getPickupAllowedCells(order, serviceArea) : serviceArea?.dropoff_cell_ids;
   const passed = Boolean(serviceArea && cellId && allowedCells?.includes(cellId));
   return createRule(
     `SO-${type.toUpperCase()}-CELL-IN-SA-${order.service_order_id}`,
@@ -59,6 +64,19 @@ function validateServiceAreaCell(order, serviceAreas, type) {
     passed,
     passed ? `${serviceAreaId} / ${cellId}` : `${serviceAreaId || "空"} / ${cellId || "空"} 不匹配`,
   );
+}
+
+function getPickupAllowedCells(order, serviceArea) {
+  const standardPickupCells = serviceArea?.pickup_cell_ids || [];
+  if (!serviceArea || order.pickup_cell_id !== order.customer_origin_cell_id) return standardPickupCells;
+  return Array.from(new Set([
+    ...standardPickupCells,
+    ...(serviceArea.dropoff_cell_ids || []),
+    ...(serviceArea.temp_stop_cell_ids || []),
+    ...(serviceArea.parking_cell_ids || []),
+    ...(serviceArea.standby_cell_ids || []),
+    ...(serviceArea.cell_ids || serviceArea.covered_cell_ids || []),
+  ]));
 }
 
 function validateCreatedStage(order) {
