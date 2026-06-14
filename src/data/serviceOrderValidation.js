@@ -1,9 +1,10 @@
-import { PaymentStatus, ServiceOrderChannel, ServiceOrderStatus } from "../domain/serviceOrderTypes.js?v=20260611-v019-6-trip";
+import { PaymentStatus, ServiceOrderChannel, ServiceOrderStatus } from "../domain/serviceOrderTypes.js?v=20260614-v020-3-service-order";
 
 export function validateServiceOrders(data) {
   const orders = data.serviceOrders || [];
   const customers = new Set((data.customers || []).map((item) => item.customer_id));
   const demandRuns = new Set((data.demandSimulationRuns || []).map((item) => item.demand_simulation_run_id));
+  const demandResults = new Set((data.demandSimulationRuns || []).map((item) => getDemandSimulationResultId(item.demand_simulation_run_id)));
   const serviceAreas = new Map((data.serviceAreas || []).map((item) => [item.service_area_id, item]));
   const cells = new Set((data.cells || []).map((item) => item.cell_id));
   const orderIds = new Set();
@@ -13,6 +14,7 @@ export function validateServiceOrders(data) {
     rules.push(validateUnique(orderIds, order.service_order_id));
     rules.push(validateRef(`SO-CUSTOMER-${order.service_order_id}`, "服务订单客户必须存在", order.customer_id, customers));
     rules.push(validateRef(`SO-DEMAND-RUN-${order.service_order_id}`, "服务订单需求模拟执行记录必须存在", order.demand_simulation_run_id, demandRuns));
+    rules.push(validateOptionalRef(`SO-DEMAND-RESULT-${order.service_order_id}`, "服务订单需求模拟结果必须存在", order.demand_simulation_result_id, demandResults));
     rules.push(validateEnum(`SO-CHANNEL-${order.service_order_id}`, "服务订单来源必须合法", order.order_channel, Object.values(ServiceOrderChannel)));
     rules.push(validateEnum(`SO-STATUS-${order.service_order_id}`, "服务订单状态必须合法", order.order_status, Object.values(ServiceOrderStatus)));
     rules.push(validateEnum(`SO-PAYMENT-${order.service_order_id}`, "服务订单支付状态必须合法", order.payment_status, Object.values(PaymentStatus)));
@@ -60,7 +62,7 @@ function validateServiceAreaCell(order, serviceAreas, type) {
 }
 
 function validateCreatedStage(order) {
-  if (order.order_status !== ServiceOrderStatus.CREATED) {
+  if (![ServiceOrderStatus.WAITING_PRICE_ESTIMATE, ServiceOrderStatus.CREATED].includes(order.order_status)) {
     return createRule(`SO-CREATED-STAGE-${order.service_order_id}`, "订单创建阶段字段约束", true, "非创建阶段暂不校验");
   }
   const passed = !order.estimated_pricing_decision_id &&
@@ -74,6 +76,16 @@ function validateCreatedStage(order) {
     passed,
     passed ? "创建阶段字段正确" : "存在提前绑定的后续对象",
   );
+}
+
+function validateOptionalRef(ruleId, ruleName, value, targetSetOrMap) {
+  const passed = !value || targetSetOrMap.has(value);
+  return createRule(ruleId, ruleName, passed, passed ? (value || "未设置") : `${value} 不存在`);
+}
+
+function getDemandSimulationResultId(runId) {
+  const serial = String(runId || "").match(/\d+$/)?.[0] || "000";
+  return `DSRES-${serial.padStart(3, "0")}`;
 }
 
 function createRule(ruleId, ruleName, passed, detail) {
