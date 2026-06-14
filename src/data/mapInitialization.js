@@ -333,7 +333,6 @@ function createRoutes(map, roadSegments) {
       total_step_count: Math.max(0, routeSteps.length - 1),
       related_service_area_ids: serviceAreaIds,
       total_distance_m: totalDistance,
-      estimated_time_s: Math.round(totalDistance / (40 * 1000 / 3600)),
       route_status: RouteStatus.ACTIVE,
     });
   });

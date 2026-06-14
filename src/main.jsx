@@ -2737,7 +2737,7 @@ function getDetailTabs(selectedType) {
       { key: "relation", label: "业务关联", keys: ["task_id", "service_order_id", "trip_id", "route_execution_id", "robotaxi_id"] },
       { key: "location", label: "起终点", keys: ["origin_cell_id", "target_cell_id", "start_cell_id", "end_cell_id"] },
       { key: "steps", label: "路径步骤", keys: ["road_segment_sequence", "route_segments", "route_step_count", "route_steps"] },
-      { key: "metrics", label: "路径指标", keys: ["total_distance_m", "estimated_time_s", "related_service_area_ids"] },
+      { key: "metrics", label: "路径指标", keys: ["total_distance_m", "related_service_area_ids"] },
     ];
   }
   if (selectedType === "deploymentTask") {
@@ -3543,7 +3543,6 @@ function createDeploymentRoute(task, data, options = {}) {
     total_step_count: Math.max(0, routeSteps.length - 1),
     related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
     total_distance_m: totalDistance,
-    estimated_time_s: Math.max(1, Math.round(totalDistance / (40 * 1000 / 3600))),
     route_status: routeSteps.length > 0 ? "Active" : "Failed",
     failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
   };
@@ -3581,7 +3580,6 @@ function createTripRoute(trip, data, options = {}) {
     total_step_count: Math.max(0, routeSteps.length - 1),
     related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
     total_distance_m: totalDistance,
-    estimated_time_s: Math.max(1, Math.round(totalDistance / (40 * 1000 / 3600))),
     route_status: routeSteps.length > 0 ? "Active" : "Failed",
     failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
   };
@@ -3637,7 +3635,6 @@ function createPriceEstimationRoute(serviceOrder, data, routePlanningRunId) {
     total_step_count: Math.max(0, routeSteps.length - 1),
     related_service_area_ids: [serviceOrder.pickup_service_area_id, serviceOrder.dropoff_service_area_id].filter(Boolean),
     total_distance_m: totalDistance,
-    estimated_time_s: Math.max(1, Math.round(totalDistance / (24 * 1000 / 3600))),
     route_status: valid ? "Active" : "Failed",
     failure_reason: valid ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
   };
@@ -4372,7 +4369,6 @@ function getRouteDetail(route) {
     route_steps: route.route_steps,
     related_service_area_ids: route.related_service_area_ids,
     total_distance_m: route.total_distance_m,
-    estimated_time_s: route.estimated_time_s,
     route_status: route.route_status,
     failure_reason: route.failure_reason,
   };
