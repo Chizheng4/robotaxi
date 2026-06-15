@@ -390,6 +390,9 @@
 |actual_distance_km|实际距离（公里）|运行态字段|服务完成后的实际距离|
 |actual_duration_min|实际时长（分钟）|运行态字段|服务完成后的实际时长|
 |final_price|最终价格|运行态字段|最终结算价格|
+|trip_total_distance_km|履约总距离（公里）|聚合展示字段|关联履约行驶记录的总距离|
+|trip_distance_traveled_km|履约已行驶距离（公里）|聚合展示字段|关联履约行驶记录的已行驶距离|
+|trip_distance_remaining_km|履约剩余距离（公里）|聚合展示字段|关联履约行驶记录的剩余距离|
 |payment_status|支付状态|运行态字段|订单支付状态|
 |paid_amount|已支付金额|运行态字段|客户已支付金额|
 |payment_completed_at|支付完成时间|运行态字段|支付完成时间，可为空|
@@ -397,6 +400,8 @@
 |pricing_breakdown_snapshot|定价明细快照|运行态字段|保存价格构成快照|
 |order_status|订单状态|运行态字段|客户服务订单当前状态|
 |matched_robotaxi_id|匹配 Robotaxi|运行态字段|已匹配车辆，可为空|
+|matched_robotaxi_location_summary|匹配 Robotaxi 位置摘要|聚合展示字段|已匹配 Robotaxi 当前结构化位置摘要|
+|matched_robotaxi_location_detail|匹配 Robotaxi 位置详情|聚合展示字段|已匹配 Robotaxi 当前结构化位置详情|
 |order_matching_decision_id|订单匹配结果编号|运行态字段|关联 OrderMatchingDecision，可为空|
 |trip_id|履约行驶记录编号|运行态字段|关联 Trip，可为空|
 |confirmed_at|客户确认时间|运行态字段|客户确认叫车时间|
@@ -547,6 +552,8 @@
 |candidate_robotaxi_count|候选车辆数量|运行态字段|进入匹配策略的候选车辆数量|
 |eligible_robotaxi_count|可匹配车辆数量|运行态字段|通过筛选的车辆数量|
 |selected_robotaxi_id|选中 Robotaxi|运行态字段|订单匹配结果选中的 Robotaxi，可为空|
+|selected_robotaxi_location_summary|选中 Robotaxi 位置摘要|聚合展示字段|订单匹配结果中选中 Robotaxi 的当前位置摘要|
+|selected_robotaxi_location_detail|选中 Robotaxi 位置详情|聚合展示字段|订单匹配结果中选中 Robotaxi 的当前位置详情|
 |candidate_snapshot|候选车辆快照|运行态字段|本次匹配候选车辆及评分快照|
 |estimated_pickup_distance_km|预估接驾距离（公里）|运行态字段|选中 Robotaxi 到上车点的预估距离|
 |estimated_pickup_duration_min|预估接驾时长（分钟）|运行态字段|选中 Robotaxi 到上车点的预估时间|
