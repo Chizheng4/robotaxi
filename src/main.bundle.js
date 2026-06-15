@@ -89,6 +89,9 @@ const pageGroups = [{
     }, {
       key: "routePlanningRuns",
       label: "路径规划执行"
+    }, {
+      key: "routes",
+      label: "路径规划结果"
     }]
   }, {
     key: "demandSimulationManagement",
@@ -124,10 +127,10 @@ const pageGroups = [{
       label: "订单匹配策略"
     }, {
       key: "orderMatchingRuns",
-      label: "匹配执行管理"
+      label: "订单匹配执行"
     }, {
       key: "orderMatchingDecisions",
-      label: "匹配决策管理"
+      label: "订单匹配结果"
     }]
   }]
 }, {
@@ -167,9 +170,6 @@ const pageGroups = [{
     key: "robotaxis",
     label: "Robotaxi 列表"
   }, {
-    key: "routes",
-    label: "Route 管理"
-  }, {
     key: "routeExecutionManagement",
     label: "行驶记录管理",
     children: [{
@@ -177,7 +177,7 @@ const pageGroups = [{
       label: "运营行驶记录"
     }, {
       key: "serviceFulfillmentRecords",
-      label: "服务履约记录"
+      label: "履约行驶记录"
     }]
   }]
 }, {
@@ -251,8 +251,8 @@ const tableConfig = {
     columns: ["zone_id", "parent_zone_id", "zone_name", "zone_level", "zone_type", "zone_status", "cell_count", "place_ids", "service_area_ids"]
   },
   routes: {
-    title: "Route 管理",
-    description: "Route 是路径规划策略执行后生成的路径结果，可供运营行驶记录或服务履约记录引用。",
+    title: "路径规划结果",
+    description: "路径规划结果是路径规划策略执行后生成的 Route，可供运营行驶记录或履约行驶记录引用。",
     columns: ["route_id", "route_version", "route_usage_type", "route_strategy_id", "route_planning_run_id", "task_id", "service_order_id", "trip_id", "route_execution_id", "robotaxi_id", "origin_cell_id", "target_cell_id", "road_segment_sequence", "route_step_count", "total_distance_m", "route_status", "failure_reason"]
   },
   customers: {
@@ -341,18 +341,18 @@ const tableConfig = {
     columns: ["order_matching_strategy_id", "strategy_name", "strategy_type", "matching_algorithm", "candidate_filter_rule", "distance_rule", "battery_rule", "scoring_rule", "min_battery_threshold", "strategy_status", "order_matching_run_count"]
   },
   orderMatchingRuns: {
-    title: "匹配执行管理",
+    title: "订单匹配执行",
     description: "记录每次订单匹配策略执行过程。",
     columns: ["order_matching_run_id", "run_result", "order_matching_strategy_id", "matching_algorithm", "service_order_id", "pickup_cell_id", "candidate_robotaxi_count", "eligible_robotaxi_count", "selected_robotaxi_id", "failure_reason", "created_at"]
   },
   orderMatchingDecisions: {
-    title: "匹配决策管理",
+    title: "订单匹配结果",
     description: "记录服务订单匹配 Robotaxi 的决策结果。",
     columns: ["order_matching_decision_id", "decision_result", "order_matching_run_id", "order_matching_strategy_id", "service_order_id", "selected_robotaxi_id", "estimated_pickup_distance_km", "estimated_pickup_duration_min", "matching_score", "failure_reason", "created_at"]
   },
   serviceFulfillmentRecords: {
-    title: "服务履约记录",
-    description: "服务履约记录用于模拟 Robotaxi 执行客户服务订单的接驾、载客和完成过程。",
+    title: "履约行驶记录",
+    description: "履约行驶记录用于模拟 Robotaxi 执行客户服务订单的接驾、载客和完成过程。",
     columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "route_id", "created_at"]
   },
   robotaxis: {
@@ -475,7 +475,7 @@ const routeExecutionStatusOptions = ["WAITING_ROUTE", "MOVING", "ARRIVED", "ARRI
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
-const tripStatusOptions = ["WAITING_ROUTE", "ON_THE_WAY_PICKUP", "WAITING_CUSTOMER_BOARDING", "CUSTOMER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "SETTLING", "WAITING_OPERATION_DECISION", "COMPLETED", "FAILED", "CANCELLED", "PENDING", "ASSIGNED", "ARRIVED_PICKUP", "PASSENGER_ONBOARD"];
+const tripStatusOptions = ["WAITING_ROUTE", "ON_THE_WAY_PICKUP", "WAITING_CUSTOMER_BOARDING", "CUSTOMER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "COMPLETED", "FAILED", "CANCELLED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
 const serviceOrderStatusOptions = ["WAITING_PRICE_ESTIMATE", "WAITING_ROBOTAXI_CALL", "WAITING_ROBOTAXI_ASSIGNMENT", "ROBOTAXI_ASSIGNMENT_FAILED", "ON_THE_WAY_PICKUP", "WAITING_CUSTOMER_BOARDING", "CUSTOMER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "SETTLING", "WAITING_PAYMENT", "COMPLETED", "CANCELLED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
@@ -3606,7 +3606,7 @@ function createTripRoute(trip, data, options = {}) {
   return {
     route_id: nextServiceRouteId(),
     route_version: 1,
-    route_name: `${trip.robotaxi_id} 服务履约 ${originCellId} 到 ${targetCellId}`,
+    route_name: `${trip.robotaxi_id} 履约行驶 ${originCellId} 到 ${targetCellId}`,
     route_usage_type: getServiceRouteUsageType(options.strategyId),
     map_id: data.maps[0].map_id,
     start_cell_id: originCellId,

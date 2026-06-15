@@ -295,7 +295,7 @@
 |task_id|任务编号|持久化字段|关联 Task，可为空|
 |route_execution_id|行驶记录编号|持久化字段|关联 RouteExecution，可为空|
 |service_order_id|服务订单编号|持久化字段|关联 ServiceOrder，可为空|
-|trip_id|服务履约记录编号|持久化字段|关联 Trip，可为空|
+|trip_id|履约行驶记录编号|持久化字段|关联 Trip，可为空|
 |robotaxi_id|Robotaxi 编号|持久化字段|执行 Robotaxi|
 |origin_cell_id|起点位置|持久化字段|本次 Route 起点 Cell|
 |route_usage_type|路径用途类型|持久化字段|区分价格预估路径、运营行驶路径、服务接驾路径、服务送达路径、服务重规划路径等 Route 用途|
@@ -397,8 +397,8 @@
 |pricing_breakdown_snapshot|定价明细快照|运行态字段|保存价格构成快照|
 |order_status|订单状态|运行态字段|客户服务订单当前状态|
 |matched_robotaxi_id|匹配 Robotaxi|运行态字段|已匹配车辆，可为空|
-|order_matching_decision_id|订单匹配决策编号|运行态字段|关联 OrderMatchingDecision，可为空|
-|trip_id|服务履约记录编号|运行态字段|关联 Trip，可为空|
+|order_matching_decision_id|订单匹配结果编号|运行态字段|关联 OrderMatchingDecision，可为空|
+|trip_id|履约行驶记录编号|运行态字段|关联 Trip，可为空|
 |confirmed_at|客户确认时间|运行态字段|客户确认叫车时间|
 |matched_at|匹配时间|运行态字段|车辆匹配成功时间|
 |cancelled_at|取消时间|运行态字段|订单取消时间，可为空|
@@ -410,17 +410,17 @@
 
 ---
 
-## 16. Trip：服务履约记录
+## 16. Trip：履约行驶记录
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
-|trip_id|服务履约记录编号|运行态字段|Trip 唯一编号|
+|trip_id|履约行驶记录编号|运行态字段|Trip 唯一编号|
 |service_order_id|服务订单编号|运行态字段|Trip 关联的 ServiceOrder|
-|robotaxi_id|Robotaxi 编号|运行态字段|执行服务履约的 Robotaxi|
-|pickup_service_area_id|上车服务区|运行态字段|服务履约上车 ServiceArea|
-|pickup_cell_id|上车位置|运行态字段|服务履约上车 Cell|
-|dropoff_service_area_id|下车服务区|运行态字段|服务履约下车 ServiceArea|
-|dropoff_cell_id|下车位置|运行态字段|服务履约下车 Cell|
+|robotaxi_id|Robotaxi 编号|运行态字段|执行履约行驶的 Robotaxi|
+|pickup_service_area_id|上车服务区|运行态字段|履约行驶上车 ServiceArea|
+|pickup_cell_id|上车位置|运行态字段|履约行驶上车 Cell|
+|dropoff_service_area_id|下车服务区|运行态字段|履约行驶下车 ServiceArea|
+|dropoff_cell_id|下车位置|运行态字段|履约行驶下车 Cell|
 |current_cell_id|当前所在网格|运行态字段|Robotaxi 当前履约位置 Cell|
 |pickup_location_summary|上车位置摘要|聚合展示字段|上车位置的结构化摘要|
 |dropoff_location_summary|下车位置摘要|聚合展示字段|下车位置的结构化摘要|
@@ -430,23 +430,23 @@
 |current_location_detail|当前位置详情|聚合展示字段|当前位置的结构化上下文|
 |current_step_index|当前步序号|运行态字段|当前执行到 Route 的 Step 下标|
 |total_step_count|总移动步数|运行态字段|当前 Route 实际移动步数，等于 route_steps.length - 1|
-|distance_traveled_km|已行驶距离（公里）|运行态字段|服务履约已行驶距离|
+|distance_traveled_km|已行驶距离（公里）|运行态字段|履约行驶已行驶距离|
 |distance_remaining_km|剩余距离（公里）|运行态字段|当前 Route 剩余距离|
-|time_elapsed|已耗时|运行态字段|服务履约已耗时|
-|trip_status|服务履约状态|运行态字段|Trip 当前状态|
-|trip_phase|服务履约阶段|运行态字段|路径规划或异常处理时使用的 Trip 阶段表达|
+|time_elapsed|已耗时|运行态字段|履约行驶已耗时|
+|trip_status|履约行驶状态|运行态字段|Trip 当前状态|
+|trip_phase|履约行驶阶段|运行态字段|路径规划或异常处理时使用的 Trip 阶段表达|
 |arrival_execution_result|到达执行结果|运行态字段|目的地到达后的执行结果，可为空|
-|exception_type|异常类型|运行态字段|服务履约异常或重规划触发原因，可为空|
+|exception_type|异常类型|运行态字段|履约行驶异常或重规划触发原因，可为空|
 |route_id|路径编号|运行态字段|Trip 当前引用 Route，可为空|
 |route_planning_run_id|路径规划执行记录编号|运行态字段|Trip 当前引用路径规划执行记录，可为空|
 |route_history|路径历史|运行态字段|Trip 履约过程中的路径历史，可为空数组|
-|started_at|开始时间|运行态字段|服务履约开始时间|
-|completed_at|完成时间|运行态字段|服务履约完成时间|
-|event_log|事件记录|运行态字段|服务履约事件数组|
+|started_at|开始时间|运行态字段|履约行驶开始时间|
+|completed_at|完成时间|运行态字段|履约行驶完成时间|
+|event_log|事件记录|运行态字段|履约行驶事件数组|
 
 说明：
 
-- Trip 是服务订单履约记录；
+- Trip 是服务订单的履约行驶记录；
 - Trip 与 RouteExecution 都可以引用 Route，但二者执行记录独立。
 
 ---
@@ -526,18 +526,18 @@
 说明：
 
 - 定价可以调用路径规划策略生成价格预估 Route，并使用该 Route 的距离和时长作为输入；
-- 价格预估 Route 需要进入 Route 管理，并通过 `route_usage_type = PRICE_ESTIMATION` 与执行类路径区分；
+- 价格预估 Route 需要进入路径规划结果，并通过 `route_usage_type = PRICE_ESTIMATION` 与执行类路径区分；
 - 定价策略只返回定价执行和定价结果，不主动改变 ServiceOrder、Trip 或 Robotaxi 状态。
 
 ---
 
-## 19. OrderMatchingStrategy / OrderMatchingDecision：订单匹配策略与订单匹配决策
+## 19. OrderMatchingStrategy / OrderMatchingDecision：订单匹配策略与订单匹配结果
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |order_matching_strategy_id|订单匹配策略编号|持久化字段|OrderMatchingStrategy 唯一编号|
-|order_matching_run_id|匹配执行记录编号|运行态字段|一次订单匹配策略执行记录|
-|order_matching_decision_id|匹配决策编号|运行态字段|OrderMatchingDecision 唯一编号|
+|order_matching_run_id|订单匹配执行编号|运行态字段|一次订单匹配策略执行记录|
+|order_matching_decision_id|订单匹配结果编号|运行态字段|OrderMatchingDecision 唯一编号|
 |matching_algorithm|匹配算法|持久化字段|订单匹配策略使用的算法|
 |candidate_filter_rule|候选筛选规则|持久化字段|候选 Robotaxi 筛选规则|
 |distance_rule|距离计算规则|持久化字段|接驾距离计算规则|
@@ -546,27 +546,27 @@
 |min_battery_threshold|最低电量阈值|持久化字段|可参与匹配的最低电量百分比|
 |candidate_robotaxi_count|候选车辆数量|运行态字段|进入匹配策略的候选车辆数量|
 |eligible_robotaxi_count|可匹配车辆数量|运行态字段|通过筛选的车辆数量|
-|selected_robotaxi_id|选中 Robotaxi|运行态字段|匹配决策选中的 Robotaxi，可为空|
+|selected_robotaxi_id|选中 Robotaxi|运行态字段|订单匹配结果选中的 Robotaxi，可为空|
 |candidate_snapshot|候选车辆快照|运行态字段|本次匹配候选车辆及评分快照|
 |estimated_pickup_distance_km|预估接驾距离（公里）|运行态字段|选中 Robotaxi 到上车点的预估距离|
 |estimated_pickup_duration_min|预估接驾时长（分钟）|运行态字段|选中 Robotaxi 到上车点的预估时间|
-|matching_score|匹配评分|运行态字段|本次匹配决策评分|
+|matching_score|匹配评分|运行态字段|本次订单匹配结果评分|
 |decision_result|决策结果|运行态字段|OrderMatchingDecision 决策结果|
 |decision_reason|决策说明|运行态字段|本次匹配成功或失败说明|
 
 说明：
 
 - OrderMatchingStrategy 只负责返回匹配结果；
-- 调用方根据 OrderMatchingDecision 更新 ServiceOrder 和 Robotaxi；
-- 匹配成功后由服务履约流程创建 Trip，并由 Trip 后续反馈 ServiceOrder 与 Robotaxi 状态。
+- 调用方根据 OrderMatchingDecision 形成的订单匹配结果更新 ServiceOrder 和 Robotaxi；
+- 匹配成功后由履约行驶流程创建 Trip，并由 Trip 后续反馈 ServiceOrder 与 Robotaxi 状态。
 
 ---
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |order_matching_strategy_id|订单匹配策略编号|持久化字段|OrderMatchingStrategy 唯一编号|
-|order_matching_run_id|订单匹配执行记录编号|运行态字段|一次订单匹配策略执行记录|
-|order_matching_decision_id|订单匹配决策编号|运行态字段|OrderMatchingDecision 唯一编号|
+|order_matching_run_id|订单匹配执行编号|运行态字段|一次订单匹配策略执行记录|
+|order_matching_decision_id|订单匹配结果编号|运行态字段|OrderMatchingDecision 唯一编号|
 |matching_algorithm|匹配算法|持久化字段|订单匹配策略使用的算法|
 |candidate_filter_rule|候选车辆筛选规则|持久化字段|如何筛选候选 Robotaxi|
 |distance_rule|距离计算规则|持久化字段|候选车辆距离计算方式|
@@ -576,7 +576,7 @@
 |eligible_robotaxi_count|可用车辆数量|运行态字段|通过筛选的车辆数量|
 |selected_robotaxi_id|选中 Robotaxi|运行态字段|匹配成功选中的 Robotaxi|
 |matching_score|匹配评分|运行态字段|最终匹配评分|
-|decision_result|决策结果|运行态字段|匹配决策成功或失败|
+|decision_result|决策结果|运行态字段|订单匹配结果成功或失败|
 |decision_reason|决策说明|运行态字段|匹配结果说明|
 
 说明：
