@@ -235,6 +235,7 @@ export const fieldDictionary = {
   same_service_area_retry_allowed: "允许同服务区重试",
   current_target_service_area_id: "当前目标服务区",
   route_history: "路径历史",
+  route_history_detail: "路径历史详情",
   route_change_reason: "路径变化原因",
   strategy_usage_count: "策略执行次数",
   route_planning_run_id: "路径规划执行记录编号",

@@ -308,7 +308,7 @@ const tableConfig = {
   taskEventLogs: {
     title: "任务事件日志",
     description: "记录运营准入任务的创建、分配、检查和状态反馈事件。",
-    columns: ["event_id", "event_type", "event_result", "task_id", "robotaxi_id", "worker_id", "route_execution_id", "message", "created_at"]
+    columns: ["event_id", "event_type", "event_result", "message", "task_id", "robotaxi_id", "worker_id", "route_execution_id", "created_at"]
   },
   routePlanningStrategies: {
     title: "路径规划策略",
@@ -1453,7 +1453,7 @@ function App() {
     const serviceOrder = serviceOrders.find(item => item.service_order_id === serviceOrderId);
     if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.SETTLING) return;
     const trip = trips.find(item => item.trip_id === serviceOrder.trip_id || item.service_order_id === serviceOrderId);
-    const settlementOrder = mergeServiceOrderTripMetrics(serviceOrder, trip);
+    const settlementOrder = mergeServiceOrderTripMetrics(serviceOrder, trip, data);
     const strategy = data.pricingStrategies?.find(item => item.pricing_strategy_id === "DPS-002");
     const result = runFinalFareCalculation({
       strategy,
@@ -2294,7 +2294,7 @@ function RecordTable({
   const actionColumn = getActionColumn();
   const finalColumns = actionColumn ? [...columns, actionColumn] : columns;
   const eventRows = isTripPage ? createTripEventRows(rows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
-  const eventColumns = isTripPage ? ["event_id", "event_time", "event_type", "event_result", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventColumns = isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
   const eventRowKey = isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 262}px)` : "calc(100vh - 120px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
@@ -2421,7 +2421,7 @@ function RecordTable({
     title: "\u62D6\u52A8\u8C03\u6574\u4E8B\u4EF6\u533A\u9AD8\u5EA6"
   }), /*#__PURE__*/React.createElement("div", {
     className: "event-log-title"
-  }, isTripPage ? "履约执行事件" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
+  }, isTripPage ? "履约行驶事件" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: eventRowKey,
     columns: eventColumns.map(key => ({
@@ -2698,9 +2698,17 @@ function createTripEventRows(trips = []) {
     robotaxi_id: trip.robotaxi_id,
     route_id: event.route_id || trip.route_id,
     cell_id: event.cell_id || trip.current_cell_id,
+    message: event.message || createTripEventMessage(event, trip),
     previous_status: event.previous_status || null,
     next_status: event.next_status || null
   }))).sort((left, right) => String(right.event_time || "").localeCompare(String(left.event_time || "")));
+}
+function createTripEventMessage(event, trip) {
+  const typeText = getDisplayValue(event.event_type || "TRIP_STATUS_CHANGED");
+  const resultText = getDisplayValue(event.event_result || "SUCCESS");
+  const nextStatusText = event.next_status ? getDisplayValue(event.next_status) : null;
+  const routeText = event.route_id ? `路径 ${event.route_id}` : trip.route_id ? `路径 ${trip.route_id}` : "未生成路径";
+  return nextStatusText ? `${typeText}，结果${resultText}，状态更新为${nextStatusText}，${routeText}` : `${typeText}，结果${resultText}，${routeText}`;
 }
 function DetailPanel({
   selectedObject,
@@ -2913,7 +2921,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "route",
       label: "路径关联",
-      keys: ["route_id", "route_planning_run_id", "route_summary", "route_detail", "route_history"]
+      keys: ["route_id", "route_planning_run_id", "route_summary", "route_detail", "route_history", "route_history_detail"]
     }, {
       key: "time",
       label: "状态时间",
@@ -4259,7 +4267,7 @@ function enrichServiceOrderForDisplay(order, data, trips) {
   const robotaxi = data.robotaxis.find(item => item.robotaxi_id === order.matched_robotaxi_id);
   const trip = trips.find(item => item.trip_id === order.trip_id || item.service_order_id === order.service_order_id);
   const robotaxiLocation = getLocationInfo(robotaxi?.current_cell_id, data);
-  const tripMetrics = getTripMetrics(trip);
+  const tripMetrics = getTripMetrics(trip, data);
   return {
     ...order,
     matched_robotaxi_location_summary: robotaxi ? robotaxiLocation.summary : null,
@@ -4283,6 +4291,8 @@ function enrichTripForDisplay(trip, data) {
   const dropoffLocation = getLocationInfo(trip.dropoff_cell_id, data);
   const currentLocation = getLocationInfo(trip.current_cell_id, data);
   const route = data.routes.find(item => item.route_id === trip.route_id);
+  const routeHistoryDetail = createTripRouteHistoryDetail(trip, data);
+  const tripMetrics = getTripMetrics(trip, data);
   return {
     ...trip,
     pickup_location_summary: pickupLocation.summary,
@@ -4292,10 +4302,14 @@ function enrichTripForDisplay(trip, data) {
     dropoff_location_detail: dropoffLocation.detail,
     current_location_detail: currentLocation.detail,
     route_summary: summarizeRoute(route),
-    route_detail: route ? getRouteDetail(route) : null
+    route_detail: route ? getRouteDetail(route) : null,
+    route_history_detail: routeHistoryDetail,
+    total_distance_km: tripMetrics.totalDistanceKm,
+    distance_traveled_km: tripMetrics.distanceTraveledKm,
+    distance_remaining_km: tripMetrics.distanceRemainingKm
   };
 }
-function getTripMetrics(trip) {
+function getTripMetrics(trip, data = null) {
   if (!trip) {
     return {
       totalDistanceKm: null,
@@ -4306,15 +4320,42 @@ function getTripMetrics(trip) {
   }
   const distanceTraveledKm = roundDistance(trip.distance_traveled_km || 0);
   const distanceRemainingKm = roundDistance(trip.distance_remaining_km || 0);
+  const routeHistoryDistanceKm = data ? getTripRouteHistoryDistanceKm(trip, data) : null;
   return {
-    totalDistanceKm: roundDistance(distanceTraveledKm + distanceRemainingKm),
+    totalDistanceKm: routeHistoryDistanceKm ?? roundDistance(distanceTraveledKm + distanceRemainingKm),
     distanceTraveledKm,
     distanceRemainingKm,
     durationMin: Number.parseInt(trip.time_elapsed, 10) || 0
   };
 }
-function mergeServiceOrderTripMetrics(order, trip) {
-  const tripMetrics = getTripMetrics(trip);
+function getTripRouteHistoryDistanceKm(trip, data) {
+  const routeIds = Array.from(new Set((trip.route_history || []).map(item => item.route_id).filter(Boolean)));
+  if (routeIds.length === 0) return null;
+  const routeDistanceKm = routeIds.reduce((sum, routeId) => {
+    const route = data.routes.find(item => item.route_id === routeId);
+    return sum + Number(route?.total_distance_m || 0) / 1000;
+  }, 0);
+  return routeDistanceKm > 0 ? roundDistance(Math.max(routeDistanceKm, (trip.distance_traveled_km || 0) + (trip.distance_remaining_km || 0))) : null;
+}
+function createTripRouteHistoryDetail(trip, data) {
+  const history = Array.isArray(trip.route_history) ? trip.route_history : [];
+  if (history.length === 0) return [];
+  return history.map((item, index) => {
+    const route = data.routes.find(routeItem => routeItem.route_id === item.route_id);
+    return {
+      index: index + 1,
+      route_id: item.route_id,
+      route_strategy_id: item.route_strategy_id,
+      route_change_reason: item.route_change_reason,
+      origin_cell_id: item.origin_cell_id,
+      target_cell_id: item.target_cell_id,
+      total_distance_km: route ? roundDistance(Number(route.total_distance_m || 0) / 1000) : null,
+      is_current_route: item.route_id === trip.route_id
+    };
+  });
+}
+function mergeServiceOrderTripMetrics(order, trip, data = null) {
+  const tripMetrics = getTripMetrics(trip, data);
   return {
     ...order,
     actual_distance_km: tripMetrics.distanceTraveledKm ?? order.actual_distance_km ?? order.estimated_distance_km,

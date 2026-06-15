@@ -445,6 +445,7 @@
 |route_id|路径编号|运行态字段|Trip 当前引用 Route，可为空|
 |route_planning_run_id|路径规划执行记录编号|运行态字段|Trip 当前引用路径规划执行记录，可为空|
 |route_history|路径历史|运行态字段|Trip 履约过程中的路径历史，可为空数组|
+|route_history_detail|路径历史详情|聚合展示字段|Trip 当前路径与历史路径的结构化展示|
 |started_at|开始时间|运行态字段|履约行驶开始时间|
 |completed_at|完成时间|运行态字段|履约行驶完成时间|
 |event_log|事件记录|运行态字段|履约行驶事件数组|
