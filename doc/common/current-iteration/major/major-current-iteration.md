@@ -1,15 +1,13 @@
 # 当前大版本迭代
 
-当前暂无进行中的大版本自动执行计划。
+当前大版本计划：
 
-当新的大版本迭代开始时，需要先在本文件记录当前大版本目标，并将可执行计划整理为：
+`doc/common/current-iteration/major/v022-auto-execution-plan.md`
 
-```text
-doc/common/current-iteration/major/vXXX-auto-execution-plan.md
-```
+阶段基线版本：`v021.6`
 
-已完成的大版本自动执行计划必须归档至：
+阶段名称：订单匹配、服务订单与履约行驶体验优化
 
-```text
-doc/common/iteration-history/major/
-```
+当前计划范围：`v022.1` 至 `v022.5`
+
+执行状态：自动执行计划已整理，按子版本连续推进；遇到业务冲突、范围扩大或无法验证时暂停确认。
