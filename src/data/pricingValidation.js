@@ -1,4 +1,4 @@
-import { PricingResult, PricingStage } from "../domain/pricingTypes.js?v=20260611-v019-4-pricing";
+import { PricingAlgorithm, PricingResult, PricingStage } from "../domain/pricingTypes.js?v=20260611-v019-4-pricing";
 
 export function validatePricing(data) {
   const strategies = data.pricingStrategies || [];
@@ -41,6 +41,9 @@ export function validatePricing(data) {
 }
 
 function hasValidConfig(strategy) {
+  if (strategy.pricing_algorithm === PricingAlgorithm.BASIC_FINAL_FARE_CALCULATION) {
+    return true;
+  }
   return ["base_fare", "distance_unit_price", "time_unit_price", "supply_demand_multiplier", "time_period_multiplier", "service_area_multiplier", "channel_multiplier"]
     .every((key) => Number.isFinite(Number(strategy[key])));
 }

@@ -475,6 +475,7 @@ const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
 const serviceOrderStatusOptions = ["WAITING_PRICE_ESTIMATE", "WAITING_ROBOTAXI_CALL", "WAITING_ROBOTAXI_ASSIGNMENT", "ROBOTAXI_ASSIGNMENT_FAILED", "ON_THE_WAY_PICKUP", "WAITING_CUSTOMER_BOARDING", "CUSTOMER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "SETTLING", "WAITING_PAYMENT", "COMPLETED", "CANCELLED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
 const runtimeStorageKey = "robotaxi.runtime.v019-7-service-route";
+const runtimeStorageKeyPrefix = "robotaxi.runtime.";
 const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null };
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
@@ -516,11 +517,11 @@ function App() {
     routeExecutions,
     routePlanningRuns,
     demandSimulationRuns,
-    serviceOrders: serviceOrders.map((order) => enrichServiceOrderForDisplay(order, data, trips)),
+    serviceOrders,
     pricingStrategyRuns,
     pricingDecisions,
     orderMatchingRuns,
-    orderMatchingDecisions: orderMatchingDecisions.map((decision) => enrichOrderMatchingDecisionForDisplay(decision, data)),
+    orderMatchingDecisions,
     trips,
     taskEventLogs,
   }), [demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips]);
@@ -557,7 +558,7 @@ function App() {
     demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
     demandSimulationRuns,
     demandSimulationResults: createDemandSimulationResultRows(demandSimulationRuns),
-    serviceOrders,
+    serviceOrders: serviceOrders.map((order) => enrichServiceOrderForDisplay(order, data, trips)),
     opsCenters: data.opsCenters,
     workers: data.workers.map((worker) => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks,
@@ -571,7 +572,7 @@ function App() {
     pricingDecisions,
     orderMatchingStrategies: createOrderMatchingStrategyRows(data, orderMatchingRuns),
     orderMatchingRuns,
-    orderMatchingDecisions,
+    orderMatchingDecisions: orderMatchingDecisions.map((decision) => enrichOrderMatchingDecisionForDisplay(decision, data)),
     serviceFulfillmentRecords: trips.map((trip) => enrichTripForDisplay(trip, data)),
     robotaxis: data.robotaxis.map((robotaxi) => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     validations,
@@ -1446,11 +1447,38 @@ function App() {
     selectForPage("serviceFulfillmentRecords", "trip", trip.trip_id);
   }
 
-  function settleServiceOrder(serviceOrderId) {
+  function settleServiceOrder(serviceOrderId, visibleOrder = null) {
+    console.info("[settlement-debug] click", { serviceOrderId, visibleOrderStatus: visibleOrder?.order_status });
     const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
-    if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.SETTLING) return;
+    if (!serviceOrder) {
+      console.info("[settlement-debug] stop:no-service-order", { serviceOrderId });
+      return;
+    }
     const trip = trips.find((item) => item.trip_id === serviceOrder.trip_id || item.service_order_id === serviceOrderId);
-    const settlementOrder = mergeServiceOrderTripMetrics(serviceOrder, trip, data);
+    const settlementOrder = {
+      ...mergeServiceOrderTripMetrics(serviceOrder, trip, data),
+      ...(visibleOrder || {}),
+    };
+    const canSettle = settlementOrder.order_status === serviceOrderTypes.ServiceOrderStatus.SETTLING ||
+      [tripTypes.TripStatus.ARRIVED_DESTINATION, tripTypes.TripStatus.SETTLING, tripTypes.TripStatus.COMPLETED].includes(trip?.trip_status);
+    console.info("[settlement-debug] state", {
+      serviceOrderId,
+      rawOrderStatus: serviceOrder.order_status,
+      visibleOrderStatus: visibleOrder?.order_status,
+      settlementOrderStatus: settlementOrder.order_status,
+      tripId: trip?.trip_id,
+      tripStatus: trip?.trip_status,
+      actualDistanceKm: settlementOrder.actual_distance_km,
+      actualDurationMin: settlementOrder.actual_duration_min,
+      estimatedDistanceKm: settlementOrder.estimated_distance_km,
+      estimatedDurationMin: settlementOrder.estimated_duration_min,
+      quotedPrice: settlementOrder.quoted_price,
+      canSettle,
+    });
+    if (!canSettle) {
+      console.info("[settlement-debug] stop:not-settleable", { serviceOrderId });
+      return;
+    }
     const strategy = data.pricingStrategies?.find((item) => item.pricing_strategy_id === "DPS-002");
     const result = runFinalFareCalculation({
       strategy,
@@ -1459,20 +1487,28 @@ function App() {
       pricingDecisionId: nextPricingDecisionId(),
       createdAt: now(),
     });
+    console.info("[settlement-debug] pricing-result", {
+      serviceOrderId,
+      runId: result.run?.pricing_strategy_run_id,
+      runResult: result.run?.run_result,
+      failureReason: result.run?.failure_reason,
+      decisionId: result.decision?.pricing_decision_id,
+      finalPrice: result.decision?.final_price,
+    });
     setPricingStrategyRuns((items) => [result.run, ...items]);
     if (result.decision) {
       setPricingDecisions((items) => [result.decision, ...items]);
     }
     setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
       ...order,
-      order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT,
-      payment_status: serviceOrderTypes.PaymentStatus.WAITING_PAYMENT,
-      actual_distance_km: settlementOrder.actual_distance_km,
-      actual_duration_min: settlementOrder.actual_duration_min,
+      order_status: result.decision ? serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT : order.order_status,
+      payment_status: result.decision ? serviceOrderTypes.PaymentStatus.WAITING_PAYMENT : order.payment_status,
+      actual_distance_km: result.decision?.actual_distance_km ?? settlementOrder.actual_distance_km,
+      actual_duration_min: result.decision?.actual_duration_min ?? settlementOrder.actual_duration_min,
       final_pricing_decision_id: result.decision?.pricing_decision_id || order.final_pricing_decision_id,
-      final_price: result.decision?.final_price ?? order.final_price ?? order.quoted_price ?? order.estimated_price ?? 0,
+      final_price: result.decision?.final_price ?? order.final_price,
       pricing_explanation: result.decision?.pricing_explanation || order.pricing_explanation,
-      failure_reason: null,
+      failure_reason: result.decision ? null : result.run.failure_reason,
     } : order));
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
@@ -3101,7 +3137,7 @@ function renderServiceOrderActions(row, actions) {
     return <RowActionButton onClick={() => actions.createTripForOrder(row.service_order_id)}>创建履约行驶</RowActionButton>;
   }
   if (row.order_status === "SETTLING") {
-    return <RowActionButton onClick={() => actions.settleServiceOrder(row.service_order_id)}>结算</RowActionButton>;
+    return <RowActionButton onClick={() => actions.settleServiceOrder(row.service_order_id, row)}>结算</RowActionButton>;
   }
   if (row.order_status === "WAITING_PAYMENT") {
     return <RowActionButton onClick={() => actions.payServiceOrder(row.service_order_id)}>立即支付</RowActionButton>;
@@ -3717,15 +3753,37 @@ function findRoadSegmentIdByCell(data, cellId) {
 }
 
 function runFinalFareCalculation({ strategy, serviceOrder, pricingStrategyRunId, pricingDecisionId, createdAt }) {
-  const actualDistanceKm = Number(serviceOrder.actual_distance_km ?? serviceOrder.estimated_distance_km ?? 0);
-  const actualDurationMin = Number(serviceOrder.actual_duration_min ?? serviceOrder.estimated_duration_min ?? 0);
+  const rawActualDistanceKm = Number(serviceOrder.actual_distance_km ?? 0);
+  const rawActualDurationMin = Number(serviceOrder.actual_duration_min ?? 0);
+  const estimatedDistanceKm = Number(serviceOrder.estimated_distance_km ?? 0);
+  const estimatedDurationMin = Number(serviceOrder.estimated_duration_min ?? 0);
+  const actualDistanceKm = rawActualDistanceKm > 0 ? rawActualDistanceKm : estimatedDistanceKm;
+  const actualDurationMin = rawActualDurationMin > 0 ? rawActualDurationMin : estimatedDurationMin;
   const hasStrategy = strategy && strategy.strategy_status === "ACTIVE";
-  const success = hasStrategy && actualDistanceKm > 0;
   const pricingSnapshot = serviceOrder.pricing_breakdown_snapshot || {};
-  const distanceUnitPrice = Number(serviceOrder.quote_distance_unit_price ?? pricingSnapshot.distance_unit_price ?? strategy?.distance_unit_price ?? 0);
-  const timeUnitPrice = Number(serviceOrder.quote_time_unit_price ?? pricingSnapshot.time_unit_price ?? strategy?.time_unit_price ?? 0);
-  const baseFare = Number(serviceOrder.quote_base_fare ?? pricingSnapshot.base_fare ?? strategy?.base_fare ?? 0);
+  const quotedPrice = Number(serviceOrder.quoted_price ?? serviceOrder.estimated_price ?? pricingSnapshot.quoted_price);
+  const hasQuotedPriceOnly = Number.isFinite(quotedPrice) && quotedPrice > 0 &&
+    serviceOrder.quote_base_fare == null &&
+    serviceOrder.quote_distance_unit_price == null &&
+    serviceOrder.quote_time_unit_price == null &&
+    pricingSnapshot.base_fare == null &&
+    pricingSnapshot.distance_unit_price == null &&
+    pricingSnapshot.time_unit_price == null;
+  const distanceUnitPrice = hasQuotedPriceOnly ? 0 : Number(serviceOrder.quote_distance_unit_price ?? pricingSnapshot.distance_unit_price);
+  const timeUnitPrice = hasQuotedPriceOnly ? 0 : Number(serviceOrder.quote_time_unit_price ?? pricingSnapshot.time_unit_price);
+  const baseFare = hasQuotedPriceOnly ? quotedPrice : Number(serviceOrder.quote_base_fare ?? pricingSnapshot.base_fare);
   const dynamicMultiplier = Number(pricingSnapshot.dynamic_multiplier ?? 1);
+  const hasPricingInputs = [baseFare, distanceUnitPrice, timeUnitPrice, dynamicMultiplier].every(Number.isFinite);
+  const failureReason = !hasStrategy
+    ? pricingTypes.PricingFailureReason.PRICING_STRATEGY_NOT_FOUND
+    : !hasPricingInputs
+      ? pricingTypes.PricingFailureReason.PRICING_CONFIG_MISSING
+      : actualDistanceKm <= 0 && !hasQuotedPriceOnly
+        ? pricingTypes.PricingFailureReason.INVALID_DISTANCE
+        : actualDurationMin < 0
+          ? pricingTypes.PricingFailureReason.INVALID_DURATION
+          : null;
+  const success = !failureReason;
   const distanceFee = roundMoney(actualDistanceKm * distanceUnitPrice);
   const timeFee = roundMoney(actualDurationMin * timeUnitPrice);
   const basePrice = roundMoney(baseFare + distanceFee + timeFee);
@@ -3739,6 +3797,8 @@ function runFinalFareCalculation({ strategy, serviceOrder, pricingStrategyRunId,
     input_snapshot: {
       actual_distance_km: actualDistanceKm,
       actual_duration_min: actualDurationMin,
+      actual_distance_source: rawActualDistanceKm > 0 ? "TRIP_ACTUAL" : "SERVICE_ORDER_ESTIMATE",
+      actual_duration_source: rawActualDurationMin > 0 ? "TRIP_ACTUAL" : "SERVICE_ORDER_ESTIMATE",
       quote_base_fare: serviceOrder.quote_base_fare,
       quote_distance_unit_price: serviceOrder.quote_distance_unit_price,
       quote_time_unit_price: serviceOrder.quote_time_unit_price,
@@ -3747,7 +3807,7 @@ function runFinalFareCalculation({ strategy, serviceOrder, pricingStrategyRunId,
     },
     output_snapshot: success ? { final_price: finalPrice, base_price: basePrice, distance_fee: distanceFee, time_fee: timeFee, dynamic_multiplier: dynamicMultiplier } : null,
     run_result: success ? pricingTypes.PricingResult.SUCCESS : pricingTypes.PricingResult.FAILED,
-    failure_reason: success ? null : pricingTypes.PricingFailureReason.INVALID_DISTANCE,
+    failure_reason: failureReason,
     created_at: createdAt,
   });
   return {
@@ -4178,14 +4238,25 @@ function createPricingStrategyRows(data, pricingStrategyRuns) {
   });
   return (data.pricingStrategies || []).map((strategy) => ({
     ...strategy,
-    dynamic_multiplier: Number((
-      strategy.supply_demand_multiplier *
-      strategy.time_period_multiplier *
-      strategy.service_area_multiplier *
-      strategy.channel_multiplier
-    ).toFixed(3)),
+    dynamic_multiplier: getPricingStrategyDisplayMultiplier(strategy),
     pricing_strategy_run_count: runCountByStrategyId.get(strategy.pricing_strategy_id) || 0,
   }));
+}
+
+function getPricingStrategyDisplayMultiplier(strategy) {
+  if (strategy.pricing_algorithm === pricingTypes.PricingAlgorithm.BASIC_FINAL_FARE_CALCULATION) {
+    return null;
+  }
+  const multiplierValues = [
+    strategy.supply_demand_multiplier,
+    strategy.time_period_multiplier,
+    strategy.service_area_multiplier,
+    strategy.channel_multiplier,
+  ].map(Number);
+  if (!multiplierValues.every(Number.isFinite)) {
+    return null;
+  }
+  return Number(multiplierValues.reduce((total, value) => total * value, 1).toFixed(3));
 }
 
 function createOrderMatchingStrategyRows(data, orderMatchingRuns) {
@@ -5059,6 +5130,11 @@ function loadRuntimeSnapshot(initialData) {
   };
   if (typeof window === "undefined") return fallback;
   try {
+    if (new URLSearchParams(window.location.search).get("resetRuntime") === "1") {
+      clearRobotaxiRuntimeStorage();
+      removeRuntimeResetParam();
+      return fallback;
+    }
     const rawValue = window.localStorage.getItem(runtimeStorageKey);
     if (!rawValue) return fallback;
     const snapshot = JSON.parse(rawValue);
@@ -5115,6 +5191,20 @@ function loadRuntimeSnapshot(initialData) {
   } catch (error) {
     return fallback;
   }
+}
+
+function clearRobotaxiRuntimeStorage() {
+  if (typeof window === "undefined") return;
+  Object.keys(window.localStorage)
+    .filter((key) => key.startsWith(runtimeStorageKeyPrefix))
+    .forEach((key) => window.localStorage.removeItem(key));
+  window.sessionStorage?.clear?.();
+}
+
+function removeRuntimeResetParam() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("resetRuntime");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function normalizeOperationalRouteStrategies(operationalData) {
