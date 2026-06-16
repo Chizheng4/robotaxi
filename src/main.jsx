@@ -31,6 +31,7 @@ let getFieldLabel;
 let validateReadinessCheckTasks;
 let validateDeploymentTasks;
 let taskTypes;
+let serviceOrderSettlement;
 let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
@@ -228,7 +229,7 @@ const tableConfig = {
   serviceOrders: {
     title: "服务订单管理",
     description: "服务订单记录客户发起的出行服务需求，当前支持创建、定价和车辆匹配。",
-    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "customer_origin_cell_id", "pickup_cell_id", "dropoff_cell_id", "price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "matched_robotaxi_id", "matched_robotaxi_location_summary", "order_matching_decision_id", "trip_id", "payment_status", "created_at"],
+    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "customer_origin_cell_id", "pickup_cell_id", "dropoff_cell_id", "price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "trip_id", "actual_distance_km", "actual_duration_min", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "matched_robotaxi_id", "matched_robotaxi_location_summary", "order_matching_decision_id", "payment_status", "created_at"],
   },
   opsCenters: {
     title: "运营中心管理",
@@ -258,7 +259,7 @@ const tableConfig = {
   taskEventLogs: {
     title: "任务事件日志",
     description: "记录运营准入任务的创建、分配、检查和状态反馈事件。",
-    columns: ["event_id", "event_type", "event_result", "message", "task_id", "robotaxi_id", "worker_id", "route_execution_id", "created_at"],
+    columns: ["event_id", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "task_id", "robotaxi_id", "worker_id", "route_execution_id", "created_at"],
   },
   routePlanningStrategies: {
     title: "路径规划策略",
@@ -1284,6 +1285,12 @@ function App() {
       failure_reason: null,
     });
     setServiceOrders((items) => [order, ...items]);
+    addServiceOrderEvent({
+      service_order_id: order.service_order_id,
+      event_type: taskTypes.TaskEventType.SERVICE_ORDER_CREATED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      message: `${order.service_order_id} 已创建服务订单`,
+    });
     selectForPage("serviceOrders", "serviceOrder", order.service_order_id);
   }
 
@@ -1315,6 +1322,13 @@ function App() {
         order_status: serviceOrderTypes.ServiceOrderStatus.FAILED,
         failure_reason: priceRoute.failure_reason,
       } : order));
+      addServiceOrderEvent({
+        service_order_id: serviceOrderId,
+        route_id: priceRoute.route_id,
+        event_type: taskTypes.TaskEventType.SERVICE_ORDER_PRICE_ESTIMATED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        message: `${serviceOrderId} 价格预估失败：${getDisplayValue(priceRoute.failure_reason)}`,
+      });
       selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
       return;
     }
@@ -1342,6 +1356,13 @@ function App() {
         order_status: serviceOrderTypes.ServiceOrderStatus.FAILED,
         failure_reason: result.run.failure_reason,
       } : order));
+      addServiceOrderEvent({
+        service_order_id: serviceOrderId,
+        pricing_strategy_run_id: result.run.pricing_strategy_run_id,
+        event_type: taskTypes.TaskEventType.SERVICE_ORDER_PRICE_ESTIMATED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        message: `${serviceOrderId} 价格预估失败：${getDisplayValue(result.run.failure_reason)}`,
+      });
       return;
     }
     setPricingDecisions((items) => [result.decision, ...items]);
@@ -1361,6 +1382,15 @@ function App() {
       order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_CALL,
       failure_reason: null,
     } : order));
+    addServiceOrderEvent({
+      service_order_id: serviceOrderId,
+      pricing_strategy_run_id: result.run.pricing_strategy_run_id,
+      pricing_decision_id: result.decision.pricing_decision_id,
+      route_id: priceRoute.route_id,
+      event_type: taskTypes.TaskEventType.SERVICE_ORDER_PRICE_ESTIMATED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      message: `${serviceOrderId} 价格预估完成，客户报价 ${result.decision.quoted_price}`,
+    });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
 
@@ -1373,6 +1403,12 @@ function App() {
       confirmed_at: now(),
       failure_reason: null,
     } : order));
+    addServiceOrderEvent({
+      service_order_id: serviceOrderId,
+      event_type: taskTypes.TaskEventType.SERVICE_ORDER_ROBOTAXI_CALLED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      message: `${serviceOrderId} 已呼叫 Robotaxi，等待分配`,
+    });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
 
@@ -1405,6 +1441,12 @@ function App() {
         order_status: serviceOrderTypes.ServiceOrderStatus.ROBOTAXI_ASSIGNMENT_FAILED,
         failure_reason: result.run.failure_reason,
       } : order));
+      addServiceOrderEvent({
+        service_order_id: serviceOrderId,
+        event_type: taskTypes.TaskEventType.SERVICE_ORDER_ASSIGNMENT_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        message: `${serviceOrderId} 分配 Robotaxi 失败：${getDisplayValue(result.run.failure_reason)}`,
+      });
       selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
       return;
     }
@@ -1424,6 +1466,14 @@ function App() {
       ...order,
       trip_id: trip.trip_id,
     } : order));
+    addServiceOrderEvent({
+      service_order_id: serviceOrderId,
+      trip_id: trip.trip_id,
+      robotaxi_id: selectedRobotaxiId,
+      event_type: taskTypes.TaskEventType.SERVICE_ORDER_ROBOTAXI_ASSIGNED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      message: `${serviceOrderId} 已分配 ${selectedRobotaxiId}，并创建履约行驶记录 ${trip.trip_id}`,
+    });
     setOperationalData((current) => ({
       ...current,
       robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === selectedRobotaxiId ? {
@@ -1444,72 +1494,75 @@ function App() {
       ...order,
       trip_id: trip.trip_id,
     } : order));
+    addServiceOrderEvent({
+      service_order_id: serviceOrderId,
+      trip_id: trip.trip_id,
+      robotaxi_id: serviceOrder.matched_robotaxi_id,
+      event_type: taskTypes.TaskEventType.SERVICE_ORDER_TRIP_CREATED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      message: `${serviceOrderId} 已创建履约行驶记录 ${trip.trip_id}`,
+    });
     selectForPage("serviceFulfillmentRecords", "trip", trip.trip_id);
   }
 
   function settleServiceOrder(serviceOrderId, visibleOrder = null) {
-    console.info("[settlement-debug] click", { serviceOrderId, visibleOrderStatus: visibleOrder?.order_status });
     const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
-    if (!serviceOrder) {
-      console.info("[settlement-debug] stop:no-service-order", { serviceOrderId });
-      return;
-    }
+    if (!serviceOrder) return;
     const trip = trips.find((item) => item.trip_id === serviceOrder.trip_id || item.service_order_id === serviceOrderId);
-    const settlementOrder = {
-      ...mergeServiceOrderTripMetrics(serviceOrder, trip, data),
+    const sourceOrder = {
+      ...serviceOrder,
       ...(visibleOrder || {}),
+      ...serviceOrderSettlement.createServiceOrderActualSnapshotFromTrip(serviceOrder, trip, serviceOrderTypes, tripTypes),
     };
-    const canSettle = settlementOrder.order_status === serviceOrderTypes.ServiceOrderStatus.SETTLING ||
-      [tripTypes.TripStatus.ARRIVED_DESTINATION, tripTypes.TripStatus.SETTLING, tripTypes.TripStatus.COMPLETED].includes(trip?.trip_status);
-    console.info("[settlement-debug] state", {
-      serviceOrderId,
-      rawOrderStatus: serviceOrder.order_status,
-      visibleOrderStatus: visibleOrder?.order_status,
-      settlementOrderStatus: settlementOrder.order_status,
-      tripId: trip?.trip_id,
-      tripStatus: trip?.trip_status,
-      actualDistanceKm: settlementOrder.actual_distance_km,
-      actualDurationMin: settlementOrder.actual_duration_min,
-      estimatedDistanceKm: settlementOrder.estimated_distance_km,
-      estimatedDurationMin: settlementOrder.estimated_duration_min,
-      quotedPrice: settlementOrder.quoted_price,
-      canSettle,
+    const settlementInput = serviceOrderSettlement.buildServiceOrderSettlementInput({
+      serviceOrder: sourceOrder,
+      trip,
+      serviceOrderTypes,
+      tripTypes,
     });
-    if (!canSettle) {
-      console.info("[settlement-debug] stop:not-settleable", { serviceOrderId });
+    if (!settlementInput.settlementOrder) {
+      addServiceOrderEvent({
+        service_order_id: serviceOrderId,
+        trip_id: trip?.trip_id,
+        event_type: taskTypes.TaskEventType.SERVICE_ORDER_SETTLEMENT_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        message: `${serviceOrderId} 结算失败：${getDisplayValue(settlementInput.failure_reason)}`,
+      });
       return;
     }
+    const settlementOrder = settlementInput.settlementOrder;
     const strategy = data.pricingStrategies?.find((item) => item.pricing_strategy_id === "DPS-002");
-    const result = runFinalFareCalculation({
+    const result = serviceOrderSettlement.runFinalFareCalculation({
       strategy,
       serviceOrder: settlementOrder,
       pricingStrategyRunId: nextPricingStrategyRunId(),
       pricingDecisionId: nextPricingDecisionId(),
       createdAt: now(),
-    });
-    console.info("[settlement-debug] pricing-result", {
-      serviceOrderId,
-      runId: result.run?.pricing_strategy_run_id,
-      runResult: result.run?.run_result,
-      failureReason: result.run?.failure_reason,
-      decisionId: result.decision?.pricing_decision_id,
-      finalPrice: result.decision?.final_price,
+      pricingTypes,
     });
     setPricingStrategyRuns((items) => [result.run, ...items]);
     if (result.decision) {
       setPricingDecisions((items) => [result.decision, ...items]);
     }
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-      ...order,
-      order_status: result.decision ? serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT : order.order_status,
-      payment_status: result.decision ? serviceOrderTypes.PaymentStatus.WAITING_PAYMENT : order.payment_status,
-      actual_distance_km: result.decision?.actual_distance_km ?? settlementOrder.actual_distance_km,
-      actual_duration_min: result.decision?.actual_duration_min ?? settlementOrder.actual_duration_min,
-      final_pricing_decision_id: result.decision?.pricing_decision_id || order.final_pricing_decision_id,
-      final_price: result.decision?.final_price ?? order.final_price,
-      pricing_explanation: result.decision?.pricing_explanation || order.pricing_explanation,
-      failure_reason: result.decision ? null : result.run.failure_reason,
-    } : order));
+    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId
+      ? serviceOrderSettlement.applyServiceOrderSettlementResult({
+        order,
+        settlementOrder,
+        result,
+        serviceOrderTypes,
+      })
+      : order));
+    addServiceOrderEvent({
+      service_order_id: serviceOrderId,
+      trip_id: trip?.trip_id,
+      pricing_strategy_run_id: result.run.pricing_strategy_run_id,
+      pricing_decision_id: result.decision?.pricing_decision_id || null,
+      event_type: result.decision ? taskTypes.TaskEventType.SERVICE_ORDER_SETTLED : taskTypes.TaskEventType.SERVICE_ORDER_SETTLEMENT_FAILED,
+      event_result: result.decision ? taskTypes.TaskEventResult.SUCCESS : taskTypes.TaskEventResult.FAILED,
+      message: result.decision
+        ? `${serviceOrderId} 结算完成，最终价格 ${result.decision.final_price}`
+        : `${serviceOrderId} 结算失败：${getDisplayValue(result.run.failure_reason)}`,
+    });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
 
@@ -1545,6 +1598,13 @@ function App() {
         available_for_dispatch: true,
       } : robotaxi),
     }));
+    addServiceOrderEvent({
+      service_order_id: serviceOrderId,
+      trip_id: serviceOrder.trip_id,
+      event_type: taskTypes.TaskEventType.SERVICE_ORDER_PAID,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      message: `${serviceOrderId} 支付完成，支付金额 ${finalPrice}`,
+    });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
 
@@ -2245,6 +2305,10 @@ function App() {
   function createEventLog(event) {
     return taskTypes.createTaskEventLog({
       event_id: nextEventId(),
+      service_order_id: event.service_order_id || null,
+      trip_id: event.trip_id || null,
+      pricing_decision_id: event.pricing_decision_id || null,
+      pricing_strategy_run_id: event.pricing_strategy_run_id || null,
       task_id: event.task_id || null,
       robotaxi_id: event.robotaxi_id || null,
       worker_id: event.worker_id || null,
@@ -2257,6 +2321,10 @@ function App() {
       message: event.message,
       created_at: now(),
     });
+  }
+
+  function addServiceOrderEvent(event) {
+    setTaskEventLogs((logs) => [createEventLog(event), ...logs]);
   }
 }
 
@@ -2320,7 +2388,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isOrderMatchingPage = page === "orderMatchingStrategies";
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
+  const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -2354,8 +2422,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const eventRows = isTripPage ? createTripEventRows(rows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
-  const eventColumns = isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRows = isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventColumns = isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
   const eventRowKey = isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 262}px)` : "calc(100vh - 120px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
@@ -2459,7 +2527,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
       {hasEventPanel && (
         <div className="event-log-section" style={{ height: eventPanelHeight }}>
           <div className="event-log-resizer" onPointerDown={handleEventResizeStart} title="拖动调整事件区高度" />
-          <div className="event-log-title">{isTripPage ? "履约行驶事件" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
+          <div className="event-log-title">{isTripPage ? "履约行驶事件" : isServiceOrderPage ? "最近事件记录" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
           <Table
             size="small"
             rowKey={eventRowKey}
@@ -2700,6 +2768,13 @@ function createTripEventRows(trips = []) {
     previous_status: event.previous_status || null,
     next_status: event.next_status || null,
   }))).sort((left, right) => String(right.event_time || "").localeCompare(String(left.event_time || "")));
+}
+
+function createServiceOrderEventRows(eventLogs = [], serviceOrders = []) {
+  const visibleOrderIds = new Set(serviceOrders.map((order) => order.service_order_id).filter(Boolean));
+  return (eventLogs || [])
+    .filter((event) => event.service_order_id && (visibleOrderIds.size === 0 || visibleOrderIds.has(event.service_order_id)))
+    .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
 }
 
 function createTripEventMessage(event, trip) {
@@ -3488,6 +3563,7 @@ async function bootstrap() {
     readinessTaskValidation,
     deploymentTaskValidation,
     taskTypeModule,
+    serviceOrderSettlementModule,
   ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -3515,6 +3591,7 @@ async function bootstrap() {
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
+    import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"),
   ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -3545,6 +3622,7 @@ async function bootstrap() {
   validateReadinessCheckTasks = readinessTaskValidation.validateReadinessCheckTasks;
   validateDeploymentTasks = deploymentTaskValidation.validateDeploymentTasks;
   taskTypes = taskTypeModule;
+  serviceOrderSettlement = serviceOrderSettlementModule;
 
   ReactDOM.createRoot(document.querySelector("#app")).render(<App />);
 }
@@ -3750,99 +3828,6 @@ function mergeRouteStepPlans(stepPlans, data) {
 
 function findRoadSegmentIdByCell(data, cellId) {
   return data.roadSegments.find((segment) => (segment.cell_sequence || segment.cell_ids || []).includes(cellId))?.road_segment_id || null;
-}
-
-function runFinalFareCalculation({ strategy, serviceOrder, pricingStrategyRunId, pricingDecisionId, createdAt }) {
-  const rawActualDistanceKm = Number(serviceOrder.actual_distance_km ?? 0);
-  const rawActualDurationMin = Number(serviceOrder.actual_duration_min ?? 0);
-  const estimatedDistanceKm = Number(serviceOrder.estimated_distance_km ?? 0);
-  const estimatedDurationMin = Number(serviceOrder.estimated_duration_min ?? 0);
-  const actualDistanceKm = rawActualDistanceKm > 0 ? rawActualDistanceKm : estimatedDistanceKm;
-  const actualDurationMin = rawActualDurationMin > 0 ? rawActualDurationMin : estimatedDurationMin;
-  const hasStrategy = strategy && strategy.strategy_status === "ACTIVE";
-  const pricingSnapshot = serviceOrder.pricing_breakdown_snapshot || {};
-  const quotedPrice = Number(serviceOrder.quoted_price ?? serviceOrder.estimated_price ?? pricingSnapshot.quoted_price);
-  const hasQuotedPriceOnly = Number.isFinite(quotedPrice) && quotedPrice > 0 &&
-    serviceOrder.quote_base_fare == null &&
-    serviceOrder.quote_distance_unit_price == null &&
-    serviceOrder.quote_time_unit_price == null &&
-    pricingSnapshot.base_fare == null &&
-    pricingSnapshot.distance_unit_price == null &&
-    pricingSnapshot.time_unit_price == null;
-  const distanceUnitPrice = hasQuotedPriceOnly ? 0 : Number(serviceOrder.quote_distance_unit_price ?? pricingSnapshot.distance_unit_price);
-  const timeUnitPrice = hasQuotedPriceOnly ? 0 : Number(serviceOrder.quote_time_unit_price ?? pricingSnapshot.time_unit_price);
-  const baseFare = hasQuotedPriceOnly ? quotedPrice : Number(serviceOrder.quote_base_fare ?? pricingSnapshot.base_fare);
-  const dynamicMultiplier = Number(pricingSnapshot.dynamic_multiplier ?? 1);
-  const hasPricingInputs = [baseFare, distanceUnitPrice, timeUnitPrice, dynamicMultiplier].every(Number.isFinite);
-  const failureReason = !hasStrategy
-    ? pricingTypes.PricingFailureReason.PRICING_STRATEGY_NOT_FOUND
-    : !hasPricingInputs
-      ? pricingTypes.PricingFailureReason.PRICING_CONFIG_MISSING
-      : actualDistanceKm <= 0 && !hasQuotedPriceOnly
-        ? pricingTypes.PricingFailureReason.INVALID_DISTANCE
-        : actualDurationMin < 0
-          ? pricingTypes.PricingFailureReason.INVALID_DURATION
-          : null;
-  const success = !failureReason;
-  const distanceFee = roundMoney(actualDistanceKm * distanceUnitPrice);
-  const timeFee = roundMoney(actualDurationMin * timeUnitPrice);
-  const basePrice = roundMoney(baseFare + distanceFee + timeFee);
-  const finalPrice = roundMoney(basePrice * dynamicMultiplier);
-  const run = pricingTypes.createPricingStrategyRun({
-    pricing_strategy_run_id: pricingStrategyRunId,
-    pricing_strategy_id: strategy?.pricing_strategy_id || null,
-    pricing_algorithm: strategy?.pricing_algorithm || null,
-    service_order_id: serviceOrder.service_order_id,
-    pricing_stage: pricingTypes.PricingStage.FINAL,
-    input_snapshot: {
-      actual_distance_km: actualDistanceKm,
-      actual_duration_min: actualDurationMin,
-      actual_distance_source: rawActualDistanceKm > 0 ? "TRIP_ACTUAL" : "SERVICE_ORDER_ESTIMATE",
-      actual_duration_source: rawActualDurationMin > 0 ? "TRIP_ACTUAL" : "SERVICE_ORDER_ESTIMATE",
-      quote_base_fare: serviceOrder.quote_base_fare,
-      quote_distance_unit_price: serviceOrder.quote_distance_unit_price,
-      quote_time_unit_price: serviceOrder.quote_time_unit_price,
-      quote_dynamic_multiplier: dynamicMultiplier,
-      quoted_price: serviceOrder.quoted_price,
-    },
-    output_snapshot: success ? { final_price: finalPrice, base_price: basePrice, distance_fee: distanceFee, time_fee: timeFee, dynamic_multiplier: dynamicMultiplier } : null,
-    run_result: success ? pricingTypes.PricingResult.SUCCESS : pricingTypes.PricingResult.FAILED,
-    failure_reason: failureReason,
-    created_at: createdAt,
-  });
-  return {
-    run,
-    decision: success ? pricingTypes.createPricingDecision({
-      pricing_decision_id: pricingDecisionId,
-      pricing_strategy_run_id: pricingStrategyRunId,
-      pricing_strategy_id: strategy.pricing_strategy_id,
-      pricing_algorithm: strategy.pricing_algorithm,
-      service_order_id: serviceOrder.service_order_id,
-      order_channel: serviceOrder.order_channel,
-      pickup_service_area_id: serviceOrder.pickup_service_area_id,
-      dropoff_service_area_id: serviceOrder.dropoff_service_area_id,
-      estimated_distance_km: serviceOrder.estimated_distance_km,
-      estimated_duration_min: serviceOrder.estimated_duration_min,
-      actual_distance_km: actualDistanceKm,
-      actual_duration_min: actualDurationMin,
-      base_fare: baseFare,
-      distance_unit_price: distanceUnitPrice,
-      time_unit_price: timeUnitPrice,
-      distance_fee: distanceFee,
-      time_fee: timeFee,
-      base_price: basePrice,
-      dynamic_multiplier: dynamicMultiplier,
-      estimated_price: serviceOrder.estimated_price,
-      quoted_price: serviceOrder.quoted_price,
-      final_price: finalPrice,
-      pricing_stage: pricingTypes.PricingStage.FINAL,
-      pricing_result: pricingTypes.PricingResult.SUCCESS,
-      pricing_breakdown_snapshot: { final_price: finalPrice, base_price: basePrice, actual_distance_km: actualDistanceKm, actual_duration_min: actualDurationMin, distance_fee: distanceFee, time_fee: timeFee, dynamic_multiplier: dynamicMultiplier },
-      pricing_explanation: "最终费用由报价快照、实际行驶距离、实际耗时和最终费用计算策略生成。",
-      failure_reason: null,
-      created_at: createdAt,
-    }) : null,
-  };
 }
 
 function createRouteHistoryEntry(route, routeChangeReason, arrivalExecutionResult) {
@@ -4928,13 +4913,14 @@ function updateServiceOrderForTrip(order, trip) {
     COMPLETED: "SETTLING",
   };
   const nextOrderStatus = statusByTripStatus[trip.trip_status] || order.order_status;
-  const hasActualTripResult = ["ARRIVED_DESTINATION", "SETTLING", "COMPLETED"].includes(trip.trip_status);
+  const syncedOrder = serviceOrderSettlement.createServiceOrderActualSnapshotFromTrip(order, trip, serviceOrderTypes, tripTypes);
   return {
+    ...syncedOrder,
     ...order,
     trip_id: trip.trip_id,
     order_status: nextOrderStatus,
-    actual_distance_km: hasActualTripResult ? trip.distance_traveled_km : order.actual_distance_km,
-    actual_duration_min: hasActualTripResult ? Number.parseInt(trip.time_elapsed, 10) || order.actual_duration_min : order.actual_duration_min,
+    actual_distance_km: syncedOrder.actual_distance_km,
+    actual_duration_min: syncedOrder.actual_duration_min,
     final_price: order.final_price,
     completed_at: order.completed_at,
     failure_reason: null,

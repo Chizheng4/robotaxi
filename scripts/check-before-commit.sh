@@ -48,6 +48,8 @@ node --check src/main.bundle.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/domain/fieldDictionary.js
 node --check src/domain/taskTypes.js
+node --check src/domain/serviceOrderSettlement.js
+node scripts/verify-service-order-settlement.mjs
 
 print_step "检查 Git diff 空白问题"
 git diff --check
