@@ -2,6 +2,14 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.4
+
+核心：SimulationLoop + SupplyTrigger + DemandTrigger。
+
+- 新增 `src/data/simulationSupplyTrigger.js`：供给侧触发判断（准入/投放/RouteExecution），按时间窗口和配置开关决定是否触发。
+- 新增 `src/data/simulationDemandTrigger.js`：需求侧触发判断，Poisson/Fixed/Uniform 分布生成 Tick 订单数量。
+- 新增 `src/data/simulationLoop.js`：Tick 主循环编排（executeTick），14 步执行顺序，汇总 Tick 摘要。
+
 ## v023.3
 
 核心：SimulationRun 生命周期管理 + SimulationClock 时间上下文 + SimulationEvent 记录。
