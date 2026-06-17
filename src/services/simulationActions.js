@@ -23,6 +23,8 @@ export function useSimulationActions({
   setSimulationPolicies,
   setSimulationRuns,
   setSimulationEvents,
+  // 业务数据上下文 — 供 Tick 循环传入 WorkflowEngine + ExecutionEngine
+  getBusinessData,
 }) {
   function initDefaultPolicy() {
     if (!simulationInitialization || !simulationTypes) return;
@@ -80,10 +82,12 @@ export function useSimulationActions({
         clearInterval(tickIntervalRef.current);
         return prev;
       }
+      const businessData = getBusinessData ? getBusinessData() : null;
       const tickResult = simulationLoop.executeTick({
         simulationRun: run,
         policySnapshot: run.simulation_policy_snapshot,
         randomSeed: Date.now(),
+        businessData,
       });
       if (!tickResult) return prev;
       const result = simulationEngine.completeTick(

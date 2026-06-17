@@ -722,6 +722,40 @@ function App() {
   }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, workspacePages]);
 
   // ===== Simulation 控制 =====
+  const getBusinessData = () => ({
+    serviceOrders,
+    trips,
+    readinessTasks,
+    deploymentTasks,
+    routeExecutions,
+    robotaxis: data.robotaxis,
+    data,
+    serviceOrderService,
+    tripService,
+    demandSimulationEngine,
+    pricingStrategyRuns,
+    pricingDecisions,
+    orderMatchingRuns,
+    orderMatchingDecisions,
+    setServiceOrders,
+    setTrips,
+    setReadinessTasks,
+    setDeploymentTasks,
+    setRouteExecutions,
+    setRobotaxis: fn => {
+      // Robotaxis 在 data.robotaxis 中，需要通过 setOperationalData 更新
+      const nextRobotaxis = fn(data.robotaxis);
+      setOperationalData(prev => ({
+        ...prev,
+        robotaxis: nextRobotaxis
+      }));
+    },
+    setPricingStrategyRuns,
+    setPricingDecisions,
+    setOrderMatchingRuns,
+    setOrderMatchingDecisions,
+    setTaskEventLogs
+  });
   const simActions = simulationActions ? simulationActions.useSimulationActions({
     simulationEngine,
     simulationLoop,
@@ -731,7 +765,8 @@ function App() {
     simulationRuns,
     setSimulationPolicies,
     setSimulationRuns,
-    setSimulationEvents
+    setSimulationEvents,
+    getBusinessData
   }) : null;
   useEffect(() => {
     if (simActions) simActions.initDefaultPolicy();
@@ -3806,7 +3841,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260614-v020-6-route-execution"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260617-v023-1-service-extraction"), import("./domain/simulationTypes.js?v=20260617-v023-6-monitor"), import("./data/simulationInitialization.js?v=20260617-v023-6-monitor"), import("./data/simulationEngine.js?v=20260617-v023-6-monitor"), import("./services/simulationActions.js?v=20260617-v023-8-frontend"), import("./data/simulationLoop.js?v=20260617-v023-8-frontend")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260614-v020-6-route-execution"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260617-v023-1-service-extraction"), import("./domain/simulationTypes.js?v=20260617-v023-6-monitor"), import("./data/simulationInitialization.js?v=20260617-v023-6-monitor"), import("./data/simulationEngine.js?v=20260617-v023-6-monitor"), import("./services/simulationActions.js?v=20260617-v023-8-frontend"), import("./data/simulationLoop.js?v=20260617-v023-8-frontend"), import("./services/simulationHandlers.js?v=20260617-v024-1-handlers"), import("./data/simulationWorkflowEngine.js?v=20260617-v024-1-handlers"), import("./data/simulationExecutionEngine.js?v=20260617-v024-1-handlers")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -3843,6 +3878,19 @@ async function bootstrap() {
   simulationEngine = simulationEngineModule;
   simulationLoop = simulationLoopModule;
   simulationActions = simulationActionsModule;
+
+  // 注册 Simulation 业务处理器到 ExecutionEngine
+  if (simulationExecutionEngineModule && simulationHandlersModule) {
+    simulationExecutionEngineModule.registerActionHandlers({
+      SERVICE_ORDER_CREATE: simulationHandlersModule.handleServiceOrderCreate,
+      PRICING_EXECUTE: simulationHandlersModule.handlePricingExecute,
+      ROBOTAXI_CALL: simulationHandlersModule.handleRobotaxiCall,
+      ORDER_MATCHING_EXECUTE: simulationHandlersModule.handleOrderMatchingExecute,
+      TRIP_STEP_EXECUTE: simulationHandlersModule.handleTripStepExecute,
+      SETTLEMENT_EXECUTE: simulationHandlersModule.handleSettlementExecute,
+      PAYMENT_EXECUTE: simulationHandlersModule.handlePaymentExecute
+    });
+  }
   ReactDOM.createRoot(document.querySelector("#app")).render(/*#__PURE__*/React.createElement(App, null));
 }
 bootstrap();

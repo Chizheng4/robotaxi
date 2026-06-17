@@ -1,3 +1,12 @@
+## v024.1
+
+核心：注册 P0 业务处理器到 ExecutionEngine，Tick 循环接入 WorkflowEngine 和 ExecutionEngine。
+
+- 新建 simulationHandlers.js：7 个业务动作处理器（创建订单、定价、确认、匹配、履约推进、结算、支付）。
+- simulationLoop.executeTick 新增步骤 5-6：查询 WorkflowEngine → 执行动作。
+- simulationActions 新增 getBusinessData 传入完整业务上下文。
+- main.jsx bootstrap 注册所有 handler 到 ExecutionEngine。
+
 # Robotaxi 版本记录
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。

@@ -731,6 +731,38 @@ function App() {
 
 
   // ===== Simulation 控制 =====
+  const getBusinessData = () => ({
+    serviceOrders,
+    trips,
+    readinessTasks,
+    deploymentTasks,
+    routeExecutions,
+    robotaxis: data.robotaxis,
+    data,
+    serviceOrderService,
+    tripService,
+    demandSimulationEngine,
+    pricingStrategyRuns,
+    pricingDecisions,
+    orderMatchingRuns,
+    orderMatchingDecisions,
+    setServiceOrders,
+    setTrips,
+    setReadinessTasks,
+    setDeploymentTasks,
+    setRouteExecutions,
+    setRobotaxis: (fn) => {
+      // Robotaxis 在 data.robotaxis 中，需要通过 setOperationalData 更新
+      const nextRobotaxis = fn(data.robotaxis);
+      setOperationalData((prev) => ({ ...prev, robotaxis: nextRobotaxis }));
+    },
+    setPricingStrategyRuns,
+    setPricingDecisions,
+    setOrderMatchingRuns,
+    setOrderMatchingDecisions,
+    setTaskEventLogs,
+  });
+
   const simActions = simulationActions ? simulationActions.useSimulationActions({
     simulationEngine,
     simulationLoop,
@@ -741,6 +773,7 @@ function App() {
     setSimulationPolicies,
     setSimulationRuns,
     setSimulationEvents,
+    getBusinessData,
   }) : null;
 
   useEffect(() => {
@@ -3714,6 +3747,9 @@ async function bootstrap() {
 		    simulationEngineModule,
 		    simulationActionsModule,
 		    simulationLoopModule,
+		    simulationHandlersModule,
+		    simulationWorkflowEngineModule,
+		    simulationExecutionEngineModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -3747,9 +3783,12 @@ async function bootstrap() {
 	    import("./domain/simulationTypes.js?v=20260617-v023-6-monitor"),
 	    import("./data/simulationInitialization.js?v=20260617-v023-6-monitor"),
 	    import("./data/simulationEngine.js?v=20260617-v023-6-monitor"),
-	    import("./services/simulationActions.js?v=20260617-v023-8-frontend"),
-	    import("./data/simulationLoop.js?v=20260617-v023-8-frontend"),
-	  ]);
+		    import("./services/simulationActions.js?v=20260617-v023-8-frontend"),
+		    import("./data/simulationLoop.js?v=20260617-v023-8-frontend"),
+		    import("./services/simulationHandlers.js?v=20260617-v024-1-handlers"),
+		    import("./data/simulationWorkflowEngine.js?v=20260617-v024-1-handlers"),
+		    import("./data/simulationExecutionEngine.js?v=20260617-v024-1-handlers"),
+		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
@@ -3785,8 +3824,21 @@ async function bootstrap() {
 		  simulationTypes = simulationTypesModule;
 		  simulationInitialization = simulationInitializationModule;
 		  simulationEngine = simulationEngineModule;
-		  simulationLoop = simulationLoopModule;
-		  simulationActions = simulationActionsModule;
+			  simulationLoop = simulationLoopModule;
+			  simulationActions = simulationActionsModule;
+
+  // 注册 Simulation 业务处理器到 ExecutionEngine
+  if (simulationExecutionEngineModule && simulationHandlersModule) {
+    simulationExecutionEngineModule.registerActionHandlers({
+      SERVICE_ORDER_CREATE: simulationHandlersModule.handleServiceOrderCreate,
+      PRICING_EXECUTE: simulationHandlersModule.handlePricingExecute,
+      ROBOTAXI_CALL: simulationHandlersModule.handleRobotaxiCall,
+      ORDER_MATCHING_EXECUTE: simulationHandlersModule.handleOrderMatchingExecute,
+      TRIP_STEP_EXECUTE: simulationHandlersModule.handleTripStepExecute,
+      SETTLEMENT_EXECUTE: simulationHandlersModule.handleSettlementExecute,
+      PAYMENT_EXECUTE: simulationHandlersModule.handlePaymentExecute,
+    });
+  }
 
 	  ReactDOM.createRoot(document.querySelector("#app")).render(<App />);
 }

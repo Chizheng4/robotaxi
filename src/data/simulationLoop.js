@@ -11,6 +11,8 @@ import { SimulationStatus } from "../domain/simulationTypes.js";
 import { computeTimeContext } from "./simulationClock.js";
 import { runSupplyTrigger } from "./simulationSupplyTrigger.js";
 import { runDemandTrigger } from "./simulationDemandTrigger.js";
+import { queryAllWorkflowRules } from "./simulationWorkflowEngine.js";
+import { executeActions } from "./simulationExecutionEngine.js";
 
 /**
  * 执行一个 SimulationTick
@@ -19,9 +21,10 @@ import { runDemandTrigger } from "./simulationDemandTrigger.js";
  * @param {Object} params.simulationRun - 当前 SimulationRun
  * @param {Object} params.policySnapshot - simulation_policy_snapshot
  * @param {number} [params.randomSeed] - 随机种子
- * @returns {Object} { tickContext, supplyResult, demandResult, tickEventSummary }
+ * @param {Object} [params.businessData] - 业务数据上下文（serviceOrders, trips 等）
+ * @returns {Object} { tickContext, supplyResult, demandResult, workflowActions, executionResults, tickEventSummary }
  */
-export function executeTick({ simulationRun, policySnapshot, randomSeed }) {
+export function executeTick({ simulationRun, policySnapshot, randomSeed, businessData }) {
   // 1. 校验 SimulationRun 状态
   if (simulationRun.simulation_status !== SimulationStatus.RUNNING) {
     return null;
@@ -42,13 +45,40 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed }) {
   // 4. 需求侧触发判断
   const demandResult = runDemandTrigger({ timeContext: tickContext, policySnapshot, randomSeed });
 
-  // 5. 汇总当前 Tick 摘要
-  const tickEventSummary = buildTickEventSummary(supplyResult, demandResult);
+  // 5. 查询工作流引擎：获取所有待执行的业务动作
+  const autoConfig = policySnapshot.service_order_auto_config || {};
+  const defaultConfig = policySnapshot.default_completion_config || {};
+  let workflowActions = [];
+  if (businessData) {
+    workflowActions = queryAllWorkflowRules({
+      serviceOrders: businessData.serviceOrders || [],
+      trips: businessData.trips || [],
+      readinessTasks: businessData.readinessTasks || [],
+      routeExecutions: businessData.routeExecutions || [],
+      autoConfig,
+      defaultCompletionConfig: defaultConfig,
+    });
+  }
+
+  // 6. 通过执行引擎分发动作
+  let executionResults = [];
+  if (businessData && workflowActions.length > 0) {
+    executionResults = executeActions(workflowActions, businessData, {
+      simulationRunId: simulationRun.simulation_run_id,
+      globalTick: simulationRun.current_global_tick,
+      policySnapshot,
+    });
+  }
+
+  // 7. 汇总当前 Tick 摘要
+  const tickEventSummary = buildTickEventSummary(supplyResult, demandResult, executionResults);
 
   return {
     tickContext,
     supplyResult,
     demandResult,
+    workflowActions,
+    executionResults,
     tickEventSummary,
   };
 }
@@ -57,32 +87,31 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed }) {
  * 执行顺序（14 步）：
  *
  *   1. 校验 SimulationRun 是否 RUNNING
- *   2. 读取 simulation_policy_snapshot
- *   3. 生成当前 SimulationClock 上下文
- *   4. 触发 RouteExecution 推进事件        → v023.5 ExecutionEngine
- *   5. 触发 Trip 推进事件                  → v023.5 ExecutionEngine
- *   6. 触发 ServiceOrder 自动推进事件       → v023.5 ExecutionEngine
- *   7. 触发 SupplyTrigger 判断
- *   8. 触发 DemandTrigger 判断
- *   9. 汇总当前 Tick 事件结果
- *  10. 更新 SimulationRun 场景摘要
- *  11. 推进 current_tick / current_time
- *  12. 记录 SIMULATION_TICK_COMPLETED
- *  13. 判断是否到达 total_ticks
- *
- * 注：步骤 4-6 依赖 ExecutionEngine（v023.5），当前先输出触发结果，
- *      实际执行由 v023.5 整合时串联。
+ *   2. 生成当前 SimulationClock 上下文
+ *   3. 触发 SupplyTrigger 判断
+ *   4. 触发 DemandTrigger 判断
+ *   5. 查询 WorkflowEngine 获取待执行动作
+ *   6. 通过 ExecutionEngine 分发执行业务动作
+ *   7. 汇总当前 Tick 事件结果
+ *   8. 更新 SimulationRun 场景摘要
+ *   9. 推进 current_tick / current_time
+ *  10. 记录 SIMULATION_TICK_COMPLETED
+ *  11. 判断是否到达 total_ticks
  */
 
-function buildTickEventSummary(supplyResult, demandResult) {
+function buildTickEventSummary(supplyResult, demandResult, executionResults = []) {
+  const succeeded = executionResults.filter((r) => r.success).length;
+  const failed = executionResults.filter((r) => !r.success).length;
   return {
     triggered_supply_events: supplyResult.triggered_event_count || 0,
     triggered_demand_events: demandResult.order_count > 0 ? 1 : 0,
     created_service_orders: demandResult.order_count || 0,
+    workflow_actions: executionResults.length,
+    succeeded_actions: succeeded,
+    failed_actions: failed,
     completed_service_orders: 0,
     completed_trips: 0,
     completed_route_executions: 0,
     no_action_events: supplyResult.no_action_count || 0,
-    failed_events: 0,
   };
 }
