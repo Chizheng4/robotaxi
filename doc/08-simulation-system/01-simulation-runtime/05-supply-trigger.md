@@ -157,33 +157,36 @@ SupplyTrigger 每次执行时需要以下输入：
 
 ## 6. 输出
 
-SupplyTrigger 执行后输出当前 Tick 的供给侧触发结果。
+SupplyTrigger 执行后输出当前 Tick 的供给侧**点火动作列表**。
+
+SupplyTrigger 不直接执行业务，只生成 Action 交给 ExecutionEngine 执行。
 
 建议输出：
 
 |输出|含义|
 |---|---|
-|readiness_trigger_result|运营准入触发结果|
-|deployment_trigger_result|运营投放触发结果|
-|route_execution_trigger_result|行驶记录推进触发结果|
-|triggered_event_count|触发事件数量|
+|actions|供给侧点火 Action 列表（READINESS_TASK_CREATE / DEPLOYMENT_TASK_CREATE）|
+|triggered_count|触发事件数量|
 |no_action_count|无动作数量|
-|failed_event_count|失败事件数量|
-|simulation_event_ids|生成的 SimulationEvent 列表|
+|failed_count|失败事件数量|
 
 示例：
 
 ```json
 {
-  "readiness_trigger_result": "TRIGGERED",
-  "deployment_trigger_result": "TRIGGERED",
-  "route_execution_trigger_result": "TRIGGERED",
-  "triggered_event_count": 3,
+  "actions": [
+    { "action_type": "READINESS_TASK_CREATE", "triggered": true },
+    { "action_type": "DEPLOYMENT_TASK_CREATE", "triggered": false, "reason": "is_robotaxi_operating_time = false" }
+  ],
+  "triggered_count": 1,
   "no_action_count": 1,
-  "failed_event_count": 0,
-  "simulation_event_ids": ["SE-001", "SE-002", "SE-003"]
+  "failed_count": 0
 }
 ```
+
+说明：
+- `ROUTE_EXECUTION_TRIGGER` 不属于 SupplyTrigger 输出。RouteExecution 是 DeploymentTask 的子流程，由 WorkflowEngine 驱动，不由 SupplyTrigger 直接触发。
+- SupplyTrigger 只负责**点火两个源头**：ReadinessTask 和 DeploymentTask。点火之后的全部推进由 WorkflowEngine 接管。
 
 ---
 
@@ -215,21 +218,22 @@ SupplyTrigger 使用 simulation_policy_snapshot 中的 supply_trigger_config。
 
 ## 8. 触发类型
 
-当前阶段 SupplyTrigger 支持三类供给侧事件。
+当前阶段 SupplyTrigger 只支持两类源头点火：
 
 ```text
-运营准入触发
-运营投放触发
-RouteExecution 推进触发
+运营准入触发（READINESS_TASK_CREATE）
+运营投放触发（DEPLOYMENT_TASK_CREATE）
 ```
 
 对应关系：
 
-|触发类型|对应业务能力|
-|---|---|
-|READINESS_CHECK_TRIGGER|ReadinessCheckTask 业务服务|
-|DEPLOYMENT_TRIGGER|DeploymentTask 业务服务|
-|ROUTE_EXECUTION_TRIGGER|RouteExecution 业务服务|
+|触发类型|对应业务能力|说明|
+|---|---|---|
+|READINESS_TASK_CREATE|准入检查业务服务|点火创建 ReadinessTask |
+|DEPLOYMENT_TASK_CREATE|投放业务服务|点火创建 DeploymentTask |
+
+RouteExecution 推进不属于 SupplyTrigger 范围。
+RouteExecution 是 DeploymentTask 的子流程——DeploymentTask 创建时同步创建 RouteExecution，后续由 WorkflowEngine 驱动 RouteExecution 的完整闭环。
 
 ---
 
@@ -333,53 +337,6 @@ SupplyTrigger 只记录返回结果。
 
 ---
 
-## 11. RouteExecution 推进触发
-
-### 11.1 触发条件
-
-SupplyTrigger 只判断：
-
-```text
-supply_trigger_enabled = true
-AND
-route_execution_trigger_enabled = true
-```
-
-满足后触发：
-
-```text
-RouteExecution 业务服务
-```
-
-### 11.2 SupplyTrigger 不判断内容
-
-SupplyTrigger 不判断：
-
-```text
-是否存在 MOVING 的 RouteExecution
-是否推进到下一个 Route Step
-是否完成 Route
-是否更新 Robotaxi 位置
-是否更新电量和里程
-```
-
-这些由 RouteExecution 业务服务自行判断。
-
-### 11.3 返回结果
-
-RouteExecution 业务服务可能返回：
-
-|返回结果|含义|
-|---|---|
-|ROUTE_EXECUTION_PROGRESS_UPDATED|行驶记录已推进|
-|ROUTE_EXECUTION_COMPLETED|行驶记录已完成|
-|NO_ACTIVE_ROUTE_EXECUTION|当前无行驶记录需要推进|
-|ROUTE_EXECUTION_FAILED|行驶记录推进失败|
-
-SupplyTrigger 只记录返回结果。
-
----
-
 ## 12. 执行流程
 
 每个 Tick 中，SupplyTrigger 的执行流程如下：
@@ -395,21 +352,18 @@ SimulationTick 到达
 ↓
 判断 supply_trigger_enabled
 ↓
-触发运营准入业务服务
+判断是否触发 READINESS_TASK_CREATE（生成 Action）
 ↓
-触发运营投放业务服务
+判断是否触发 DEPLOYMENT_TASK_CREATE（生成 Action）
 ↓
-触发 RouteExecution 推进业务服务
-↓
-记录 SimulationEvent
-↓
-返回供给侧触发摘要
+返回 Action 列表
 ```
 
 说明：
 
 ```text
-SupplyTrigger 只负责触发。
+SupplyTrigger 只负责生成 Action。
+Action 由 SimulationLoop 提交给 ExecutionEngine 执行。
 业务服务自行决定是否创建任务、是否推进状态、是否返回 NO_ACTION。
 ```
 
@@ -417,31 +371,18 @@ SupplyTrigger 只负责触发。
 
 ## 13. 触发顺序
 
-当前阶段建议供给侧触发顺序为：
-
 ```text
-ReadinessCheckTask 触发
+ReadinessTask 创建判读
 ↓
-DeploymentTask 触发
-↓
-RouteExecution 推进触发
+DeploymentTask 创建判读
 ```
 
 说明：
 
 ```text
 准入优先于投放。
-投放优先于行驶推进。
+RouteExecution 推进由 WorkflowEngine 负责，不在此顺序中。
 ```
-
-后续也可以调整为：
-
-```text
-先推进已执行对象
-再触发新任务
-```
-
-最终执行顺序由 `07-simulation-loop.md` 统一定义。
 
 ---
 
@@ -626,9 +567,19 @@ SupplyTrigger 负责：
 
 ## 20. 当前不做内容
 
+当前只做：
+
+```text
+按 Tick 判断是否点火创建 ReadinessTask / DeploymentTask
+按配置开关决定是否触发
+生成 Action（不直接执行业务）
+返回供给侧触发摘要
+```
+
 当前阶段不做：
 
 ```text
+RouteExecution 推进（属于 WorkflowEngine 范围）
 供给侧资源判断
 Worker 分配算法
 Robotaxi 投放策略
@@ -639,46 +590,20 @@ Robotaxi 投放策略
 供给侧优化决策
 ```
 
-当前只做：
-
-```text
-按 Tick 触发供给侧业务服务
-按配置开关决定是否触发
-使用 simulation_policy_snapshot
-记录 SimulationEvent
-返回供给侧触发摘要
-```
-
 ---
 
 ## 21. 规则
 
-1. SupplyTrigger 是供给侧事件触发机制；
-    
-2. SupplyTrigger 不执行业务逻辑；
-    
-3. SupplyTrigger 不判断 Worker 是否空闲；
-    
-4. SupplyTrigger 不判断 Robotaxi 是否可用；
-    
-5. SupplyTrigger 不决定是否创建任务；
-    
-6. SupplyTrigger 只触发供给侧业务服务；
-    
-7. 业务服务自行判断是否创建任务或推进状态；
-    
-8. SupplyTrigger 必须使用 SimulationRun.simulation_policy_snapshot；
-    
-9. SupplyTrigger 不直接读取最新 SimulationPolicy；
-    
-10. 配置更新不影响正在执行的 SimulationRun；
-    
-11. 每次 SupplyTrigger 执行必须记录 SimulationEvent；
-    
-12. NO_ACTION 不代表失败；
-    
-13. RouteExecution 推进触发属于供给侧触发范围；
-    
-14. Trip 推进不属于 SupplyTrigger；
-    
-15. ServiceOrder 推进不属于 SupplyTrigger。
+1. SupplyTrigger 是供给侧**点火**机制，不是业务执行机制；
+
+2. SupplyTrigger 只产出 Action，不执行业务逻辑；
+
+3. SupplyTrigger 只负责两个源头：ReadinessTask 和 DeploymentTask 创建；
+
+4. RouteExecution 推进不属于 SupplyTrigger，由 WorkflowEngine 负责；
+
+5. SupplyTrigger 不判断 Worker 是否空闲、Robotaxi 是否可用；
+
+6. SupplyTrigger 必须使用 SimulationRun.simulation_policy_snapshot；
+
+7. 每次 SupplyTrigger 执行必须产出 Action 列表（含 triggered / no_action / failed）；

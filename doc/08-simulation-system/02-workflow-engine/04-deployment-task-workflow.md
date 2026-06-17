@@ -63,26 +63,37 @@ Robotaxi 默认全天可运营（`00:00 - 24:00`）。
 
 ---
 
-## 5. 与 RouteExecution 的关系
+## 5. 与 RouteExecution 的父子关系（关键）
 
-DeploymentTask 创建时同步创建 RouteExecution：
+DeploymentTask 和 RouteExecution 是**父子关系**，不是平级关系：
 
 ```text
-createDeploymentTasks()
-    ↓
-createDeploymentTask(robotaxi, target)   → DeploymentTask (WAITING_ROUTE)
-createDeploymentRouteExecution(task)     → RouteExecution (WAITING_ROUTE)
+SupplyTrigger 点火
+    ↓ 创建 DeploymentTask (WAITING_ROUTE)
+DeploymentTask 创建时同步创建 RouteExecution (WAITING_ROUTE)
+    ↓ WorkflowEngine 接管
+RouteExecution 路径规划 → MOVING（DeploymentTask 同步 MOVING）
+    ↓ WorkflowEngine 每 Tick 推进
+RouteExecution 行驶推进 → ARRIVED（DeploymentTask 同步 ARRIVED）
+    ↓ WorkflowEngine
+RouteExecution 到达确认 → COMPLETED
+    ↓ 回到父流程
+DeploymentTask → COMPLETED（收口）
 ```
 
-之后路径规划和行驶推进通过 RouteExecution 驱动，DeploymentTask 状态同步更新：
+关键规则：
+- DeploymentTask 是**父单据**，RouteExecution 是**子单据**
+- RouteExecution 由 DeploymentTask 触发创建，不由 SupplyTrigger 直接创建
+- WorkflowEngine 只需驱动 RouteExecution，DeploymentTask 状态自动同步
+- RouteExecution 完成后，DeploymentTask 自动收口
+
+RouteExecution 状态与 DeploymentTask 状态同步：
 
 | RouteExecution 状态 | DeploymentTask 同步状态 |
 |---|---|
 | WAITING_ROUTE → MOVING | WAITING_ROUTE → MOVING |
 | MOVING → ARRIVED | MOVING → ARRIVED |
 | ARRIVED → COMPLETED | ARRIVED → COMPLETED |
-
-因此 SimulationLoop 只需驱动 RouteExecution，DeploymentTask 会自动联动。
 
 ---
 

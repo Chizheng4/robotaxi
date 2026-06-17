@@ -315,14 +315,18 @@ Execution Engine 必须保证：
 
 ## 15. 执行失败处理
 
-如果 BusinessService 执行失败：
+如果 BusinessService 执行失败，必须做到：
 
 ```text
-1. 记录 ACTION_FAILED
-2. 不更新 Domain Object
-3. 返回失败原因
+1. 记录 ACTION_FAILED 事件（含失败原因）
+2. 业务对象保留失败状态（与人工操作结果一致）
+   例如：匹配失败 → ServiceOrder.order_status = MATCH_FAILED
+   例如：定价失败 → ServiceOrder.order_status = PRICING_FAILED
+3. 返回失败原因（用户可在前端对应单据页面看到失败记录）
 4. 不重试（当前阶段）
 ```
+
+核心原则：**自动化执行的失败结果必须与人工通过 UI 操作产生的失败结果完全一致**。用户在对应业务单据页面应能看到相同的失败状态和原因，便于排查问题。
 
 ---
 
