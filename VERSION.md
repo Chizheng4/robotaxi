@@ -1,13 +1,39 @@
-## v025
+## v025.4
 
-核心：v025 大版本完成。监控四阶段事件体系 + Trigger/Workflow 边界修正 + 父子流程串联。
+核心：执行失败在业务对象上可见。
 
-- v025.1：监控事件体系，每 Tick 产出 6 类结构化事件（TICK_STARTED→SUPPLY_TRIGGER→DEMAND_TRIGGER→WORKFLOW→ACTION→TICK_COMPLETED）。
-- v025.2：SupplyTrigger 边界修正，只点火两个源头（READINESS_TASK_CREATE + DEPLOYMENT_TASK_CREATE），去掉 route_execution。
-- v025.3：DeploymentTask→RouteExecution 父子链，DT 创建时同步创建 RE，WorkflowEngine 驱动推进。
-- v025.4：执行失败在业务对象上可见（定价失败→订单状态 PRICING_FAILED）。
-- v025.5：端到端验证 50 Tick 产出 650 事件 + 最终归档。
-- 设计文档修复：05-supply-trigger.md、04-deployment-task-workflow.md、01-execution-engine.md。
+- 定价失败时 ServiceOrder 状态设为 PRICING_FAILED，并写入失败原因。
+
+## v025.3
+
+核心：DeploymentTask → RouteExecution 父子流程串联。
+
+- WorkflowEngine 新增 DEPLOYMENT_TASK_RULES 规则表。
+- 新增 handleDeploymentTaskCreate handler：创建 DT 时同步创建 RouteExecution 子单据。
+- 新增 handleReadinessTaskCreate handler：点火创建准入任务。
+- simulationLoop 工作流查询增加 deploymentTasks 参数。
+
+## v025.2
+
+核心：SupplyTrigger 边界修正。
+
+- 去掉 route_execution_trigger，只保留 READINESS_TASK_CREATE + DEPLOYMENT_TASK_CREATE 两个源头点火。
+- simulationLoop 更新为合并供给侧和需求侧动作统一执行。
+
+## v025.1
+
+核心：监控四阶段事件体系。
+
+- completeTick 重构：每 Tick 产出 TICK_STARTED → SUPPLY_TRIGGER → DEMAND_TRIGGER → WORKFLOW_QUERIED + ACTION_EXECUTED → TICK_COMPLETED 六类事件。
+- 事件消息完整中文可读，含动作名、结果和详情。
+- simulationTypes 新增 WORKFLOW_QUERIED、DEMAND_TRIGGER_COMPLETED 事件类型。
+
+## v025 计划
+
+核心：v025 大版本启动。监控四阶段 + Trigger/Workflow 边界修正 + 父子流程串联。
+
+- 修复设计文档：05-supply-trigger.md（去掉 route_execution，明确只做点火）、04-deployment-task-workflow.md（强化父子关系）、01-execution-engine.md（失败必须在业务对象可见）。
+- 制定 4 个子版本自动执行计划。
 
 ## v024.4
 
@@ -15,6 +41,8 @@
 
 - simulationHandlers 新增 6 个供给侧处理器。main.jsx bootstrap 注册全部 13 个 handler。
 - v024 全链路验证完成：Tick→触发→订单→定价→匹配→履约→结算→支付自动流转。
+
+## v024 归档
 
 ## v024.3
 
