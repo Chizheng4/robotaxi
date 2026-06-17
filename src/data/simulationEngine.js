@@ -65,7 +65,7 @@ export function initSimulationRun({ simulationName, simulationPolicy, totalDays,
     globalTick: run.current_global_tick,
     eventType: EventType.SIMULATION_RUN_STARTED,
     eventSource: EventSource.SIMULATION_SYSTEM,
-    message: `SimulationRun ${run.simulation_run_id} 已创建，状态：${SimulationStatus.READY}`,
+    message: `模拟运行 ${run.simulation_run_id} 已创建，状态：就绪`,
   });
 
   return { simulationRun: run, event };
@@ -98,7 +98,7 @@ export function startSimulationRun(simulationRun) {
     eventType: EventType.SIMULATION_RUN_STARTED,
     eventSource: EventSource.SIMULATION_SYSTEM,
     eventResult: EventResult.SUCCESS,
-    message: `SimulationRun ${updated.simulation_run_id} 已启动`,
+    message: `模拟运行 ${updated.simulation_run_id} 已启动`,
   });
 
   return { simulationRun: updated, event };
@@ -203,7 +203,7 @@ export function completeTick(simulationRun, tickContext, supplySummary, demandSu
       eventType: EventType.SIMULATION_RUN_COMPLETED,
       eventSource: EventSource.SIMULATION_SYSTEM,
       eventResult: EventResult.SUCCESS,
-      message: `SimulationRun ${updated.simulation_run_id} 已完成`,
+      message: `模拟运行 ${updated.simulation_run_id} 已完成`,
     }));
   }
 

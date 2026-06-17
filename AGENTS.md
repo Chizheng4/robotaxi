@@ -14,13 +14,21 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 2. `doc/rules/03-field-dictionary-rules.md` — 字段字典规则
 3. `doc/rules/04-frontend-ux-rules.md` — 前端布局与展示规则
 4. `doc/rules/05-codex-execution-rules.md` — 执行、验证与禁止行为
-5. `doc/common/field-dictionary.md` — 当前字段字典
+5. `doc/common/field-dictionary.md` — 字段字典（文档）
+6. `src/domain/fieldDictionary.js` — 字段字典（前端代码，含 fieldDictionary 和 valueDictionary）
 
 不因「任务看起来和前端无关」而跳过前端规则，不因「只是改代码」而跳过字段字典。
 
-### 1.2 字段字典：新增或修改任何对象、字段、状态、枚举时必须同步
+### 1.2 字段字典：两个文件必须同时更新
 
-每次编码结束后，检查 `doc/common/field-dictionary.md` 是否已包含本轮所有新增或修改的字段。未同步不得视为完成。
+新增或修改任何业务对象、字段、状态、枚举时，以下两个文件必须同步更新，缺一不可：
+
+- `doc/common/field-dictionary.md` — 文档版字段字典
+- `src/domain/fieldDictionary.js` — 前端代码版字段字典。其中：
+  - `fieldDictionary` 对象 → 用于表格列头、详情字段名的中文显示
+  - `valueDictionary` 对象 → 用于状态值、枚举值的中文显示
+
+两个文件都更新后才算完成。
 
 ### 1.3 前端展示：必须中文、必须完整布局
 
@@ -51,7 +59,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 
 每轮编码结束、准备告知用户「完成」之前，逐项确认：
 
-- [ ] **字段字典**：新增/修改的字段是否已同步到 `doc/common/field-dictionary.md`？
+- [ ] **字段字典**：`doc/common/field-dictionary.md` 和 `src/domain/fieldDictionary.js` 是否都已更新？`fieldDictionary`（字段标签）和 `valueDictionary`（枚举值）是否都已包含新增内容？
 - [ ] **前端中文**：表格列名、按钮、状态标签是否全部中文？是否有英文代码值暴露？
 - [ ] **前端布局**：是否具备状态筛选栏、全局操作栏（如需）、行操作列（如需）、详情面板？
 - [ ] **Bundle**：`src/main.bundle.js` 是否已从 `src/main.jsx` 重新编译？
@@ -77,13 +85,13 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 
 详细规则见：
 
-| 文件 | 用途 |
-|------|------|
-| `doc/iteration-rules.md` | 迭代流程、版本号、归档规则 |
-| `doc/rules/01-iteration-workflow.md` | 迭代类型与标准执行流程 |
-| `doc/rules/02-version-git-rules.md` | 版本号、提交、标签 |
-| `doc/rules/03-field-dictionary-rules.md` | 字段字典维护与中文展示 |
-| `doc/rules/04-frontend-ux-rules.md` | B 端页面布局与交互规则 |
-| `doc/rules/05-codex-execution-rules.md` | 执行要求、验证与暂停条件 |
-| `doc/rules/06-document-driven-iteration-rules.md` | 文档差异驱动迭代协议 |
-| `doc/common/field-dictionary.md` | 统一字段字典正文 |
+| 文件                                                | 用途            |
+| ------------------------------------------------- | ------------- |
+| `doc/iteration-rules.md`                          | 迭代流程、版本号、归档规则 |
+| `doc/rules/01-iteration-workflow.md`              | 迭代类型与标准执行流程   |
+| `doc/rules/02-version-git-rules.md`               | 版本号、提交、标签     |
+| `doc/rules/03-field-dictionary-rules.md`          | 字段字典维护与中文展示   |
+| `doc/rules/04-frontend-ux-rules.md`               | B 端页面布局与交互规则  |
+| `doc/rules/05-codex-execution-rules.md`           | 执行要求、验证与暂停条件  |
+| `doc/rules/06-document-driven-iteration-rules.md` | 文档差异驱动迭代协议    |
+| `doc/common/field-dictionary.md`                  | 统一字段字典正文      |

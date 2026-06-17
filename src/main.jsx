@@ -3613,6 +3613,10 @@ function isStatusField(key) {
     "order_status",
     "trip_status",
     "payment_status",
+    "simulation_status",
+    "policy_status",
+    "event_result",
+    "event_source",
   ].includes(key);
 }
 

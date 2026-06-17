@@ -2,6 +2,15 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.10
+
+核心：Simulation 前端中文显示全覆盖，补齐嵌套对象字段字典。
+
+- `fieldDictionary.js` 补齐 simulation 全部字段标签（`fieldDictionary`）和枚举值（`valueDictionary`），含 38 个子对象字段。
+- `simulationEngine.js` 事件消息英译中。
+- `main.jsx` 补全 `isStatusField` 列表，simulation 状态值正确走中文映射。
+- 规则明确：两个字典文件必须同步更新，嵌套子对象字段不可遗漏。
+
 ## v023.9
 
 核心：修复 Simulation 前端白屏、补齐 UX 布局、补全字段字典、重构规则体系。

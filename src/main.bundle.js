@@ -3752,7 +3752,7 @@ function summarizeRecord(record) {
   return Object.entries(record).slice(0, 3).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`).join("，");
 }
 function isStatusField(key) {
-  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "trip_status", "payment_status"].includes(key);
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "trip_status", "payment_status", "simulation_status", "policy_status", "event_result", "event_source"].includes(key);
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";
