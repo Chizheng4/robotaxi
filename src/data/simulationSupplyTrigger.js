@@ -1,91 +1,53 @@
 /**
- * SupplyTrigger：供给侧事件触发
+ * SupplyTrigger：供给侧点火
  *
- * 根据模拟时间上下文和配置快照，判断是否触发供给侧业务事件。
- * 本模块只判断"是否触发"，不执行具体业务逻辑（由 ExecutionEngine 分发）。
+ * 根据模拟时间上下文和配置快照，判断是否点火创建准入任务和投放任务。
+ * 本模块只产出 Action，不执行具体业务逻辑（由 ExecutionEngine 分发）。
+ * RouteExecution 推进不属于 SupplyTrigger 范围，由 WorkflowEngine 负责。
  *
  * 参考文档：doc/08-simulation-system/01-simulation-runtime/05-supply-trigger.md
  */
 
-import { EventSource, EventResult, EventType } from "../domain/simulationTypes.js";
-
 /**
- * 执行供给侧触发判断
+ * 执行供给侧点火判断
  *
  * @param {Object} params
  * @param {Object} params.timeContext - computeTimeContext 的返回值
  * @param {Object} params.policySnapshot - simulation_policy_snapshot
- * @returns {Object} 供给侧触发摘要
+ * @returns {Object} 供给侧点火结果 { actions, triggered_event_count, no_action_count, readiness_triggered, deployment_triggered }
  */
 export function runSupplyTrigger({ timeContext, policySnapshot }) {
   const config = policySnapshot.supply_trigger_config || {};
-  const results = {
-    readiness_trigger_result: "NOT_ENABLED",
-    deployment_trigger_result: "NOT_ENABLED",
-    route_execution_trigger_result: "NOT_ENABLED",
-    triggered_actions: [],
-    no_action_count: 0,
-  };
+  const actions = [];
+  let noActionCount = 0;
+  let readinessTriggered = false;
+  let deploymentTriggered = false;
 
   if (!config.supply_trigger_enabled) {
-    return results;
+    return { actions, triggered_event_count: 0, no_action_count: 0, readiness_triggered: false, deployment_triggered: false };
   }
 
-  // 1. 运营准入触发
+  // 1. 运营准入点火
   if (config.readiness_trigger_enabled && timeContext.is_worker_working_time) {
-    results.readiness_trigger_result = "TRIGGERED";
-    results.triggered_actions.push({
-      action_type: "READINESS_CHECK_TRIGGER",
-      trigger_condition: "worker_working_time",
-    });
+    actions.push({ actionType: "READINESS_TASK_CREATE", objectId: null, triggeredBy: "SUPPLY_TRIGGER" });
+    readinessTriggered = true;
   } else if (config.readiness_trigger_enabled) {
-    results.readiness_trigger_result = "OUTSIDE_WORKING_HOURS";
-    results.no_action_count++;
+    noActionCount++;
   }
 
-  // 2. 运营投放触发
+  // 2. 运营投放点火
   if (config.deployment_trigger_enabled && timeContext.is_robotaxi_operating_time) {
-    results.deployment_trigger_result = "TRIGGERED";
-    results.triggered_actions.push({
-      action_type: "DEPLOYMENT_TRIGGER",
-      trigger_condition: "robotaxi_operating_time",
-    });
+    actions.push({ actionType: "DEPLOYMENT_TASK_CREATE", objectId: null, triggeredBy: "SUPPLY_TRIGGER" });
+    deploymentTriggered = true;
   } else if (config.deployment_trigger_enabled) {
-    results.deployment_trigger_result = "OUTSIDE_OPERATING_HOURS";
-    results.no_action_count++;
+    noActionCount++;
   }
 
-  // 3. RouteExecution 推进触发
-  if (config.route_execution_trigger_enabled) {
-    results.route_execution_trigger_result = "TRIGGERED";
-    results.triggered_actions.push({
-      action_type: "ROUTE_EXECUTION_TRIGGER",
-      trigger_condition: "always",
-    });
-  }
-
-  results.triggered_event_count = results.triggered_actions.length;
-
-  return results;
-}
-
-/**
- * 判断是否应触发准入任务创建
- */
-export function shouldCreateReadinessTasks(supplyResult) {
-  return supplyResult.readiness_trigger_result === "TRIGGERED";
-}
-
-/**
- * 判断是否应触发投放任务创建
- */
-export function shouldCreateDeploymentTasks(supplyResult) {
-  return supplyResult.deployment_trigger_result === "TRIGGERED";
-}
-
-/**
- * 判断是否应推进 RouteExecution
- */
-export function shouldTriggerRouteExecution(supplyResult) {
-  return supplyResult.route_execution_trigger_result === "TRIGGERED";
+  return {
+    actions,
+    triggered_event_count: actions.length,
+    no_action_count: noActionCount,
+    readiness_triggered: readinessTriggered,
+    deployment_triggered: deploymentTriggered,
+  };
 }

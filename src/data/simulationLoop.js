@@ -59,17 +59,21 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     }
   }
 
-  // 6. 先执行需求侧创建动作（批量创建订单）
-  let demandExecutionResults = [];
-  if (businessData && demandActions.length > 0) {
-    demandExecutionResults = executeActions(demandActions, businessData, {
+  // 5. 供给侧点火动作
+  const supplyActions = (supplyResult && supplyResult.actions) ? supplyResult.actions : [];
+
+  // 6. 先执行触发层动作（创建准入/投放任务 + 创建订单）
+  const preActions = [...supplyActions, ...demandActions];
+  let preExecutionResults = [];
+  if (businessData && preActions.length > 0) {
+    preExecutionResults = executeActions(preActions, businessData, {
       simulationRunId: simulationRun.simulation_run_id,
       globalTick: simulationRun.current_global_tick,
       policySnapshot,
     });
   }
 
-  // 6b. 刷新业务数据（包含刚创建的订单），再查询工作流
+  // 7. 刷新业务数据（包含刚创建的单据），再查询工作流
   const refreshedBusinessData = refreshBusinessData ? refreshBusinessData() : businessData;
 
   // 7. 查询工作流引擎：获取所有待执行的业务动作（含刚创建的订单的后续动作）
@@ -98,7 +102,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   }
 
   // 合并所有执行结果
-  const allResults = [...demandExecutionResults, ...executionResults];
+  const allResults = [...preExecutionResults, ...executionResults];
 
   // 9. 汇总当前 Tick 摘要
   const tickEventSummary = buildTickEventSummary(supplyResult, demandResult, allResults);
