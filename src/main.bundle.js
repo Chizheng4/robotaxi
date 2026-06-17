@@ -3533,7 +3533,7 @@ function renderSimulationRunActions(row, actions) {
   }
   if (status === "PAUSED") {
     return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
-      onClick: () => sim.startSimulationRun(row.simulation_run_id)
+      onClick: () => sim.resumeSimulationRun(row.simulation_run_id)
     }, "\u7EE7\u7EED"), /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => sim.stopSimulationRun(row.simulation_run_id),
       danger: true

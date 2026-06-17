@@ -70,9 +70,6 @@
 - simulationActions 新增 getBusinessData 传入完整业务上下文。
 - main.jsx bootstrap 注册所有 handler 到 ExecutionEngine。
 
-# Robotaxi 版本记录
-
-本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
 ## v024 计划
 

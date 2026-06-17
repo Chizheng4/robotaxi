@@ -3359,7 +3359,7 @@ function renderSimulationRunActions(row, actions) {
   if (status === "PAUSED") {
     return (
       <RowActionGroup>
-        <RowActionButton onClick={() => sim.startSimulationRun(row.simulation_run_id)}>继续</RowActionButton>
+        <RowActionButton onClick={() => sim.resumeSimulationRun(row.simulation_run_id)}>继续</RowActionButton>
         <RowActionButton onClick={() => sim.stopSimulationRun(row.simulation_run_id)} danger>停止</RowActionButton>
       </RowActionGroup>
     );

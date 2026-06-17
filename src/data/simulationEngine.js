@@ -109,13 +109,16 @@ export function startSimulationRun(simulationRun) {
  */
 export function pauseSimulationRun(simulationRun) {
   if (simulationRun.simulation_status !== SimulationStatus.RUNNING) return null;
-  return {
-    simulationRun: {
-      ...simulationRun,
-      simulation_status: SimulationStatus.PAUSED,
-      paused_at: new Date().toISOString(),
-    },
-  };
+  const updated = { ...simulationRun, simulation_status: SimulationStatus.PAUSED, paused_at: new Date().toISOString() };
+  const event = createSimulationEvent({
+    simulationEventId: nextSimulationEventId(), simulationRunId: updated.simulation_run_id,
+    simulationDay: updated.current_day, simulationTime: updated.current_time,
+    dayTick: updated.current_day_tick, globalTick: updated.current_global_tick,
+    eventType: EventType.SIMULATION_RUN_PAUSED, eventSource: EventSource.SIMULATION_SYSTEM,
+    eventResult: EventResult.SUCCESS,
+    message: `模拟运行 ${updated.simulation_run_id} 已暂停 | Day ${updated.current_day} ${updated.current_time} | Tick #${updated.current_global_tick}`,
+  });
+  return { simulationRun: updated, event };
 }
 
 /**
@@ -123,13 +126,16 @@ export function pauseSimulationRun(simulationRun) {
  */
 export function resumeSimulationRun(simulationRun) {
   if (simulationRun.simulation_status !== SimulationStatus.PAUSED) return null;
-  return {
-    simulationRun: {
-      ...simulationRun,
-      simulation_status: SimulationStatus.RUNNING,
-      resumed_at: new Date().toISOString(),
-    },
-  };
+  const updated = { ...simulationRun, simulation_status: SimulationStatus.RUNNING, resumed_at: new Date().toISOString() };
+  const event = createSimulationEvent({
+    simulationEventId: nextSimulationEventId(), simulationRunId: updated.simulation_run_id,
+    simulationDay: updated.current_day, simulationTime: updated.current_time,
+    dayTick: updated.current_day_tick, globalTick: updated.current_global_tick,
+    eventType: EventType.SIMULATION_RUN_RESUMED, eventSource: EventSource.SIMULATION_SYSTEM,
+    eventResult: EventResult.SUCCESS,
+    message: `模拟运行 ${updated.simulation_run_id} 已继续 | Day ${updated.current_day} ${updated.current_time} | Tick #${updated.current_global_tick}`,
+  });
+  return { simulationRun: updated, event };
 }
 
 /**
@@ -137,13 +143,16 @@ export function resumeSimulationRun(simulationRun) {
  */
 export function stopSimulationRun(simulationRun) {
   if (![SimulationStatus.RUNNING, SimulationStatus.PAUSED].includes(simulationRun.simulation_status)) return null;
-  return {
-    simulationRun: {
-      ...simulationRun,
-      simulation_status: SimulationStatus.STOPPED,
-      stopped_at: new Date().toISOString(),
-    },
-  };
+  const updated = { ...simulationRun, simulation_status: SimulationStatus.STOPPED, stopped_at: new Date().toISOString() };
+  const event = createSimulationEvent({
+    simulationEventId: nextSimulationEventId(), simulationRunId: updated.simulation_run_id,
+    simulationDay: updated.current_day, simulationTime: updated.current_time,
+    dayTick: updated.current_day_tick, globalTick: updated.current_global_tick,
+    eventType: EventType.SIMULATION_RUN_STOPPED, eventSource: EventSource.SIMULATION_SYSTEM,
+    eventResult: EventResult.SUCCESS,
+    message: `模拟运行 ${updated.simulation_run_id} 已停止 | Day ${updated.current_day} ${updated.current_time} | Tick #${updated.current_global_tick}`,
+  });
+  return { simulationRun: updated, event };
 }
 
 /**

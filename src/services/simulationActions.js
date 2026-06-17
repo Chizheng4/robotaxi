@@ -59,18 +59,33 @@ export function useSimulationActions({
   function pauseSimulationRun(runId) {
     if (!simulationEngine) return;
     const run = simulationRuns.find((r) => r.simulation_run_id === runId);
+    if (!run) return;
     const result = simulationEngine.pauseSimulationRun(run);
     if (!result) return;
     setSimulationRuns((prev) => prev.map((r) => r.simulation_run_id === runId ? result.simulationRun : r));
+    if (result.event) setSimulationEvents((prev) => [result.event, ...prev]);
     clearInterval(tickIntervalRef.current);
+  }
+
+  function resumeSimulationRun(runId) {
+    if (!simulationEngine) return;
+    const run = simulationRuns.find((r) => r.simulation_run_id === runId);
+    if (!run) return;
+    const result = simulationEngine.resumeSimulationRun(run);
+    if (!result) return;
+    setSimulationRuns((prev) => prev.map((r) => r.simulation_run_id === runId ? result.simulationRun : r));
+    if (result.event) setSimulationEvents((prev) => [result.event, ...prev]);
+    tickIntervalRef.current = setInterval(() => executeTickForRun(runId), 500);
   }
 
   function stopSimulationRun(runId) {
     if (!simulationEngine) return;
     const run = simulationRuns.find((r) => r.simulation_run_id === runId);
+    if (!run) return;
     const result = simulationEngine.stopSimulationRun(run);
     if (!result) return;
     setSimulationRuns((prev) => prev.map((r) => r.simulation_run_id === runId ? result.simulationRun : r));
+    if (result.event) setSimulationEvents((prev) => [result.event, ...prev]);
     clearInterval(tickIntervalRef.current);
   }
 
@@ -108,6 +123,7 @@ export function useSimulationActions({
     createSimulationRun,
     startSimulationRun,
     pauseSimulationRun,
+    resumeSimulationRun,
     stopSimulationRun,
     cleanup,
   };
