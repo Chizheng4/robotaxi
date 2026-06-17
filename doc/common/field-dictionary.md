@@ -789,10 +789,174 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |NO_AVAILABLE_DROPOFF_CELL|没有可用下车点|
 |BASIC_RULE_BASED_DYNAMIC_PRICING|基础规则动态定价|
 |BASIC_NEAREST_AVAILABLE_ROBOTAXI|最近可用 Robotaxi 匹配|
+|READY|就绪|
+|RUNNING|运行中|
+|PAUSED|已暂停|
+|STOPPED|已停止|
+|DRAFT|草稿|
+|DISABLED|停用|
+|SLOW|慢速|
+|NORMAL|标准|
+|FAST|快速|
+|ULTRA_FAST|超高速|
+|NIGHT|夜间|
+|MORNING|上午|
+|NOON|中午|
+|AFTERNOON|下午|
+|EVENING|晚上|
+|PEAK|高峰期|
+|LOW|低需求期|
+|TICK_ORDER_COUNT_DISTRIBUTION|Tick 级订单数量分布|
+|FIXED_ORDER_COUNT|固定订单数量|
+|POISSON|泊松分布|
+|UNIFORM|均匀分布|
+|SIMULATION_SYSTEM|模拟系统|
+|SUPPLY_TRIGGER|供给侧触发器|
+|DEMAND_TRIGGER|需求侧触发器|
+|EXECUTION_ENGINE|执行引擎|
+|BUSINESS_SERVICE|业务服务|
+|SKIPPED|已跳过|
+|NO_ACTION|无动作|
+|SIMULATION_RUN_STARTED|模拟运行已启动|
+|SIMULATION_RUN_PAUSED|模拟运行已暂停|
+|SIMULATION_RUN_RESUMED|模拟运行已恢复|
+|SIMULATION_RUN_COMPLETED|模拟运行已完成|
+|SIMULATION_RUN_STOPPED|模拟运行已停止|
+|SIMULATION_RUN_FAILED|模拟运行失败|
+|SIMULATION_TICK_STARTED|模拟 Tick 开始|
+|SIMULATION_TICK_COMPLETED|模拟 Tick 完成|
+|SIMULATION_SCENE_UPDATED|模拟场景已更新|
+|SUPPLY_TRIGGER_STARTED|供给侧触发开始|
+|SUPPLY_TRIGGER_COMPLETED|供给侧触发完成|
+|READINESS_CHECK_TRIGGERED|准入检查已触发|
+|READINESS_CHECK_CREATED|准入任务已创建|
+|READINESS_CHECK_NO_ACTION|准入检查无动作|
+|READINESS_CHECK_FAILED|准入检查失败|
+|DEPLOYMENT_TRIGGERED|投放已触发|
+|DEPLOYMENT_TASK_CREATED|投放任务已创建|
+|DEPLOYMENT_NO_ACTION|投放无动作|
+|DEPLOYMENT_TRIGGER_FAILED|投放触发失败|
+|ROUTE_EXECUTION_TRIGGERED|行驶执行已触发|
+|ROUTE_EXECUTION_UPDATED|行驶执行已更新|
+|ROUTE_EXECUTION_COMPLETED|行驶执行已完成|
+|ROUTE_EXECUTION_NO_ACTION|行驶执行无动作|
+|DEMAND_TRIGGER_STARTED|需求触发开始|
+|ORDER_COUNT_GENERATED|订单数量已生成|
+|DEMAND_NO_ORDER_GENERATED|需求未生成订单|
+|ACTION_RECEIVED|动作已接收|
+|ACTION_EXECUTED|动作已执行|
+|ACTION_FAILED|动作失败|
+|DOMAIN_STATE_CHANGED|领域状态已变更|
 
 ---
 
-## 23. 前端显示规则
+## 23. SimulationPolicy：模拟策略
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|simulation_policy_id|模拟策略编号|持久化字段|SimulationPolicy 唯一编号|
+|policy_name|策略名称|持久化字段|模拟策略名称|
+|policy_status|策略状态|运行态字段|策略当前状态：DRAFT / ACTIVE / DISABLED / ARCHIVED|
+|tick_minutes|Tick 时长（分钟）|持久化字段|每次 Tick 模拟的分钟数|
+|simulation_days|模拟天数|持久化字段|一次模拟运行的总天数|
+|run_speed_level|运行速度等级|持久化字段|模拟运行速度：SLOW / NORMAL / FAST / ULTRA_FAST|
+|random_seed|随机种子|持久化字段|随机数种子|
+|worker_work_start_time|作业人员工作开始时间|持久化字段|运营中心作业人员的上班时间|
+|worker_work_end_time|作业人员工作结束时间|持久化字段|运营中心作业人员的下班时间|
+|robotaxi_operating_start_time|Robotaxi 运营开始时间|持久化字段|Robotaxi 开始运营的时间|
+|robotaxi_operating_end_time|Robotaxi 运营结束时间|持久化字段|Robotaxi 结束运营的时间|
+|time_period_configs|时间段配置|持久化字段|一天内各时间段的配置列表|
+|time_window_configs|时间窗口配置|持久化字段|各时间窗口的需求配置列表|
+|demand_generation_config|需求生成配置|持久化字段|需求生成的全局配置|
+|demand_generation_enabled|需求生成开关|持久化字段|是否启用需求自动生成|
+|demand_generation_mode|需求生成模式|持久化字段|需求订单生成模式|
+|max_orders_per_tick_global|每 Tick 最大订单数|持久化字段|全局每 Tick 最大生成订单数|
+|demand_profiles|需求分布配置|持久化字段|各时段需求分布配置列表|
+|supply_trigger_config|供给侧触发配置|持久化字段|供给侧自动触发开关配置|
+|supply_trigger_enabled|供给侧触发开关|持久化字段|是否启用供给侧自动触发|
+|readiness_trigger_enabled|准入检查触发开关|持久化字段|是否启用准入检查自动触发|
+|deployment_trigger_enabled|投放触发开关|持久化字段|是否启用投放自动触发|
+|route_execution_trigger_enabled|行驶执行触发开关|持久化字段|是否启用行驶执行自动触发|
+|service_order_auto_config|服务订单自动化配置|持久化字段|服务订单各环节自动化开关|
+|auto_pricing_enabled|自动定价开关|持久化字段|是否自动执行定价|
+|auto_customer_confirm_enabled|自动客户确认开关|持久化字段|是否自动确认客户订单|
+|auto_order_matching_enabled|自动订单匹配开关|持久化字段|是否自动执行订单匹配|
+|auto_trip_creation_enabled|自动履约创建开关|持久化字段|是否自动创建履约行驶记录|
+|auto_trip_progress_enabled|自动履约推进开关|持久化字段|是否自动推进履约行驶|
+|auto_payment_enabled|自动支付开关|持久化字段|是否自动完成支付|
+|execution_time_config|执行耗时配置|持久化字段|各环节的执行耗时配置|
+|worker_readiness_check_ticks|准入检查耗时（Tick）|持久化字段|准入检查需要多少个 Tick 完成|
+|passenger_boarding_ticks|乘客上车耗时（Tick）|持久化字段|乘客上车需要多少个 Tick|
+|dropoff_and_payment_ticks|下车与支付耗时（Tick）|持久化字段|下车和支付需要多少个 Tick|
+|robotaxi_speed_kmh|Robotaxi 行驶速度（km/h）|持久化字段|Robotaxi 行驶速度|
+|default_completion_config|默认完成配置|持久化字段|各环节默认成功完成的配置|
+|default_readiness_passed|准入检查默认通过|持久化字段|准入检查是否默认通过|
+|default_deployment_arrival_normal|投放到达默认正常|持久化字段|投放到达是否默认正常|
+|default_pickup_arrival_normal|接驾到达默认正常|持久化字段|接驾到达是否默认正常|
+|default_passenger_boarded|乘客默认已上车|持久化字段|乘客是否默认成功上车|
+|default_service_arrival_normal|送达到达默认正常|持久化字段|送达目的地是否默认正常|
+|default_payment_success|支付默认成功|持久化字段|支付是否默认成功|
+|enable_exception_probability|异常概率开关|持久化字段|是否启用异常概率模拟|
+
+---
+
+## 24. SimulationRun：模拟运行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|simulation_run_id|模拟运行编号|持久化字段|SimulationRun 唯一编号|
+|simulation_name|模拟运行名称|持久化字段|模拟运行名称|
+|simulation_status|模拟运行状态|运行态字段|当前模拟状态：READY / RUNNING / PAUSED / COMPLETED / STOPPED / FAILED|
+|simulation_policy_id|模拟策略编号|持久化字段|关联的 SimulationPolicy 编号|
+|simulation_policy_snapshot|模拟策略快照|运行态字段|运行创建时的策略快照|
+|total_days|模拟总天数|持久化字段|模拟总天数|
+|tick_minutes|Tick 时长（分钟）|持久化字段|每次 Tick 的模拟分钟数|
+|total_ticks|总 Tick 数|持久化字段|模拟运行总 Tick 数|
+|current_day|当前模拟天数|运行态字段|当前模拟进行到第几天|
+|current_time|当前模拟时间|运行态字段|当前模拟时间（HH:MM）|
+|current_day_tick|当天 Tick 序号|运行态字段|当天的 Tick 序号|
+|current_global_tick|全局 Tick 序号|运行态字段|模拟运行全局 Tick 序号|
+|current_time_period|当前时间段|运行态字段|当前所处时间段|
+|current_period_type|当前时段类型|运行态字段|当前时段类型：PEAK / NORMAL / LOW|
+|current_supply_scene|当前供给侧场景|运行态字段|当前供给侧 Tick 场景快照|
+|current_demand_scene|当前需求侧场景|运行态字段|当前需求侧 Tick 场景快照|
+|current_scene_summary|当前场景摘要|运行态字段|当前场景的文本摘要|
+|current_tick_event_summary|当前 Tick 事件摘要|运行态字段|当前 Tick 的事件摘要|
+|started_at|开始时间|运行态字段|模拟运行开始时间|
+|paused_at|暂停时间|运行态字段|最近一次暂停时间|
+|resumed_at|恢复时间|运行态字段|最近一次恢复时间|
+|completed_at|完成时间|运行态字段|模拟完成时间|
+|stopped_at|停止时间|运行态字段|模拟停止时间|
+|failure_reason|失败原因|运行态字段|模拟失败原因|
+|result_summary|结果摘要|运行态字段|模拟完成后的结果摘要|
+|created_at|创建时间|运行态字段|记录创建时间|
+
+---
+
+## 25. SimulationEvent：模拟事件记录
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|simulation_event_id|模拟事件编号|运行态字段|SimulationEvent 唯一编号|
+|simulation_run_id|模拟运行编号|运行态字段|所属 SimulationRun|
+|simulation_day|模拟天数|运行态字段|事件发生在模拟第几天|
+|simulation_time|模拟时间|运行态字段|事件发生的模拟时间|
+|day_tick|当天 Tick|运行态字段|事件发生的当天 Tick 序号|
+|global_tick|全局 Tick|运行态字段|事件发生的全局 Tick 序号|
+|event_type|事件类型|运行态字段|事件类型枚举值|
+|event_source|事件来源|运行态字段|事件来源：SIMULATION_SYSTEM / SUPPLY_TRIGGER / DEMAND_TRIGGER / EXECUTION_ENGINE / BUSINESS_SERVICE|
+|related_object_type|关联对象类型|运行态字段|关联的业务对象类型|
+|related_object_id|关联对象编号|运行态字段|关联的业务对象编号|
+|event_result|事件结果|运行态字段|SUCCESS / FAILED / SKIPPED / NO_ACTION|
+|failure_reason|失败原因|运行态字段|事件失败时的原因说明|
+|skip_reason|跳过原因|运行态字段|事件跳过时的原因说明|
+|message|事件描述|运行态字段|事件人类可读描述|
+|event_payload|事件负载|运行态字段|事件附加数据对象|
+|created_at|创建时间|运行态字段|事件记录创建时间|
+
+---
+
+## 26. 前端显示规则
 
 1. 代码、初始化数据和对象引用继续使用英文字段名；
 2. 前端表格列名、详情栏字段名、筛选项名称优先显示中文名；

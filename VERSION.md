@@ -2,6 +2,35 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.9
+
+核心：修复 Simulation 前端白屏、补齐 UX 布局、补全字段字典、重构规则体系。
+
+- 修复白屏问题：
+  - `tripService.js`：`import { tripTypes }` 改为 `import * as tripTypes`，修复动态 import 失败。
+  - `main.jsx`：补全 bootstrap 中 simulation 模块的解构变量（缺 5 个变量导致 ReferenceError）。
+  - `main.jsx`：删除孤立的 `}, [simActions]);` 残留代码。
+- 补齐 Simulation 页面 UX 布局：
+  - 模拟运行管理：新增「创建模拟运行」全局操作按钮。
+  - 模拟运行管理：新增行操作列（启动/暂停/继续/停止）。
+  - 三个 simulation 页面：新增状态筛选栏。
+  - 详情面板：collections 映射补充 simulation 类型，新增 Tab 化详情（策略 6 tab / 运行 5 tab / 事件 2 tab）。
+  - `hasEventPanel`：simulation 页面加入底部事件日志区。
+- 补全字段字典：
+  - 新增 SimulationPolicy（30+ 字段）、SimulationRun（20+ 字段）、SimulationEvent（16 字段）三个对象章节。
+  - 新增 60+ 个 simulation 枚举值中文映射（SimulationStatus、PolicyStatus、RunSpeedLevel、EventType 等）。
+- 重构规则体系（模型通用、平台无关）：
+  - `AGENTS.md` 重写为唯一权威入口：强制规则 + 完成自检清单，不提任何具体工具名。
+  - `doc/iteration-rules.md` 简化，引用 AGENTS.md。
+  - `doc/rules/00-rule-index.md` 去掉任务分类，所有编码任务统一必读列表。
+  - `doc/rules/01-iteration-workflow.md` 第 5 步改为强制字段字典检查，新增第 11 步完成自检清单。
+  - `doc/rules/03-field-dictionary-rules.md` 新增每轮编码结束强制检查。
+  - `doc/rules/04-frontend-ux-rules.md` 新增适用范围声明：所有编码任务必须遵守。
+  - `doc/rules/05-codex-execution-rules.md` 补充禁止跳过强制文件和自检清单。
+  - 删除冗余文件 `PROJECT_ITERATION_RULES.md`。
+- 工程优化：
+  - `start-robotaxi.command`：每次启动自动编译 bundle + 注入动态版本号 + 自定义 Python 服务器发送 no-cache 响应头。
+
 ## v023.8
 
 核心：前端 Simulation 页面可交互使用。

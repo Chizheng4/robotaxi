@@ -12,19 +12,11 @@ Major 用于整体方案变更，例如：
 - 系统边界变化
 - 需要连续自动执行计划的阶段性目标
 
-当前迭代目录：
+当前迭代目录：`doc/common/current-iteration/major/major-current-iteration.md`
 
-`doc/common/current-iteration/major/major-current-iteration.md`
+Major 自动执行计划文件：`doc/common/current-iteration/major/v{版本号}-auto-execution-plan.md`
 
-Major 自动执行计划文件：
-
-`doc/common/current-iteration/major/v{版本号}-auto-execution-plan.md`
-
-`major-current-iteration.md` 只作为当前大版本入口、占位或草案记录，不承载长期完整执行计划。用户直接在该文件中记录新大版本需求时，Codex 必须整理生成对应的 `v{版本号}-auto-execution-plan.md`，并将 `major-current-iteration.md` 改为指向该计划文件。
-
-历史归档目录：
-
-`doc/common/iteration-history/major/`
+历史归档目录：`doc/common/iteration-history/major/`
 
 ### 1.2 Minor
 
@@ -35,28 +27,29 @@ Minor 用于局部方案或局部功能修改，例如：
 - 单个状态机修正
 - 小范围文档补充
 
-当前迭代文件：
+当前迭代文件：`doc/common/current-iteration/minor/minor-current-iteration.md`
 
-`doc/common/current-iteration/minor/minor-current-iteration.md`
+历史归档目录：`doc/common/iteration-history/minor/`
 
-历史归档目录：
-
-`doc/common/iteration-history/minor/`
+---
 
 ## 2. 标准流程
 
-每轮迭代默认按以下顺序执行：
+每轮迭代按以下顺序执行：
 
 1. 查看 Git 当前版本和工作区状态。
-2. 读取迭代规则、字段字典和用户指定文档。
+2. 读取 AGENTS.md、迭代规则、字段字典规则、前端规则、执行规则和字段字典正文。
 3. 分析差异、冲突、疑问、风险和建议范围。
 4. 与用户确认后再修改文档或代码。
-5. 涉及字段、状态、枚举时，同步统一字段字典。
+5. **必须检查本轮是否涉及新增或修改业务对象、字段、状态、枚举——如有，必须同步更新 `doc/common/field-dictionary.md`。**
 6. 编码只覆盖已确认范围。
-7. 执行必要校验、语法检查和前端核心路径模拟。
+7. 执行必要校验、语法检查和前端核心路径验证。
 8. 完成后更新版本记录。
 9. 大版本或小版本迭代完成时，必须执行对应归档操作。
 10. 归档完成后再提交并打 tag。
+11. **执行 AGENTS.md 规定的完成自检清单，逐项确认。**
+
+---
 
 ## 3. 迭代归档规则
 
@@ -70,20 +63,18 @@ Minor 用于局部方案或局部功能修改，例如：
 
 Major 完成时必须：
 
-1. 将当前大版本计划文件 `v{版本号}-auto-execution-plan.md` 从 `doc/common/current-iteration/major/` 移入 `doc/common/iteration-history/major/`；
-2. 保留或更新 `doc/common/current-iteration/major/major-current-iteration.md`，明确当前暂无进行中的大版本计划，或指向新的大版本计划；
-3. 在 `VERSION.md` 中记录本次归档或将归档作为最后一个子版本的完成内容；
+1. 将当前大版本计划文件从 `doc/common/current-iteration/major/` 移入 `doc/common/iteration-history/major/`；
+2. 保留或更新 `doc/common/current-iteration/major/major-current-iteration.md`；
+3. 在 `VERSION.md` 中记录本次归档；
 4. 再执行提交和 tag。
-
-自动执行计划的最后一个子版本必须包含 Major 归档收口。
 
 ### 3.3 Minor 归档
 
 Minor 完成时必须：
 
-1. 将当前小版本迭代内容从 `doc/common/current-iteration/minor/minor-current-iteration.md` 归档到 `doc/common/iteration-history/minor/` 下的新文件；
-2. 清空或重置 `doc/common/current-iteration/minor/minor-current-iteration.md`，明确当前暂无进行中的小版本计划；
-3. 在 `VERSION.md` 中记录本次归档或将归档作为该小版本的完成内容；
+1. 将当前小版本迭代内容归档到 `doc/common/iteration-history/minor/` 下的新文件；
+2. 清空或重置 `doc/common/current-iteration/minor/minor-current-iteration.md`；
+3. 在 `VERSION.md` 中记录本次归档；
 4. 再执行提交和 tag。
 
 ### 3.4 禁止事项
@@ -93,11 +84,13 @@ Minor 完成时必须：
 - 覆盖已有历史归档文件；
 - 删除历史归档；
 - 把已完成计划继续留在 current 目录中作为当前计划；
-- 在提交和 tag 之后才补做归档，除非是在修复历史遗漏，此时必须单独形成补丁版本。
+- 在提交和 tag 之后才补做归档。
+
+---
 
 ## 4. 自动执行计划
 
-用户确认自动执行后，Codex 可以按计划连续推进。
+用户确认自动执行后，可以按计划连续推进。
 
 自动执行仍必须遵守：
 
@@ -106,6 +99,8 @@ Minor 完成时必须：
 - 每个稳定子版本更新 `VERSION.md`、提交并打 tag；
 - 最后一个子版本必须完成对应 Major 或 Minor 的归档收口；
 - 遇到业务冲突、范围扩大、用户方案变更或无法验证时暂停确认。
+
+---
 
 ## 5. 范围控制
 
@@ -116,6 +111,8 @@ Minor 完成时必须：
 不得把 minor 变更扩大为 major 变更。
 
 不得重写无关文件。
+
+---
 
 ## 6. 历史保护
 

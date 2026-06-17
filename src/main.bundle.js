@@ -209,6 +209,19 @@ const pageGroups = [{
     key: "zones",
     label: "Zone 管理"
   }]
+}, {
+  key: "simulation",
+  label: "自动运营模拟",
+  children: [{
+    key: "simulationPolicies",
+    label: "模拟规则配置"
+  }, {
+    key: "simulationRuns",
+    label: "模拟运行管理"
+  }, {
+    key: "simulationEvents",
+    label: "模拟事件记录"
+  }]
 }];
 const tableConfig = {
   maps: {
@@ -365,6 +378,21 @@ const tableConfig = {
     title: "初始化校验",
     description: "根据初始化规则检查生成后的运营空间数据。",
     columns: ["rule_id", "rule_name", "result", "detail"]
+  },
+  simulationPolicies: {
+    title: "模拟规则配置",
+    description: "配置模拟运行的规则参数，包括 Tick 粒度、时间段、需求分布和自动化开关。",
+    columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"]
+  },
+  simulationRuns: {
+    title: "模拟运行管理",
+    description: "创建和管理自动运营模拟运行，查看实时进度和结果。",
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"]
+  },
+  simulationEvents: {
+    title: "模拟事件记录",
+    description: "查看所有模拟运行产生的事件记录，包括触发、执行和结果。",
+    columns: ["simulation_event_id", "simulation_run_id", "event_type", "event_source", "event_result", "message", "simulation_time", "global_tick"]
   }
 };
 const pageObjectType = {
@@ -398,7 +426,10 @@ const pageObjectType = {
   orderMatchingDecisions: "orderMatchingDecision",
   serviceFulfillmentRecords: "trip",
   robotaxis: "robotaxi",
-  validations: "validation"
+  validations: "validation",
+  simulationPolicies: "simulationPolicy",
+  simulationRuns: "simulationRun",
+  simulationEvents: "simulationEvent"
 };
 const idFieldByType = {
   map: "map_id",
@@ -425,6 +456,9 @@ const idFieldByType = {
   routePlanningRun: "route_planning_run_id",
   pricingStrategy: "pricing_strategy_id",
   pricingStrategyRun: "pricing_strategy_run_id",
+  simulationPolicy: "simulation_policy_id",
+  simulationRun: "simulation_run_id",
+  simulationEvent: "simulation_event_id",
   pricingDecision: "pricing_decision_id",
   orderMatchingStrategy: "order_matching_strategy_id",
   orderMatchingRun: "order_matching_run_id",
@@ -461,7 +495,10 @@ const statusFieldByPage = {
   demandSimulationResults: "simulation_result",
   serviceOrders: "order_status",
   robotaxis: "availability_status",
-  validations: "result"
+  validations: "result",
+  simulationPolicies: "policy_status",
+  simulationRuns: "simulation_status",
+  simulationEvents: "event_result"
 };
 const cellClass = {
   EMPTY: "cell-empty",
@@ -514,6 +551,9 @@ function App() {
   const [orderMatchingDecisions, setOrderMatchingDecisions] = useState(initialRuntime.orderMatchingDecisions);
   const [trips, setTrips] = useState(initialRuntime.trips);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
+  const [simulationPolicies, setSimulationPolicies] = useState([]);
+  const [simulationRuns, setSimulationRuns] = useState([]);
+  const [simulationEvents, setSimulationEvents] = useState([]);
   const initialValidations = useMemo(() => [...validateMapSpace(initialData), ...validateOperationsCenter(initialData), ...validateCustomers(initialData)], [initialData]);
   const data = useMemo(() => ({
     ...operationalData,
@@ -570,8 +610,11 @@ function App() {
     orderMatchingDecisions: orderMatchingDecisions.map(decision => enrichOrderMatchingDecisionForDisplay(decision, data)),
     serviceFulfillmentRecords: trips.map(trip => enrichTripForDisplay(trip, data)),
     robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
+    simulationPolicies,
+    simulationRuns,
+    simulationEvents,
     validations
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, simulationRuns, simulationEvents, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -616,6 +659,9 @@ function App() {
       orderMatchingRun: rowsByPage.orderMatchingRuns,
       orderMatchingDecision: rowsByPage.orderMatchingDecisions,
       trip: rowsByPage.serviceFulfillmentRecords,
+      simulationPolicy: simulationPolicies,
+      simulationRun: simulationRuns,
+      simulationEvent: simulationEvents,
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: readinessTasks,
@@ -623,7 +669,7 @@ function App() {
       validation: validations
     };
     return collections[selected.type]?.find(item => item[idFieldByType[selected.type]] === selected.id) || null;
-  }, [data, rowsByPage, selected, validations]);
+  }, [data, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, validations]);
   const menuItems = pageGroups.map(group => {
     if (group.key === "console") return {
       key: "console",
@@ -674,6 +720,27 @@ function App() {
       pageUiState
     });
   }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, workspacePages]);
+
+  // ===== Simulation 控制 =====
+  const simActions = simulationActions ? simulationActions.useSimulationActions({
+    simulationEngine,
+    simulationLoop,
+    simulationTypes,
+    simulationInitialization,
+    simulationPolicies,
+    simulationRuns,
+    setSimulationPolicies,
+    setSimulationRuns,
+    setSimulationEvents
+  }) : null;
+  useEffect(() => {
+    if (simActions) simActions.initDefaultPolicy();
+  }, [simulationPolicies.length, simActions]);
+  useEffect(() => {
+    return () => {
+      if (simActions) simActions.cleanup();
+    };
+  }, [simActions]);
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -784,7 +851,11 @@ function App() {
       routePlanningRuns: rowsByPage.routePlanningRuns,
       demandSimulationRuns: rowsByPage.demandSimulationRuns,
       pricingStrategyRuns: rowsByPage.pricingStrategyRuns,
-      orderMatchingRuns: rowsByPage.orderMatchingRuns
+      orderMatchingRuns: rowsByPage.orderMatchingRuns,
+      simActions,
+      simulationPolicies,
+      simulationRuns,
+      simulationEvents
     }
   })), /*#__PURE__*/React.createElement("aside", {
     className: "detail-rail"
@@ -851,6 +922,9 @@ function App() {
     setOrderMatchingDecisions([]);
     setTrips([]);
     setTaskEventLogs([]);
+    setSimulationPolicies([]);
+    setSimulationRuns([]);
+    setSimulationEvents([]);
     setActivePage("console");
     setOpenMenuKeys([]);
     setSelected(nextSelection);
@@ -1345,21 +1419,21 @@ function App() {
       ...current,
       routes: [priceRoute, ...current.routes]
     }));
-    const result = runPricingEstimate({
+    const result = serviceOrderService.executePricing({
       strategy,
       serviceOrder,
       data,
-      pricingStrategyRunId: nextPricingStrategyRunId(),
-      pricingDecisionId: nextPricingDecisionId(),
       routeEstimate: {
         route_id: priceRoute.route_id,
         estimated_distance_km: priceRoute.total_distance_m / 1000,
         estimated_duration_min: Math.max(1, Math.ceil(priceRoute.total_distance_m / 1000 / 24 * 60))
       },
+      pricingStrategyRunId: nextPricingStrategyRunId(),
+      pricingDecisionId: nextPricingDecisionId(),
       createdAt: now()
     });
     setPricingStrategyRuns(items => [result.run, ...items]);
-    if (!result.decision) {
+    if (!result.success) {
       setServiceOrders(items => items.map(order => order.service_order_id === serviceOrderId ? {
         ...order,
         order_status: serviceOrderTypes.ServiceOrderStatus.FAILED,
@@ -1424,7 +1498,7 @@ function App() {
     const assignableStatuses = [serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT, serviceOrderTypes.ServiceOrderStatus.ROBOTAXI_ASSIGNMENT_FAILED, serviceOrderTypes.ServiceOrderStatus.WAITING_FOR_VEHICLE, serviceOrderTypes.ServiceOrderStatus.MATCH_FAILED, serviceOrderTypes.ServiceOrderStatus.MATCHING_FAILED];
     if (!serviceOrder || !assignableStatuses.includes(serviceOrder.order_status)) return;
     const strategy = data.orderMatchingStrategies?.find(item => item.order_matching_strategy_id === "OMS-001");
-    const result = runOrderMatching({
+    const result = serviceOrderService.executeOrderMatching({
       strategy,
       serviceOrder,
       data,
@@ -1434,7 +1508,7 @@ function App() {
     });
     setOrderMatchingRuns(items => [result.run, ...items]);
     setOrderMatchingDecisions(items => [result.decision, ...items]);
-    if (!result.decision || result.decision.decision_result !== orderMatchingTypes.OrderMatchingResult.SUCCESS) {
+    if (!result.success) {
       setServiceOrders(items => items.map(order => order.service_order_id === serviceOrderId ? {
         ...order,
         order_matching_decision_id: result.decision?.order_matching_decision_id || null,
@@ -1675,7 +1749,7 @@ function App() {
     const trip = trips.find(item => item.trip_id === tripId);
     if (!trip) return;
     if ([tripTypes.TripStatus.ON_THE_WAY_PICKUP, tripTypes.TripStatus.ON_THE_WAY_DESTINATION].includes(trip.trip_status)) {
-      const movedTrip = getNextTripMovementState(trip, data);
+      const movedTrip = tripService.getNextTripMovementState(trip, data);
       if (!movedTrip) return;
       setTrips(items => items.map(item => item.trip_id === tripId ? movedTrip : item));
       setOperationalData(current => ({
@@ -1686,7 +1760,7 @@ function App() {
       selectForPage("serviceFulfillmentRecords", "trip", tripId);
       return;
     }
-    let nextTrip = getNextTripState(trip);
+    let nextTrip = tripService.getNextTripState(trip);
     if (!nextTrip) return;
     const routeUpdate = createTripRouteUpdate(trip, nextTrip, data);
     if (routeUpdate?.failedTrip) {
@@ -2360,8 +2434,11 @@ function RecordTable({
   const isPricingRunPage = page === "pricingStrategyRuns";
   const isOrderMatchingPage = page === "orderMatchingStrategies";
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
+  const isSimulationPolicyPage = page === "simulationPolicies";
+  const isSimulationRunPage = page === "simulationRuns";
+  const isSimulationEventPage = page === "simulationEvents";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
+  const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -2489,7 +2566,13 @@ function RecordTable({
   }, "\u521B\u5EFA\u81EA\u6709\u5E73\u53F0\u670D\u52A1\u8BA2\u5355"), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: () => actions.createServiceOrderFromDemand("PARTNER_APP_SIMULATED_ORDER")
-  }, "\u521B\u5EFA\u5916\u90E8\u5E73\u53F0\u670D\u52A1\u8BA2\u5355")), /*#__PURE__*/React.createElement(Table, {
+  }, "\u521B\u5EFA\u5916\u90E8\u5E73\u53F0\u670D\u52A1\u8BA2\u5355")), isSimulationRunPage && /*#__PURE__*/React.createElement("div", {
+    className: "list-action-bar"
+  }, /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    type: "primary",
+    onClick: () => actions.simActions?.createSimulationRun()
+  }, "\u521B\u5EFA\u6A21\u62DF\u8FD0\u884C")), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: idField,
     columns: finalColumns,
@@ -2685,6 +2768,15 @@ function RecordTable({
         })
       };
     }
+    if (isSimulationRunPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 180,
+        render: (_, row) => renderSimulationRunActions(row, actions)
+      };
+    }
     return null;
   }
   function openAbnormalModal(task) {
@@ -2858,7 +2950,7 @@ function DetailPanel({
   }));
 }
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution", "serviceOrder", "trip"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent"].includes(selectedType);
 }
 function TabbedDetail({
   selectedObject,
@@ -3029,6 +3121,67 @@ function getDetailTabs(selectedType) {
       key: "time",
       label: "状态时间",
       keys: ["started_at", "completed_at", "failure_reason", "event_log"]
+    }];
+  }
+  if (selectedType === "simulationPolicy") {
+    return [{
+      key: "basic",
+      label: "策略信息",
+      keys: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"]
+    }, {
+      key: "time",
+      label: "时间配置",
+      keys: ["worker_work_start_time", "worker_work_end_time", "robotaxi_operating_start_time", "robotaxi_operating_end_time", "time_period_configs", "time_window_configs"]
+    }, {
+      key: "demand",
+      label: "需求配置",
+      keys: ["demand_generation_config", "demand_generation_enabled", "demand_generation_mode", "max_orders_per_tick_global", "demand_profiles"]
+    }, {
+      key: "supply",
+      label: "供给侧配置",
+      keys: ["supply_trigger_config", "supply_trigger_enabled", "readiness_trigger_enabled", "deployment_trigger_enabled", "route_execution_trigger_enabled"]
+    }, {
+      key: "auto",
+      label: "自动化配置",
+      keys: ["service_order_auto_config", "auto_pricing_enabled", "auto_customer_confirm_enabled", "auto_order_matching_enabled", "auto_trip_creation_enabled", "auto_trip_progress_enabled", "auto_payment_enabled"]
+    }, {
+      key: "execution",
+      label: "执行配置",
+      keys: ["execution_time_config", "worker_readiness_check_ticks", "passenger_boarding_ticks", "dropoff_and_payment_ticks", "robotaxi_speed_kmh", "default_completion_config", "enable_exception_probability"]
+    }];
+  }
+  if (selectedType === "simulationRun") {
+    return [{
+      key: "basic",
+      label: "运行信息",
+      keys: ["simulation_run_id", "simulation_name", "simulation_status", "simulation_policy_id", "total_days", "tick_minutes", "total_ticks", "created_at"]
+    }, {
+      key: "progress",
+      label: "运行进度",
+      keys: ["current_day", "current_time", "current_day_tick", "current_global_tick", "current_time_period", "current_period_type"]
+    }, {
+      key: "scene",
+      label: "当前场景",
+      keys: ["current_supply_scene", "current_demand_scene", "current_scene_summary", "current_tick_event_summary"]
+    }, {
+      key: "time",
+      label: "状态时间",
+      keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "result_summary"]
+    }, {
+      key: "policy",
+      label: "策略快照",
+      keys: ["simulation_policy_snapshot"]
+    }];
+  }
+  if (selectedType === "simulationEvent") {
+    return [{
+      key: "basic",
+      label: "事件信息",
+      keys: ["simulation_event_id", "simulation_run_id", "simulation_day", "simulation_time", "day_tick", "global_tick", "event_type", "event_source", "event_result"]
+    }, {
+      key: "detail",
+      label: "事件详情",
+      keys: ["related_object_type", "related_object_id", "message", "failure_reason", "skip_reason", "event_payload", "created_at"]
     }];
   }
   return [];
@@ -3322,6 +3475,34 @@ function renderRoutePlanningRunActions(row, actions) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.viewGeneratedRoute(row)
     }, "\u67E5\u770B\u751F\u6210\u8DEF\u5F84");
+  }
+  return renderViewDetailAction(row, actions);
+}
+function renderSimulationRunActions(row, actions) {
+  const sim = actions.simActions;
+  if (!sim) return renderViewDetailAction(row, actions);
+  const status = row.simulation_status;
+  if (status === "READY") {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => sim.startSimulationRun(row.simulation_run_id)
+    }, "\u542F\u52A8\u6A21\u62DF");
+  }
+  if (status === "RUNNING") {
+    return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => sim.pauseSimulationRun(row.simulation_run_id),
+      type: "default"
+    }, "\u6682\u505C"), /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => sim.stopSimulationRun(row.simulation_run_id),
+      danger: true
+    }, "\u505C\u6B62"));
+  }
+  if (status === "PAUSED") {
+    return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => sim.startSimulationRun(row.simulation_run_id)
+    }, "\u7EE7\u7EED"), /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => sim.stopSimulationRun(row.simulation_run_id),
+      danger: true
+    }, "\u505C\u6B62"));
   }
   return renderViewDetailAction(row, actions);
 }
@@ -3625,7 +3806,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260614-v020-6-route-execution"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260614-v020-6-route-execution"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260617-v023-1-service-extraction"), import("./domain/simulationTypes.js?v=20260617-v023-6-monitor"), import("./data/simulationInitialization.js?v=20260617-v023-6-monitor"), import("./data/simulationEngine.js?v=20260617-v023-6-monitor"), import("./services/simulationActions.js?v=20260617-v023-8-frontend"), import("./data/simulationLoop.js?v=20260617-v023-8-frontend")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -3655,6 +3836,13 @@ async function bootstrap() {
   validateDeploymentTasks = deploymentTaskValidation.validateDeploymentTasks;
   taskTypes = taskTypeModule;
   serviceOrderSettlement = serviceOrderSettlementModule;
+  serviceOrderService = serviceOrderServiceModule;
+  tripService = tripServiceModule;
+  simulationTypes = simulationTypesModule;
+  simulationInitialization = simulationInitializationModule;
+  simulationEngine = simulationEngineModule;
+  simulationLoop = simulationLoopModule;
+  simulationActions = simulationActionsModule;
   ReactDOM.createRoot(document.querySelector("#app")).render(/*#__PURE__*/React.createElement(App, null));
 }
 bootstrap();
@@ -4498,138 +4686,6 @@ function hasRelation(value) {
 function findCurrentTask(taskId, readinessTasks, deploymentTasks) {
   if (!taskId) return null;
   return readinessTasks.find(task => task.task_id === taskId) || deploymentTasks.find(task => task.task_id === taskId) || null;
-}
-function getNextTripMovementState(trip, data) {
-  const route = data.routes.find(item => item.route_id === trip.route_id);
-  if (!route || !Array.isArray(route.route_steps) || route.route_steps.length === 0) return null;
-  const totalStepCount = getMovementStepCount(route);
-  const currentStepIndex = Math.max(0, Number(trip.current_step_index || 0));
-  const nextStepIndex = Math.min(currentStepIndex + 1, totalStepCount);
-  const nextStep = route.route_steps[nextStepIndex] || route.route_steps[route.route_steps.length - 1];
-  const reachedTarget = nextStepIndex >= totalStepCount;
-  const distancePerStepKm = totalStepCount > 0 ? (route.total_distance_m || 0) / 1000 / totalStepCount : 0;
-  const distanceTraveledKm = roundDistance(distancePerStepKm * nextStepIndex);
-  const distanceRemainingKm = roundDistance(Math.max(0, (route.total_distance_m || 0) / 1000 - distanceTraveledKm));
-  const nextStatus = reachedTarget ? trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP ? tripTypes.TripStatus.WAITING_CUSTOMER_BOARDING : tripTypes.TripStatus.ARRIVED_DESTINATION : trip.trip_status;
-  const nextPhase = trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP ? tripTypes.TripPhase.PICKUP : tripTypes.TripPhase.DESTINATION;
-  return {
-    ...trip,
-    trip_status: nextStatus,
-    trip_phase: reachedTarget && nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION ? tripTypes.TripPhase.DESTINATION : nextPhase,
-    current_cell_id: nextStep?.cell_id || trip.current_cell_id,
-    current_step_index: nextStepIndex,
-    total_step_count: totalStepCount,
-    distance_traveled_km: distanceTraveledKm,
-    distance_remaining_km: distanceRemainingKm,
-    time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-    arrival_execution_result: reachedTarget && nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION ? "NORMAL_ARRIVAL" : trip.arrival_execution_result,
-    event_log: [...(Array.isArray(trip.event_log) ? trip.event_log : []), {
-      event_time: now(),
-      previous_status: trip.trip_status,
-      next_status: nextStatus,
-      event_type: reachedTarget ? "ROUTE_TARGET_REACHED" : "ROUTE_STEP_ADVANCED",
-      event_result: "SUCCESS",
-      route_id: route.route_id,
-      cell_id: nextStep?.cell_id || null
-    }]
-  };
-}
-function getNextTripState(trip) {
-  const status = tripTypes.TripStatus;
-  const phase = tripTypes.TripPhase;
-  const timestamp = now();
-  const baseEvent = {
-    event_time: timestamp,
-    previous_status: trip.trip_status
-  };
-  const eventLog = Array.isArray(trip.event_log) ? trip.event_log : [];
-  if ([status.COMPLETED, status.FAILED, status.CANCELLED].includes(trip.trip_status)) return null;
-  const transitions = {
-    [status.WAITING_ROUTE]: {
-      trip_status: status.ON_THE_WAY_PICKUP,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.current_cell_id,
-      started_at: trip.started_at || timestamp,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2)
-    },
-    [status.PENDING]: {
-      trip_status: status.ON_THE_WAY_PICKUP,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.current_cell_id,
-      started_at: trip.started_at || timestamp,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2)
-    },
-    [status.ASSIGNED]: {
-      trip_status: status.ON_THE_WAY_PICKUP,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.current_cell_id,
-      started_at: trip.started_at || timestamp,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2)
-    },
-    [status.ON_THE_WAY_PICKUP]: {
-      trip_status: status.WAITING_CUSTOMER_BOARDING,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.pickup_cell_id,
-      current_step_index: Math.max(trip.current_step_index || 0, 1),
-      total_step_count: Math.max(trip.total_step_count || 0, 4),
-      distance_traveled_km: roundDistance((trip.distance_traveled_km || 0) + 0.6),
-      distance_remaining_km: roundDistance(Math.max(0, trip.distance_remaining_km || 0)),
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 3)
-    },
-    [status.ARRIVED_PICKUP]: {
-      trip_status: status.CUSTOMER_ONBOARD,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.pickup_cell_id,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1)
-    },
-    [status.WAITING_CUSTOMER_BOARDING]: {
-      trip_status: status.CUSTOMER_ONBOARD,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.pickup_cell_id,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1)
-    },
-    [status.CUSTOMER_ONBOARD]: {
-      trip_status: status.ON_THE_WAY_DESTINATION,
-      trip_phase: phase.DESTINATION,
-      current_cell_id: trip.pickup_cell_id,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1)
-    },
-    [status.PASSENGER_ONBOARD]: {
-      trip_status: status.ON_THE_WAY_DESTINATION,
-      trip_phase: phase.DESTINATION,
-      current_cell_id: trip.pickup_cell_id,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1)
-    },
-    [status.ON_THE_WAY_DESTINATION]: {
-      trip_status: status.ARRIVED_DESTINATION,
-      trip_phase: phase.DESTINATION,
-      current_cell_id: trip.dropoff_cell_id,
-      current_step_index: Math.max(trip.total_step_count || 4, 4),
-      total_step_count: Math.max(trip.total_step_count || 0, 4),
-      distance_traveled_km: roundDistance(Math.max(trip.distance_traveled_km || 0, (trip.distance_traveled_km || 0) + (trip.distance_remaining_km || 0))),
-      distance_remaining_km: 0,
-      arrival_execution_result: "NORMAL_ARRIVAL",
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 8)
-    },
-    [status.ARRIVED_DESTINATION]: {
-      trip_status: status.COMPLETED,
-      trip_phase: phase.COMPLETED,
-      current_cell_id: trip.dropoff_cell_id,
-      distance_remaining_km: 0,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-      completed_at: timestamp
-    }
-  };
-  const nextValues = transitions[trip.trip_status];
-  if (!nextValues) return null;
-  return {
-    ...trip,
-    ...nextValues,
-    event_log: [...eventLog, {
-      ...baseEvent,
-      next_status: nextValues.trip_status
-    }]
-  };
 }
 function createTripRouteUpdate(trip, nextTrip, data) {
   const routeRequest = getTripRouteRequest(trip);

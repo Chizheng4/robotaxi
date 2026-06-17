@@ -9,7 +9,7 @@
  * - 返回结构化结果，由调用方决定如何写入 state
  */
 
-import { tripTypes } from "../domain/tripTypes.js";
+import * as tripTypes from "../domain/tripTypes.js";
 
 // ============================================================================
 // 1. 行驶步数推进（Movement）

@@ -445,6 +445,9 @@ const statusFieldByPage = {
   serviceOrders: "order_status",
   robotaxis: "availability_status",
   validations: "result",
+  simulationPolicies: "policy_status",
+  simulationRuns: "simulation_status",
+  simulationEvents: "event_result",
 };
 
 const cellClass = {
@@ -664,6 +667,9 @@ function App() {
       orderMatchingRun: rowsByPage.orderMatchingRuns,
       orderMatchingDecision: rowsByPage.orderMatchingDecisions,
       trip: rowsByPage.serviceFulfillmentRecords,
+      simulationPolicy: simulationPolicies,
+      simulationRun: simulationRuns,
+      simulationEvent: simulationEvents,
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: readinessTasks,
@@ -2452,8 +2458,11 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isPricingRunPage = page === "pricingStrategyRuns";
   const isOrderMatchingPage = page === "orderMatchingStrategies";
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
+  const isSimulationPolicyPage = page === "simulationPolicies";
+  const isSimulationRunPage = page === "simulationRuns";
+  const isSimulationEventPage = page === "simulationEvents";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage;
+  const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -2576,6 +2585,11 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         <div className="list-action-bar">
           <Button size="small" type="primary" onClick={() => actions.createServiceOrderFromDemand("OWN_APP_SIMULATED_ORDER")}>创建自有平台服务订单</Button>
           <Button size="small" onClick={() => actions.createServiceOrderFromDemand("PARTNER_APP_SIMULATED_ORDER")}>创建外部平台服务订单</Button>
+        </div>
+      )}
+      {isSimulationRunPage && (
+        <div className="list-action-bar">
+          <Button size="small" type="primary" onClick={() => actions.simActions?.createSimulationRun()}>创建模拟运行</Button>
         </div>
       )}
       <Table
@@ -2729,6 +2743,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderViewDetailAction(row, { ...actions, page, objectType, idField }),
       };
     }
+    if (isSimulationRunPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 180,
+        render: (_, row) => renderSimulationRunActions(row, actions),
+      };
+    }
     return null;
   }
 
@@ -2754,8 +2777,6 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     setAbnormalArrivalExecution(null);
   }
 
-
-  }, [simActions]);
   function applyStatusFilter(statusValue) {
     const nextFilters = { ...defaultPageFilters, statusValue };
     onUiStateChange(createNextPageUiState(uiState, { filters: nextFilters, appliedFilters: nextFilters, pagination: { current: 1 } }));
@@ -2893,7 +2914,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution", "serviceOrder", "trip"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -2982,6 +3003,31 @@ function getDetailTabs(selectedType) {
       { key: "progress", label: "履约进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"] },
       { key: "route", label: "路径关联", keys: ["route_id", "route_planning_run_id", "route_summary", "route_detail", "route_history", "route_history_detail"] },
       { key: "time", label: "状态时间", keys: ["started_at", "completed_at", "failure_reason", "event_log"] },
+    ];
+  }
+  if (selectedType === "simulationPolicy") {
+    return [
+      { key: "basic", label: "策略信息", keys: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"] },
+      { key: "time", label: "时间配置", keys: ["worker_work_start_time", "worker_work_end_time", "robotaxi_operating_start_time", "robotaxi_operating_end_time", "time_period_configs", "time_window_configs"] },
+      { key: "demand", label: "需求配置", keys: ["demand_generation_config", "demand_generation_enabled", "demand_generation_mode", "max_orders_per_tick_global", "demand_profiles"] },
+      { key: "supply", label: "供给侧配置", keys: ["supply_trigger_config", "supply_trigger_enabled", "readiness_trigger_enabled", "deployment_trigger_enabled", "route_execution_trigger_enabled"] },
+      { key: "auto", label: "自动化配置", keys: ["service_order_auto_config", "auto_pricing_enabled", "auto_customer_confirm_enabled", "auto_order_matching_enabled", "auto_trip_creation_enabled", "auto_trip_progress_enabled", "auto_payment_enabled"] },
+      { key: "execution", label: "执行配置", keys: ["execution_time_config", "worker_readiness_check_ticks", "passenger_boarding_ticks", "dropoff_and_payment_ticks", "robotaxi_speed_kmh", "default_completion_config", "enable_exception_probability"] },
+    ];
+  }
+  if (selectedType === "simulationRun") {
+    return [
+      { key: "basic", label: "运行信息", keys: ["simulation_run_id", "simulation_name", "simulation_status", "simulation_policy_id", "total_days", "tick_minutes", "total_ticks", "created_at"] },
+      { key: "progress", label: "运行进度", keys: ["current_day", "current_time", "current_day_tick", "current_global_tick", "current_time_period", "current_period_type"] },
+      { key: "scene", label: "当前场景", keys: ["current_supply_scene", "current_demand_scene", "current_scene_summary", "current_tick_event_summary"] },
+      { key: "time", label: "状态时间", keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "result_summary"] },
+      { key: "policy", label: "策略快照", keys: ["simulation_policy_snapshot"] },
+    ];
+  }
+  if (selectedType === "simulationEvent") {
+    return [
+      { key: "basic", label: "事件信息", keys: ["simulation_event_id", "simulation_run_id", "simulation_day", "simulation_time", "day_tick", "global_tick", "event_type", "event_source", "event_result"] },
+      { key: "detail", label: "事件详情", keys: ["related_object_type", "related_object_id", "message", "failure_reason", "skip_reason", "event_payload", "created_at"] },
     ];
   }
   return [];
@@ -3258,6 +3304,32 @@ function renderRouteExecutionActions(row, actions) {
 function renderRoutePlanningRunActions(row, actions) {
   if (row.result_route_id) {
     return <RowActionButton onClick={() => actions.viewGeneratedRoute(row)}>查看生成路径</RowActionButton>;
+  }
+  return renderViewDetailAction(row, actions);
+}
+
+function renderSimulationRunActions(row, actions) {
+  const sim = actions.simActions;
+  if (!sim) return renderViewDetailAction(row, actions);
+  const status = row.simulation_status;
+  if (status === "READY") {
+    return <RowActionButton onClick={() => sim.startSimulationRun(row.simulation_run_id)}>启动模拟</RowActionButton>;
+  }
+  if (status === "RUNNING") {
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => sim.pauseSimulationRun(row.simulation_run_id)} type="default">暂停</RowActionButton>
+        <RowActionButton onClick={() => sim.stopSimulationRun(row.simulation_run_id)} danger>停止</RowActionButton>
+      </RowActionGroup>
+    );
+  }
+  if (status === "PAUSED") {
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => sim.startSimulationRun(row.simulation_run_id)}>继续</RowActionButton>
+        <RowActionButton onClick={() => sim.stopSimulationRun(row.simulation_run_id)} danger>停止</RowActionButton>
+      </RowActionGroup>
+    );
   }
   return renderViewDetailAction(row, actions);
 }
@@ -3631,9 +3703,14 @@ async function bootstrap() {
     deploymentTaskValidation,
     taskTypeModule,
     serviceOrderSettlementModule,
-	    serviceOrderServiceModule,
-	    tripServiceModule,
-	  ] = await Promise.all([
+		    serviceOrderServiceModule,
+		    tripServiceModule,
+		    simulationTypesModule,
+		    simulationInitializationModule,
+		    simulationEngineModule,
+		    simulationActionsModule,
+		    simulationLoopModule,
+		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"),
