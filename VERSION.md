@@ -2,6 +2,15 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.2
+
+核心：SimulationPolicy 类型定义、默认初始化与校验。
+
+- 新增 `src/domain/simulationTypes.js`：定义 SimulationStatus、PolicyStatus、TimePeriod、PeriodType、DistributionType 等枚举及中文标签，含 createDefaultSimulationPolicy 等工厂函数。
+- 新增 `src/data/simulationInitialization.js`：生成默认 SimulationPolicy（1天、10分钟Tick、9个 DemandProfile、完整时间窗口覆盖）。
+- 新增 `src/data/simulationValidation.js`：实现 20 条配置完整性校验规则。
+- 更新字段字典：新增 simulationPolicy / simulationRun / simulationEvent 对象及 70+ 个字段中文映射。
+
 ## v023.1
 
 核心：提取 P0 业务函数为独立服务模块，供 UI 和 Simulation System 两条路径复用。
