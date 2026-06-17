@@ -156,7 +156,7 @@ export function stopSimulationRun(simulationRun) {
  * @param {Object|null} tickEventSummary
  * @returns {{ simulationRun: Object, events: Object[] }}
  */
-export function completeTick(simulationRun, tickContext, supplySummary, demandSummary, tickEventSummary) {
+export function completeTick(simulationRun, tickContext, supplySummary, demandSummary, executionResults, tickEventSummary) {
   // 更新场景
   let updated = updateSimulationRunScene(simulationRun, tickContext, supplySummary, demandSummary);
 
@@ -184,9 +184,28 @@ export function completeTick(simulationRun, tickContext, supplySummary, demandSu
     eventSource: EventSource.SIMULATION_SYSTEM,
     eventResult: EventResult.SUCCESS,
     message: `Tick ${updated.current_global_tick} 完成`,
-  }));
+    }));
 
-  // 判断是否完成
+    // 记录动作执行结果事件
+    if (executionResults && executionResults.length > 0) {
+      for (const execResult of executionResults) {
+        const eventResultEnum = execResult.success ? EventResult.SUCCESS : EventResult.FAILED;
+        events.push(createSimulationEvent({
+          simulationEventId: nextSimulationEventId(),
+          simulationRunId: updated.simulation_run_id,
+          simulationDay: updated.current_day,
+          simulationTime: updated.current_time,
+          dayTick: updated.current_day_tick,
+          globalTick: updated.current_global_tick,
+          eventType: execResult.actionType || "ACTION_EXECUTED",
+          eventSource: EventSource.EXECUTION_ENGINE,
+          eventResult: eventResultEnum,
+          message: execResult.message || (execResult.success ? "动作执行成功" : "动作执行失败"),
+        }));
+      }
+    }
+
+    // 判断是否完成
   if (isSimulationComplete(updated)) {
     updated = {
       ...updated,

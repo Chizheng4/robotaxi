@@ -22,9 +22,10 @@ import { executeActions } from "./simulationExecutionEngine.js";
  * @param {Object} params.policySnapshot - simulation_policy_snapshot
  * @param {number} [params.randomSeed] - 随机种子
  * @param {Object} [params.businessData] - 业务数据上下文（serviceOrders, trips 等）
+ * @param {Function} [params.refreshBusinessData] - 刷新业务数据（在需求执行后调用，获取最新订单等）
  * @returns {Object} { tickContext, supplyResult, demandResult, workflowActions, executionResults, tickEventSummary }
  */
-export function executeTick({ simulationRun, policySnapshot, randomSeed, businessData }) {
+export function executeTick({ simulationRun, policySnapshot, randomSeed, businessData, refreshBusinessData }) {
   // 1. 校验 SimulationRun 状态
   if (simulationRun.simulation_status !== SimulationStatus.RUNNING) {
     return null;
@@ -45,40 +46,69 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   // 4. 需求侧触发判断
   const demandResult = runDemandTrigger({ timeContext: tickContext, policySnapshot, randomSeed });
 
-  // 5. 查询工作流引擎：获取所有待执行的业务动作
-  const autoConfig = policySnapshot.service_order_auto_config || {};
-  const defaultConfig = policySnapshot.default_completion_config || {};
-  let workflowActions = [];
-  if (businessData) {
-    workflowActions = queryAllWorkflowRules({
-      serviceOrders: businessData.serviceOrders || [],
-      trips: businessData.trips || [],
-      readinessTasks: businessData.readinessTasks || [],
-      routeExecutions: businessData.routeExecutions || [],
-      autoConfig,
-      defaultCompletionConfig: defaultConfig,
-    });
+  // 5. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
+  const demandActions = [];
+  if (businessData && demandResult.order_count > 0) {
+    for (let i = 0; i < demandResult.order_count; i++) {
+      demandActions.push({
+        actionType: "SERVICE_ORDER_CREATE",
+        objectId: null,
+        triggeredBy: "DEMAND_TRIGGER",
+        context: { tickContext, policySnapshot },
+      });
+    }
   }
 
-  // 6. 通过执行引擎分发动作
-  let executionResults = [];
-  if (businessData && workflowActions.length > 0) {
-    executionResults = executeActions(workflowActions, businessData, {
+  // 6. 先执行需求侧创建动作（批量创建订单）
+  let demandExecutionResults = [];
+  if (businessData && demandActions.length > 0) {
+    demandExecutionResults = executeActions(demandActions, businessData, {
       simulationRunId: simulationRun.simulation_run_id,
       globalTick: simulationRun.current_global_tick,
       policySnapshot,
     });
   }
 
-  // 7. 汇总当前 Tick 摘要
-  const tickEventSummary = buildTickEventSummary(supplyResult, demandResult, executionResults);
+  // 6b. 刷新业务数据（包含刚创建的订单），再查询工作流
+  const refreshedBusinessData = refreshBusinessData ? refreshBusinessData() : businessData;
+
+  // 7. 查询工作流引擎：获取所有待执行的业务动作（含刚创建的订单的后续动作）
+  const autoConfig = policySnapshot.service_order_auto_config || {};
+  const defaultConfig = policySnapshot.default_completion_config || {};
+  let workflowActions = [];
+  if (refreshedBusinessData) {
+    workflowActions = queryAllWorkflowRules({
+      serviceOrders: refreshedBusinessData.serviceOrders || [],
+      trips: refreshedBusinessData.trips || [],
+      readinessTasks: refreshedBusinessData.readinessTasks || [],
+      routeExecutions: refreshedBusinessData.routeExecutions || [],
+      autoConfig,
+      defaultCompletionConfig: defaultConfig,
+    });
+  }
+
+  // 8. 通过执行引擎分发动作
+  let executionResults = [];
+  if (refreshedBusinessData && workflowActions.length > 0) {
+    executionResults = executeActions(workflowActions, refreshedBusinessData, {
+      simulationRunId: simulationRun.simulation_run_id,
+      globalTick: simulationRun.current_global_tick,
+      policySnapshot,
+    });
+  }
+
+  // 合并所有执行结果
+  const allResults = [...demandExecutionResults, ...executionResults];
+
+  // 9. 汇总当前 Tick 摘要
+  const tickEventSummary = buildTickEventSummary(supplyResult, demandResult, allResults);
 
   return {
     tickContext,
     supplyResult,
     demandResult,
     workflowActions,
-    executionResults,
+    executionResults: allResults,
     tickEventSummary,
   };
 }

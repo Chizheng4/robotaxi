@@ -1,3 +1,11 @@
+## v024.2
+
+核心：需求触发自动创建订单 + 自动定价链。
+
+- simulationLoop 在需求触发后构造 SERVICE_ORDER_CREATE 动作并执行。
+- 执行后刷新 businessData，再查询 WorkflowEngine 获取定价动作并自动执行。
+- pricingEngine 需要完整 multiplier 字段，当前依赖已创建的策略对象。
+
 ## v024.1
 
 核心：注册 P0 业务处理器到 ExecutionEngine，Tick 循环接入 WorkflowEngine 和 ExecutionEngine。

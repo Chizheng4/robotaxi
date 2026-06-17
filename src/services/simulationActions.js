@@ -88,10 +88,11 @@ export function useSimulationActions({
         policySnapshot: run.simulation_policy_snapshot,
         randomSeed: Date.now(),
         businessData,
+        refreshBusinessData: getBusinessData || null,
       });
       if (!tickResult) return prev;
       const result = simulationEngine.completeTick(
-        run, tickResult.tickContext, tickResult.supplyResult, tickResult.demandResult, tickResult.tickEventSummary
+        run, tickResult.tickContext, tickResult.supplyResult, tickResult.demandResult, tickResult.executionResults, tickResult.tickEventSummary
       );
       setSimulationEvents((evts) => [...result.events, ...evts]);
       return prev.map((r) => r.simulation_run_id === runId ? result.simulationRun : r);
