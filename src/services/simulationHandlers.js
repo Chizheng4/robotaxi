@@ -100,7 +100,7 @@ export function handlePricingExecute({ objectId, data }) {
     if (o.service_order_id !== objectId) return o;
     return {
       ...o,
-      order_status: "WAITING_CUSTOMER_CONFIRM",
+      order_status: "WAITING_ROBOTAXI_CALL",
       estimated_pricing_decision_id: decisionId,
       quote_base_fare: result.decision?.base_fare,
       quote_distance_unit_price: result.decision?.distance_unit_price,
@@ -215,12 +215,22 @@ export function handleOrderMatchingExecute({ objectId, data }) {
 export function handleTripStepExecute({ objectId, data }) {
   const { tripService, data: appData, serviceOrders, trips, setServiceOrders, setTrips, setRobotaxis } = data;
 
-  // objectId 可能是 service_order_id
-  const order = serviceOrders.find((o) => o.service_order_id === objectId);
+  // objectId 可能是 service_order_id 或 trip_id
+  let order = serviceOrders.find((o) => o.service_order_id === objectId);
+  let trip = trips.find((t) => t.trip_id === objectId);
+
+  // 如果是 trip_id，反向查找 order
+  if (!order && trip) {
+    order = serviceOrders.find((o) => o.trip_id === trip.trip_id || o.service_order_id === trip.service_order_id);
+  }
+  // 如果是 service_order_id，查找 trip
+  if (!trip && order) {
+    trip = trips.find((t) => t.trip_id === order.trip_id);
+  }
+
   if (!order) return { success: false, message: `未找到服务订单 ${objectId}` };
 
   // 如果没有 Trip，先创建
-  let trip = trips.find((t) => t.trip_id === order.trip_id);
   if (!trip) {
     trip = createTripForOrderSimple(order, appData);
     setTrips((prev) => [trip, ...prev]);

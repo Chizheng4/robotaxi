@@ -35,6 +35,7 @@ const SERVICE_ORDER_RULES = [
   { fromState: SO.WAITING_ROBOTAXI_CALL, actionType: "ROBOTAXI_CALL", condition: null },
   { fromState: SO.WAITING_ROBOTAXI_ASSIGNMENT, actionType: "ORDER_MATCHING_EXECUTE", condition: "auto_order_matching_enabled" },
   { fromState: SO.ROBOTAXI_ASSIGNMENT_FAILED, actionType: "ORDER_MATCHING_EXECUTE", condition: "auto_order_matching_enabled" },
+  { fromState: SO.VEHICLE_ASSIGNED, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_creation_enabled" },
   { fromState: SO.ARRIVED_DESTINATION, actionType: "SETTLEMENT_EXECUTE", condition: null },
   { fromState: SO.SETTLING, actionType: "PAYMENT_EXECUTE", condition: "auto_payment_enabled" },
   { fromState: SO.WAITING_PAYMENT, actionType: "PAYMENT_EXECUTE", condition: "auto_payment_enabled" },

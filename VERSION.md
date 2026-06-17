@@ -1,3 +1,12 @@
+## v024.3
+
+核心：全链路打通。订单→定价→确认→匹配→履约→结算→支付自动流转。
+
+- workflowEngine 新增 VEHICLE_ASSIGNED→TRIP_STEP_EXECUTE 规则。
+- handleTripStepExecute 支持 trip_id 和 service_order_id 双入口。
+- handlePricingExecute 状态修正为 WAITING_ROBOTAXI_CALL。
+- 完整链路 Node.js 验证通过：144 Tick 完成 1 天模拟，1 订单完成全流程。
+
 ## v024.2
 
 核心：需求触发自动创建订单 + 自动定价链。
