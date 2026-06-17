@@ -1,3 +1,11 @@
+## v025.5
+
+核心：修复模拟运行生命周期 bug。
+
+- 新增 resumeSimulationRun 到 simulationActions（之前缺失，导致「继续」无响应）。
+- pause / resume / stop 三个引擎函数补充事件记录（含模拟时间 Day HH:MM Tick #N）。
+- 前端「继续」按钮从调用 startSimulationRun 改为 resumeSimulationRun。
+
 ## v025.4
 
 核心：执行失败在业务对象上可见。
