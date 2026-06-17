@@ -280,3 +280,104 @@ export function createDefaultSimulationPolicy(overrides = {}) {
     ...overrides,
   };
 }
+
+/**
+ * 创建 SimulationRun
+ *
+ * @param {Object} params
+ * @param {string} params.simulationRunId - 运行编号
+ * @param {string} params.simulationName - 运行名称
+ * @param {Object} params.simulationPolicy - 引用的 SimulationPolicy（将深拷贝为 snapshot）
+ * @param {number} params.totalDays - 模拟天数
+ * @param {number} params.tickMinutes - 每 Tick 分钟数
+ * @returns {Object} SimulationRun 对象
+ */
+export function createSimulationRun({ simulationRunId, simulationName, simulationPolicy, totalDays, tickMinutes }) {
+  const totalTicks = totalDays * 24 * 60 / tickMinutes;
+  return {
+    simulation_run_id: simulationRunId,
+    simulation_name: simulationName,
+    simulation_status: SimulationStatus.READY,
+    simulation_policy_id: simulationPolicy.simulation_policy_id,
+    simulation_policy_snapshot: JSON.parse(JSON.stringify(simulationPolicy)),
+    total_days: totalDays,
+    tick_minutes: tickMinutes,
+    total_ticks: totalTicks,
+    current_day: 1,
+    current_time: "00:00",
+    current_day_tick: 0,
+    current_global_tick: 0,
+    current_time_period: null,
+    current_period_type: null,
+    current_supply_scene: null,
+    current_demand_scene: null,
+    current_scene_summary: null,
+    current_tick_event_summary: null,
+    started_at: null,
+    paused_at: null,
+    resumed_at: null,
+    completed_at: null,
+    stopped_at: null,
+    failure_reason: null,
+    result_summary: null,
+    created_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * 创建 SimulationEvent
+ *
+ * @param {Object} params
+ * @param {string} params.simulationEventId - 事件编号
+ * @param {string} params.simulationRunId - 所属 SimulationRun
+ * @param {number} params.simulationDay - 模拟第几天
+ * @param {string} params.simulationTime - 模拟时间
+ * @param {number} params.dayTick - 当天 Tick
+ * @param {number} params.globalTick - 全局 Tick
+ * @param {string} params.eventType - 事件类型
+ * @param {string} params.eventSource - 事件来源
+ * @param {string|null} params.relatedObjectType - 关联对象类型
+ * @param {string|null} params.relatedObjectId - 关联对象编号
+ * @param {string} params.eventResult - 事件结果
+ * @param {string|null} params.failureReason - 失败原因
+ * @param {string|null} params.skipReason - 跳过原因
+ * @param {string} params.message - 事件描述
+ * @param {Object|null} params.eventPayload - 事件负载
+ * @returns {Object} SimulationEvent 对象
+ */
+export function createSimulationEvent({
+  simulationEventId,
+  simulationRunId,
+  simulationDay,
+  simulationTime,
+  dayTick,
+  globalTick,
+  eventType,
+  eventSource = EventSource.SIMULATION_SYSTEM,
+  relatedObjectType = null,
+  relatedObjectId = null,
+  eventResult = EventResult.SUCCESS,
+  failureReason = null,
+  skipReason = null,
+  message = "",
+  eventPayload = null,
+}) {
+  return {
+    simulation_event_id: simulationEventId,
+    simulation_run_id: simulationRunId,
+    simulation_day: simulationDay,
+    simulation_time: simulationTime,
+    day_tick: dayTick,
+    global_tick: globalTick,
+    event_type: eventType,
+    event_source: eventSource,
+    related_object_type: relatedObjectType,
+    related_object_id: relatedObjectId,
+    event_result: eventResult,
+    failure_reason: failureReason,
+    skip_reason: skipReason,
+    message,
+    event_payload: eventPayload,
+    created_at: new Date().toISOString(),
+  };
+}

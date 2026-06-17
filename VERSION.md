@@ -2,6 +2,14 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.3
+
+核心：SimulationRun 生命周期管理 + SimulationClock 时间上下文 + SimulationEvent 记录。
+
+- 扩展 `simulationTypes.js`：新增 `createSimulationRun`、`createSimulationEvent` 工厂函数。
+- 新增 `src/data/simulationClock.js`：computeTimeContext（时间段/窗口/高峰识别）、advanceTick（时间推进）、updateSimulationRunScene（场景更新）。
+- 新增 `src/data/simulationEngine.js`：SimulationRun 生命周期管理（init/start/pause/resume/stop/completeTick）、SimulationEvent 记录、Tick 完成判断。
+
 ## v023.2
 
 核心：SimulationPolicy 类型定义、默认初始化与校验。
