@@ -156,77 +156,97 @@ export function stopSimulationRun(simulationRun) {
  * @param {Object|null} tickEventSummary
  * @returns {{ simulationRun: Object, events: Object[] }}
  */
-export function completeTick(simulationRun, tickContext, supplySummary, demandSummary, executionResults, tickEventSummary) {
+export function completeTick(simulationRun, tickContext, supplyResult, demandResult, executionResults, tickEventSummary) {
   // 更新场景
-  let updated = updateSimulationRunScene(simulationRun, tickContext, supplySummary, demandSummary);
-
-  // 更新 Tick 事件摘要
-  updated = {
-    ...updated,
-    current_tick_event_summary: tickEventSummary || null,
-  };
+  let updated = updateSimulationRunScene(simulationRun, tickContext, supplyResult, demandResult);
 
   // 推进 Tick
   const tickMinutes = updated.tick_minutes || updated.simulation_policy_snapshot?.tick_minutes || 10;
   updated = advanceTick(updated, tickMinutes);
 
   const events = [];
+  const tick = updated.current_global_tick;
+  const day = updated.current_day;
+  const time = updated.current_time;
+  const dayT = updated.current_day_tick;
+  const runId = updated.simulation_run_id;
 
-  // 记录 Tick 完成事件
-  events.push(createSimulationEvent({
-    simulationEventId: nextSimulationEventId(),
-    simulationRunId: updated.simulation_run_id,
-    simulationDay: updated.current_day,
-    simulationTime: updated.current_time,
-    dayTick: updated.current_day_tick,
-    globalTick: updated.current_global_tick,
-    eventType: EventType.SIMULATION_TICK_COMPLETED,
-    eventSource: EventSource.SIMULATION_SYSTEM,
-    eventResult: EventResult.SUCCESS,
-    message: `Tick ${updated.current_global_tick} 完成`,
-    }));
+  // === Phase 1: TICK_STARTED ===
+  events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_STARTED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
+    `Tick #${tick} 开始 | Day ${day} ${time} | 时段 ${tickContext?.period_type || tickContext?.time_period || 'N/A'}`));
 
-    // 记录动作执行结果事件
-    if (executionResults && executionResults.length > 0) {
-      for (const execResult of executionResults) {
-        const eventResultEnum = execResult.success ? EventResult.SUCCESS : EventResult.FAILED;
-        events.push(createSimulationEvent({
-          simulationEventId: nextSimulationEventId(),
-          simulationRunId: updated.simulation_run_id,
-          simulationDay: updated.current_day,
-          simulationTime: updated.current_time,
-          dayTick: updated.current_day_tick,
-          globalTick: updated.current_global_tick,
-          eventType: execResult.actionType || "ACTION_EXECUTED",
-          eventSource: EventSource.EXECUTION_ENGINE,
-          eventResult: eventResultEnum,
-          message: execResult.message || (execResult.success ? "动作执行成功" : "动作执行失败"),
-        }));
-      }
+  // === Phase 2: SUPPLY_TRIGGER ===
+  if (supplyResult) {
+    const triggered = supplyResult.triggered_event_count || 0;
+    const noAction = supplyResult.no_action_count || 0;
+    const readinessMsg = supplyResult.readiness_triggered ? '准入检查已触发' : '准入检查跳过';
+    const deploymentMsg = supplyResult.deployment_triggered ? '投放已触发' : '投放跳过';
+    events.push(makeEvent(runId, day, time, dayT, tick, EventType.SUPPLY_TRIGGER_COMPLETED, EventSource.SUPPLY_TRIGGER,
+      triggered > 0 ? EventResult.SUCCESS : EventResult.NO_ACTION,
+      `供给侧触发：${readinessMsg}、${deploymentMsg} | 触发 ${triggered} 无动作 ${noAction}`));
+  }
+
+  // === Phase 3: DEMAND_TRIGGER ===
+  if (demandResult) {
+    const count = demandResult.order_count || 0;
+    const profileName = demandResult.demand_profile_id ? String(demandResult.demand_profile_id).replace(/^DP-/, '') : '无';
+    events.push(makeEvent(runId, day, time, dayT, tick, EventType.DEMAND_TRIGGER_COMPLETED, EventSource.DEMAND_TRIGGER,
+      count > 0 ? EventResult.SUCCESS : EventResult.NO_ACTION,
+      `需求侧触发：${count > 0 ? `生成 ${count} 个订单请求` : '当前时段无需求'}（配置 ${profileName}）`));
+  }
+
+  // === Phase 4: WORKFLOW + EXECUTION ===
+  const execResults = executionResults || [];
+  if (execResults.length > 0) {
+    const succeeded = execResults.filter((r) => r.success).length;
+    const failed = execResults.filter((r) => !r.success).length;
+    events.push(makeEvent(runId, day, time, dayT, tick, EventType.WORKFLOW_QUERIED, EventSource.EXECUTION_ENGINE, EventResult.SUCCESS,
+      `工作流执行：${execResults.length} 个动作（成功 ${succeeded} / 失败 ${failed}）`));
+
+    for (const execResult of execResults) {
+      const evtResult = execResult.success ? EventResult.SUCCESS : EventResult.FAILED;
+      const actionLabel = getActionLabel(execResult.actionType || '');
+      const detail = execResult.message || (execResult.success ? '成功' : '失败');
+      events.push(makeEvent(runId, day, time, dayT, tick, execResult.actionType || EventType.ACTION_EXECUTED, EventSource.EXECUTION_ENGINE,
+        evtResult, `[${actionLabel}] ${detail}`));
     }
+  }
+
+  // === Phase 5: TICK_COMPLETED ===
+  const created = execResults.filter((r) => r.resultType === 'ORDER_CREATED').length;
+  const succeeded = execResults.filter((r) => r.success).length;
+  const failed = execResults.filter((r) => !r.success).length;
+  updated = { ...updated, current_tick_event_summary: tickEventSummary || null };
+  events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
+    `Tick #${tick} 完成 | 创建 ${created} 订单 | 执行 ${execResults.length} 动作（成功 ${succeeded} / 失败 ${failed}）`));
 
     // 判断是否完成
   if (isSimulationComplete(updated)) {
-    updated = {
-      ...updated,
-      simulation_status: SimulationStatus.COMPLETED,
-      completed_at: new Date().toISOString(),
-    };
-    events.push(createSimulationEvent({
-      simulationEventId: nextSimulationEventId(),
-      simulationRunId: updated.simulation_run_id,
-      simulationDay: updated.current_day,
-      simulationTime: updated.current_time,
-      dayTick: updated.current_day_tick,
-      globalTick: updated.current_global_tick,
-      eventType: EventType.SIMULATION_RUN_COMPLETED,
-      eventSource: EventSource.SIMULATION_SYSTEM,
-      eventResult: EventResult.SUCCESS,
-      message: `模拟运行 ${updated.simulation_run_id} 已完成`,
-    }));
+    updated = { ...updated, simulation_status: SimulationStatus.COMPLETED, completed_at: new Date().toISOString() };
+    events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_RUN_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
+      `模拟运行 ${runId} 已完成`));
   }
 
   return { simulationRun: updated, events };
+}
+
+function makeEvent(runId, day, time, dayTick, globalTick, eventType, eventSource, eventResult, message) {
+  return createSimulationEvent({
+    simulationEventId: `SE-${nextSimulationEventId()}`,
+    simulationRunId: runId, simulationDay: day, simulationTime: time,
+    dayTick, globalTick, eventType, eventSource, eventResult, message,
+  });
+}
+
+function getActionLabel(actionType) {
+  const labels = {
+    SERVICE_ORDER_CREATE: "创建订单", PRICING_EXECUTE: "定价执行", ROBOTAXI_CALL: "客户确认",
+    ORDER_MATCHING_EXECUTE: "匹配执行", TRIP_STEP_EXECUTE: "履约推进", SETTLEMENT_EXECUTE: "结算执行",
+    PAYMENT_EXECUTE: "支付执行", READINESS_TASK_ASSIGN: "准入分配", READINESS_TASK_START: "准入开始",
+    READINESS_TASK_PASS: "准入通过", ROUTE_PLAN: "路径规划", ROUTE_EXECUTION_STEP: "行驶步进",
+    ARRIVAL_CONFIRM: "到达确认", DEPLOYMENT_TASK_CREATE: "创建投放任务", READINESS_TASK_CREATE: "创建准入任务",
+  };
+  return labels[actionType] || actionType;
 }
 
 // ============================================================================
