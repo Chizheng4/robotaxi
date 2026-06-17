@@ -92,7 +92,11 @@ export function handlePricingExecute({ objectId, data }) {
   });
 
   if (!result.success) {
-    return { success: false, message: result.failureReason || "定价失败" };
+    setServiceOrders((prev) => prev.map((o) => {
+      if (o.service_order_id !== objectId) return o;
+      return { ...o, order_status: "PRICING_FAILED", pricing_explanation: result.failureReason || "定价失败" };
+    }));
+    return { success: false, resultType: "PRICING_FAILED", message: `服务订单 ${objectId} 定价失败：${result.failureReason || "未知原因"}` };
   }
 
   // 更新订单
