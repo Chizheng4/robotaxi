@@ -5,19 +5,13 @@
  * 通过 hook 模式封装 React state 操作。
  */
 
+// 模块级变量，跨渲染保持
+const tickIntervalRef = { current: null };
+
 /**
  * 创建 Simulation 控制 hook
  *
  * @param {Object} deps - 依赖注入
- * @param {Object} deps.simulationEngine - simulationEngine 模块
- * @param {Object} deps.simulationLoop - simulationLoop 模块
- * @param {Object} deps.simulationTypes - simulationTypes 模块
- * @param {Object} deps.simulationInitialization - simulationInitialization 模块
- * @param {Array} deps.simulationPolicies - React state
- * @param {Array} deps.simulationRuns - React state
- * @param {Function} deps.setSimulationPolicies - React setState
- * @param {Function} deps.setSimulationRuns - React setState
- * @param {Function} deps.setSimulationEvents - React setState
  */
 export function useSimulationActions({
   simulationEngine,
@@ -30,8 +24,6 @@ export function useSimulationActions({
   setSimulationRuns,
   setSimulationEvents,
 }) {
-  const tickIntervalRef = { current: null };
-
   function initDefaultPolicy() {
     if (!simulationInitialization || !simulationTypes) return;
     if (simulationPolicies.length > 0) return;

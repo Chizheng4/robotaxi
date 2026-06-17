@@ -600,7 +600,7 @@ export const valueDictionary = {
   COMPLETED: "已完成",
   CANCELLED: "已取消",
   FAILED: "异常失败",
-  PAUSED: "已暂停",
+  PAUSED: "暂停中",
   LOW: "低",
   NORMAL: "普通",
   HIGH: "高",
@@ -856,7 +856,7 @@ export const valueDictionary = {
   day_tick: "当天 Tick",
 
   // Simulation System — 枚举值中文
-  READY: "就绪",
+  READY: "待启动",
   RUNNING: "运行中",
   STOPPED: "已停止",
   DRAFT: "草稿",

@@ -20,9 +20,9 @@ export const SimulationStatus = {
 };
 
 export const SimulationStatusLabel = {
-  [SimulationStatus.READY]: "就绪",
+  [SimulationStatus.READY]: "待启动",
   [SimulationStatus.RUNNING]: "运行中",
-  [SimulationStatus.PAUSED]: "已暂停",
+  [SimulationStatus.PAUSED]: "暂停中",
   [SimulationStatus.COMPLETED]: "已完成",
   [SimulationStatus.STOPPED]: "已停止",
   [SimulationStatus.FAILED]: "失败",

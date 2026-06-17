@@ -2,6 +2,14 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v024 计划
+
+核心：启动 v024 大版本，打通 Simulation 自动运营全链路。
+
+- 当前 Tick 可推进时间但不产生业务数据（ExecutionEngine 15 个 handler 为 null，WorkflowEngine 未接入）。
+- 拆分为 4 个子版本：注册 handler → 需求订单链路 → 匹配履约支付链路 → 供给侧 + 端到端验证。
+- 新建 `simulationHandlers.js` 提取纯数据处理函数，供 ExecutionEngine 注册。
+
 ## v023.10
 
 核心：Simulation 前端中文显示全覆盖，补齐嵌套对象字段字典。
