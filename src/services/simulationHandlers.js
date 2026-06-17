@@ -339,6 +339,129 @@ export function handlePaymentExecute({ objectId, data }) {
 }
 
 // ============================================================================
+// 8-11. 供给侧：准入检查 + 投放 + 行驶执行
+// ============================================================================
+
+/**
+ * READINESS_TASK_ASSIGN
+ * 自动分配 Worker 到准入任务
+ */
+export function handleReadinessTaskAssign({ objectId, data }) {
+  const { readinessTasks, setReadinessTasks, data: appData } = data;
+  const task = readinessTasks.find((t) => t.readiness_task_id === objectId);
+  if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
+
+  const worker = (appData.workers || [])[0];
+  if (!worker) return { success: false, message: "无可用作业人员" };
+
+  setReadinessTasks((prev) => prev.map((t) => {
+    if (t.readiness_task_id !== objectId) return t;
+    return { ...t, task_status: "WAITING_CHECK", assigned_worker_id: worker.worker_id };
+  }));
+
+  return { success: true, resultType: "READINESS_ASSIGNED", message: `准入任务 ${objectId} 已分配给 ${worker.worker_id}` };
+}
+
+/**
+ * READINESS_TASK_START
+ * 自动开始准入检查
+ */
+export function handleReadinessTaskStart({ objectId, data }) {
+  const { readinessTasks, setReadinessTasks } = data;
+  const task = readinessTasks.find((t) => t.readiness_task_id === objectId);
+  if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
+
+  setReadinessTasks((prev) => prev.map((t) => {
+    if (t.readiness_task_id !== objectId) return t;
+    return { ...t, task_status: "CHECKING" };
+  }));
+
+  return { success: true, resultType: "READINESS_STARTED", message: `准入任务 ${objectId} 检查中` };
+}
+
+/**
+ * READINESS_TASK_PASS
+ * 自动通过准入检查
+ */
+export function handleReadinessTaskPass({ objectId, data }) {
+  const { readinessTasks, setReadinessTasks } = data;
+  const task = readinessTasks.find((t) => t.readiness_task_id === objectId);
+  if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
+
+  setReadinessTasks((prev) => prev.map((t) => {
+    if (t.readiness_task_id !== objectId) return t;
+    return { ...t, task_status: "PASSED", check_result: "PASSED", completed_at: new Date().toISOString() };
+  }));
+
+  return { success: true, resultType: "READINESS_PASSED", message: `准入任务 ${objectId} 已通过` };
+}
+
+/**
+ * ROUTE_PLAN
+ * 自动规划行驶路径
+ */
+export function handleRoutePlan({ objectId, data }) {
+  const { routeExecutions, setRouteExecutions } = data;
+  const re = routeExecutions.find((r) => r.route_execution_id === objectId);
+  if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
+
+  setRouteExecutions((prev) => prev.map((r) => {
+    if (r.route_execution_id !== objectId) return r;
+    return { ...r, execution_status: "WAITING_ROUTE", planned_route_id: `ROUTE-${Date.now().toString(36)}` };
+  }));
+
+  return { success: true, resultType: "ROUTE_PLANNED", message: `行驶执行 ${objectId} 路径已规划` };
+}
+
+/**
+ * ROUTE_EXECUTION_STEP
+ * 自动推进行驶执行一步
+ */
+export function handleRouteExecutionStep({ objectId, data }) {
+  const { routeExecutions, setRouteExecutions, setRobotaxis } = data;
+  const re = routeExecutions.find((r) => r.route_execution_id === objectId);
+  if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
+
+  setRouteExecutions((prev) => prev.map((r) => {
+    if (r.route_execution_id !== objectId) return r;
+    return { ...r, execution_status: "ARRIVED", current_step_index: (r.current_step_index || 0) + 1 };
+  }));
+
+  if (re.robotaxi_id) {
+    setRobotaxis((prev) => prev.map((rb) => {
+      if (rb.robotaxi_id !== re.robotaxi_id) return rb;
+      return { ...rb, current_cell_id: re.target_cell_id || rb.current_cell_id, motion_status: "MOVING" };
+    }));
+  }
+
+  return { success: true, resultType: "ROUTE_STEPPED", message: `行驶执行 ${objectId} 步进完成` };
+}
+
+/**
+ * ARRIVAL_CONFIRM
+ * 自动确认到达
+ */
+export function handleArrivalConfirm({ objectId, data }) {
+  const { routeExecutions, setRouteExecutions, setRobotaxis } = data;
+  const re = routeExecutions.find((r) => r.route_execution_id === objectId);
+  if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
+
+  setRouteExecutions((prev) => prev.map((r) => {
+    if (r.route_execution_id !== objectId) return r;
+    return { ...r, execution_status: "COMPLETED", arrival_confirmed: true, completed_at: new Date().toISOString() };
+  }));
+
+  if (re.robotaxi_id) {
+    setRobotaxis((prev) => prev.map((rb) => {
+      if (rb.robotaxi_id !== re.robotaxi_id) return rb;
+      return { ...rb, motion_status: "PARKED" };
+    }));
+  }
+
+  return { success: true, resultType: "ARRIVAL_CONFIRMED", message: `行驶执行 ${objectId} 到达确认` };
+}
+
+// ============================================================================
 // 辅助函数
 // ============================================================================
 

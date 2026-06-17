@@ -3837,6 +3837,12 @@ async function bootstrap() {
       TRIP_STEP_EXECUTE: simulationHandlersModule.handleTripStepExecute,
       SETTLEMENT_EXECUTE: simulationHandlersModule.handleSettlementExecute,
       PAYMENT_EXECUTE: simulationHandlersModule.handlePaymentExecute,
+      READINESS_TASK_ASSIGN: simulationHandlersModule.handleReadinessTaskAssign,
+      READINESS_TASK_START: simulationHandlersModule.handleReadinessTaskStart,
+      READINESS_TASK_PASS: simulationHandlersModule.handleReadinessTaskPass,
+      ROUTE_PLAN: simulationHandlersModule.handleRoutePlan,
+      ROUTE_EXECUTION_STEP: simulationHandlersModule.handleRouteExecutionStep,
+      ARRIVAL_CONFIRM: simulationHandlersModule.handleArrivalConfirm,
     });
   }
 
