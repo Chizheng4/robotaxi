@@ -2,6 +2,13 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.5
+
+核心：WorkflowEngine 规则引擎 + ExecutionEngine 动作分发器。
+
+- 新增 `src/data/simulationWorkflowEngine.js`：业务单据流转规则表（ServiceOrder/Trip/ReadinessTask/RouteExecution），queryWorkflowRules / queryAllWorkflowRules 查询接口。
+- 新增 `src/data/simulationExecutionEngine.js`：动作分发器，15 个动作类型→业务函数映射表，registerActionHandler / executeAction / executeActions 接口。P0 函数待运行时注入，P1-P3 占位待后续子版本补齐。
+
 ## v023.4
 
 核心：SimulationLoop + SupplyTrigger + DemandTrigger。
