@@ -158,6 +158,15 @@ const pageGroups = [
       { key: "zones", label: "Zone 管理" },
     ],
   },
+  {
+    key: "simulation",
+    label: "自动运营模拟",
+    children: [
+      { key: "simulationPolicies", label: "模拟规则配置" },
+      { key: "simulationRuns", label: "模拟运行管理" },
+      { key: "simulationEvents", label: "模拟事件记录" },
+    ],
+  },
 ];
 
 const tableConfig = {
@@ -506,6 +515,9 @@ function App() {
   const [orderMatchingDecisions, setOrderMatchingDecisions] = useState(initialRuntime.orderMatchingDecisions);
   const [trips, setTrips] = useState(initialRuntime.trips);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
+  const [simulationPolicies, setSimulationPolicies] = useState([]);
+  const [simulationRuns, setSimulationRuns] = useState([]);
+  const [simulationEvents, setSimulationEvents] = useState([]);
   const initialValidations = useMemo(() => [
     ...validateMapSpace(initialData),
     ...validateOperationsCenter(initialData),
@@ -3596,6 +3608,9 @@ async function bootstrap() {
     import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"),
 	    import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"),
 	    import("./services/tripService.js?v=20260617-v023-1-service-extraction"),
+	    import("./domain/simulationTypes.js?v=20260617-v023-6-monitor"),
+	    import("./data/simulationInitialization.js?v=20260617-v023-6-monitor"),
+	    import("./data/simulationEngine.js?v=20260617-v023-6-monitor"),
 	  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -3629,6 +3644,9 @@ async function bootstrap() {
   serviceOrderSettlement = serviceOrderSettlementModule;
 	  serviceOrderService = serviceOrderServiceModule;
 	  tripService = tripServiceModule;
+		  simulationTypes = simulationTypesModule;
+		  simulationInitialization = simulationInitializationModule;
+		  simulationEngine = simulationEngineModule;
 
 	  ReactDOM.createRoot(document.querySelector("#app")).render(<App />);
 }

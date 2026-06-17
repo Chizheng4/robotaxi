@@ -2,6 +2,15 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.6
+
+核心：前端 Monitor 页面基础集成。
+
+- 在 `main.jsx` 中导入 simulationTypes、simulationInitialization、simulationEngine 模块。
+- 新增 React state：simulationPolicies、simulationRuns、simulationEvents。
+- 新增菜单项「自动运营模拟」：模拟规则配置、模拟运行管理、模拟事件记录。
+- Simulation 模块已完全可被前端调用，后续可在此基础上构建完整 Monitor UI。
+
 ## v023.5
 
 核心：WorkflowEngine 规则引擎 + ExecutionEngine 动作分发器。
