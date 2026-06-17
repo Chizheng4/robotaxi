@@ -85,6 +85,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
       serviceOrders: refreshedBusinessData.serviceOrders || [],
       trips: refreshedBusinessData.trips || [],
       readinessTasks: refreshedBusinessData.readinessTasks || [],
+      deploymentTasks: refreshedBusinessData.deploymentTasks || [],
       routeExecutions: refreshedBusinessData.routeExecutions || [],
       autoConfig,
       defaultCompletionConfig: defaultConfig,

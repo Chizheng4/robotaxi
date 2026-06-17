@@ -339,8 +339,59 @@ export function handlePaymentExecute({ objectId, data }) {
 }
 
 // ============================================================================
-// 8-11. 供给侧：准入检查 + 投放 + 行驶执行
+// 8-14. 供给侧：准入 + 投放 + 行驶执行
 // ============================================================================
+
+/**
+ * READINESS_TASK_CREATE
+ * 创建准入任务
+ */
+export function handleReadinessTaskCreate({ data }) {
+  const { readinessTasks, setReadinessTasks, data: appData } = data;
+  const taskId = `RT-${Date.now().toString(36)}`;
+  const candidate = (appData.robotaxis || []).find((r) => r.availability_status === "AVAILABLE" && !r.current_task_id);
+  const newTask = {
+    task_id: taskId, task_type: "READINESS_CHECK",
+    task_status: "WAITING_ASSIGNMENT",
+    robotaxi_id: candidate?.robotaxi_id || null,
+    deployment_task_id: null, route_execution_id: null,
+    created_at: new Date().toISOString(),
+  };
+  setReadinessTasks((prev) => [newTask, ...prev]);
+  return { success: true, resultType: "READINESS_CREATED", message: `准入任务 ${taskId} 已创建` };
+}
+
+/**
+ * DEPLOYMENT_TASK_CREATE
+ * 创建投放任务，同步创建 RouteExecution 子单据
+ */
+export function handleDeploymentTaskCreate({ data }) {
+  const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis, data: appData } = data;
+  const dtId = `DT-${Date.now().toString(36)}`;
+  const reId = `RE-${Date.now().toString(36)}`;
+  const candidate = (appData.robotaxis || []).find((r) => r.availability_status === "AVAILABLE" && !r.current_task_id && !r.current_order_id);
+  if (!candidate) return { success: false, resultType: "NO_CANDIDATE", message: "无可投放 Robotaxi" };
+
+  const dt = {
+    task_id: dtId, task_type: "DEPLOYMENT",
+    task_status: "WAITING_ROUTE",
+    robotaxi_id: candidate.robotaxi_id,
+    route_execution_id: reId,
+    created_at: new Date().toISOString(),
+  };
+  const re = {
+    route_execution_id: reId,
+    deployment_task_id: dtId,
+    robotaxi_id: candidate.robotaxi_id,
+    execution_status: "WAITING_ROUTE",
+    current_cell_id: candidate.current_cell_id,
+    created_at: new Date().toISOString(),
+  };
+  setDeploymentTasks((prev) => [dt, ...prev]);
+  setRouteExecutions((prev) => [re, ...prev]);
+  setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === candidate.robotaxi_id ? { ...r, current_task_id: dtId } : r));
+  return { success: true, resultType: "DEPLOYMENT_CREATED", message: `投放任务 ${dtId} 已创建，关联 RouteExecution ${reId}` };
+}
 
 /**
  * READINESS_TASK_ASSIGN

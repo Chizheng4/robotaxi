@@ -3840,6 +3840,8 @@ async function bootstrap() {
       READINESS_TASK_ASSIGN: simulationHandlersModule.handleReadinessTaskAssign,
       READINESS_TASK_START: simulationHandlersModule.handleReadinessTaskStart,
       READINESS_TASK_PASS: simulationHandlersModule.handleReadinessTaskPass,
+      READINESS_TASK_CREATE: simulationHandlersModule.handleReadinessTaskCreate,
+      DEPLOYMENT_TASK_CREATE: simulationHandlersModule.handleDeploymentTaskCreate,
       ROUTE_PLAN: simulationHandlersModule.handleRoutePlan,
       ROUTE_EXECUTION_STEP: simulationHandlersModule.handleRouteExecutionStep,
       ARRIVAL_CONFIRM: simulationHandlersModule.handleArrivalConfirm,
