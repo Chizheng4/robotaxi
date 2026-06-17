@@ -2,6 +2,21 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.8
+
+核心：前端 Simulation 页面可交互使用。
+
+- 新增 `src/services/simulationActions.js`：SimulationRun 控制 Hook（创建/启动/暂停/停止 + Tick 循环）。
+- `main.jsx` 集成：
+  - 导入 simulationLoop、simulationActions 模块。
+  - 新增 simulationPolicies/simulationRuns/simulationEvents 的 tableConfig、rowsByPage、pageObjectType。
+  - 新增「自动运营模拟」菜单（模拟规则配置、模拟运行管理、模拟事件记录）。
+  - 重置运行时同步清除模拟状态。
+  - SimulationRun 启动后自动以 500ms 间隔推进 Tick，产生 SimulationEvent。
+- 前端可完整操作：
+  - 页面加载后自动初始化默认 SimulationPolicy。
+  - 模拟运行管理页面可创建 SimulationRun、启动/暂停/停止、查看实时 Tick 进度和事件。
+
 ## v023.7
 
 核心：v023 大版本归档收口。

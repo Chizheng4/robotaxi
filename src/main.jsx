@@ -325,6 +325,21 @@ const tableConfig = {
     description: "根据初始化规则检查生成后的运营空间数据。",
     columns: ["rule_id", "rule_name", "result", "detail"],
   },
+  simulationPolicies: {
+    title: "模拟规则配置",
+    description: "配置模拟运行的规则参数，包括 Tick 粒度、时间段、需求分布和自动化开关。",
+    columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"],
+  },
+  simulationRuns: {
+    title: "模拟运行管理",
+    description: "创建和管理自动运营模拟运行，查看实时进度和结果。",
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
+  },
+  simulationEvents: {
+    title: "模拟事件记录",
+    description: "查看所有模拟运行产生的事件记录，包括触发、执行和结果。",
+    columns: ["simulation_event_id", "simulation_run_id", "event_type", "event_source", "event_result", "message", "simulation_time", "global_tick"],
+  },
 };
 
 const pageObjectType = {
@@ -359,6 +374,9 @@ const pageObjectType = {
   serviceFulfillmentRecords: "trip",
   robotaxis: "robotaxi",
   validations: "validation",
+  simulationPolicies: "simulationPolicy",
+  simulationRuns: "simulationRun",
+  simulationEvents: "simulationEvent",
 };
 
 const idFieldByType = {
@@ -386,6 +404,9 @@ const idFieldByType = {
   routePlanningRun: "route_planning_run_id",
   pricingStrategy: "pricing_strategy_id",
   pricingStrategyRun: "pricing_strategy_run_id",
+  simulationPolicy: "simulation_policy_id",
+  simulationRun: "simulation_run_id",
+  simulationEvent: "simulation_event_id",
   pricingDecision: "pricing_decision_id",
   orderMatchingStrategy: "order_matching_strategy_id",
   orderMatchingRun: "order_matching_run_id",
@@ -588,8 +609,11 @@ function App() {
     orderMatchingDecisions: orderMatchingDecisions.map((decision) => enrichOrderMatchingDecisionForDisplay(decision, data)),
     serviceFulfillmentRecords: trips.map((trip) => enrichTripForDisplay(trip, data)),
     robotaxis: data.robotaxis.map((robotaxi) => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
+    simulationPolicies,
+    simulationRuns,
+    simulationEvents,
     validations,
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, simulationRuns, simulationEvents, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -648,7 +672,7 @@ function App() {
     };
 
     return collections[selected.type]?.find((item) => item[idFieldByType[selected.type]] === selected.id) || null;
-  }, [data, rowsByPage, selected, validations]);
+  }, [data, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, validations]);
 
   const menuItems = pageGroups.map((group) => {
     if (group.key === "console") return { key: "console", label: "运营中控台" };
@@ -698,6 +722,28 @@ function App() {
     });
   }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, workspacePages]);
 
+
+
+  // ===== Simulation 控制 =====
+  const simActions = simulationActions ? simulationActions.useSimulationActions({
+    simulationEngine,
+    simulationLoop,
+    simulationTypes,
+    simulationInitialization,
+    simulationPolicies,
+    simulationRuns,
+    setSimulationPolicies,
+    setSimulationRuns,
+    setSimulationEvents,
+  }) : null;
+
+  useEffect(() => {
+    if (simActions) simActions.initDefaultPolicy();
+  }, [simulationPolicies.length, simActions]);
+
+  useEffect(() => {
+    return () => { if (simActions) simActions.cleanup(); };
+  }, [simActions]);
   return (
     <Layout className="ops-shell">
       <Sider className="ops-sider" width={216} collapsedWidth={58} collapsed={collapsed} trigger={null}>
@@ -795,6 +841,10 @@ function App() {
                   demandSimulationRuns: rowsByPage.demandSimulationRuns,
                   pricingStrategyRuns: rowsByPage.pricingStrategyRuns,
                   orderMatchingRuns: rowsByPage.orderMatchingRuns,
+                  simActions,
+                  simulationPolicies,
+                  simulationRuns,
+                  simulationEvents,
                 }}
               />
             )}
@@ -865,6 +915,9 @@ function App() {
     setOrderMatchingDecisions([]);
     setTrips([]);
     setTaskEventLogs([]);
+    setSimulationPolicies([]);
+    setSimulationRuns([]);
+    setSimulationEvents([]);
     setActivePage("console");
     setOpenMenuKeys([]);
     setSelected(nextSelection);
@@ -2701,6 +2754,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     setAbnormalArrivalExecution(null);
   }
 
+
+  }, [simActions]);
   function applyStatusFilter(statusValue) {
     const nextFilters = { ...defaultPageFilters, statusValue };
     onUiStateChange(createNextPageUiState(uiState, { filters: nextFilters, appliedFilters: nextFilters, pagination: { current: 1 } }));
@@ -3611,6 +3666,8 @@ async function bootstrap() {
 	    import("./domain/simulationTypes.js?v=20260617-v023-6-monitor"),
 	    import("./data/simulationInitialization.js?v=20260617-v023-6-monitor"),
 	    import("./data/simulationEngine.js?v=20260617-v023-6-monitor"),
+	    import("./services/simulationActions.js?v=20260617-v023-8-frontend"),
+	    import("./data/simulationLoop.js?v=20260617-v023-8-frontend"),
 	  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -3647,6 +3704,8 @@ async function bootstrap() {
 		  simulationTypes = simulationTypesModule;
 		  simulationInitialization = simulationInitializationModule;
 		  simulationEngine = simulationEngineModule;
+		  simulationLoop = simulationLoopModule;
+		  simulationActions = simulationActionsModule;
 
 	  ReactDOM.createRoot(document.querySelector("#app")).render(<App />);
 }
