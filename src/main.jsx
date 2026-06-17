@@ -1336,21 +1336,21 @@ function App() {
       ...current,
       routes: [priceRoute, ...current.routes],
     }));
-    const result = runPricingEstimate({
+    const result = serviceOrderService.executePricing({
       strategy,
       serviceOrder,
       data,
-      pricingStrategyRunId: nextPricingStrategyRunId(),
-      pricingDecisionId: nextPricingDecisionId(),
       routeEstimate: {
         route_id: priceRoute.route_id,
         estimated_distance_km: priceRoute.total_distance_m / 1000,
         estimated_duration_min: Math.max(1, Math.ceil((priceRoute.total_distance_m / 1000 / 24) * 60)),
       },
+      pricingStrategyRunId: nextPricingStrategyRunId(),
+      pricingDecisionId: nextPricingDecisionId(),
       createdAt: now(),
     });
     setPricingStrategyRuns((items) => [result.run, ...items]);
-    if (!result.decision) {
+    if (!result.success) {
       setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
         ...order,
         order_status: serviceOrderTypes.ServiceOrderStatus.FAILED,
@@ -1423,7 +1423,7 @@ function App() {
     ];
     if (!serviceOrder || !assignableStatuses.includes(serviceOrder.order_status)) return;
     const strategy = data.orderMatchingStrategies?.find((item) => item.order_matching_strategy_id === "OMS-001");
-    const result = runOrderMatching({
+    const result = serviceOrderService.executeOrderMatching({
       strategy,
       serviceOrder,
       data,
@@ -1434,7 +1434,7 @@ function App() {
     setOrderMatchingRuns((items) => [result.run, ...items]);
     setOrderMatchingDecisions((items) => [result.decision, ...items]);
 
-    if (!result.decision || result.decision.decision_result !== orderMatchingTypes.OrderMatchingResult.SUCCESS) {
+    if (!result.success) {
       setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
         ...order,
         order_matching_decision_id: result.decision?.order_matching_decision_id || null,
@@ -1664,7 +1664,7 @@ function App() {
     const trip = trips.find((item) => item.trip_id === tripId);
     if (!trip) return;
     if ([tripTypes.TripStatus.ON_THE_WAY_PICKUP, tripTypes.TripStatus.ON_THE_WAY_DESTINATION].includes(trip.trip_status)) {
-      const movedTrip = getNextTripMovementState(trip, data);
+      const movedTrip = tripService.getNextTripMovementState(trip, data);
       if (!movedTrip) return;
       setTrips((items) => items.map((item) => item.trip_id === tripId ? movedTrip : item));
       setOperationalData((current) => ({
@@ -1675,7 +1675,7 @@ function App() {
       selectForPage("serviceFulfillmentRecords", "trip", tripId);
       return;
     }
-    let nextTrip = getNextTripState(trip);
+    let nextTrip = tripService.getNextTripState(trip);
     if (!nextTrip) return;
     const routeUpdate = createTripRouteUpdate(trip, nextTrip, data);
     if (routeUpdate?.failedTrip) {
@@ -3564,7 +3564,9 @@ async function bootstrap() {
     deploymentTaskValidation,
     taskTypeModule,
     serviceOrderSettlementModule,
-  ] = await Promise.all([
+	    serviceOrderServiceModule,
+	    tripServiceModule,
+	  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"),
@@ -3592,7 +3594,9 @@ async function bootstrap() {
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
     import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"),
-  ]);
+	    import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"),
+	    import("./services/tripService.js?v=20260617-v023-1-service-extraction"),
+	  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
@@ -3623,8 +3627,10 @@ async function bootstrap() {
   validateDeploymentTasks = deploymentTaskValidation.validateDeploymentTasks;
   taskTypes = taskTypeModule;
   serviceOrderSettlement = serviceOrderSettlementModule;
+	  serviceOrderService = serviceOrderServiceModule;
+	  tripService = tripServiceModule;
 
-  ReactDOM.createRoot(document.querySelector("#app")).render(<App />);
+	  ReactDOM.createRoot(document.querySelector("#app")).render(<App />);
 }
 
 bootstrap();
@@ -4566,152 +4572,6 @@ function findCurrentTask(taskId, readinessTasks, deploymentTasks) {
     null;
 }
 
-function getNextTripMovementState(trip, data) {
-  const route = data.routes.find((item) => item.route_id === trip.route_id);
-  if (!route || !Array.isArray(route.route_steps) || route.route_steps.length === 0) return null;
-  const totalStepCount = getMovementStepCount(route);
-  const currentStepIndex = Math.max(0, Number(trip.current_step_index || 0));
-  const nextStepIndex = Math.min(currentStepIndex + 1, totalStepCount);
-  const nextStep = route.route_steps[nextStepIndex] || route.route_steps[route.route_steps.length - 1];
-  const reachedTarget = nextStepIndex >= totalStepCount;
-  const distancePerStepKm = totalStepCount > 0 ? (route.total_distance_m || 0) / 1000 / totalStepCount : 0;
-  const distanceTraveledKm = roundDistance(distancePerStepKm * nextStepIndex);
-  const distanceRemainingKm = roundDistance(Math.max(0, (route.total_distance_m || 0) / 1000 - distanceTraveledKm));
-  const nextStatus = reachedTarget
-    ? (trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP ? tripTypes.TripStatus.WAITING_CUSTOMER_BOARDING : tripTypes.TripStatus.ARRIVED_DESTINATION)
-    : trip.trip_status;
-  const nextPhase = trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP ? tripTypes.TripPhase.PICKUP : tripTypes.TripPhase.DESTINATION;
-
-  return {
-    ...trip,
-    trip_status: nextStatus,
-    trip_phase: reachedTarget && nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION ? tripTypes.TripPhase.DESTINATION : nextPhase,
-    current_cell_id: nextStep?.cell_id || trip.current_cell_id,
-    current_step_index: nextStepIndex,
-    total_step_count: totalStepCount,
-    distance_traveled_km: distanceTraveledKm,
-    distance_remaining_km: distanceRemainingKm,
-    time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-    arrival_execution_result: reachedTarget && nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION ? "NORMAL_ARRIVAL" : trip.arrival_execution_result,
-    event_log: [
-      ...(Array.isArray(trip.event_log) ? trip.event_log : []),
-      {
-        event_time: now(),
-        previous_status: trip.trip_status,
-        next_status: nextStatus,
-        event_type: reachedTarget ? "ROUTE_TARGET_REACHED" : "ROUTE_STEP_ADVANCED",
-        event_result: "SUCCESS",
-        route_id: route.route_id,
-        cell_id: nextStep?.cell_id || null,
-      },
-    ],
-  };
-}
-
-function getNextTripState(trip) {
-  const status = tripTypes.TripStatus;
-  const phase = tripTypes.TripPhase;
-  const timestamp = now();
-  const baseEvent = {
-    event_time: timestamp,
-    previous_status: trip.trip_status,
-  };
-  const eventLog = Array.isArray(trip.event_log) ? trip.event_log : [];
-
-  if ([status.COMPLETED, status.FAILED, status.CANCELLED].includes(trip.trip_status)) return null;
-
-  const transitions = {
-    [status.WAITING_ROUTE]: {
-      trip_status: status.ON_THE_WAY_PICKUP,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.current_cell_id,
-      started_at: trip.started_at || timestamp,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2),
-    },
-    [status.PENDING]: {
-      trip_status: status.ON_THE_WAY_PICKUP,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.current_cell_id,
-      started_at: trip.started_at || timestamp,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2),
-    },
-    [status.ASSIGNED]: {
-      trip_status: status.ON_THE_WAY_PICKUP,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.current_cell_id,
-      started_at: trip.started_at || timestamp,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 2),
-    },
-    [status.ON_THE_WAY_PICKUP]: {
-      trip_status: status.WAITING_CUSTOMER_BOARDING,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.pickup_cell_id,
-      current_step_index: Math.max(trip.current_step_index || 0, 1),
-      total_step_count: Math.max(trip.total_step_count || 0, 4),
-      distance_traveled_km: roundDistance((trip.distance_traveled_km || 0) + 0.6),
-      distance_remaining_km: roundDistance(Math.max(0, trip.distance_remaining_km || 0)),
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 3),
-    },
-    [status.ARRIVED_PICKUP]: {
-      trip_status: status.CUSTOMER_ONBOARD,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.pickup_cell_id,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-    },
-    [status.WAITING_CUSTOMER_BOARDING]: {
-      trip_status: status.CUSTOMER_ONBOARD,
-      trip_phase: phase.PICKUP,
-      current_cell_id: trip.pickup_cell_id,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-    },
-    [status.CUSTOMER_ONBOARD]: {
-      trip_status: status.ON_THE_WAY_DESTINATION,
-      trip_phase: phase.DESTINATION,
-      current_cell_id: trip.pickup_cell_id,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-    },
-    [status.PASSENGER_ONBOARD]: {
-      trip_status: status.ON_THE_WAY_DESTINATION,
-      trip_phase: phase.DESTINATION,
-      current_cell_id: trip.pickup_cell_id,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-    },
-    [status.ON_THE_WAY_DESTINATION]: {
-      trip_status: status.ARRIVED_DESTINATION,
-      trip_phase: phase.DESTINATION,
-      current_cell_id: trip.dropoff_cell_id,
-      current_step_index: Math.max(trip.total_step_count || 4, 4),
-      total_step_count: Math.max(trip.total_step_count || 0, 4),
-      distance_traveled_km: roundDistance(Math.max(trip.distance_traveled_km || 0, (trip.distance_traveled_km || 0) + (trip.distance_remaining_km || 0))),
-      distance_remaining_km: 0,
-      arrival_execution_result: "NORMAL_ARRIVAL",
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 8),
-    },
-    [status.ARRIVED_DESTINATION]: {
-      trip_status: status.COMPLETED,
-      trip_phase: phase.COMPLETED,
-      current_cell_id: trip.dropoff_cell_id,
-      distance_remaining_km: 0,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-      completed_at: timestamp,
-    },
-  };
-
-  const nextValues = transitions[trip.trip_status];
-  if (!nextValues) return null;
-
-  return {
-    ...trip,
-    ...nextValues,
-    event_log: [
-      ...eventLog,
-      {
-        ...baseEvent,
-        next_status: nextValues.trip_status,
-      },
-    ],
-  };
-}
 
 function createTripRouteUpdate(trip, nextTrip, data) {
   const routeRequest = getTripRouteRequest(trip);

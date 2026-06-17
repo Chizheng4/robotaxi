@@ -2,6 +2,15 @@
 
 本文档用于记录每个版本的核心变化，便于后续对比、回退和继续迭代。
 
+## v023.1
+
+核心：提取 P0 业务函数为独立服务模块，供 UI 和 Simulation System 两条路径复用。
+
+- 新增 `src/services/serviceOrderService.js`：提取 `executePricing`（价格预估）和 `executeOrderMatching`（订单匹配）。
+- 新增 `src/services/tripService.js`：提取 `getNextTripMovementState`（Trip 行驶步数推进）和 `getNextTripState`（Trip 状态跳转）。
+- 修改 `main.jsx` 中 `estimateServiceOrderPrice`、`matchServiceOrder`、`advanceTrip` 改为调用服务函数。
+- 删除 `main.jsx` 中已迁移的本地函数定义，保留通用辅助函数。
+
 ## v023 计划
 
 核心：启动 v023 大版本自动执行计划，构建自动运营模拟系统。
