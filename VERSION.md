@@ -1,3 +1,21 @@
+## v025
+
+核心：v025 大版本完成。监控四阶段事件体系 + Trigger/Workflow 边界修正 + 父子流程串联。
+
+- v025.1：监控事件体系，每 Tick 产出 6 类结构化事件（TICK_STARTED→SUPPLY_TRIGGER→DEMAND_TRIGGER→WORKFLOW→ACTION→TICK_COMPLETED）。
+- v025.2：SupplyTrigger 边界修正，只点火两个源头（READINESS_TASK_CREATE + DEPLOYMENT_TASK_CREATE），去掉 route_execution。
+- v025.3：DeploymentTask→RouteExecution 父子链，DT 创建时同步创建 RE，WorkflowEngine 驱动推进。
+- v025.4：执行失败在业务对象上可见（定价失败→订单状态 PRICING_FAILED）。
+- v025.5：端到端验证 50 Tick 产出 650 事件 + 最终归档。
+- 设计文档修复：05-supply-trigger.md、04-deployment-task-workflow.md、01-execution-engine.md。
+
+## v024.4
+
+核心：供给侧处理器 + v024 大版本归档。
+
+- simulationHandlers 新增 6 个供给侧处理器。main.jsx bootstrap 注册全部 13 个 handler。
+- v024 全链路验证完成：Tick→触发→订单→定价→匹配→履约→结算→支付自动流转。
+
 ## v024.3
 
 核心：全链路打通。订单→定价→确认→匹配→履约→结算→支付自动流转。
