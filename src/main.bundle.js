@@ -218,11 +218,9 @@ const pageGroups = [{
   }, {
     key: "simulationRuns",
     label: "模拟运行管理"
-  }, {
-    key: "simulationEvents",
-    label: "模拟事件记录"
   }]
 }];
+const hiddenWorkspacePages = new Set(["simulationEvents"]);
 const tableConfig = {
   maps: {
     title: "地图管理",
@@ -685,7 +683,7 @@ function App() {
           key: child.key,
           label: child.label
         }))
-      }))
+      })).filter(item => !hiddenWorkspacePages.has(item.key))
     };
   });
   const failedCount = validations.filter(item => item.result !== "PASS").length;
@@ -928,6 +926,7 @@ function App() {
       pricingStrategyRuns: rowsByPage.pricingStrategyRuns,
       orderMatchingRuns: rowsByPage.orderMatchingRuns,
       simActions,
+      clearSimulationEvents,
       simulationPolicies,
       simulationRuns,
       simulationEvents
@@ -1016,6 +1015,9 @@ function App() {
         // Ignore storage cleanup failures; in-memory reset is already complete.
       }
     }
+  }
+  function clearSimulationEvents() {
+    setSimulationEvents([]);
   }
   function selectForPage(page, type, id) {
     const nextSelection = {
@@ -2519,6 +2521,8 @@ function RecordTable({
   const idField = idFieldByType[objectType];
   const statusField = statusFieldByPage[page];
   const [eventPanelHeight, setEventPanelHeight] = useState(112);
+  const tableSectionRef = useRef(null);
+  const [tableBodyHeight, setTableBodyHeight] = useState(220);
   const [abnormalTask, setAbnormalTask] = useState(null);
   const [abnormalIssueType, setAbnormalIssueType] = useState(taskTypes?.IssueType?.LOW_BATTERY || "LOW_BATTERY");
   const [abnormalArrivalExecution, setAbnormalArrivalExecution] = useState(null);
@@ -2547,7 +2551,20 @@ function RecordTable({
   const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
   const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
-  const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 262}px)` : "calc(100vh - 120px)";
+  useEffect(() => {
+    const node = tableSectionRef.current;
+    if (!node) return undefined;
+    const updateTableBodyHeight = () => {
+      const paginationHeight = node.querySelector(".ant-pagination")?.getBoundingClientRect().height || 32;
+      const nextHeight = Math.max(96, Math.floor(node.clientHeight - paginationHeight - 48));
+      setTableBodyHeight(currentHeight => currentHeight === nextHeight ? currentHeight : nextHeight);
+    };
+    updateTableBodyHeight();
+    const observer = new ResizeObserver(updateTableBodyHeight);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [eventPanelHeight, hasEventPanel, page, rows.length]);
+  const tableScrollY = tableBodyHeight;
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
   return /*#__PURE__*/React.createElement("section", {
     className: isReadinessPage ? "record-page-new readiness-page" : "record-page-new"
@@ -2647,19 +2664,13 @@ function RecordTable({
     size: "small",
     type: "primary",
     onClick: () => actions.simActions?.createSimulationRun()
-  }, "\u521B\u5EFA\u6A21\u62DF\u8FD0\u884C")), isSimulationRunPage && /*#__PURE__*/React.createElement("pre", {
-    className: "sim-debug-bar",
-    style: {
-      background: "#1a1a2e",
-      color: "#0f0",
-      padding: "8px 12px",
-      margin: 0,
-      fontSize: 11,
-      maxHeight: 120,
-      overflow: "auto",
-      borderRadius: 4
-    }
-  }, (window.__simDebug || []).slice(-15).join("\n") || "诊断：点击按钮开始调试"), /*#__PURE__*/React.createElement(Table, {
+  }, "\u521B\u5EFA\u6A21\u62DF\u8FD0\u884C"), /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    onClick: actions.clearSimulationEvents
+  }, "\u6E05\u7A7A\u6A21\u62DF\u4E8B\u4EF6")), /*#__PURE__*/React.createElement("div", {
+    className: "record-table-section",
+    ref: tableSectionRef
+  }, /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: idField,
     columns: finalColumns,
@@ -2679,7 +2690,7 @@ function RecordTable({
       onClick: () => onSelect(objectType, row[idField])
     }),
     onChange: pagination => updatePagination(pagination.current)
-  }), hasEventPanel && /*#__PURE__*/React.createElement("div", {
+  })), hasEventPanel && /*#__PURE__*/React.createElement("div", {
     className: "event-log-section",
     style: {
       height: eventPanelHeight
@@ -2690,7 +2701,7 @@ function RecordTable({
     title: "\u62D6\u52A8\u8C03\u6574\u4E8B\u4EF6\u533A\u9AD8\u5EA6"
   }), /*#__PURE__*/React.createElement("div", {
     className: "event-log-title"
-  }, isTripPage ? "履约行驶事件" : isServiceOrderPage ? "最近事件记录" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
+  }, isTripPage ? "履约行驶事件" : isServiceOrderPage ? "最近事件记录" : isSimulationRunPage ? "模拟运行事件" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: eventRowKey,
     columns: eventColumns.map(key => ({
@@ -2761,13 +2772,13 @@ function RecordTable({
         title: "操作",
         fixed: "right",
         width: 240,
-        render: (_, row) => renderReadinessActions(row, {
+        render: (_, row) => renderActionCell(row, renderReadinessActions(row, {
           ...actions,
           openAbnormalModal: openAbnormalModal,
           page,
           objectType,
           idField
-        })
+        }))
       };
     }
     if (isDeploymentPage) {
@@ -2776,12 +2787,12 @@ function RecordTable({
         title: "操作",
         fixed: "right",
         width: 220,
-        render: (_, row) => renderDeploymentActions(row, {
+        render: (_, row) => renderActionCell(row, renderDeploymentActions(row, {
           ...actions,
           page,
           objectType,
           idField
-        })
+        }))
       };
     }
     if (isRouteExecutionPage) {
@@ -2790,13 +2801,13 @@ function RecordTable({
         title: "操作",
         fixed: "right",
         width: 220,
-        render: (_, row) => renderRouteExecutionActions(row, {
+        render: (_, row) => renderActionCell(row, renderRouteExecutionActions(row, {
           ...actions,
           openAbnormalArrivalModal,
           page,
           objectType,
           idField
-        })
+        }))
       };
     }
     if (isRoutePlanningRunPage) {
@@ -2805,12 +2816,12 @@ function RecordTable({
         title: "操作",
         fixed: "right",
         width: 180,
-        render: (_, row) => renderRoutePlanningRunActions(row, {
+        render: (_, row) => renderActionCell(row, renderRoutePlanningRunActions(row, {
           ...actions,
           page,
           objectType,
           idField
-        })
+        }))
       };
     }
     if (isServiceOrderPage) {
@@ -2819,12 +2830,12 @@ function RecordTable({
         title: "操作",
         fixed: "right",
         width: 150,
-        render: (_, row) => renderServiceOrderActions(row, {
+        render: (_, row) => renderActionCell(row, renderServiceOrderActions(row, {
           ...actions,
           page,
           objectType,
           idField
-        })
+        }))
       };
     }
     if (isTripPage) {
@@ -2833,12 +2844,12 @@ function RecordTable({
         title: "操作",
         fixed: "right",
         width: 150,
-        render: (_, row) => renderTripActions(row, {
+        render: (_, row) => renderActionCell(row, renderTripActions(row, {
           ...actions,
           page,
           objectType,
           idField
-        })
+        }))
       };
     }
     if (isPricingRunPage || isOrderMatchingRunPage) {
@@ -2847,12 +2858,12 @@ function RecordTable({
         title: "操作",
         fixed: "right",
         width: 120,
-        render: (_, row) => renderViewDetailAction(row, {
+        render: (_, row) => renderActionCell(row, renderViewDetailAction(row, {
           ...actions,
           page,
           objectType,
           idField
-        })
+        }))
       };
     }
     if (isSimulationRunPage) {
@@ -2861,10 +2872,21 @@ function RecordTable({
         title: "操作",
         fixed: "right",
         width: 180,
-        render: (_, row) => renderSimulationRunActions(row, actions)
+        render: (_, row) => renderActionCell(row, renderSimulationRunActions(row, {
+          ...actions,
+          page,
+          objectType,
+          idField
+        }))
       };
     }
     return null;
+  }
+  function renderActionCell(row, actionContent) {
+    return /*#__PURE__*/React.createElement("span", {
+      className: "row-action-cell",
+      onClickCapture: () => onSelect(objectType, row[idField])
+    }, actionContent);
   }
   function openAbnormalModal(task) {
     setAbnormalTask(task);
@@ -5142,6 +5164,7 @@ function findPageMenuLabel(page) {
   return null;
 }
 function isLeafPage(page) {
+  if (hiddenWorkspacePages.has(page)) return false;
   return page === "console" || Boolean(pageObjectType[page] || tableConfig[page]);
 }
 function normalizeWorkspacePages(pages, activePage = "console") {
@@ -5223,6 +5246,7 @@ function loadRuntimeSnapshot(initialData) {
     deploymentRouteSequence = deriveSequence(operationalData.routes || [], "route_id", "DRT-");
     serviceRouteSequence = deriveSequence(operationalData.routes || [], "route_id", "SRT-");
     eventSequence = deriveSequence(taskEventLogs, "event_id", "EVT-");
+    const restoredActivePage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
     return {
       operationalData,
       readinessTasks,
@@ -5240,8 +5264,8 @@ function loadRuntimeSnapshot(initialData) {
       simulationPolicies,
       simulationRuns,
       simulationEvents,
-      activePage: snapshot.activePage || "console",
-      workspacePages: normalizeWorkspacePages(snapshot.workspacePages, snapshot.activePage || "console"),
+      activePage: restoredActivePage,
+      workspacePages: normalizeWorkspacePages(snapshot.workspacePages, restoredActivePage),
       detailCollapsedByPage: snapshot.detailCollapsedByPage || {},
       pageSelections: {
         console: {
