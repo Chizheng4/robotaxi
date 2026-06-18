@@ -741,7 +741,7 @@ function App() {
     data,
     serviceOrderService,
     tripService,
-    demandSimulationEngine,
+    demandSimulationEngine: { runDemandSimulation },
     pricingStrategyRuns,
     pricingDecisions,
     orderMatchingRuns,
@@ -775,14 +775,19 @@ function App() {
     setSimulationEvents,
     getBusinessData,
   }) : null;
+  const simActionsRef = useRef(null);
 
   useEffect(() => {
     if (simActions) simActions.initDefaultPolicy();
   }, [simulationPolicies.length, simActions]);
 
   useEffect(() => {
-    return () => { if (simActions) simActions.cleanup(); };
+    simActionsRef.current = simActions;
   }, [simActions]);
+
+  useEffect(() => {
+    return () => { if (simActionsRef.current) simActionsRef.current.cleanup(); };
+  }, []);
   return (
     <Layout className="ops-shell">
       <Sider className="ops-sider" width={216} collapsedWidth={58} collapsed={collapsed} trigger={null}>
@@ -2624,6 +2629,11 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         <div className="list-action-bar">
           <Button size="small" type="primary" onClick={() => actions.simActions?.createSimulationRun()}>创建模拟运行</Button>
         </div>
+      )}
+      {isSimulationRunPage && (
+        <pre className="sim-debug-bar" style={{background:"#1a1a2e",color:"#0f0",padding:"8px 12px",margin:0,fontSize:11,maxHeight:120,overflow:"auto",borderRadius:4}}>
+          {((window.__simDebug || []).slice(-15).join("\n")) || "诊断：点击按钮开始调试"}
+        </pre>
       )}
       <Table
         size="small"

@@ -732,7 +732,9 @@ function App() {
     data,
     serviceOrderService,
     tripService,
-    demandSimulationEngine,
+    demandSimulationEngine: {
+      runDemandSimulation
+    },
     pricingStrategyRuns,
     pricingDecisions,
     orderMatchingRuns,
@@ -768,14 +770,18 @@ function App() {
     setSimulationEvents,
     getBusinessData
   }) : null;
+  const simActionsRef = useRef(null);
   useEffect(() => {
     if (simActions) simActions.initDefaultPolicy();
   }, [simulationPolicies.length, simActions]);
   useEffect(() => {
-    return () => {
-      if (simActions) simActions.cleanup();
-    };
+    simActionsRef.current = simActions;
   }, [simActions]);
+  useEffect(() => {
+    return () => {
+      if (simActionsRef.current) simActionsRef.current.cleanup();
+    };
+  }, []);
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -2607,7 +2613,19 @@ function RecordTable({
     size: "small",
     type: "primary",
     onClick: () => actions.simActions?.createSimulationRun()
-  }, "\u521B\u5EFA\u6A21\u62DF\u8FD0\u884C")), /*#__PURE__*/React.createElement(Table, {
+  }, "\u521B\u5EFA\u6A21\u62DF\u8FD0\u884C")), isSimulationRunPage && /*#__PURE__*/React.createElement("pre", {
+    className: "sim-debug-bar",
+    style: {
+      background: "#1a1a2e",
+      color: "#0f0",
+      padding: "8px 12px",
+      margin: 0,
+      fontSize: 11,
+      maxHeight: 120,
+      overflow: "auto",
+      borderRadius: 4
+    }
+  }, (window.__simDebug || []).slice(-15).join("\n") || "诊断：点击按钮开始调试"), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: idField,
     columns: finalColumns,

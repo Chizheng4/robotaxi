@@ -6,7 +6,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PORT="4173"
 HOST="127.0.0.1"
 APP_VERSION="$(date +%Y%m%d-%H%M%S)"
-URL="http://${HOST}:${PORT}/?v=${APP_VERSION}&resetRuntime=1"
+URL="http://${HOST}:${PORT}/?v=${APP_VERSION}"
 LOG_FILE="${PROJECT_DIR}/.robotaxi-server.log"
 
 cd "$PROJECT_DIR"
@@ -74,7 +74,7 @@ sleep 1
 if curl -fsS "http://${HOST}:${PORT}/" >/dev/null 2>&1; then
   open "$URL"
   echo "==> Opened ${URL}"
-  echo "==> Cache disabled. Runtime reset by resetRuntime=1"
+  echo "==> Cache disabled. Runtime data preserved."
 else
   echo "ERROR: Server failed to start. See ${LOG_FILE}"
   exit 1

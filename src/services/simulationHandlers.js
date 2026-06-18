@@ -403,14 +403,14 @@ export function handleDeploymentTaskCreate({ data }) {
  */
 export function handleReadinessTaskAssign({ objectId, data }) {
   const { readinessTasks, setReadinessTasks, data: appData } = data;
-  const task = readinessTasks.find((t) => t.readiness_task_id === objectId);
+  const task = readinessTasks.find((t) => t.task_id === objectId);
   if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
 
   const worker = (appData.workers || [])[0];
   if (!worker) return { success: false, message: "无可用作业人员" };
 
   setReadinessTasks((prev) => prev.map((t) => {
-    if (t.readiness_task_id !== objectId) return t;
+    if (t.task_id !== objectId) return t;
     return { ...t, task_status: "WAITING_CHECK", assigned_worker_id: worker.worker_id };
   }));
 
@@ -423,11 +423,11 @@ export function handleReadinessTaskAssign({ objectId, data }) {
  */
 export function handleReadinessTaskStart({ objectId, data }) {
   const { readinessTasks, setReadinessTasks } = data;
-  const task = readinessTasks.find((t) => t.readiness_task_id === objectId);
+  const task = readinessTasks.find((t) => t.task_id === objectId);
   if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
 
   setReadinessTasks((prev) => prev.map((t) => {
-    if (t.readiness_task_id !== objectId) return t;
+    if (t.task_id !== objectId) return t;
     return { ...t, task_status: "CHECKING" };
   }));
 
@@ -440,12 +440,12 @@ export function handleReadinessTaskStart({ objectId, data }) {
  */
 export function handleReadinessTaskPass({ objectId, data }) {
   const { readinessTasks, setReadinessTasks } = data;
-  const task = readinessTasks.find((t) => t.readiness_task_id === objectId);
+  const task = readinessTasks.find((t) => t.task_id === objectId);
   if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
 
   setReadinessTasks((prev) => prev.map((t) => {
-    if (t.readiness_task_id !== objectId) return t;
-    return { ...t, task_status: "PASSED", check_result: "PASSED", completed_at: new Date().toISOString() };
+    if (t.task_id !== objectId) return t;
+    return { ...t, task_status: "COMPLETED", check_result: "PASSED", completed_at: new Date().toISOString() };
   }));
 
   return { success: true, resultType: "READINESS_PASSED", message: `准入任务 ${objectId} 已通过` };
@@ -456,16 +456,22 @@ export function handleReadinessTaskPass({ objectId, data }) {
  * 自动规划行驶路径
  */
 export function handleRoutePlan({ objectId, data }) {
-  const { routeExecutions, setRouteExecutions } = data;
-  const re = routeExecutions.find((r) => r.route_execution_id === objectId);
+  const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions } = data;
+  const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
   if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
 
   setRouteExecutions((prev) => prev.map((r) => {
-    if (r.route_execution_id !== objectId) return r;
-    return { ...r, execution_status: "WAITING_ROUTE", planned_route_id: `ROUTE-${Date.now().toString(36)}` };
+    if (r.route_execution_id !== re.route_execution_id) return r;
+    return { ...r, execution_status: "MOVING", planned_route_id: `ROUTE-${Date.now().toString(36)}`, current_step_index: 0 };
   }));
+  if (re.deployment_task_id) {
+    setDeploymentTasks((prev) => prev.map((task) => {
+      if (task.task_id !== re.deployment_task_id) return task;
+      return { ...task, task_status: "MOVING" };
+    }));
+  }
 
-  return { success: true, resultType: "ROUTE_PLANNED", message: `行驶执行 ${objectId} 路径已规划` };
+  return { success: true, resultType: "ROUTE_PLANNED", message: `行驶执行 ${re.route_execution_id} 路径已规划` };
 }
 
 /**
@@ -473,14 +479,20 @@ export function handleRoutePlan({ objectId, data }) {
  * 自动推进行驶执行一步
  */
 export function handleRouteExecutionStep({ objectId, data }) {
-  const { routeExecutions, setRouteExecutions, setRobotaxis } = data;
-  const re = routeExecutions.find((r) => r.route_execution_id === objectId);
+  const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis } = data;
+  const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
   if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
 
   setRouteExecutions((prev) => prev.map((r) => {
-    if (r.route_execution_id !== objectId) return r;
+    if (r.route_execution_id !== re.route_execution_id) return r;
     return { ...r, execution_status: "ARRIVED", current_step_index: (r.current_step_index || 0) + 1 };
   }));
+  if (re.deployment_task_id) {
+    setDeploymentTasks((prev) => prev.map((task) => {
+      if (task.task_id !== re.deployment_task_id) return task;
+      return { ...task, task_status: "ARRIVED" };
+    }));
+  }
 
   if (re.robotaxi_id) {
     setRobotaxis((prev) => prev.map((rb) => {
@@ -497,19 +509,25 @@ export function handleRouteExecutionStep({ objectId, data }) {
  * 自动确认到达
  */
 export function handleArrivalConfirm({ objectId, data }) {
-  const { routeExecutions, setRouteExecutions, setRobotaxis } = data;
-  const re = routeExecutions.find((r) => r.route_execution_id === objectId);
+  const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis } = data;
+  const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
   if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
 
   setRouteExecutions((prev) => prev.map((r) => {
-    if (r.route_execution_id !== objectId) return r;
+    if (r.route_execution_id !== re.route_execution_id) return r;
     return { ...r, execution_status: "COMPLETED", arrival_confirmed: true, completed_at: new Date().toISOString() };
   }));
+  if (re.deployment_task_id) {
+    setDeploymentTasks((prev) => prev.map((task) => {
+      if (task.task_id !== re.deployment_task_id) return task;
+      return { ...task, task_status: "COMPLETED", completed_at: new Date().toISOString() };
+    }));
+  }
 
   if (re.robotaxi_id) {
     setRobotaxis((prev) => prev.map((rb) => {
       if (rb.robotaxi_id !== re.robotaxi_id) return rb;
-      return { ...rb, motion_status: "PARKED" };
+      return { ...rb, current_task_id: null, motion_status: "PARKED" };
     }));
   }
 
