@@ -539,9 +539,9 @@ function App() {
   const [orderMatchingDecisions, setOrderMatchingDecisions] = useState(initialRuntime.orderMatchingDecisions);
   const [trips, setTrips] = useState(initialRuntime.trips);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
-  const [simulationPolicies, setSimulationPolicies] = useState([]);
-  const [simulationRuns, setSimulationRuns] = useState([]);
-  const [simulationEvents, setSimulationEvents] = useState([]);
+  const [simulationPolicies, setSimulationPolicies] = useState(initialRuntime.simulationPolicies);
+  const [simulationRuns, setSimulationRuns] = useState(initialRuntime.simulationRuns);
+  const [simulationEvents, setSimulationEvents] = useState(initialRuntime.simulationEvents);
   const initialValidations = useMemo(() => [
     ...validateMapSpace(initialData),
     ...validateOperationsCenter(initialData),
@@ -720,48 +720,82 @@ function App() {
       orderMatchingDecisions,
       trips,
       taskEventLogs,
+      simulationPolicies,
+      simulationRuns,
+      simulationEvents,
       activePage,
       workspacePages,
       detailCollapsedByPage,
       pageSelections,
       pageUiState,
     });
-  }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, workspacePages]);
+  }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workspacePages]);
 
 
 
   // ===== Simulation 控制 =====
-  const getBusinessData = () => ({
-    serviceOrders,
-    trips,
-    readinessTasks,
-    deploymentTasks,
-    routeExecutions,
-    robotaxis: data.robotaxis,
-    data,
-    serviceOrderService,
-    tripService,
-    demandSimulationEngine: { runDemandSimulation },
-    pricingStrategyRuns,
-    pricingDecisions,
-    orderMatchingRuns,
-    orderMatchingDecisions,
-    setServiceOrders,
-    setTrips,
-    setReadinessTasks,
-    setDeploymentTasks,
-    setRouteExecutions,
-    setRobotaxis: (fn) => {
-      // Robotaxis 在 data.robotaxis 中，需要通过 setOperationalData 更新
-      const nextRobotaxis = fn(data.robotaxis);
+  const getBusinessData = () => {
+    const businessData = {
+      serviceOrders,
+      trips,
+      readinessTasks,
+      deploymentTasks,
+      routeExecutions,
+      robotaxis: data.robotaxis,
+      data,
+      serviceOrderService,
+      tripService,
+      demandSimulationEngine: { runDemandSimulation },
+      demandSimulationRuns,
+      pricingStrategyRuns,
+      pricingDecisions,
+      orderMatchingRuns,
+      orderMatchingDecisions,
+      taskEventLogs,
+    };
+    const refreshContextData = () => {
+      businessData.data = {
+        ...businessData.data,
+        robotaxis: businessData.robotaxis,
+        serviceOrders: businessData.serviceOrders,
+        trips: businessData.trips,
+        readinessCheckTasks: businessData.readinessTasks,
+        deploymentTasks: businessData.deploymentTasks,
+        routeExecutions: businessData.routeExecutions,
+        demandSimulationRuns: businessData.demandSimulationRuns,
+        pricingStrategyRuns: businessData.pricingStrategyRuns,
+        pricingDecisions: businessData.pricingDecisions,
+        orderMatchingRuns: businessData.orderMatchingRuns,
+        orderMatchingDecisions: businessData.orderMatchingDecisions,
+        taskEventLogs: businessData.taskEventLogs,
+      };
+    };
+    const bindSetter = (key, setter) => (updater) => {
+      const nextValue = typeof updater === "function" ? updater(businessData[key]) : updater;
+      businessData[key] = nextValue;
+      refreshContextData();
+      setter(nextValue);
+    };
+    businessData.setServiceOrders = bindSetter("serviceOrders", setServiceOrders);
+    businessData.setTrips = bindSetter("trips", setTrips);
+    businessData.setReadinessTasks = bindSetter("readinessTasks", setReadinessTasks);
+    businessData.setDeploymentTasks = bindSetter("deploymentTasks", setDeploymentTasks);
+    businessData.setRouteExecutions = bindSetter("routeExecutions", setRouteExecutions);
+    businessData.setDemandSimulationRuns = bindSetter("demandSimulationRuns", setDemandSimulationRuns);
+    businessData.setPricingStrategyRuns = bindSetter("pricingStrategyRuns", setPricingStrategyRuns);
+    businessData.setPricingDecisions = bindSetter("pricingDecisions", setPricingDecisions);
+    businessData.setOrderMatchingRuns = bindSetter("orderMatchingRuns", setOrderMatchingRuns);
+    businessData.setOrderMatchingDecisions = bindSetter("orderMatchingDecisions", setOrderMatchingDecisions);
+    businessData.setTaskEventLogs = bindSetter("taskEventLogs", setTaskEventLogs);
+    businessData.setRobotaxis = (updater) => {
+      const nextRobotaxis = typeof updater === "function" ? updater(businessData.robotaxis) : updater;
+      businessData.robotaxis = nextRobotaxis;
+      refreshContextData();
       setOperationalData((prev) => ({ ...prev, robotaxis: nextRobotaxis }));
-    },
-    setPricingStrategyRuns,
-    setPricingDecisions,
-    setOrderMatchingRuns,
-    setOrderMatchingDecisions,
-    setTaskEventLogs,
-  });
+    };
+    refreshContextData();
+    return businessData;
+  };
 
   const simActions = simulationActions ? simulationActions.useSimulationActions({
     simulationEngine,
@@ -2534,9 +2568,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const eventRows = isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
-  const eventColumns = isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   const tableScrollY = hasEventPanel ? `calc(100vh - ${eventPanelHeight + 262}px)` : "calc(100vh - 120px)";
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
 
@@ -3797,7 +3831,7 @@ async function bootstrap() {
 		    import("./data/simulationLoop.js?v=20260617-v023-8-frontend"),
 		    import("./services/simulationHandlers.js?v=20260617-v024-1-handlers"),
 		    import("./data/simulationWorkflowEngine.js?v=20260617-v024-1-handlers"),
-		    import("./data/simulationExecutionEngine.js?v=20260617-v024-1-handlers"),
+		    import("./data/simulationExecutionEngine.js"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -5196,6 +5230,9 @@ function loadRuntimeSnapshot(initialData) {
     orderMatchingDecisions: [],
     trips: [],
     taskEventLogs: [],
+    simulationPolicies: [],
+    simulationRuns: [],
+    simulationEvents: [],
     activePage: "console",
     workspacePages: ["console"],
     detailCollapsedByPage: {},
@@ -5224,6 +5261,9 @@ function loadRuntimeSnapshot(initialData) {
     const orderMatchingDecisions = Array.isArray(snapshot.orderMatchingDecisions) ? snapshot.orderMatchingDecisions : [];
     const trips = Array.isArray(snapshot.trips) ? snapshot.trips : [];
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
+    const simulationPolicies = Array.isArray(snapshot.simulationPolicies) ? snapshot.simulationPolicies : [];
+    const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
+    const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
@@ -5253,6 +5293,9 @@ function loadRuntimeSnapshot(initialData) {
       orderMatchingDecisions,
       trips,
       taskEventLogs,
+      simulationPolicies,
+      simulationRuns,
+      simulationEvents,
       activePage: snapshot.activePage || "console",
       workspacePages: normalizeWorkspacePages(snapshot.workspacePages, snapshot.activePage || "console"),
       detailCollapsedByPage: snapshot.detailCollapsedByPage || {},
@@ -5332,6 +5375,9 @@ function saveRuntimeSnapshot(snapshot) {
       orderMatchingDecisionSequence,
       tripSequence,
       eventSequence,
+      simulationPolicies: snapshot.simulationPolicies || [],
+      simulationRuns: snapshot.simulationRuns || [],
+      simulationEvents: snapshot.simulationEvents || [],
     }));
   } catch (error) {
     // Local persistence is a convenience for this prototype; runtime should continue if storage is unavailable.

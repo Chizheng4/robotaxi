@@ -44,7 +44,8 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   const supplyResult = runSupplyTrigger({ timeContext: tickContext, policySnapshot });
 
   // 4. 需求侧触发判断
-  const demandResult = runDemandTrigger({ timeContext: tickContext, policySnapshot, randomSeed });
+  const tickRandomSeed = `${randomSeed || simulationRun.simulation_run_id}-${simulationRun.current_global_tick}`;
+  const demandResult = runDemandTrigger({ timeContext: tickContext, policySnapshot, randomSeed: tickRandomSeed });
 
   // 5. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
   const demandActions = [];
@@ -73,8 +74,9 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     });
   }
 
-  // 7. 刷新业务数据（包含刚创建的单据），再查询工作流
-  const refreshedBusinessData = refreshBusinessData ? refreshBusinessData() : businessData;
+  // 7. 使用本 Tick 内已被 handler 同步写入的业务上下文，再查询工作流。
+  // React state 异步刷新，不能依赖立即重新读取组件闭包。
+  const refreshedBusinessData = businessData || (refreshBusinessData ? refreshBusinessData() : null);
 
   // 7. 查询工作流引擎：获取所有待执行的业务动作（含刚创建的订单的后续动作）
   const autoConfig = policySnapshot.service_order_auto_config || {};

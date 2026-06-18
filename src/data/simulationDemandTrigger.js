@@ -55,22 +55,33 @@ export function runDemandTrigger({ timeContext, policySnapshot, randomSeed }) {
  * 根据 DemandProfile 生成订单数量
  */
 function generateOrderCount(profile, randomSeed) {
+  const seed = normalizeSeed(randomSeed);
   if (profile.distribution_type === DistributionType.FIXED) {
     return profile.lambda || 0;
   }
 
   if (profile.distribution_type === DistributionType.POISSON) {
     const lambda = profile.lambda || 0;
-    const count = poissonRandom(lambda, randomSeed);
+    const count = poissonRandom(lambda, seed);
     return Math.max(profile.min_orders_per_tick || 0, Math.min(count, profile.max_orders_per_tick || 999));
   }
 
   // UNIFORM
   const min = profile.min_orders_per_tick || 0;
   const max = profile.max_orders_per_tick || 0;
-  const seed = randomSeed || Date.now();
   const pseudoRandom = ((seed * 1103515245 + 12345) % 2147483648) / 2147483648;
   return Math.floor(min + pseudoRandom * (max - min + 1));
+}
+
+function normalizeSeed(randomSeed) {
+  if (typeof randomSeed === "number" && Number.isFinite(randomSeed)) return randomSeed;
+  const input = String(randomSeed || Date.now());
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 /**

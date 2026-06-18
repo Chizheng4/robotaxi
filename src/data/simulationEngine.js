@@ -216,8 +216,29 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
       const evtResult = execResult.success ? EventResult.SUCCESS : EventResult.FAILED;
       const actionLabel = getActionLabel(execResult.actionType || '');
       const detail = execResult.message || (execResult.success ? '成功' : '失败');
+      const resultData = execResult.data?.data || execResult.data || {};
+      const relatedObjectType = resultData.objectType || execResult.objectType || null;
+      const relatedObjectId = resultData.objectId || execResult.objectId || null;
+      const failureReason = !execResult.success ? (resultData.failureReason || execResult.message || "执行失败") : null;
       events.push(makeEvent(runId, day, time, dayT, tick, execResult.actionType || EventType.ACTION_EXECUTED, EventSource.EXECUTION_ENGINE,
-        evtResult, `[${actionLabel}] ${detail}`));
+        evtResult, `[${actionLabel}] ${detail}`, {
+          relatedObjectType,
+          relatedObjectId,
+          failureReason,
+          payload: {
+            action_type: execResult.actionType || null,
+            action_label: actionLabel,
+            result_type: execResult.resultType || null,
+            success: Boolean(execResult.success),
+            from_state: execResult.fromState || null,
+            triggered_by: execResult.triggeredBy || null,
+            service_order_id: resultData.serviceOrderId || (relatedObjectType === "serviceOrder" ? relatedObjectId : null),
+            trip_id: resultData.objectType === "trip" ? resultData.objectId : null,
+            task_id: ["readinessTask", "deploymentTask"].includes(resultData.objectType) ? resultData.objectId : null,
+            route_execution_id: resultData.routeExecutionId || (resultData.objectType === "routeExecution" ? resultData.objectId : null),
+            robotaxi_id: resultData.robotaxiId || null,
+          },
+        }));
     }
   }
 
@@ -239,11 +260,21 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   return { simulationRun: updated, events };
 }
 
-function makeEvent(runId, day, time, dayTick, globalTick, eventType, eventSource, eventResult, message) {
+function makeEvent(runId, day, time, dayTick, globalTick, eventType, eventSource, eventResult, message, options = {}) {
   return createSimulationEvent({
-    simulationEventId: `SE-${nextSimulationEventId()}`,
+    simulationEventId: nextSimulationEventId(),
     simulationRunId: runId, simulationDay: day, simulationTime: time,
-    dayTick, globalTick, eventType, eventSource, eventResult, message,
+    dayTick,
+    globalTick,
+    eventType,
+    eventSource,
+    eventResult,
+    relatedObjectType: options.relatedObjectType || null,
+    relatedObjectId: options.relatedObjectId || null,
+    failureReason: options.failureReason || null,
+    skipReason: options.skipReason || null,
+    message,
+    eventPayload: options.payload || null,
   });
 }
 

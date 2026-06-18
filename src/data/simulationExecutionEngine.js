@@ -111,12 +111,12 @@ export function executeAction({ actionType, objectId, data, context }) {
  * @returns {Object[]} 执行结果列表
  */
 export function executeActions(actions, data, context) {
-  return actions.map((action) => {
+  return actions.map((action, actionIndex) => {
     const result = executeAction({
       actionType: action.actionType,
       objectId: action.objectId,
       data,
-      context,
+      context: { ...context, actionIndex, action },
     });
     return { ...action, ...result };
   });

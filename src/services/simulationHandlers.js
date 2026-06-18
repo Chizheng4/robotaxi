@@ -14,32 +14,77 @@
 // 1. 需求侧：创建服务订单
 // ============================================================================
 
+let simulationBusinessSequence = 0;
+
+function nextSimulationBusinessId(prefix, context = {}) {
+  simulationBusinessSequence += 1;
+  const tick = String((context.globalTick || 0) + 1).padStart(4, "0");
+  return `${prefix}-SIM-${tick}-${String(simulationBusinessSequence).padStart(4, "0")}`;
+}
+
+function formatFailureReason(reason) {
+  const reasonLabels = {
+    NO_ACTIVE_CUSTOMER: "没有可用客户",
+    NO_AVAILABLE_PLACE: "没有可用地点",
+    NO_AVAILABLE_ROAD_SEGMENT: "没有可用道路片段",
+    CUSTOMER_LOCATION_INVALID: "客户需求位置无效",
+    NO_AVAILABLE_PICKUP_CELL: "没有可用上车点",
+    NO_AVAILABLE_DROPOFF_CELL: "没有可用下车点",
+    ROUTE_ESTIMATION_FAILED: "路径估算失败",
+    PRICING_STRATEGY_NOT_FOUND: "未找到可用定价策略",
+    PRICING_CONFIG_MISSING: "定价参数缺失",
+    INVALID_DISTANCE: "预估距离无效",
+    INVALID_DURATION: "预估时长无效",
+    NO_AVAILABLE_ROBOTAXI: "没有可用 Robotaxi",
+    ROBOTAXI_STATE_INVALID: "Robotaxi 状态无效",
+    ROBOTAXI_ALREADY_ASSIGNED: "Robotaxi 已被分配",
+    PICKUP_CELL_UNREACHABLE: "上车点不可达",
+    BATTERY_NOT_ENOUGH: "电量不足",
+  };
+  return reasonLabels[reason] || reason || "未知原因";
+}
+
 /**
  * SERVICE_ORDER_CREATE
  * 根据需求模拟策略生成一条服务订单
  */
 export function handleServiceOrderCreate({ data, context }) {
-  const { demandSimulationEngine, serviceOrderService, data: appData, serviceOrders, setServiceOrders } = data;
-  const policy = context.policySnapshot;
+  const { demandSimulationEngine, data: appData, setDemandSimulationRuns, setServiceOrders } = data;
 
   if (!demandSimulationEngine || !appData) {
     return { success: false, message: "缺少需求模拟引擎或数据上下文" };
   }
 
   // 运行需求模拟
+  const runId = nextSimulationBusinessId("DSR", context);
   const dsResult = demandSimulationEngine.runDemandSimulation({
     strategy: appData.demandSimulationStrategies?.[0],
     data: appData,
     customers: appData.customers,
+    orderChannel: "OWN_APP_SIMULATED_ORDER",
+    runId,
+    randomSeed: `${context.simulationRunId || "SIM"}-${context.globalTick || 0}-${context.actionIndex || 0}`,
+    createdAt: new Date().toISOString(),
   });
+  if (dsResult) setDemandSimulationRuns((prev) => [dsResult, ...prev]);
 
   if (!dsResult || dsResult.simulation_result !== "SUCCESS") {
-    return { success: false, message: "需求模拟失败：" + (dsResult?.failure_reason || "未知原因") };
+    const failureReason = dsResult?.failure_reason || "需求模拟未返回结果";
+    return {
+      success: false,
+      resultType: "SERVICE_ORDER_CREATE_FAILED",
+      message: "服务订单创建失败：" + formatFailureReason(failureReason),
+      data: {
+        objectType: "demandSimulationRun",
+        objectId: dsResult?.demand_simulation_run_id || runId,
+        failureReason,
+      },
+    };
   }
 
   // 创建服务订单
   const orderChannel = dsResult.order_channel || "OWN_APP_SIMULATED_ORDER";
-  const newOrder = createServiceOrderFromDemandResult(dsResult, orderChannel, appData);
+  const newOrder = createServiceOrderFromDemandResult(dsResult, orderChannel, appData, context);
 
   setServiceOrders((prev) => [newOrder, ...prev]);
 
@@ -47,7 +92,7 @@ export function handleServiceOrderCreate({ data, context }) {
     success: true,
     resultType: "ORDER_CREATED",
     message: `服务订单 ${newOrder.service_order_id} 已创建`,
-    data: { serviceOrderId: newOrder.service_order_id },
+    data: { objectType: "serviceOrder", objectId: newOrder.service_order_id, serviceOrderId: newOrder.service_order_id },
   };
 }
 
@@ -78,8 +123,8 @@ export function handlePricingExecute({ objectId, data }) {
     };
   }
 
-  const runId = `SPR-${String(Date.now()).slice(-6)}`;
-  const decisionId = `SPD-${String(Date.now()).slice(-6)}`;
+  const runId = nextSimulationBusinessId("DPR", {});
+  const decisionId = nextSimulationBusinessId("PD", {});
 
   const result = sosService.executePricing({
     serviceOrder: order,
@@ -92,11 +137,17 @@ export function handlePricingExecute({ objectId, data }) {
   });
 
   if (!result.success) {
+    const failureReason = result.failureReason || "未知原因";
     setServiceOrders((prev) => prev.map((o) => {
       if (o.service_order_id !== objectId) return o;
-      return { ...o, order_status: "PRICING_FAILED", pricing_explanation: result.failureReason || "定价失败" };
+      return { ...o, order_status: "PRICING_FAILED", pricing_explanation: formatFailureReason(failureReason) };
     }));
-    return { success: false, resultType: "PRICING_FAILED", message: `服务订单 ${objectId} 定价失败：${result.failureReason || "未知原因"}` };
+    return {
+      success: false,
+      resultType: "PRICING_FAILED",
+      message: `服务订单 ${objectId} 定价失败：${formatFailureReason(failureReason)}`,
+      data: { objectType: "serviceOrder", objectId, failureReason },
+    };
   }
 
   // 更新订单
@@ -120,7 +171,7 @@ export function handlePricingExecute({ objectId, data }) {
   if (result.run) setPricingStrategyRuns((prev) => [result.run, ...prev]);
   if (result.decision) setPricingDecisions((prev) => [result.decision, ...prev]);
 
-  return { success: true, resultType: "PRICING_COMPLETED", message: `服务订单 ${objectId} 定价完成` };
+  return { success: true, resultType: "PRICING_COMPLETED", message: `服务订单 ${objectId} 定价完成`, data: { objectType: "serviceOrder", objectId } };
 }
 
 // ============================================================================
@@ -141,7 +192,7 @@ export function handleRobotaxiCall({ objectId, data }) {
     return { ...o, order_status: "WAITING_ROBOTAXI_ASSIGNMENT" };
   }));
 
-  return { success: true, resultType: "CUSTOMER_CONFIRMED", message: `服务订单 ${objectId} 客户已确认` };
+  return { success: true, resultType: "CUSTOMER_CONFIRMED", message: `服务订单 ${objectId} 客户已确认`, data: { objectType: "serviceOrder", objectId } };
 }
 
 // ============================================================================
@@ -160,8 +211,8 @@ export function handleOrderMatchingExecute({ objectId, data }) {
   const strategy = appData.orderMatchingStrategies?.find((s) => s.strategy_status === "ACTIVE");
   if (!strategy) return { success: false, message: "无可用匹配策略" };
 
-  const runId = `SMR-${String(Date.now()).slice(-6)}`;
-  const decisionId = `SMD-${String(Date.now()).slice(-6)}`;
+  const runId = nextSimulationBusinessId("OMR", {});
+  const decisionId = nextSimulationBusinessId("OMD", {});
 
   const result = sosService.executeOrderMatching({
     strategy,
@@ -173,11 +224,17 @@ export function handleOrderMatchingExecute({ objectId, data }) {
   });
 
   if (!result.success) {
+    const failureReason = result.failureReason || "未知原因";
     setServiceOrders((prev) => prev.map((o) => {
       if (o.service_order_id !== objectId) return o;
       return { ...o, order_status: "MATCH_FAILED" };
     }));
-    return { success: false, message: result.failureReason || "匹配失败" };
+    return {
+      success: false,
+      resultType: "MATCHING_FAILED",
+      message: `服务订单 ${objectId} 匹配失败：${formatFailureReason(failureReason)}`,
+      data: { objectType: "serviceOrder", objectId, failureReason },
+    };
   }
 
   const robotaxiId = result.decision?.selected_robotaxi_id;
@@ -205,7 +262,7 @@ export function handleOrderMatchingExecute({ objectId, data }) {
   if (result.run) setOrderMatchingRuns((prev) => [result.run, ...prev]);
   if (result.decision) setOrderMatchingDecisions((prev) => [result.decision, ...prev]);
 
-  return { success: true, resultType: "MATCHING_COMPLETED", message: `服务订单 ${objectId} 匹配成功，Robotaxi: ${robotaxiId}` };
+  return { success: true, resultType: "MATCHING_COMPLETED", message: `服务订单 ${objectId} 匹配成功，Robotaxi: ${robotaxiId}`, data: { objectType: "serviceOrder", objectId, robotaxiId } };
 }
 
 // ============================================================================
@@ -242,7 +299,7 @@ export function handleTripStepExecute({ objectId, data }) {
       if (o.service_order_id !== objectId) return o;
       return { ...o, trip_id: trip.trip_id };
     }));
-    return { success: true, resultType: "TRIP_CREATED", message: `履约行驶 ${trip.trip_id} 已创建` };
+    return { success: true, resultType: "TRIP_CREATED", message: `履约行驶 ${trip.trip_id} 已创建`, data: { objectType: "trip", objectId: trip.trip_id, serviceOrderId: order.service_order_id } };
   }
 
   // 推进 Trip 状态
@@ -253,9 +310,9 @@ export function handleTripStepExecute({ objectId, data }) {
     if (moveResult) {
       setTrips((prev) => prev.map((t) => t.trip_id === trip.trip_id ? moveResult : t));
       updateRobotaxiPosition(moveResult, setRobotaxis);
-      return { success: true, resultType: "TRIP_STEPPED", message: `履约行驶 ${trip.trip_id} 步进完成` };
+      return { success: true, resultType: "TRIP_STEPPED", message: `履约行驶 ${trip.trip_id} 步进完成`, data: { objectType: "trip", objectId: trip.trip_id } };
     }
-    return { success: false, message: `Trip ${trip.trip_id} 无需推进` };
+    return { success: false, resultType: "TRIP_NO_ACTION", message: `Trip ${trip.trip_id} 无需推进`, data: { objectType: "trip", objectId: trip.trip_id, failureReason: "当前状态无需推进" } };
   }
 
   setTrips((prev) => prev.map((t) => t.trip_id === trip.trip_id ? nextTrip : t));
@@ -274,7 +331,7 @@ export function handleTripStepExecute({ objectId, data }) {
     }));
   }
 
-  return { success: true, resultType: "TRIP_ADVANCED", message: `履约行驶 ${trip.trip_id} 推进至 ${nextTrip.trip_status}` };
+  return { success: true, resultType: "TRIP_ADVANCED", message: `履约行驶 ${trip.trip_id} 推进至 ${nextTrip.trip_status}`, data: { objectType: "trip", objectId: trip.trip_id } };
 }
 
 // ============================================================================
@@ -304,7 +361,7 @@ export function handleSettlementExecute({ objectId, data }) {
     };
   }));
 
-  return { success: true, resultType: "SETTLEMENT_COMPLETED", message: `服务订单 ${objectId} 结算完成，待支付 ${finalPrice}` };
+  return { success: true, resultType: "SETTLEMENT_COMPLETED", message: `服务订单 ${objectId} 结算完成，待支付 ${finalPrice}`, data: { objectType: "serviceOrder", objectId } };
 }
 
 // ============================================================================
@@ -339,7 +396,7 @@ export function handlePaymentExecute({ objectId, data }) {
     }));
   }
 
-  return { success: true, resultType: "PAYMENT_COMPLETED", message: `服务订单 ${objectId} 支付完成` };
+  return { success: true, resultType: "PAYMENT_COMPLETED", message: `服务订单 ${objectId} 支付完成`, data: { objectType: "serviceOrder", objectId } };
 }
 
 // ============================================================================
@@ -351,9 +408,17 @@ export function handlePaymentExecute({ objectId, data }) {
  * 创建准入任务
  */
 export function handleReadinessTaskCreate({ data }) {
-  const { readinessTasks, setReadinessTasks, data: appData } = data;
-  const taskId = `RT-${Date.now().toString(36)}`;
-  const candidate = (appData.robotaxis || []).find((r) => r.availability_status === "AVAILABLE" && !r.current_task_id);
+  const { robotaxis, setRobotaxis, setReadinessTasks } = data;
+  const taskId = nextSimulationBusinessId("TASK-RC");
+  const candidate = (robotaxis || []).find((r) => r.availability_status === "PENDING_INSPECTION" && !r.current_task_id);
+  if (!candidate) {
+    return {
+      success: false,
+      resultType: "NO_CANDIDATE_ROBOTAXI",
+      message: "准入任务创建失败：没有待准入 Robotaxi",
+      data: { objectType: "readinessTask", objectId: null, failureReason: "没有待准入 Robotaxi" },
+    };
+  }
   const newTask = {
     task_id: taskId, task_type: "READINESS_CHECK",
     task_status: "WAITING_ASSIGNMENT",
@@ -362,7 +427,8 @@ export function handleReadinessTaskCreate({ data }) {
     created_at: new Date().toISOString(),
   };
   setReadinessTasks((prev) => [newTask, ...prev]);
-  return { success: true, resultType: "READINESS_CREATED", message: `准入任务 ${taskId} 已创建` };
+  setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === candidate.robotaxi_id ? { ...r, current_task_id: taskId, current_task_type: "READINESS_CHECK", current_task_status: "WAITING_ASSIGNMENT" } : r));
+  return { success: true, resultType: "READINESS_CREATED", message: `准入任务 ${taskId} 已创建`, data: { objectType: "readinessTask", objectId: taskId, robotaxiId: candidate.robotaxi_id } };
 }
 
 /**
@@ -371,10 +437,10 @@ export function handleReadinessTaskCreate({ data }) {
  */
 export function handleDeploymentTaskCreate({ data }) {
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis, data: appData } = data;
-  const dtId = `DT-${Date.now().toString(36)}`;
-  const reId = `RE-${Date.now().toString(36)}`;
+  const dtId = nextSimulationBusinessId("TASK-DP");
+  const reId = nextSimulationBusinessId("REX");
   const candidate = (appData.robotaxis || []).find((r) => r.availability_status === "AVAILABLE" && !r.current_task_id && !r.current_order_id);
-  if (!candidate) return { success: false, resultType: "NO_CANDIDATE", message: "无可投放 Robotaxi" };
+  if (!candidate) return { success: false, resultType: "NO_CANDIDATE_ROBOTAXI", message: "投放任务创建失败：无可投放 Robotaxi", data: { objectType: "deploymentTask", objectId: null, failureReason: "无可投放 Robotaxi" } };
 
   const dt = {
     task_id: dtId, task_type: "DEPLOYMENT",
@@ -394,7 +460,7 @@ export function handleDeploymentTaskCreate({ data }) {
   setDeploymentTasks((prev) => [dt, ...prev]);
   setRouteExecutions((prev) => [re, ...prev]);
   setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === candidate.robotaxi_id ? { ...r, current_task_id: dtId } : r));
-  return { success: true, resultType: "DEPLOYMENT_CREATED", message: `投放任务 ${dtId} 已创建，关联 RouteExecution ${reId}` };
+  return { success: true, resultType: "DEPLOYMENT_CREATED", message: `投放任务 ${dtId} 已创建，关联 RouteExecution ${reId}`, data: { objectType: "deploymentTask", objectId: dtId, routeExecutionId: reId } };
 }
 
 /**
@@ -402,19 +468,22 @@ export function handleDeploymentTaskCreate({ data }) {
  * 自动分配 Worker 到准入任务
  */
 export function handleReadinessTaskAssign({ objectId, data }) {
-  const { readinessTasks, setReadinessTasks, data: appData } = data;
+  const { readinessTasks, setReadinessTasks, setRobotaxis, data: appData } = data;
   const task = readinessTasks.find((t) => t.task_id === objectId);
-  if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
+  if (!task) return { success: false, resultType: "READINESS_ASSIGN_FAILED", message: `未找到准入任务 ${objectId}`, data: { objectType: "readinessTask", objectId, failureReason: "未找到准入任务" } };
 
   const worker = (appData.workers || [])[0];
-  if (!worker) return { success: false, message: "无可用作业人员" };
+  if (!worker) return { success: false, resultType: "READINESS_ASSIGN_FAILED", message: "准入任务分配失败：无可用作业人员", data: { objectType: "readinessTask", objectId, failureReason: "无可用作业人员" } };
 
   setReadinessTasks((prev) => prev.map((t) => {
     if (t.task_id !== objectId) return t;
     return { ...t, task_status: "WAITING_CHECK", assigned_worker_id: worker.worker_id };
   }));
+  if (task.robotaxi_id) {
+    setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === task.robotaxi_id ? { ...r, current_task_status: "WAITING_CHECK" } : r));
+  }
 
-  return { success: true, resultType: "READINESS_ASSIGNED", message: `准入任务 ${objectId} 已分配给 ${worker.worker_id}` };
+  return { success: true, resultType: "READINESS_ASSIGNED", message: `准入任务 ${objectId} 已分配给 ${worker.worker_id}`, data: { objectType: "readinessTask", objectId, workerId: worker.worker_id } };
 }
 
 /**
@@ -422,16 +491,19 @@ export function handleReadinessTaskAssign({ objectId, data }) {
  * 自动开始准入检查
  */
 export function handleReadinessTaskStart({ objectId, data }) {
-  const { readinessTasks, setReadinessTasks } = data;
+  const { readinessTasks, setReadinessTasks, setRobotaxis } = data;
   const task = readinessTasks.find((t) => t.task_id === objectId);
-  if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
+  if (!task) return { success: false, resultType: "READINESS_START_FAILED", message: `未找到准入任务 ${objectId}`, data: { objectType: "readinessTask", objectId, failureReason: "未找到准入任务" } };
 
   setReadinessTasks((prev) => prev.map((t) => {
     if (t.task_id !== objectId) return t;
     return { ...t, task_status: "CHECKING" };
   }));
+  if (task.robotaxi_id) {
+    setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === task.robotaxi_id ? { ...r, availability_status: "IN_INSPECTION", current_task_status: "CHECKING" } : r));
+  }
 
-  return { success: true, resultType: "READINESS_STARTED", message: `准入任务 ${objectId} 检查中` };
+  return { success: true, resultType: "READINESS_STARTED", message: `准入任务 ${objectId} 检查中`, data: { objectType: "readinessTask", objectId } };
 }
 
 /**
@@ -439,16 +511,26 @@ export function handleReadinessTaskStart({ objectId, data }) {
  * 自动通过准入检查
  */
 export function handleReadinessTaskPass({ objectId, data }) {
-  const { readinessTasks, setReadinessTasks } = data;
+  const { readinessTasks, setReadinessTasks, setRobotaxis } = data;
   const task = readinessTasks.find((t) => t.task_id === objectId);
-  if (!task) return { success: false, message: `未找到准入任务 ${objectId}` };
+  if (!task) return { success: false, resultType: "READINESS_PASS_FAILED", message: `未找到准入任务 ${objectId}`, data: { objectType: "readinessTask", objectId, failureReason: "未找到准入任务" } };
 
   setReadinessTasks((prev) => prev.map((t) => {
     if (t.task_id !== objectId) return t;
     return { ...t, task_status: "COMPLETED", check_result: "PASSED", completed_at: new Date().toISOString() };
   }));
+  if (task.robotaxi_id) {
+    setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === task.robotaxi_id ? {
+      ...r,
+      availability_status: "AVAILABLE",
+      available_for_dispatch: true,
+      current_task_id: null,
+      current_task_type: null,
+      current_task_status: null,
+    } : r));
+  }
 
-  return { success: true, resultType: "READINESS_PASSED", message: `准入任务 ${objectId} 已通过` };
+  return { success: true, resultType: "READINESS_PASSED", message: `准入任务 ${objectId} 已通过`, data: { objectType: "readinessTask", objectId, robotaxiId: task.robotaxi_id } };
 }
 
 /**
@@ -458,7 +540,7 @@ export function handleReadinessTaskPass({ objectId, data }) {
 export function handleRoutePlan({ objectId, data }) {
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions } = data;
   const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
-  if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
+  if (!re) return { success: false, resultType: "ROUTE_PLAN_FAILED", message: `未找到行驶执行 ${objectId}`, data: { objectType: "routeExecution", objectId, failureReason: "未找到行驶执行" } };
 
   setRouteExecutions((prev) => prev.map((r) => {
     if (r.route_execution_id !== re.route_execution_id) return r;
@@ -471,7 +553,7 @@ export function handleRoutePlan({ objectId, data }) {
     }));
   }
 
-  return { success: true, resultType: "ROUTE_PLANNED", message: `行驶执行 ${re.route_execution_id} 路径已规划` };
+  return { success: true, resultType: "ROUTE_PLANNED", message: `行驶执行 ${re.route_execution_id} 路径已规划`, data: { objectType: "routeExecution", objectId: re.route_execution_id, taskId: re.deployment_task_id } };
 }
 
 /**
@@ -481,7 +563,7 @@ export function handleRoutePlan({ objectId, data }) {
 export function handleRouteExecutionStep({ objectId, data }) {
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis } = data;
   const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
-  if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
+  if (!re) return { success: false, resultType: "ROUTE_STEP_FAILED", message: `未找到行驶执行 ${objectId}`, data: { objectType: "routeExecution", objectId, failureReason: "未找到行驶执行" } };
 
   setRouteExecutions((prev) => prev.map((r) => {
     if (r.route_execution_id !== re.route_execution_id) return r;
@@ -501,7 +583,7 @@ export function handleRouteExecutionStep({ objectId, data }) {
     }));
   }
 
-  return { success: true, resultType: "ROUTE_STEPPED", message: `行驶执行 ${objectId} 步进完成` };
+  return { success: true, resultType: "ROUTE_STEPPED", message: `行驶执行 ${re.route_execution_id} 步进完成`, data: { objectType: "routeExecution", objectId: re.route_execution_id, taskId: re.deployment_task_id, robotaxiId: re.robotaxi_id } };
 }
 
 /**
@@ -511,7 +593,7 @@ export function handleRouteExecutionStep({ objectId, data }) {
 export function handleArrivalConfirm({ objectId, data }) {
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis } = data;
   const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
-  if (!re) return { success: false, message: `未找到行驶执行 ${objectId}` };
+  if (!re) return { success: false, resultType: "ARRIVAL_CONFIRM_FAILED", message: `未找到行驶执行 ${objectId}`, data: { objectType: "routeExecution", objectId, failureReason: "未找到行驶执行" } };
 
   setRouteExecutions((prev) => prev.map((r) => {
     if (r.route_execution_id !== re.route_execution_id) return r;
@@ -531,17 +613,16 @@ export function handleArrivalConfirm({ objectId, data }) {
     }));
   }
 
-  return { success: true, resultType: "ARRIVAL_CONFIRMED", message: `行驶执行 ${objectId} 到达确认` };
+  return { success: true, resultType: "ARRIVAL_CONFIRMED", message: `行驶执行 ${re.route_execution_id} 到达确认`, data: { objectType: "routeExecution", objectId: re.route_execution_id, taskId: re.deployment_task_id, robotaxiId: re.robotaxi_id } };
 }
 
 // ============================================================================
 // 辅助函数
 // ============================================================================
 
-function createServiceOrderFromDemandResult(dsResult, orderChannel, appData) {
-  const seq = Date.now();
+function createServiceOrderFromDemandResult(dsResult, orderChannel, appData, context) {
   return {
-    service_order_id: `SO-${String(seq).slice(-6)}`,
+    service_order_id: nextSimulationBusinessId("SO", context),
     order_channel: orderChannel,
     customer_id: dsResult.customer_id,
     demand_simulation_run_id: dsResult.demand_simulation_run_id,
@@ -564,9 +645,8 @@ function createServiceOrderFromDemandResult(dsResult, orderChannel, appData) {
 }
 
 function createTripForOrderSimple(order, appData) {
-  const seq = Date.now();
   return {
-    trip_id: `TP-${String(seq).slice(-6)}`,
+    trip_id: nextSimulationBusinessId("TRIP"),
     service_order_id: order.service_order_id,
     robotaxi_id: order.matched_robotaxi_id,
     pickup_service_area_id: order.pickup_service_area_id,

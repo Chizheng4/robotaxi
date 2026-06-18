@@ -952,7 +952,89 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |skip_reason|跳过原因|运行态字段|事件跳过时的原因说明|
 |message|事件描述|运行态字段|事件人类可读描述|
 |event_payload|事件负载|运行态字段|事件附加数据对象|
+|action_type|动作类型|运行态字段|执行引擎动作类型，如 SERVICE_ORDER_CREATE / PRICING_EXECUTE|
+|action_label|动作名称|运行态字段|动作的中文业务名称|
+|result_type|执行结果类型|运行态字段|执行动作返回的结果类型，如 ORDER_CREATED / MATCHING_FAILED|
+|success|是否成功|运行态字段|动作是否执行成功|
+|from_state|来源状态|运行态字段|工作流动作触发前的业务对象状态|
+|triggered_by|触发来源|运行态字段|动作由需求、供给或业务工作流触发|
+|triggered_event_count|触发事件数|运行态字段|当前 Tick 内触发的事件数量|
+|no_action_count|无动作事件数|运行态字段|当前 Tick 内未产生动作的事件数量|
+|readiness_triggered|是否触发准入|运行态字段|供给侧是否触发运营准入|
+|deployment_triggered|是否触发投放|运行态字段|供给侧是否触发运营投放|
+|order_count|订单请求数|运行态字段|需求侧当前 Tick 生成的订单请求数|
+|actions|动作列表|运行态字段|当前 Tick 产生的动作列表|
+|worker_working|作业人员是否工作中|运行态字段|当前模拟时间作业人员是否在工作窗口内|
+|robotaxi_operating|Robotaxi 是否运营中|运行态字段|当前模拟时间 Robotaxi 是否在运营窗口内|
+|supply_triggered|供给侧是否触发|运行态字段|当前 Tick 是否触发供给侧逻辑|
+|demand_triggered|需求侧是否触发|运行态字段|当前 Tick 是否触发需求侧逻辑|
+|workflow_actions|工作流动作数|运行态字段|当前 Tick 从工作流得到的动作数|
+|succeeded_actions|成功动作数|运行态字段|当前 Tick 执行成功的动作数|
+|failed_actions|失败动作数|运行态字段|当前 Tick 执行失败的动作数|
+|created_service_orders|已创建服务订单数|运行态字段|当前运行累计创建的服务订单数|
+|completed_service_orders|已完成服务订单数|运行态字段|当前运行累计完成的服务订单数|
+|completed_trips|已完成履约数|运行态字段|当前运行累计完成的履约行驶数|
+|completed_route_executions|已完成行驶记录数|运行态字段|当前运行累计完成的行驶记录数|
+|no_action_events|无动作事件数|运行态字段|当前运行累计无动作事件数|
 |created_at|创建时间|运行态字段|事件记录创建时间|
+
+### 25.1 SimulationEvent 枚举中文显示
+
+|枚举值|中文名|适用字段|
+|---|---|---|
+|SIMULATION_SYSTEM|模拟系统|event_source|
+|SUPPLY_TRIGGER|供给侧触发器|event_source|
+|DEMAND_TRIGGER|需求侧触发器|event_source|
+|EXECUTION_ENGINE|执行引擎|event_source|
+|BUSINESS_SERVICE|业务服务|event_source|
+|SERVICE_ORDER_CREATE|创建服务订单|event_type / action_type|
+|PRICING_EXECUTE|执行定价|event_type / action_type|
+|ROBOTAXI_CALL|客户确认叫车|event_type / action_type|
+|ORDER_MATCHING_EXECUTE|执行订单匹配|event_type / action_type|
+|TRIP_STEP_EXECUTE|推进履约行驶|event_type / action_type|
+|SETTLEMENT_EXECUTE|执行结算|event_type / action_type|
+|PAYMENT_EXECUTE|执行支付|event_type / action_type|
+|READINESS_TASK_CREATE|创建准入任务|event_type / action_type|
+|DEPLOYMENT_TASK_CREATE|创建投放任务|event_type / action_type|
+|READINESS_TASK_ASSIGN|分配准入任务|event_type / action_type|
+|READINESS_TASK_START|开始准入检查|event_type / action_type|
+|READINESS_TASK_PASS|准入检查通过|event_type / action_type|
+|ROUTE_PLAN|规划行驶路径|event_type / action_type|
+|ROUTE_EXECUTION_STEP|推进行驶记录|event_type / action_type|
+|ARRIVAL_CONFIRM|确认到达|event_type / action_type|
+|ORDER_CREATED|服务订单已创建|result_type|
+|SERVICE_ORDER_CREATE_FAILED|服务订单创建失败|result_type|
+|PRICING_COMPLETED|定价完成|result_type|
+|PRICING_FAILED|定价失败|result_type|
+|CUSTOMER_CONFIRMED|客户已确认|result_type|
+|MATCHING_COMPLETED|匹配完成|result_type|
+|MATCHING_FAILED|匹配失败|result_type|
+|TRIP_CREATED|履约已创建|result_type|
+|TRIP_STEPPED|履约已步进|result_type|
+|TRIP_NO_ACTION|履约无需动作|result_type|
+|TRIP_ADVANCED|履约已推进|result_type|
+|SETTLEMENT_COMPLETED|结算完成|result_type|
+|PAYMENT_COMPLETED|支付完成|result_type|
+|READINESS_CREATED|准入任务已创建|result_type|
+|DEPLOYMENT_CREATED|投放任务已创建|result_type|
+|READINESS_ASSIGNED|准入任务已分配|result_type|
+|READINESS_ASSIGN_FAILED|准入任务分配失败|result_type|
+|READINESS_STARTED|准入检查已开始|result_type|
+|READINESS_START_FAILED|准入检查开始失败|result_type|
+|READINESS_PASSED|准入检查已通过|result_type|
+|READINESS_PASS_FAILED|准入检查通过失败|result_type|
+|ROUTE_PLANNED|路径生成成功|result_type|
+|ROUTE_PLAN_FAILED|路径规划失败|result_type|
+|ROUTE_STEPPED|行驶记录已步进|result_type|
+|ROUTE_STEP_FAILED|行驶记录步进失败|result_type|
+|ARRIVAL_CONFIRMED|到达已确认|result_type|
+|ARRIVAL_CONFIRM_FAILED|到达确认失败|result_type|
+|serviceOrder|服务订单|related_object_type|
+|trip|履约行驶记录|related_object_type|
+|readinessTask|运营准入任务|related_object_type|
+|deploymentTask|运营投放任务|related_object_type|
+|routeExecution|行驶记录|related_object_type|
+|demandSimulationRun|需求模拟执行|related_object_type|
 
 ---
 
