@@ -4,6 +4,7 @@ import { initializeDefaultSimulationPolicy } from "../src/data/simulationInitial
 import { advanceTick, computeTimeContext, formatSimulationTimestamp, getSimulationPosition } from "../src/data/simulationClock.js";
 import { completeTick, initSimulationRun, resetSimulationCounters, startSimulationRun } from "../src/data/simulationEngine.js";
 import { executeTick } from "../src/data/simulationLoop.js";
+import { handleReadinessTaskCreate, handleServiceOrderCreate } from "../src/services/simulationHandlers.js";
 
 const policy = initializeDefaultSimulationPolicy();
 
@@ -105,5 +106,54 @@ const stalled = completeTick(
 );
 assert.equal(stalled.simulationRun.simulation_status, "FAILED");
 assert.match(stalled.simulationRun.failure_reason, /未收敛/);
+
+const auditContext = {
+  simulationRunId: "SIM-RUN-AUDIT",
+  globalTick: 17,
+  tickContext: { current_time: "Day 3 12:34:56", global_tick: 17 },
+};
+let readinessTasks = [];
+let robotaxis = [{ robotaxi_id: "RTX-AUDIT", availability_status: "PENDING_INSPECTION", current_task_id: null }];
+handleReadinessTaskCreate({
+  context: auditContext,
+  data: {
+    robotaxis,
+    setReadinessTasks: (updater) => { readinessTasks = updater(readinessTasks); },
+    setRobotaxis: (updater) => { robotaxis = updater(robotaxis); },
+  },
+});
+assert.equal(readinessTasks[0].record_source, "SIMULATION");
+assert.equal(readinessTasks[0].simulation_created_at, "Day 3 12:34:56");
+assert.equal(readinessTasks[0].simulation_run_id, "SIM-RUN-AUDIT");
+assert.equal(readinessTasks[0].simulation_global_tick, 18);
+
+let demandRuns = [];
+let serviceOrders = [];
+handleServiceOrderCreate({
+  context: auditContext,
+  data: {
+    demandSimulationEngine: {
+      runDemandSimulation: () => ({
+        simulation_result: "SUCCESS",
+        demand_simulation_run_id: "DSR-AUDIT",
+        demand_simulation_result_id: "DSR-RESULT-AUDIT",
+        order_channel: "OWN_APP_SIMULATED_ORDER",
+        customer_id: "C-AUDIT",
+        customer_origin_location_type: "PLACE",
+        customer_origin_cell_id: "CELL-1",
+        pickup_service_area_id: "SA-1",
+        pickup_cell_id: "CELL-1",
+        dropoff_service_area_id: "SA-2",
+        dropoff_cell_id: "CELL-2",
+      }),
+    },
+    data: { demandSimulationStrategies: [{}], customers: [] },
+    setDemandSimulationRuns: (updater) => { demandRuns = updater(demandRuns); },
+    setServiceOrders: (updater) => { serviceOrders = updater(serviceOrders); },
+  },
+});
+assert.equal(demandRuns[0].simulation_created_at, "Day 3 12:34:56");
+assert.equal(serviceOrders[0].record_source, "SIMULATION");
+assert.equal(serviceOrders[0].simulation_created_at, "Day 3 12:34:56");
 
 console.log("连续模拟时间轴代码级验证通过");

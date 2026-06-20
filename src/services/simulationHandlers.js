@@ -22,6 +22,20 @@ function nextSimulationBusinessId(prefix, context = {}) {
   return `${prefix}-SIM-${tick}-${String(simulationBusinessSequence).padStart(4, "0")}`;
 }
 
+function getSimulationAudit(context, { created = false, completed = false } = {}) {
+  const simulationTime = context?.tickContext?.current_time;
+  if (!context?.simulationRunId || !simulationTime) return {};
+  const audit = {
+    record_source: "SIMULATION",
+    simulation_run_id: context.simulationRunId,
+    simulation_updated_at: simulationTime,
+    simulation_global_tick: (Number(context.tickContext?.global_tick ?? context.globalTick) || 0) + 1,
+  };
+  if (created) audit.simulation_created_at = simulationTime;
+  if (completed) audit.simulation_completed_at = simulationTime;
+  return audit;
+}
+
 function formatFailureReason(reason) {
   const reasonLabels = {
     NO_ACTIVE_CUSTOMER: "没有可用客户",
@@ -66,7 +80,7 @@ export function handleServiceOrderCreate({ data, context }) {
     randomSeed: `${context.simulationRunId || "SIM"}-${context.globalTick || 0}-${context.actionIndex || 0}`,
     createdAt: new Date().toISOString(),
   });
-  if (dsResult) setDemandSimulationRuns((prev) => [dsResult, ...prev]);
+  if (dsResult) setDemandSimulationRuns((prev) => [{ ...dsResult, ...getSimulationAudit(context, { created: true }) }, ...prev]);
 
   if (!dsResult || dsResult.simulation_result !== "SUCCESS") {
     const failureReason = dsResult?.failure_reason || "需求模拟未返回结果";
@@ -104,7 +118,7 @@ export function handleServiceOrderCreate({ data, context }) {
  * PRICING_EXECUTE
  * 对服务订单执行价格预估
  */
-export function handlePricingExecute({ objectId, data }) {
+export function handlePricingExecute({ objectId, data, context }) {
   const { serviceOrderService: sosService, data: appData, serviceOrders, pricingStrategyRuns, pricingDecisions, setServiceOrders, setPricingStrategyRuns, setPricingDecisions } = data;
   const order = serviceOrders.find((o) => o.service_order_id === objectId);
   if (!order) return { success: false, message: `未找到服务订单 ${objectId}` };
@@ -118,8 +132,8 @@ export function handlePricingExecute({ objectId, data }) {
     // 生成一条价格预估路径（简化处理）
     routeEstimate = {
       route_id: null,
-      estimated_distance_km: pickRandomDistance(),
-      estimated_duration_min: pickRandomDuration(),
+      estimated_distance_km: pickRandomDistance(context),
+      estimated_duration_min: pickRandomDuration(context),
     };
   }
 
@@ -140,7 +154,7 @@ export function handlePricingExecute({ objectId, data }) {
     const failureReason = result.failureReason || "未知原因";
     setServiceOrders((prev) => prev.map((o) => {
       if (o.service_order_id !== objectId) return o;
-      return { ...o, order_status: "PRICING_FAILED", pricing_explanation: formatFailureReason(failureReason) };
+      return { ...o, order_status: "PRICING_FAILED", pricing_explanation: formatFailureReason(failureReason), ...getSimulationAudit(context) };
     }));
     return {
       success: false,
@@ -165,11 +179,12 @@ export function handlePricingExecute({ objectId, data }) {
       estimated_price: result.decision?.estimated_price,
       quoted_price: result.decision?.estimated_price,
       pricing_explanation: result.decision?.pricing_explanation,
+      ...getSimulationAudit(context),
     };
   }));
 
-  if (result.run) setPricingStrategyRuns((prev) => [result.run, ...prev]);
-  if (result.decision) setPricingDecisions((prev) => [result.decision, ...prev]);
+  if (result.run) setPricingStrategyRuns((prev) => [{ ...result.run, ...getSimulationAudit(context, { created: true }) }, ...prev]);
+  if (result.decision) setPricingDecisions((prev) => [{ ...result.decision, ...getSimulationAudit(context, { created: true }) }, ...prev]);
 
   return { success: true, resultType: "PRICING_COMPLETED", message: `服务订单 ${objectId} 定价完成`, data: { objectType: "serviceOrder", objectId } };
 }
@@ -182,14 +197,14 @@ export function handlePricingExecute({ objectId, data }) {
  * ROBOTAXI_CALL
  * 自动客户确认，订单进入待匹配状态
  */
-export function handleRobotaxiCall({ objectId, data }) {
+export function handleRobotaxiCall({ objectId, data, context }) {
   const { serviceOrders, setServiceOrders } = data;
   const order = serviceOrders.find((o) => o.service_order_id === objectId);
   if (!order) return { success: false, message: `未找到服务订单 ${objectId}` };
 
   setServiceOrders((prev) => prev.map((o) => {
     if (o.service_order_id !== objectId) return o;
-    return { ...o, order_status: "WAITING_ROBOTAXI_ASSIGNMENT" };
+    return { ...o, order_status: "WAITING_ROBOTAXI_ASSIGNMENT", ...getSimulationAudit(context) };
   }));
 
   return { success: true, resultType: "CUSTOMER_CONFIRMED", message: `服务订单 ${objectId} 客户已确认`, data: { objectType: "serviceOrder", objectId } };
@@ -203,7 +218,7 @@ export function handleRobotaxiCall({ objectId, data }) {
  * ORDER_MATCHING_EXECUTE
  * 对服务订单执行 Robotaxi 匹配
  */
-export function handleOrderMatchingExecute({ objectId, data }) {
+export function handleOrderMatchingExecute({ objectId, data, context }) {
   const { serviceOrderService: sosService, data: appData, serviceOrders, robotaxis, orderMatchingRuns, orderMatchingDecisions, setServiceOrders, setRobotaxis, setOrderMatchingRuns, setOrderMatchingDecisions } = data;
   const order = serviceOrders.find((o) => o.service_order_id === objectId);
   if (!order) return { success: false, message: `未找到服务订单 ${objectId}` };
@@ -227,7 +242,7 @@ export function handleOrderMatchingExecute({ objectId, data }) {
     const failureReason = result.failureReason || "未知原因";
     setServiceOrders((prev) => prev.map((o) => {
       if (o.service_order_id !== objectId) return o;
-      return { ...o, order_status: "MATCH_FAILED" };
+      return { ...o, order_status: "MATCH_FAILED", ...getSimulationAudit(context) };
     }));
     return {
       success: false,
@@ -248,6 +263,8 @@ export function handleOrderMatchingExecute({ objectId, data }) {
       matched_robotaxi_id: robotaxiId,
       order_matching_decision_id: decisionId,
       matched_at: new Date().toISOString(),
+      simulation_matched_at: context?.tickContext?.current_time || null,
+      ...getSimulationAudit(context),
     };
   }));
 
@@ -255,12 +272,12 @@ export function handleOrderMatchingExecute({ objectId, data }) {
   if (robotaxiId) {
     setRobotaxis((prev) => prev.map((r) => {
       if (r.robotaxi_id !== robotaxiId) return r;
-      return { ...r, current_order_id: objectId, motion_status: "STOPPED" };
+      return { ...r, current_order_id: objectId, motion_status: "STOPPED", ...getSimulationAudit(context) };
     }));
   }
 
-  if (result.run) setOrderMatchingRuns((prev) => [result.run, ...prev]);
-  if (result.decision) setOrderMatchingDecisions((prev) => [result.decision, ...prev]);
+  if (result.run) setOrderMatchingRuns((prev) => [{ ...result.run, ...getSimulationAudit(context, { created: true }) }, ...prev]);
+  if (result.decision) setOrderMatchingDecisions((prev) => [{ ...result.decision, ...getSimulationAudit(context, { created: true }) }, ...prev]);
 
   return { success: true, resultType: "MATCHING_COMPLETED", message: `服务订单 ${objectId} 匹配成功，Robotaxi: ${robotaxiId}`, data: { objectType: "serviceOrder", objectId, robotaxiId } };
 }
@@ -273,7 +290,7 @@ export function handleOrderMatchingExecute({ objectId, data }) {
  * TRIP_STEP_EXECUTE
  * 推进 Trip 到下一状态（创建或步进）
  */
-export function handleTripStepExecute({ objectId, data }) {
+export function handleTripStepExecute({ objectId, data, context }) {
   const { tripService, data: appData, serviceOrders, trips, setServiceOrders, setTrips, setRobotaxis } = data;
 
   // objectId 可能是 service_order_id 或 trip_id
@@ -293,11 +310,11 @@ export function handleTripStepExecute({ objectId, data }) {
 
   // 如果没有 Trip，先创建
   if (!trip) {
-    trip = createTripForOrderSimple(order, appData);
+    trip = createTripForOrderSimple(order, appData, context);
     setTrips((prev) => [trip, ...prev]);
     setServiceOrders((prev) => prev.map((o) => {
       if (o.service_order_id !== objectId) return o;
-      return { ...o, trip_id: trip.trip_id };
+      return { ...o, trip_id: trip.trip_id, ...getSimulationAudit(context) };
     }));
     return { success: true, resultType: "TRIP_CREATED", message: `履约行驶 ${trip.trip_id} 已创建`, data: { objectType: "trip", objectId: trip.trip_id, serviceOrderId: order.service_order_id } };
   }
@@ -308,15 +325,17 @@ export function handleTripStepExecute({ objectId, data }) {
     // 尝试步进
     const moveResult = tripService.getNextTripMovementState(trip, appData);
     if (moveResult) {
-      setTrips((prev) => prev.map((t) => t.trip_id === trip.trip_id ? moveResult : t));
-      updateRobotaxiPosition(moveResult, setRobotaxis);
+      const auditedMoveResult = { ...moveResult, ...getSimulationAudit(context) };
+      setTrips((prev) => prev.map((t) => t.trip_id === trip.trip_id ? auditedMoveResult : t));
+      updateRobotaxiPosition(auditedMoveResult, setRobotaxis, context);
       return { success: true, resultType: "TRIP_STEPPED", message: `履约行驶 ${trip.trip_id} 步进完成`, data: { objectType: "trip", objectId: trip.trip_id } };
     }
     return { success: false, resultType: "TRIP_NO_ACTION", message: `Trip ${trip.trip_id} 无需推进`, data: { objectType: "trip", objectId: trip.trip_id, failureReason: "当前状态无需推进" } };
   }
 
-  setTrips((prev) => prev.map((t) => t.trip_id === trip.trip_id ? nextTrip : t));
-  updateRobotaxiPosition(nextTrip, setRobotaxis);
+  const auditedNextTrip = { ...nextTrip, ...getSimulationAudit(context) };
+  setTrips((prev) => prev.map((t) => t.trip_id === trip.trip_id ? auditedNextTrip : t));
+  updateRobotaxiPosition(auditedNextTrip, setRobotaxis, context);
 
   // 如果 Trip 完成，反馈到 ServiceOrder
   if (nextTrip.trip_status === "ARRIVED_DESTINATION" || nextTrip.trip_status === "SETTLING") {
@@ -327,6 +346,7 @@ export function handleTripStepExecute({ objectId, data }) {
         order_status: "ARRIVED_DESTINATION",
         actual_distance_km: nextTrip.distance_traveled_km,
         actual_duration_min: parseTimeElapsed(nextTrip.time_elapsed),
+        ...getSimulationAudit(context),
       };
     }));
   }
@@ -342,7 +362,7 @@ export function handleTripStepExecute({ objectId, data }) {
  * SETTLEMENT_EXECUTE
  * 对服务订单执行结算
  */
-export function handleSettlementExecute({ objectId, data }) {
+export function handleSettlementExecute({ objectId, data, context }) {
   const { serviceOrders, trips, setServiceOrders } = data;
   const order = serviceOrders.find((o) => o.service_order_id === objectId);
   if (!order) return { success: false, message: `未找到服务订单 ${objectId}` };
@@ -358,6 +378,7 @@ export function handleSettlementExecute({ objectId, data }) {
       final_price: finalPrice,
       actual_distance_km: trip?.distance_traveled_km || order.estimated_distance_km,
       actual_duration_min: trip ? parseTimeElapsed(trip.time_elapsed) : order.estimated_duration_min,
+      ...getSimulationAudit(context),
     };
   }));
 
@@ -372,7 +393,7 @@ export function handleSettlementExecute({ objectId, data }) {
  * PAYMENT_EXECUTE
  * 对服务订单执行支付
  */
-export function handlePaymentExecute({ objectId, data }) {
+export function handlePaymentExecute({ objectId, data, context }) {
   const { serviceOrders, setServiceOrders, setRobotaxis } = data;
   const order = serviceOrders.find((o) => o.service_order_id === objectId);
   if (!order) return { success: false, message: `未找到服务订单 ${objectId}` };
@@ -385,6 +406,8 @@ export function handlePaymentExecute({ objectId, data }) {
       payment_status: "PAID",
       paid_amount: order.final_price || order.estimated_price || 0,
       payment_completed_at: new Date().toISOString(),
+      simulation_payment_completed_at: context?.tickContext?.current_time || null,
+      ...getSimulationAudit(context, { completed: true }),
     };
   }));
 
@@ -392,7 +415,7 @@ export function handlePaymentExecute({ objectId, data }) {
   if (order.matched_robotaxi_id) {
     setRobotaxis((prev) => prev.map((r) => {
       if (r.robotaxi_id !== order.matched_robotaxi_id) return r;
-      return { ...r, current_order_id: null, motion_status: "PARKED" };
+      return { ...r, current_order_id: null, motion_status: "PARKED", ...getSimulationAudit(context) };
     }));
   }
 
@@ -407,7 +430,7 @@ export function handlePaymentExecute({ objectId, data }) {
  * READINESS_TASK_CREATE
  * 创建准入任务
  */
-export function handleReadinessTaskCreate({ data }) {
+export function handleReadinessTaskCreate({ data, context }) {
   const { robotaxis, setRobotaxis, setReadinessTasks } = data;
   const taskId = nextSimulationBusinessId("TASK-RC");
   const candidate = (robotaxis || []).find((r) => r.availability_status === "PENDING_INSPECTION" && !r.current_task_id);
@@ -425,9 +448,10 @@ export function handleReadinessTaskCreate({ data }) {
     robotaxi_id: candidate?.robotaxi_id || null,
     deployment_task_id: null, route_execution_id: null,
     created_at: new Date().toISOString(),
+    ...getSimulationAudit(context, { created: true }),
   };
   setReadinessTasks((prev) => [newTask, ...prev]);
-  setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === candidate.robotaxi_id ? { ...r, current_task_id: taskId, current_task_type: "READINESS_CHECK", current_task_status: "WAITING_ASSIGNMENT" } : r));
+  setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === candidate.robotaxi_id ? { ...r, current_task_id: taskId, current_task_type: "READINESS_CHECK", current_task_status: "WAITING_ASSIGNMENT", ...getSimulationAudit(context) } : r));
   return { success: true, resultType: "READINESS_CREATED", message: `准入任务 ${taskId} 已创建`, data: { objectType: "readinessTask", objectId: taskId, robotaxiId: candidate.robotaxi_id } };
 }
 
@@ -435,7 +459,7 @@ export function handleReadinessTaskCreate({ data }) {
  * DEPLOYMENT_TASK_CREATE
  * 创建投放任务，同步创建 RouteExecution 子单据
  */
-export function handleDeploymentTaskCreate({ data }) {
+export function handleDeploymentTaskCreate({ data, context }) {
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis, data: appData } = data;
   const dtId = nextSimulationBusinessId("TASK-DP");
   const reId = nextSimulationBusinessId("REX");
@@ -448,6 +472,7 @@ export function handleDeploymentTaskCreate({ data }) {
     robotaxi_id: candidate.robotaxi_id,
     route_execution_id: reId,
     created_at: new Date().toISOString(),
+    ...getSimulationAudit(context, { created: true }),
   };
   const re = {
     route_execution_id: reId,
@@ -456,10 +481,11 @@ export function handleDeploymentTaskCreate({ data }) {
     execution_status: "WAITING_ROUTE",
     current_cell_id: candidate.current_cell_id,
     created_at: new Date().toISOString(),
+    ...getSimulationAudit(context, { created: true }),
   };
   setDeploymentTasks((prev) => [dt, ...prev]);
   setRouteExecutions((prev) => [re, ...prev]);
-  setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === candidate.robotaxi_id ? { ...r, current_task_id: dtId } : r));
+  setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === candidate.robotaxi_id ? { ...r, current_task_id: dtId, ...getSimulationAudit(context) } : r));
   return { success: true, resultType: "DEPLOYMENT_CREATED", message: `投放任务 ${dtId} 已创建，关联 RouteExecution ${reId}`, data: { objectType: "deploymentTask", objectId: dtId, routeExecutionId: reId } };
 }
 
@@ -467,7 +493,7 @@ export function handleDeploymentTaskCreate({ data }) {
  * READINESS_TASK_ASSIGN
  * 自动分配 Worker 到准入任务
  */
-export function handleReadinessTaskAssign({ objectId, data }) {
+export function handleReadinessTaskAssign({ objectId, data, context }) {
   const { readinessTasks, setReadinessTasks, setRobotaxis, data: appData } = data;
   const task = readinessTasks.find((t) => t.task_id === objectId);
   if (!task) return { success: false, resultType: "READINESS_ASSIGN_FAILED", message: `未找到准入任务 ${objectId}`, data: { objectType: "readinessTask", objectId, failureReason: "未找到准入任务" } };
@@ -477,10 +503,10 @@ export function handleReadinessTaskAssign({ objectId, data }) {
 
   setReadinessTasks((prev) => prev.map((t) => {
     if (t.task_id !== objectId) return t;
-    return { ...t, task_status: "WAITING_CHECK", assigned_worker_id: worker.worker_id };
+    return { ...t, task_status: "WAITING_CHECK", assigned_worker_id: worker.worker_id, ...getSimulationAudit(context) };
   }));
   if (task.robotaxi_id) {
-    setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === task.robotaxi_id ? { ...r, current_task_status: "WAITING_CHECK" } : r));
+    setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === task.robotaxi_id ? { ...r, current_task_status: "WAITING_CHECK", ...getSimulationAudit(context) } : r));
   }
 
   return { success: true, resultType: "READINESS_ASSIGNED", message: `准入任务 ${objectId} 已分配给 ${worker.worker_id}`, data: { objectType: "readinessTask", objectId, workerId: worker.worker_id } };
@@ -490,17 +516,17 @@ export function handleReadinessTaskAssign({ objectId, data }) {
  * READINESS_TASK_START
  * 自动开始准入检查
  */
-export function handleReadinessTaskStart({ objectId, data }) {
+export function handleReadinessTaskStart({ objectId, data, context }) {
   const { readinessTasks, setReadinessTasks, setRobotaxis } = data;
   const task = readinessTasks.find((t) => t.task_id === objectId);
   if (!task) return { success: false, resultType: "READINESS_START_FAILED", message: `未找到准入任务 ${objectId}`, data: { objectType: "readinessTask", objectId, failureReason: "未找到准入任务" } };
 
   setReadinessTasks((prev) => prev.map((t) => {
     if (t.task_id !== objectId) return t;
-    return { ...t, task_status: "CHECKING" };
+    return { ...t, task_status: "CHECKING", ...getSimulationAudit(context) };
   }));
   if (task.robotaxi_id) {
-    setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === task.robotaxi_id ? { ...r, availability_status: "IN_INSPECTION", current_task_status: "CHECKING" } : r));
+    setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === task.robotaxi_id ? { ...r, availability_status: "IN_INSPECTION", current_task_status: "CHECKING", ...getSimulationAudit(context) } : r));
   }
 
   return { success: true, resultType: "READINESS_STARTED", message: `准入任务 ${objectId} 检查中`, data: { objectType: "readinessTask", objectId } };
@@ -510,14 +536,14 @@ export function handleReadinessTaskStart({ objectId, data }) {
  * READINESS_TASK_PASS
  * 自动通过准入检查
  */
-export function handleReadinessTaskPass({ objectId, data }) {
+export function handleReadinessTaskPass({ objectId, data, context }) {
   const { readinessTasks, setReadinessTasks, setRobotaxis } = data;
   const task = readinessTasks.find((t) => t.task_id === objectId);
   if (!task) return { success: false, resultType: "READINESS_PASS_FAILED", message: `未找到准入任务 ${objectId}`, data: { objectType: "readinessTask", objectId, failureReason: "未找到准入任务" } };
 
   setReadinessTasks((prev) => prev.map((t) => {
     if (t.task_id !== objectId) return t;
-    return { ...t, task_status: "COMPLETED", check_result: "PASSED", completed_at: new Date().toISOString() };
+    return { ...t, task_status: "COMPLETED", check_result: "PASSED", completed_at: new Date().toISOString(), ...getSimulationAudit(context, { completed: true }) };
   }));
   if (task.robotaxi_id) {
     setRobotaxis((prev) => prev.map((r) => r.robotaxi_id === task.robotaxi_id ? {
@@ -527,6 +553,7 @@ export function handleReadinessTaskPass({ objectId, data }) {
       current_task_id: null,
       current_task_type: null,
       current_task_status: null,
+      ...getSimulationAudit(context),
     } : r));
   }
 
@@ -537,19 +564,19 @@ export function handleReadinessTaskPass({ objectId, data }) {
  * ROUTE_PLAN
  * 自动规划行驶路径
  */
-export function handleRoutePlan({ objectId, data }) {
+export function handleRoutePlan({ objectId, data, context }) {
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions } = data;
   const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
   if (!re) return { success: false, resultType: "ROUTE_PLAN_FAILED", message: `未找到行驶执行 ${objectId}`, data: { objectType: "routeExecution", objectId, failureReason: "未找到行驶执行" } };
 
   setRouteExecutions((prev) => prev.map((r) => {
     if (r.route_execution_id !== re.route_execution_id) return r;
-    return { ...r, execution_status: "MOVING", planned_route_id: `ROUTE-${Date.now().toString(36)}`, current_step_index: 0 };
+    return { ...r, execution_status: "MOVING", planned_route_id: nextSimulationBusinessId("ROUTE", context), current_step_index: 0, ...getSimulationAudit(context) };
   }));
   if (re.deployment_task_id) {
     setDeploymentTasks((prev) => prev.map((task) => {
       if (task.task_id !== re.deployment_task_id) return task;
-      return { ...task, task_status: "MOVING" };
+      return { ...task, task_status: "MOVING", ...getSimulationAudit(context) };
     }));
   }
 
@@ -560,26 +587,26 @@ export function handleRoutePlan({ objectId, data }) {
  * ROUTE_EXECUTION_STEP
  * 自动推进行驶执行一步
  */
-export function handleRouteExecutionStep({ objectId, data }) {
+export function handleRouteExecutionStep({ objectId, data, context }) {
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis } = data;
   const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
   if (!re) return { success: false, resultType: "ROUTE_STEP_FAILED", message: `未找到行驶执行 ${objectId}`, data: { objectType: "routeExecution", objectId, failureReason: "未找到行驶执行" } };
 
   setRouteExecutions((prev) => prev.map((r) => {
     if (r.route_execution_id !== re.route_execution_id) return r;
-    return { ...r, execution_status: "ARRIVED", current_step_index: (r.current_step_index || 0) + 1 };
+    return { ...r, execution_status: "ARRIVED", current_step_index: (r.current_step_index || 0) + 1, ...getSimulationAudit(context) };
   }));
   if (re.deployment_task_id) {
     setDeploymentTasks((prev) => prev.map((task) => {
       if (task.task_id !== re.deployment_task_id) return task;
-      return { ...task, task_status: "ARRIVED" };
+      return { ...task, task_status: "ARRIVED", ...getSimulationAudit(context) };
     }));
   }
 
   if (re.robotaxi_id) {
     setRobotaxis((prev) => prev.map((rb) => {
       if (rb.robotaxi_id !== re.robotaxi_id) return rb;
-      return { ...rb, current_cell_id: re.target_cell_id || rb.current_cell_id, motion_status: "MOVING" };
+      return { ...rb, current_cell_id: re.target_cell_id || rb.current_cell_id, motion_status: "MOVING", ...getSimulationAudit(context) };
     }));
   }
 
@@ -590,26 +617,26 @@ export function handleRouteExecutionStep({ objectId, data }) {
  * ARRIVAL_CONFIRM
  * 自动确认到达
  */
-export function handleArrivalConfirm({ objectId, data }) {
+export function handleArrivalConfirm({ objectId, data, context }) {
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions, setRobotaxis } = data;
   const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
   if (!re) return { success: false, resultType: "ARRIVAL_CONFIRM_FAILED", message: `未找到行驶执行 ${objectId}`, data: { objectType: "routeExecution", objectId, failureReason: "未找到行驶执行" } };
 
   setRouteExecutions((prev) => prev.map((r) => {
     if (r.route_execution_id !== re.route_execution_id) return r;
-    return { ...r, execution_status: "COMPLETED", arrival_confirmed: true, completed_at: new Date().toISOString() };
+    return { ...r, execution_status: "COMPLETED", arrival_confirmed: true, completed_at: new Date().toISOString(), ...getSimulationAudit(context, { completed: true }) };
   }));
   if (re.deployment_task_id) {
     setDeploymentTasks((prev) => prev.map((task) => {
       if (task.task_id !== re.deployment_task_id) return task;
-      return { ...task, task_status: "COMPLETED", completed_at: new Date().toISOString() };
+      return { ...task, task_status: "COMPLETED", completed_at: new Date().toISOString(), ...getSimulationAudit(context, { completed: true }) };
     }));
   }
 
   if (re.robotaxi_id) {
     setRobotaxis((prev) => prev.map((rb) => {
       if (rb.robotaxi_id !== re.robotaxi_id) return rb;
-      return { ...rb, current_task_id: null, motion_status: "PARKED" };
+      return { ...rb, current_task_id: null, motion_status: "PARKED", ...getSimulationAudit(context) };
     }));
   }
 
@@ -641,10 +668,11 @@ function createServiceOrderFromDemandResult(dsResult, orderChannel, appData, con
     quoted_price: null,
     final_price: null,
     created_at: new Date().toISOString(),
+    ...getSimulationAudit(context, { created: true }),
   };
 }
 
-function createTripForOrderSimple(order, appData) {
+function createTripForOrderSimple(order, appData, context) {
   return {
     trip_id: nextSimulationBusinessId("TRIP"),
     service_order_id: order.service_order_id,
@@ -662,19 +690,29 @@ function createTripForOrderSimple(order, appData) {
     trip_status: "PENDING",
     trip_phase: "PICKUP",
     created_at: new Date().toISOString(),
+    ...getSimulationAudit(context, { created: true }),
   };
 }
 
-function updateRobotaxiPosition(trip, setRobotaxis) {
+function updateRobotaxiPosition(trip, setRobotaxis, context) {
   if (!trip?.robotaxi_id || !trip?.current_cell_id) return;
   setRobotaxis((prev) => prev.map((r) => {
     if (r.robotaxi_id !== trip.robotaxi_id) return r;
-    return { ...r, current_cell_id: trip.current_cell_id, motion_status: trip.trip_status === "COMPLETED" ? "PARKED" : "MOVING" };
+    return { ...r, current_cell_id: trip.current_cell_id, motion_status: trip.trip_status === "COMPLETED" ? "PARKED" : "MOVING", ...getSimulationAudit(context) };
   }));
 }
 
-function pickRandomDistance() { return +(1 + Math.random() * 4).toFixed(2); }
-function pickRandomDuration() { return Math.floor(5 + Math.random() * 20); }
+function pickRandomDistance(context) { return +(1 + deterministicFraction(context, "distance") * 4).toFixed(2); }
+function pickRandomDuration(context) { return Math.floor(5 + deterministicFraction(context, "duration") * 20); }
+function deterministicFraction(context, salt) {
+  const source = `${context?.simulationRunId || "SIM"}-${context?.globalTick || 0}-${context?.actionIndex || 0}-${salt}`;
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967296;
+}
 function parseTimeElapsed(elapsed) {
   if (!elapsed) return 0;
   const parts = elapsed.split(":");

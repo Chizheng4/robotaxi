@@ -853,6 +853,32 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 
 ---
 
+## 22.1 模拟业务审计公共字段
+
+由 SimulationLoop、WorkflowEngine 和 ExecutionEngine 创建或推进的业务对象统一使用以下字段，并与真实审计时间分开保存：
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|record_source|记录来源|持久化字段|记录由 SIMULATION 模拟生成或 MANUAL 人工操作|
+|simulation_run_id|模拟运行编号|持久化字段|创建或推进该对象的 SimulationRun|
+|simulation_created_at|模拟创建时间|持久化字段|对象在连续模拟时间轴中的创建时间，格式 Day N HH:MM:SS|
+|simulation_updated_at|模拟更新时间|运行态字段|对象最近一次被模拟工作流更新的时间|
+|simulation_completed_at|模拟完成时间|运行态字段|对象在模拟工作流中进入终态的时间|
+|simulation_matched_at|模拟匹配时间|运行态字段|服务订单在模拟中完成车辆匹配的时间|
+|simulation_payment_completed_at|模拟支付完成时间|运行态字段|服务订单在模拟中完成支付的时间|
+|simulation_global_tick|模拟全局 Tick|运行态字段|字段变化发生时的连续时间轴 Tick|
+
+真实 `created_at`、`updated_at`、`completed_at`、`matched_at` 和 `payment_completed_at` 继续表示真实审计时间。人工操作对象的模拟字段为空，不得用真实时间伪造模拟时间。
+
+枚举中文：
+
+|枚举值|中文名|
+|---|---|
+|SIMULATION|模拟生成|
+|MANUAL|人工操作|
+
+---
+
 ## 23. SimulationPolicy：模拟策略
 
 |属性英文名|中文名|字段性质|含义|
