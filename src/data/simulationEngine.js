@@ -29,12 +29,27 @@ export function resetSimulationCounters() {
   nextEventIdCounter = 1;
 }
 
+export function synchronizeSimulationCounters(simulationRuns = [], simulationEvents = []) {
+  nextRunIdCounter = Math.max(nextRunIdCounter, deriveNextCounter(simulationRuns, "simulation_run_id", "SIM-RUN-"));
+  nextEventIdCounter = Math.max(nextEventIdCounter, deriveNextCounter(simulationEvents, "simulation_event_id", "SE-"));
+}
+
 function nextSimulationRunId() {
   return `SIM-RUN-${String(nextRunIdCounter++).padStart(3, "0")}`;
 }
 
 function nextSimulationEventId() {
   return `SE-${String(nextEventIdCounter++).padStart(4, "0")}`;
+}
+
+function deriveNextCounter(items, field, prefix) {
+  const maxValue = items.reduce((max, item) => {
+    const value = String(item?.[field] || "");
+    if (!value.startsWith(prefix)) return max;
+    const numeric = Number(value.slice(prefix.length));
+    return Number.isFinite(numeric) ? Math.max(max, numeric) : max;
+  }, 0);
+  return maxValue + 1;
 }
 
 /**
@@ -47,7 +62,7 @@ function nextSimulationEventId() {
  * @param {number} [params.tickMinutes] - 每 Tick 分钟数（默认从 Policy 读取）
  * @returns {Object} { simulationRun, event }
  */
-export function initSimulationRun({ simulationName, simulationPolicy, totalDays, tickMinutes, previousSimulationRun = null }) {
+export function initSimulationRun({ simulationName, simulationPolicy, totalDays, tickMinutes, tickSeconds, previousSimulationRun = null }) {
   const startSimulationSeconds = Number(previousSimulationRun?.simulation_end_seconds);
   const inheritedStartSeconds = Number.isFinite(startSimulationSeconds)
     ? startSimulationSeconds
@@ -58,6 +73,7 @@ export function initSimulationRun({ simulationName, simulationPolicy, totalDays,
     simulationPolicy,
     totalDays: totalDays || simulationPolicy.simulation_days,
     tickMinutes: tickMinutes || simulationPolicy.tick_minutes,
+    tickSeconds: tickSeconds || simulationPolicy.tick_seconds,
     startSimulationSeconds: inheritedStartSeconds,
     startGlobalTick: previousSimulationRun?.current_global_tick || 0,
     simulationTimelineId: previousSimulationRun?.simulation_timeline_id || "SIM-TIMELINE-001",

@@ -44,6 +44,7 @@ export function useSimulationActions({
   simulationInitialization,
   simulationPolicies,
   simulationRuns,
+  simulationEvents,
   setSimulationPolicies,
   setSimulationRuns,
   setSimulationEvents,
@@ -54,6 +55,7 @@ export function useSimulationActions({
   depsRef.engine = simulationEngine;
   depsRef.loop = simulationLoop;
   depsRef.getBusinessData = getBusinessData;
+  simulationEngine?.synchronizeSimulationCounters?.(simulationRuns, simulationEvents);
 
   function initDefaultPolicy() {
     if (!simulationInitialization || !simulationTypes) return;
@@ -104,6 +106,12 @@ export function useSimulationActions({
     setTimeout(() => {
       debug("DELAYED-CHECK: intervalId=" + tickIntervalRef.current + " | 是否还在运行=" + (tickIntervalRef.current ? "是" : "否(已被清除)"));
     }, 2000);
+  }
+
+  function restoreActiveSimulationRun() {
+    if (tickIntervalRef.current) return;
+    const activeRun = simulationRuns.find((run) => ["RUNNING", "DRAINING"].includes(run.simulation_status));
+    if (activeRun) startTickInterval(activeRun.simulation_run_id, executeTickForRun);
   }
 
   function pauseSimulationRun(runId) {
@@ -186,6 +194,7 @@ export function useSimulationActions({
     initDefaultPolicy,
     createSimulationRun,
     startSimulationRun,
+    restoreActiveSimulationRun,
     pauseSimulationRun,
     resumeSimulationRun,
     stopSimulationRun,

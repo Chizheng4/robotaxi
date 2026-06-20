@@ -511,6 +511,11 @@ const serviceOrderStatusOptions = ["WAITING_PRICE_ESTIMATE", "WAITING_ROBOTAXI_C
 const triggerTypeOptions = ["AUTO", "MANUAL"];
 const runtimeStorageKey = "robotaxi.runtime.v019-7-service-route";
 const runtimeStorageKeyPrefix = "robotaxi.runtime.";
+const simulationEventDbName = "robotaxi.simulation.events.v027";
+const simulationEventStoreName = "simulationEvents";
+const runtimeSnapshotDbName = "robotaxi.runtime.snapshot.v027";
+const runtimeSnapshotStoreName = "runtimeSnapshots";
+const persistedSimulationEventIds = new Set();
 const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null };
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
@@ -543,6 +548,15 @@ function App() {
   const [simulationPolicies, setSimulationPolicies] = useState(initialRuntime.simulationPolicies);
   const [simulationRuns, setSimulationRuns] = useState(initialRuntime.simulationRuns);
   const [simulationEvents, setSimulationEvents] = useState(initialRuntime.simulationEvents);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadPersistedSimulationEvents().then((events) => {
+      if (cancelled || !events.length) return;
+      setSimulationEvents((current) => mergeSimulationEvents(current, events));
+    });
+    return () => { cancelled = true; };
+  }, []);
   const initialValidations = useMemo(() => [
     ...validateMapSpace(initialData),
     ...validateOperationsCenter(initialData),
@@ -581,6 +595,42 @@ function App() {
   const [detailCollapsedByPage, setDetailCollapsedByPage] = useState(initialRuntime.detailCollapsedByPage);
   const [pageSelections, setPageSelections] = useState(initialRuntime.pageSelections);
   const [pageUiState, setPageUiState] = useState(initialRuntime.pageUiState);
+  const [runtimeHydrated, setRuntimeHydrated] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadPersistedRuntimeSnapshot().then((snapshot) => {
+      if (cancelled || !snapshot) return;
+      setOperationalData(normalizeOperationalRouteStrategies(snapshot.operationalData || initialData));
+      setReadinessTasks(Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : []);
+      setDeploymentTasks(normalizeRouteStrategyReferences(snapshot.deploymentTasks || []));
+      setRouteExecutions(normalizeRouteStrategyReferences(snapshot.routeExecutions || []));
+      setRoutePlanningRuns(normalizeRouteStrategyReferences(snapshot.routePlanningRuns || []));
+      setDemandSimulationRuns(Array.isArray(snapshot.demandSimulationRuns) ? snapshot.demandSimulationRuns : []);
+      setServiceOrders(normalizeServiceOrders(snapshot.serviceOrders || []));
+      setPricingStrategyRuns(snapshot.pricingStrategyRuns || []);
+      setPricingDecisions(snapshot.pricingDecisions || []);
+      setOrderMatchingRuns(snapshot.orderMatchingRuns || []);
+      setOrderMatchingDecisions(snapshot.orderMatchingDecisions || []);
+      setTrips(snapshot.trips || []);
+      setTaskEventLogs(normalizeRouteStrategyReferences(snapshot.taskEventLogs || []));
+      setSimulationPolicies(snapshot.simulationPolicies || []);
+      setSimulationRuns(snapshot.simulationRuns || []);
+      const restoredPage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
+      const restoredSelections = snapshot.pageSelections || {};
+      setActivePage(restoredPage);
+      setWorkspacePages(normalizeWorkspacePages(snapshot.workspacePages, restoredPage));
+      setDetailCollapsedByPage(snapshot.detailCollapsedByPage || {});
+      setPageSelections(restoredSelections);
+      setSelected(restoredSelections[restoredPage] || { type: "map", id: initialData.maps[0].map_id });
+      setOpenMenuKeys(getOpenKeysForPage(restoredPage));
+      setPageUiState(normalizePageUiStateMap(snapshot.pageUiState));
+      restoreRuntimeSequences(snapshot);
+    }).finally(() => {
+      if (!cancelled) setRuntimeHydrated(true);
+    });
+    return () => { cancelled = true; };
+  }, [initialData]);
 
   const rowsByPage = useMemo(() => ({
     maps: data.maps,
@@ -707,6 +757,7 @@ function App() {
   const detailCollapsed = Boolean(detailCollapsedByPage[activePage]);
 
   useEffect(() => {
+    if (!runtimeHydrated) return;
     saveRuntimeSnapshot({
       operationalData,
       readinessTasks,
@@ -730,7 +781,8 @@ function App() {
       pageSelections,
       pageUiState,
     });
-  }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workspacePages]);
+    persistSimulationEvents(simulationEvents);
+  }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workspacePages]);
 
 
 
@@ -805,6 +857,7 @@ function App() {
     simulationInitialization,
     simulationPolicies,
     simulationRuns,
+    simulationEvents,
     setSimulationPolicies,
     setSimulationRuns,
     setSimulationEvents,
@@ -814,7 +867,8 @@ function App() {
 
   useEffect(() => {
     if (simActions) simActions.initDefaultPolicy();
-  }, [simulationPolicies.length, simActions]);
+    if (simActions && runtimeHydrated) simActions.restoreActiveSimulationRun();
+  }, [runtimeHydrated, simulationPolicies.length, simActions]);
 
   useEffect(() => {
     simActionsRef.current = simActions;
@@ -1008,6 +1062,8 @@ function App() {
     if (typeof window !== "undefined") {
       try {
         window.localStorage.removeItem(runtimeStorageKey);
+        clearPersistedSimulationEvents();
+        clearPersistedRuntimeSnapshot();
       } catch (error) {
         // Ignore storage cleanup failures; in-memory reset is already complete.
       }
@@ -1016,6 +1072,7 @@ function App() {
 
   function clearSimulationEvents() {
     setSimulationEvents([]);
+    clearPersistedSimulationEvents();
   }
 
   function selectForPage(page, type, id) {
@@ -2577,6 +2634,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     actionColumn,
   ] : columns;
   const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const visibleEventRows = eventRows.slice(0, 300);
   const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
   const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   useEffect(() => {
@@ -2715,7 +2773,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
               width: getColumnWidth(key),
               render: (_, row) => renderCellValue(key, row),
             }))}
-            dataSource={eventRows}
+            dataSource={visibleEventRows}
             pagination={false}
             scroll={{ x: "max-content", y: eventTableScrollY }}
           />
@@ -3112,7 +3170,7 @@ function getDetailTabs(selectedType) {
   }
   if (selectedType === "simulationPolicy") {
     return [
-      { key: "basic", label: "策略信息", keys: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"] },
+      { key: "basic", label: "策略信息", keys: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "tick_seconds", "simulation_days", "run_speed_level", "random_seed", "max_drain_ticks"] },
       { key: "time", label: "时间配置", keys: ["worker_work_start_time", "worker_work_end_time", "robotaxi_operating_start_time", "robotaxi_operating_end_time", "time_period_configs", "time_window_configs"] },
       { key: "demand", label: "需求配置", keys: ["demand_generation_config", "demand_generation_enabled", "demand_generation_mode", "max_orders_per_tick_global", "demand_profiles"] },
       { key: "supply", label: "供给侧配置", keys: ["supply_trigger_config", "supply_trigger_enabled", "readiness_trigger_enabled", "deployment_trigger_enabled", "route_execution_trigger_enabled"] },
@@ -3122,8 +3180,8 @@ function getDetailTabs(selectedType) {
   }
   if (selectedType === "simulationRun") {
     return [
-      { key: "basic", label: "运行信息", keys: ["simulation_run_id", "simulation_name", "simulation_status", "simulation_policy_id", "total_days", "tick_minutes", "total_ticks", "created_at"] },
-      { key: "progress", label: "运行进度", keys: ["current_day", "current_time", "current_day_tick", "current_global_tick", "current_time_period", "current_period_type"] },
+      { key: "basic", label: "运行信息", keys: ["simulation_run_id", "simulation_name", "simulation_status", "simulation_policy_id", "simulation_timeline_id", "previous_simulation_run_id", "total_days", "tick_minutes", "tick_seconds", "total_ticks", "simulation_start_at", "planned_simulation_end_at", "simulation_end_at", "created_at"] },
+      { key: "progress", label: "运行进度", keys: ["current_day", "current_time", "current_clock_time", "current_day_tick", "current_run_tick", "current_global_tick", "trigger_ticks_completed", "drain_ticks", "max_drain_ticks", "current_time_period", "current_period_type"] },
       { key: "scene", label: "当前场景", keys: ["current_supply_scene", "current_demand_scene", "current_scene_summary", "current_tick_event_summary"] },
       { key: "time", label: "状态时间", keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "result_summary"] },
       { key: "policy", label: "策略快照", keys: ["simulation_policy_snapshot"] },
@@ -3868,19 +3926,19 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/fieldDictionary.js?v=20260614-v020-6-route-execution"),
+    import("./domain/fieldDictionary.js?v=20260620-v027-4"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
     import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"),
 	    import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"),
 	    import("./services/tripService.js?v=20260617-v023-1-service-extraction"),
-	    import("./domain/simulationTypes.js?v=20260617-v023-6-monitor"),
-	    import("./data/simulationInitialization.js?v=20260617-v023-6-monitor"),
-	    import("./data/simulationEngine.js?v=20260617-v023-6-monitor"),
-		    import("./services/simulationActions.js?v=20260617-v023-8-frontend"),
-		    import("./data/simulationLoop.js?v=20260617-v023-8-frontend"),
-		    import("./services/simulationHandlers.js?v=20260617-v024-1-handlers"),
+		    import("./domain/simulationTypes.js?v=20260620-v027-4"),
+		    import("./data/simulationInitialization.js?v=20260620-v027-4"),
+		    import("./data/simulationEngine.js?v=20260620-v027-4"),
+			    import("./services/simulationActions.js?v=20260620-v027-4"),
+			    import("./data/simulationLoop.js?v=20260620-v027-4"),
+			    import("./services/simulationHandlers.js?v=20260620-v027-4"),
 		    import("./data/simulationWorkflowEngine.js?v=20260617-v024-1-handlers"),
 		    import("./data/simulationExecutionEngine.js"),
 		  ]);
@@ -5369,6 +5427,8 @@ function clearRobotaxiRuntimeStorage() {
     .filter((key) => key.startsWith(runtimeStorageKeyPrefix))
     .forEach((key) => window.localStorage.removeItem(key));
   window.sessionStorage?.clear?.();
+  clearPersistedSimulationEvents();
+  clearPersistedRuntimeSnapshot();
 }
 
 function removeRuntimeResetParam() {
@@ -5413,28 +5473,173 @@ function normalizeRouteStrategyId(routeStrategyId) {
 
 function saveRuntimeSnapshot(snapshot) {
   if (typeof window === "undefined") return;
+  const storedSnapshot = {
+    ...snapshot,
+    taskSequence,
+    deploymentRouteSequence,
+    serviceRouteSequence,
+    routePlanningRunSequence,
+    demandSimulationRunSequence,
+    serviceOrderSequence,
+    pricingStrategyRunSequence,
+    pricingDecisionSequence,
+    orderMatchingRunSequence,
+    orderMatchingDecisionSequence,
+    tripSequence,
+    eventSequence,
+    simulationPolicies: snapshot.simulationPolicies || [],
+    simulationRuns: snapshot.simulationRuns || [],
+    simulationEvents: [],
+  };
+  persistRuntimeSnapshot(storedSnapshot);
   try {
     window.localStorage.setItem(runtimeStorageKey, JSON.stringify({
-      ...snapshot,
-      taskSequence,
-      deploymentRouteSequence,
-      serviceRouteSequence,
-      routePlanningRunSequence,
-      demandSimulationRunSequence,
-      serviceOrderSequence,
-      pricingStrategyRunSequence,
-      pricingDecisionSequence,
-      orderMatchingRunSequence,
-      orderMatchingDecisionSequence,
-      tripSequence,
-      eventSequence,
-      simulationPolicies: snapshot.simulationPolicies || [],
-      simulationRuns: snapshot.simulationRuns || [],
-      simulationEvents: snapshot.simulationEvents || [],
+      runtime_snapshot_in_indexed_db: true,
+      activePage: snapshot.activePage,
+      workspacePages: snapshot.workspacePages,
+      detailCollapsedByPage: snapshot.detailCollapsedByPage,
+      pageSelections: snapshot.pageSelections,
+      pageUiState: snapshot.pageUiState,
+      simulationPolicies: [],
+      simulationRuns: [],
+      simulationEvents: [],
     }));
   } catch (error) {
     // Local persistence is a convenience for this prototype; runtime should continue if storage is unavailable.
   }
+}
+
+async function loadPersistedRuntimeSnapshot() {
+  if (typeof indexedDB === "undefined") return null;
+  try {
+    const database = await openRuntimeSnapshotDatabase();
+    return await runRuntimeStoreRequest(database, "readonly", (store) => store.get(runtimeStorageKey));
+  } catch (error) {
+    return null;
+  }
+}
+
+async function persistRuntimeSnapshot(snapshot) {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const database = await openRuntimeSnapshotDatabase();
+    await runRuntimeStoreRequest(database, "readwrite", (store) => store.put(snapshot, runtimeStorageKey));
+  } catch (error) {
+    // Runtime continues in memory when persistent snapshot storage is unavailable.
+  }
+}
+
+async function clearPersistedRuntimeSnapshot() {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const database = await openRuntimeSnapshotDatabase();
+    await runRuntimeStoreRequest(database, "readwrite", (store) => store.clear());
+  } catch (error) {
+    // In-memory reset remains authoritative.
+  }
+}
+
+function openRuntimeSnapshotDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(runtimeSnapshotDbName, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(runtimeSnapshotStoreName)) {
+        database.createObjectStore(runtimeSnapshotStoreName);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function runRuntimeStoreRequest(database, mode, createRequest) {
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(runtimeSnapshotStoreName, mode);
+    const request = createRequest(transaction.objectStore(runtimeSnapshotStoreName));
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function mergeSimulationEvents(current, persisted) {
+  const byId = new Map();
+  [...current, ...persisted].forEach((event) => {
+    const id = `${event.simulation_run_id || "run"}:${event.simulation_event_id || event.created_at}`;
+    if (!byId.has(id)) byId.set(id, event);
+  });
+  return [...byId.values()].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+}
+
+async function loadPersistedSimulationEvents() {
+  if (typeof indexedDB === "undefined") return [];
+  try {
+    const database = await openSimulationEventDatabase();
+    const records = await runEventStoreRequest(database, "readonly", (store) => store.getAll());
+    const events = records.map((record) => record.event).filter(Boolean);
+    events.forEach((event) => persistedSimulationEventIds.add(getSimulationEventStorageId(event)));
+    return events;
+  } catch (error) {
+    return [];
+  }
+}
+
+async function persistSimulationEvents(events) {
+  if (typeof indexedDB === "undefined" || !events.length) return;
+  const pendingEvents = events.filter((event) => !persistedSimulationEventIds.has(getSimulationEventStorageId(event)));
+  if (!pendingEvents.length) return;
+  try {
+    const database = await openSimulationEventDatabase();
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(simulationEventStoreName, "readwrite");
+      const store = transaction.objectStore(simulationEventStoreName);
+      pendingEvents.forEach((event) => store.put({ storage_id: getSimulationEventStorageId(event), event }));
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+    pendingEvents.forEach((event) => persistedSimulationEventIds.add(getSimulationEventStorageId(event)));
+  } catch (error) {
+    // Runtime continues in memory when persistent event storage is unavailable.
+  }
+}
+
+async function clearPersistedSimulationEvents() {
+  persistedSimulationEventIds.clear();
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const database = await openSimulationEventDatabase();
+    await runEventStoreRequest(database, "readwrite", (store) => store.clear());
+  } catch (error) {
+    // In-memory reset remains authoritative.
+  }
+}
+
+function openSimulationEventDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(simulationEventDbName, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(simulationEventStoreName)) {
+        database.createObjectStore(simulationEventStoreName, { keyPath: "storage_id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function runEventStoreRequest(database, mode, createRequest) {
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(simulationEventStoreName, mode);
+    const request = createRequest(transaction.objectStore(simulationEventStoreName));
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function getSimulationEventStorageId(event) {
+  return `${event.simulation_run_id || "run"}:${event.simulation_event_id || event.created_at}`;
 }
 
 function deriveSequence(items, field, prefix) {
@@ -5444,6 +5649,21 @@ function deriveSequence(items, field, prefix) {
     const numberValue = Number(value.slice(prefix.length));
     return Number.isFinite(numberValue) ? Math.max(maxValue, numberValue) : maxValue;
   }, 0);
+}
+
+function restoreRuntimeSequences(snapshot) {
+  taskSequence = deriveSequence(snapshot.readinessTasks || [], "task_id", "TASK-RC-");
+  deploymentTaskSequence = deriveSequence(snapshot.deploymentTasks || [], "task_id", "TASK-DP-");
+  routeExecutionSequence = deriveSequence(snapshot.routeExecutions || [], "route_execution_id", "REX-");
+  routePlanningRunSequence = deriveSequence(snapshot.routePlanningRuns || [], "route_planning_run_id", "RPR-");
+  demandSimulationRunSequence = deriveSequence(snapshot.demandSimulationRuns || [], "demand_simulation_run_id", "DSR-");
+  serviceOrderSequence = deriveSequence(snapshot.serviceOrders || [], "service_order_id", "SO-");
+  pricingStrategyRunSequence = deriveSequence(snapshot.pricingStrategyRuns || [], "pricing_strategy_run_id", "DPR-");
+  pricingDecisionSequence = deriveSequence(snapshot.pricingDecisions || [], "pricing_decision_id", "PD-");
+  orderMatchingRunSequence = deriveSequence(snapshot.orderMatchingRuns || [], "order_matching_run_id", "OMR-");
+  orderMatchingDecisionSequence = deriveSequence(snapshot.orderMatchingDecisions || [], "order_matching_decision_id", "OMD-");
+  tripSequence = deriveSequence(snapshot.trips || [], "trip_id", "TRIP-");
+  eventSequence = deriveSequence(snapshot.taskEventLogs || [], "event_id", "EVT-");
 }
 
 function filterRecordRows(rows, columns, statusField, filters) {

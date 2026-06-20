@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 
 import { initializeDefaultSimulationPolicy } from "../src/data/simulationInitialization.js";
 import { advanceTick, computeTimeContext, formatSimulationTimestamp, getSimulationPosition } from "../src/data/simulationClock.js";
-import { completeTick, initSimulationRun, resetSimulationCounters, startSimulationRun } from "../src/data/simulationEngine.js";
+import { completeTick, initSimulationRun, resetSimulationCounters, startSimulationRun, synchronizeSimulationCounters } from "../src/data/simulationEngine.js";
 import { executeTick } from "../src/data/simulationLoop.js";
-import { handleReadinessTaskCreate, handleServiceOrderCreate } from "../src/services/simulationHandlers.js";
+import { handlePaymentExecute, handleReadinessTaskCreate, handleServiceOrderCreate } from "../src/services/simulationHandlers.js";
+import { registerActionHandlers } from "../src/data/simulationExecutionEngine.js";
 
 const policy = initializeDefaultSimulationPolicy();
 
@@ -155,5 +156,80 @@ handleServiceOrderCreate({
 assert.equal(demandRuns[0].simulation_created_at, "Day 3 12:34:56");
 assert.equal(serviceOrders[0].record_source, "SIMULATION");
 assert.equal(serviceOrders[0].simulation_created_at, "Day 3 12:34:56");
+
+registerActionHandlers({ PAYMENT_EXECUTE: handlePaymentExecute });
+let drainBusinessData = {
+  serviceOrders: [{
+    service_order_id: "SO-LAST-TICK",
+    order_status: "WAITING_PAYMENT",
+    payment_status: "UNPAID",
+    final_price: 28,
+    matched_robotaxi_id: null,
+  }],
+  trips: [],
+  readinessTasks: [],
+  deploymentTasks: [],
+  routeExecutions: [],
+  robotaxis: [],
+};
+drainBusinessData.setServiceOrders = (updater) => {
+  drainBusinessData.serviceOrders = updater(drainBusinessData.serviceOrders);
+};
+drainBusinessData.setRobotaxis = (updater) => {
+  drainBusinessData.robotaxis = updater(drainBusinessData.robotaxis);
+};
+
+const pendingDrainRun = {
+  ...drainingRun,
+  simulation_status: "DRAINING",
+  current_time: "Day 1 00:10:00",
+  current_clock_time: "00:10:00",
+  current_simulation_seconds: 600,
+};
+const paymentDrainTick = executeTick({
+  simulationRun: pendingDrainRun,
+  policySnapshot: pendingDrainRun.simulation_policy_snapshot,
+  businessData: drainBusinessData,
+});
+assert.equal(paymentDrainTick.workflowActionCount, 1);
+assert.equal(paymentDrainTick.demandResult.order_count, 0);
+assert.equal(drainBusinessData.serviceOrders[0].order_status, "COMPLETED");
+assert.equal(drainBusinessData.serviceOrders[0].simulation_completed_at, "Day 1 00:10:00");
+
+const afterPayment = completeTick(
+  pendingDrainRun,
+  paymentDrainTick.tickContext,
+  paymentDrainTick.supplyResult,
+  paymentDrainTick.demandResult,
+  paymentDrainTick.executionResults,
+  paymentDrainTick.tickEventSummary,
+  { phase: "DRAINING", workflowActionCount: paymentDrainTick.workflowActionCount },
+).simulationRun;
+assert.equal(afterPayment.simulation_status, "DRAINING");
+
+const settledDrainTick = executeTick({
+  simulationRun: afterPayment,
+  policySnapshot: afterPayment.simulation_policy_snapshot,
+  businessData: drainBusinessData,
+});
+assert.equal(settledDrainTick.workflowActionCount, 0);
+const fullyDrained = completeTick(
+  afterPayment,
+  settledDrainTick.tickContext,
+  settledDrainTick.supplyResult,
+  settledDrainTick.demandResult,
+  settledDrainTick.executionResults,
+  settledDrainTick.tickEventSummary,
+  { phase: "DRAINING", workflowActionCount: 0 },
+).simulationRun;
+assert.equal(fullyDrained.simulation_status, "COMPLETED");
+
+synchronizeSimulationCounters(
+  [{ simulation_run_id: "SIM-RUN-009" }],
+  [{ simulation_event_id: "SE-0042" }],
+);
+const synchronized = initSimulationRun({ simulationName: "计数器恢复", simulationPolicy: policy });
+assert.equal(synchronized.simulationRun.simulation_run_id, "SIM-RUN-010");
+assert.equal(synchronized.event.simulation_event_id, "SE-0043");
 
 console.log("连续模拟时间轴代码级验证通过");

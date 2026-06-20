@@ -309,17 +309,18 @@ export function createSimulationRun({
   simulationPolicy,
   totalDays,
   tickMinutes,
+  tickSeconds,
   startSimulationSeconds = 0,
   startGlobalTick = 0,
   simulationTimelineId = "SIM-TIMELINE-001",
   previousSimulationRunId = null,
 }) {
-  const tickSeconds = Number(simulationPolicy.tick_seconds) || tickMinutes * 60;
+  const resolvedTickSeconds = Number(tickSeconds) || Number(simulationPolicy.tick_seconds) || tickMinutes * 60;
   const totalSeconds = totalDays * 24 * 60 * 60;
-  const totalTicks = Math.ceil(totalSeconds / tickSeconds);
+  const totalTicks = Math.ceil(totalSeconds / resolvedTickSeconds);
   const startSeconds = Math.max(0, Number(startSimulationSeconds) || 0);
   const plannedEndSeconds = startSeconds + totalSeconds;
-  const position = getSimulationPosition(startSeconds, tickSeconds);
+  const position = getSimulationPosition(startSeconds, resolvedTickSeconds);
   return {
     simulation_run_id: simulationRunId,
     simulation_name: simulationName,
@@ -330,7 +331,7 @@ export function createSimulationRun({
     previous_simulation_run_id: previousSimulationRunId,
     total_days: totalDays,
     tick_minutes: tickMinutes,
-    tick_seconds: tickSeconds,
+    tick_seconds: resolvedTickSeconds,
     total_ticks: totalTicks,
     simulation_start_seconds: startSeconds,
     planned_simulation_end_seconds: plannedEndSeconds,
