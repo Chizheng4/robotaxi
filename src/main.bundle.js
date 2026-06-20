@@ -818,8 +818,8 @@ function App() {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
     className: "ops-sider",
-    width: 216,
-    collapsedWidth: 58,
+    width: 232,
+    collapsedWidth: 60,
     collapsed: collapsed,
     trigger: null
   }, /*#__PURE__*/React.createElement("div", {
@@ -3486,10 +3486,32 @@ function renderCellValue(key, row) {
       color: passed ? "success" : "error"
     }, getDisplayValue(row[key]));
   }
+  if (isStatusField(key)) {
+    return /*#__PURE__*/React.createElement(StatusValue, {
+      value: row[key],
+      label: getFieldDisplayValue(key, row[key] ?? "", row)
+    });
+  }
   if (Array.isArray(row[key])) return row[key].join(" / ");
   if (typeof row[key] === "boolean") return row[key] ? "是" : "否";
   if (typeof row[key] === "object" && row[key] !== null) return summarizeObject(row[key]);
   return getFieldDisplayValue(key, row[key] ?? "", row);
+}
+function StatusValue({
+  value,
+  label
+}) {
+  return /*#__PURE__*/React.createElement("span", {
+    className: `status-value status-${getStatusTone(value)}`
+  }, label || "无");
+}
+function getStatusTone(value) {
+  const normalized = String(value || "").toUpperCase();
+  if (["ACTIVE", "AVAILABLE", "COMPLETED", "PAID", "PASSED", "PASS", "SUCCESS", "IDLE", "ARRIVED", "NORMAL_ARRIVAL"].includes(normalized)) return "success";
+  if (["FAILED", "FAIL", "BLOCKED", "UNAVAILABLE", "CANCELLED"].some(token => normalized.includes(token)) || normalized.includes("ABNORMAL")) return "danger";
+  if (["WAITING", "PENDING", "PAUSED", "DRAFT", "RESTRICTED", "STOPPED"].some(token => normalized.includes(token))) return "warning";
+  if (["RUNNING", "MOVING", "CHECKING", "INSPECTION", "ASSIGNED", "PROCESSING", "ON_THE_WAY", "CALCULATING", "SETTLING", "BUSY"].some(token => normalized.includes(token))) return "info";
+  return "neutral";
 }
 function RowActionButton({
   children,
@@ -3749,6 +3771,12 @@ function renderDetailValue(key, value, row = null) {
     return /*#__PURE__*/React.createElement(Tag, {
       color: passed ? "success" : "error"
     }, getDisplayValue(value));
+  }
+  if (isStatusField(key)) {
+    return /*#__PURE__*/React.createElement(StatusValue, {
+      value: value,
+      label: getFieldDisplayValue(key, value ?? "", row)
+    });
   }
   if (isLocationDetailKey(key) && value && typeof value === "object") {
     return /*#__PURE__*/React.createElement(CompactLocationDetail, {

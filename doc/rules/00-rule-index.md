@@ -18,6 +18,7 @@
 | `04-frontend-ux-rules.md` | B 端运营平台页面布局、字体、密度、交互 |
 | `05-codex-execution-rules.md` | 执行方式、验证要求、禁止行为、暂停条件 |
 | `06-document-driven-iteration-rules.md` | 用户更新文档后的差异分析、确认和自动执行协议 |
+| `07-frontend-design-system.md` | 前端设计令牌、页面模板、组件规范、体验一致性与模型接入规则 |
 
 ## 3. 读取规则
 
@@ -27,8 +28,9 @@
 2. `doc/iteration-rules.md`
 3. `doc/rules/03-field-dictionary-rules.md`
 4. `doc/rules/04-frontend-ux-rules.md`
-5. `doc/rules/05-codex-execution-rules.md`
-6. `doc/common/field-dictionary.md`
+5. `doc/rules/07-frontend-design-system.md`
+6. `doc/rules/05-codex-execution-rules.md`
+7. `doc/common/field-dictionary.md`
 
 文档差异驱动迭代（用户更新文档后要求分析）额外读取：
 
