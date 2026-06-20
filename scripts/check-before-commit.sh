@@ -26,6 +26,7 @@ test -f src/main.jsx || fail "缺少 src/main.jsx"
 test -f src/main.bundle.js || fail "缺少 src/main.bundle.js"
 test -f vendor/babel.min.js || fail "缺少 vendor/babel.min.js"
 test -f VERSION.md || fail "缺少 VERSION.md"
+test -f scripts/verify-server-readiness.py || fail "缺少启动就绪检查脚本"
 
 print_step "检查生成后的 bundle 是否与源码一致"
 TMP_BUNDLE="$(mktemp "${TMPDIR:-/tmp}/robotaxi-main-bundle.XXXXXX.js")"
@@ -51,6 +52,11 @@ node --check src/domain/taskTypes.js
 node --check src/domain/serviceOrderSettlement.js
 node scripts/verify-service-order-settlement.mjs
 node scripts/verify-simulation-continuity.mjs
+python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
+
+if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then
+  fail "启动脚本必须使用并发静态服务，避免单连接阻塞导致白屏"
+fi
 
 print_step "检查 Git diff 空白问题"
 git diff --check

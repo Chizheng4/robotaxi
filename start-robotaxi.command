@@ -26,19 +26,6 @@ try {
 }
 '
 
-echo "==> Injecting version into index.html ..."
-node -e '
-const fs = require("fs");
-const html = fs.readFileSync("index.html", "utf8");
-const version = process.argv[1];
-const updated = html.replace(
-  /src="\.\/src\/main\.bundle\.js\?v=[^"]*"/,
-  "src=\"./src/main.bundle.js?v=" + version + "\""
-);
-fs.writeFileSync("index.html", updated);
-console.log("    Version: " + version);
-' "$APP_VERSION"
-
 echo "==> Restarting server on ${URL}"
 PIDS="$(lsof -tiTCP:${PORT} -sTCP:LISTEN || true)"
 if [ -n "${PIDS}" ]; then
@@ -64,18 +51,21 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # silent
 
-server = http.server.HTTPServer(('${HOST}', ${PORT}), NoCacheHandler)
+server = http.server.ThreadingHTTPServer(('${HOST}', ${PORT}), NoCacheHandler)
+server.daemon_threads = True
 print('Serving on ${HOST}:${PORT} with no-cache headers', flush=True)
 sys.stdout.flush()
 server.serve_forever()
 " >"${LOG_FILE}" 2>&1 &
+SERVER_PID=$!
 sleep 1
 
-if curl -fsS "http://${HOST}:${PORT}/" >/dev/null 2>&1; then
+if python3 scripts/verify-server-readiness.py "${HOST}" "${PORT}"; then
   open "$URL"
   echo "==> Opened ${URL}"
-  echo "==> Cache disabled. Runtime data preserved."
+  echo "==> Concurrent resource check passed. Cache disabled. Runtime data preserved."
 else
+  kill "${SERVER_PID}" >/dev/null 2>&1 || true
   echo "ERROR: Server failed to start. See ${LOG_FILE}"
   exit 1
 fi
