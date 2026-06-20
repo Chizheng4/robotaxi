@@ -50,6 +50,7 @@ node --check src/domain/fieldDictionary.js
 node --check src/domain/taskTypes.js
 node --check src/domain/serviceOrderSettlement.js
 node scripts/verify-service-order-settlement.mjs
+node scripts/verify-simulation-continuity.mjs
 
 print_step "检查 Git diff 空白问题"
 git diff --check

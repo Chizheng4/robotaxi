@@ -210,3 +210,29 @@ SimulationRun = COMPLETED
 8. SimulationClock 不判断资源状态；
     
 9. 场景信息用于前端展示和调试。
+
+---
+
+## 10. v027 连续模拟时间标准
+
+从 v027 起，SimulationClock 使用 `current_simulation_seconds` 作为唯一计算源，不再以字符串时间做累计运算。
+
+统一展示格式：
+
+```text
+Day N HH:MM:SS
+```
+
+运行时同时保留：
+
+|字段|职责|
+|---|---|
+|`current_simulation_seconds`|同一模拟时间轴上的绝对模拟秒|
+|`current_time`|面向用户的 `Day N HH:MM:SS`|
+|`current_clock_time`|供每日时间窗口判断的 `HH:MM:SS`|
+|`current_global_tick`|同一时间轴连续累计的 Tick|
+|`current_run_tick`|当前 SimulationRun 内实际执行的 Tick|
+
+`tick_seconds` 是统一计算粒度，旧 `tick_minutes` 仅用于兼容换算。跨午夜推进必须保留剩余秒数，不得直接丢弃为 `00:00:00`。
+
+SimulationEvent 使用动作实际发生时刻；运行游标只能在本 Tick 事件记录完成后推进，避免事件时间偏移一个 Tick。

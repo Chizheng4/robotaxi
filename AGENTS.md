@@ -18,7 +18,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 2. `doc/rules/03-field-dictionary-rules.md` — 字段字典规则
 3. `doc/rules/04-frontend-ux-rules.md` — 前端体验、设计系统与标准化接入规则
 4. `doc/rules/05-codex-execution-rules.md` — 执行、验证与禁止行为
-5. `doc/common/field-dictionary.md` — 字段字典（文档）
+5. `doc/rules/field-dictionary.md` — 字段字典（文档）
 6. `src/domain/fieldDictionary.js` — 字段字典（前端代码，含 fieldDictionary 和 valueDictionary）
 
 #### B. 业务对象 / 字段 / 状态 / 枚举修改
@@ -26,7 +26,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 当任务新增或修改业务对象、字段、状态、枚举时，必须读取：
 
 1. `doc/rules/03-field-dictionary-rules.md`
-2. `doc/common/field-dictionary.md`
+2. `doc/rules/field-dictionary.md`
 3. `src/domain/fieldDictionary.js`
 
 #### C. 前端页面 / 交互 / 展示修改
@@ -50,7 +50,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 
 新增或修改任何业务对象、字段、状态、枚举时，以下两个文件必须同步更新，缺一不可：
 
-- `doc/common/field-dictionary.md` — 文档版字段字典
+- `doc/rules/field-dictionary.md` — 文档版字段字典
 - `src/domain/fieldDictionary.js` — 前端代码版字段字典。其中：
   - `fieldDictionary` 对象 → 用于表格列头、详情字段名的中文显示
   - `valueDictionary` 对象 → 用于状态值、枚举值的中文显示
@@ -86,7 +86,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 
 每轮编码结束、准备告知用户「完成」之前，按实际变更范围确认：
 
-- [ ] **字段字典**：若涉及业务字段、状态、枚举，`doc/common/field-dictionary.md` 和 `src/domain/fieldDictionary.js` 是否都已更新？
+- [ ] **字段字典**：若涉及业务字段、状态、枚举，`doc/rules/field-dictionary.md` 和 `src/domain/fieldDictionary.js` 是否都已更新？
 - [ ] **前端中文**：若涉及前端展示，表格列名、按钮、状态标签是否全部中文？
 - [ ] **前端布局**：若涉及业务页面，是否保持状态筛选栏、搜索过滤区、操作列、详情面板等必要结构？
 - [ ] **设计系统**：若涉及前端，是否复用 `04-frontend-ux-rules.md` 的令牌、页面模板、组件状态和验收标准，避免一次性样式？
@@ -123,4 +123,4 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 | `doc/rules/04-frontend-ux-rules.md`               | 前端体验、设计系统与标准化规则 |
 | `doc/rules/05-codex-execution-rules.md`           | 执行要求、验证与暂停条件  |
 | `doc/rules/06-document-driven-iteration-rules.md` | 文档差异驱动迭代协议    |
-| `doc/common/field-dictionary.md`                  | 统一字段字典正文      |
+| `doc/rules/field-dictionary.md`                   | 统一字段字典正文      |

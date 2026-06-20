@@ -33,10 +33,13 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
 
   // 2. 计算当前 Tick 时间上下文
   const tickContext = computeTimeContext({
+    currentSimulationSeconds: simulationRun.current_simulation_seconds,
     currentTime: simulationRun.current_time,
     currentDay: simulationRun.current_day,
     dayTick: simulationRun.current_day_tick,
     globalTick: simulationRun.current_global_tick,
+    runTick: simulationRun.current_run_tick,
+    tickSeconds: simulationRun.tick_seconds,
     policySnapshot,
   });
 
@@ -44,7 +47,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   const supplyResult = runSupplyTrigger({ timeContext: tickContext, policySnapshot });
 
   // 4. 需求侧触发判断
-  const tickRandomSeed = `${randomSeed || simulationRun.simulation_run_id}-${simulationRun.current_global_tick}`;
+  const tickRandomSeed = `${randomSeed ?? simulationRun.simulation_policy_snapshot?.random_seed ?? simulationRun.simulation_run_id}-${simulationRun.current_global_tick}`;
   const demandResult = runDemandTrigger({ timeContext: tickContext, policySnapshot, randomSeed: tickRandomSeed });
 
   // 5. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
@@ -70,6 +73,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     preExecutionResults = executeActions(preActions, businessData, {
       simulationRunId: simulationRun.simulation_run_id,
       globalTick: simulationRun.current_global_tick,
+      tickContext,
       policySnapshot,
     });
   }
@@ -100,6 +104,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     executionResults = executeActions(workflowActions, refreshedBusinessData, {
       simulationRunId: simulationRun.simulation_run_id,
       globalTick: simulationRun.current_global_tick,
+      tickContext,
       policySnapshot,
     });
   }

@@ -858,6 +858,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |policy_name|策略名称|持久化字段|模拟策略名称|
 |policy_status|策略状态|运行态字段|策略当前状态：DRAFT / ACTIVE / DISABLED / ARCHIVED|
 |tick_minutes|Tick 时长（分钟）|持久化字段|每次 Tick 模拟的分钟数|
+|tick_seconds|Tick 时长（秒）|持久化字段|统一时间计算使用的 Tick 秒数，兼容 tick_minutes 换算|
 |simulation_days|模拟天数|持久化字段|一次模拟运行的总天数|
 |run_speed_level|运行速度等级|持久化字段|模拟运行速度：SLOW / NORMAL / FAST / ULTRA_FAST|
 |random_seed|随机种子|持久化字段|随机数种子|
@@ -906,16 +907,30 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |---|---|---|---|
 |simulation_run_id|模拟运行编号|持久化字段|SimulationRun 唯一编号|
 |simulation_name|模拟运行名称|持久化字段|模拟运行名称|
-|simulation_status|模拟运行状态|运行态字段|当前模拟状态：READY / RUNNING / PAUSED / COMPLETED / STOPPED / FAILED|
+|simulation_status|模拟运行状态|运行态字段|当前模拟状态：READY / RUNNING / PAUSED / DRAINING / COMPLETED / STOPPED / FAILED|
 |simulation_policy_id|模拟策略编号|持久化字段|关联的 SimulationPolicy 编号|
 |simulation_policy_snapshot|模拟策略快照|运行态字段|运行创建时的策略快照|
+|simulation_timeline_id|模拟时间轴编号|持久化字段|串联多次连续 SimulationRun 的时间轴编号|
+|previous_simulation_run_id|上一模拟运行编号|持久化字段|同一时间轴内上一运行编号|
 |total_days|模拟总天数|持久化字段|模拟总天数|
 |tick_minutes|Tick 时长（分钟）|持久化字段|每次 Tick 的模拟分钟数|
+|tick_seconds|Tick 时长（秒）|持久化字段|每次 Tick 的统一模拟秒数，是时间推进计算值|
 |total_ticks|总 Tick 数|持久化字段|模拟运行总 Tick 数|
+|simulation_start_seconds|模拟开始绝对秒|持久化字段|运行在时间轴上的开始绝对秒|
+|planned_simulation_end_seconds|计划结束绝对秒|持久化字段|计划触发周期的结束绝对秒|
+|simulation_end_seconds|实际结束绝对秒|运行态字段|包含排空阶段的实际结束绝对秒|
+|simulation_start_at|模拟开始时间|持久化字段|统一 Day N HH:MM:SS 格式的开始时间|
+|planned_simulation_end_at|计划模拟结束时间|持久化字段|统一 Day N HH:MM:SS 格式的计划结束时间|
+|simulation_end_at|实际模拟结束时间|运行态字段|统一 Day N HH:MM:SS 格式的实际结束时间|
+|current_simulation_seconds|当前模拟绝对秒|运行态字段|当前时间轴绝对模拟秒，是运行时钟唯一计算源|
 |current_day|当前模拟天数|运行态字段|当前模拟进行到第几天|
-|current_time|当前模拟时间|运行态字段|当前模拟时间（HH:MM）|
+|current_time|当前模拟时间|运行态字段|当前模拟时间（Day N HH:MM:SS）|
+|current_clock_time|当前日内时间|运行态字段|供时间窗口计算使用的 HH:MM:SS|
 |current_day_tick|当天 Tick 序号|运行态字段|当天的 Tick 序号|
-|current_global_tick|全局 Tick 序号|运行态字段|模拟运行全局 Tick 序号|
+|current_run_tick|当前运行 Tick 序号|运行态字段|本次运行实际 Tick，包含排空 Tick|
+|current_global_tick|全局 Tick 序号|运行态字段|同一时间轴连续累计的 Tick 序号|
+|trigger_ticks_completed|已完成触发 Tick 数|运行态字段|已执行供给和需求触发的计划 Tick 数|
+|drain_ticks|排空 Tick 数|运行态字段|计划周期结束后用于完成既有工作流的 Tick 数|
 |current_time_period|当前时间段|运行态字段|当前所处时间段|
 |current_period_type|当前时段类型|运行态字段|当前时段类型：PEAK / NORMAL / LOW|
 |current_supply_scene|当前供给侧场景|运行态字段|当前供给侧 Tick 场景快照|

@@ -1,53 +1,57 @@
 /**
- * SimulationClock：模拟时间上下文计算
- *
- * 根据当前模拟时间和 SimulationPolicy snapshot 计算时间语境。
- * 参考文档：doc/08-simulation-system/01-simulation-runtime/01-simulation-time.md
+ * SimulationClock：连续模拟时间上下文计算。
+ * 绝对模拟秒是唯一计算源，Day N HH:MM:SS 仅作为稳定展示格式。
  */
 
 import { TimePeriod, PeriodType } from "../domain/simulationTypes.js";
+import {
+  SECONDS_PER_DAY,
+  clockTimeToSeconds,
+  formatSimulationTimestamp,
+  getSimulationPosition,
+  resolveTickSeconds,
+} from "../domain/simulationTime.js";
 
-/**
- * 计算当前 Tick 的时间上下文
- *
- * @param {Object} params
- * @param {string} params.currentTime - 当前模拟时间 "HH:MM"
- * @param {number} params.currentDay - 当前模拟第几天
- * @param {number} params.dayTick - 当天 Tick
- * @param {number} params.globalTick - 全局 Tick
- * @param {Object} params.policySnapshot - simulation_policy_snapshot
- * @returns {Object} 时间上下文
- */
-export function computeTimeContext({ currentTime, currentDay, dayTick, globalTick, policySnapshot }) {
-  const timePeriod = getTimePeriod(currentTime, policySnapshot);
-  const timeWindow = getTimeWindow(currentTime, policySnapshot);
+export { formatSimulationTimestamp, getSimulationPosition, resolveTickSeconds } from "../domain/simulationTime.js";
+
+export function computeTimeContext({
+  currentSimulationSeconds,
+  currentTime,
+  currentDay,
+  dayTick,
+  globalTick,
+  runTick = 0,
+  tickSeconds,
+  policySnapshot,
+}) {
+  const resolvedTickSeconds = resolveTickSeconds({ tickSeconds, tickMinutes: policySnapshot?.tick_minutes });
+  const legacySeconds = ((Number(currentDay) || 1) - 1) * SECONDS_PER_DAY + clockTimeToSeconds(currentTime);
+  const absoluteSeconds = Number.isFinite(Number(currentSimulationSeconds))
+    ? Number(currentSimulationSeconds)
+    : legacySeconds;
+  const position = getSimulationPosition(absoluteSeconds, resolvedTickSeconds);
+  const timePeriod = getTimePeriod(position.clockTime, policySnapshot || {});
+  const timeWindow = getTimeWindow(position.clockTime, policySnapshot || {});
   const periodType = timeWindow?.period_type || PeriodType.NORMAL;
-  const isWorkerWorkingTime = isWithinTimeRange(currentTime, policySnapshot.worker_work_start_time, policySnapshot.worker_work_end_time);
-  const isRobotaxiOperatingTime = isWithinTimeRange(currentTime, policySnapshot.robotaxi_operating_start_time, policySnapshot.robotaxi_operating_end_time);
 
   return {
-    current_time: currentTime,
-    current_day: currentDay,
-    day_tick: dayTick,
-    global_tick: globalTick,
+    current_time: position.displayTime,
+    current_clock_time: position.clockTime,
+    current_simulation_seconds: position.simulationSeconds,
+    current_day: position.day,
+    day_tick: Number.isFinite(Number(dayTick)) ? Number(dayTick) : position.dayTick,
+    global_tick: Number(globalTick) || 0,
+    run_tick: Number(runTick) || 0,
+    tick_seconds: resolvedTickSeconds,
     time_period: timePeriod,
     period_type: periodType,
     time_window: timeWindow?.time_window || null,
     demand_profile_id: timeWindow?.demand_profile_id || null,
-    is_worker_working_time: isWorkerWorkingTime,
-    is_robotaxi_operating_time: isRobotaxiOperatingTime,
+    is_worker_working_time: isWithinTimeRange(position.clockTime, policySnapshot?.worker_work_start_time, policySnapshot?.worker_work_end_time),
+    is_robotaxi_operating_time: isWithinTimeRange(position.clockTime, policySnapshot?.robotaxi_operating_start_time, policySnapshot?.robotaxi_operating_end_time),
   };
 }
 
-/**
- * 更新当前场景摘要（写入 SimulationRun）
- *
- * @param {Object} simulationRun - 当前 SimulationRun 对象
- * @param {Object} context - 时间上下文（computeTimeContext 的返回值）
- * @param {Object} supplySummary - 供给侧触发摘要（可选）
- * @param {Object} demandSummary - 需求侧触发摘要（可选）
- * @returns {Object} 更新后的 SimulationRun
- */
 export function updateSimulationRunScene(simulationRun, context, supplySummary = null, demandSummary = null) {
   return {
     ...simulationRun,
@@ -59,45 +63,32 @@ export function updateSimulationRunScene(simulationRun, context, supplySummary =
   };
 }
 
-/**
- * 推进 Tick（更新模拟时间）
- *
- * @param {Object} simulationRun - 当前 SimulationRun
- * @param {number} tickMinutes - 每 Tick 分钟数
- * @returns {Object} 更新后的 SimulationRun
- */
-export function advanceTick(simulationRun, tickMinutes) {
-  const currentMinutes = timeToMinutes(simulationRun.current_time);
-  const nextMinutes = currentMinutes + tickMinutes;
-
-  if (nextMinutes >= 24 * 60) {
-    return {
-      ...simulationRun,
-      current_day: simulationRun.current_day + 1,
-      current_time: "00:00",
-      current_day_tick: 0,
-      current_global_tick: simulationRun.current_global_tick + 1,
-    };
-  }
+export function advanceTick(simulationRun, { tickSeconds, phase = "RUNNING" } = {}) {
+  const resolvedTickSeconds = resolveTickSeconds({
+    tickSeconds,
+    tickMinutes: simulationRun.tick_minutes || simulationRun.simulation_policy_snapshot?.tick_minutes,
+  });
+  const nextSeconds = (Number(simulationRun.current_simulation_seconds) || 0) + resolvedTickSeconds;
+  const position = getSimulationPosition(nextSeconds, resolvedTickSeconds);
 
   return {
     ...simulationRun,
-    current_time: minutesToTime(nextMinutes),
-    current_day_tick: simulationRun.current_day_tick + 1,
-    current_global_tick: simulationRun.current_global_tick + 1,
+    tick_seconds: resolvedTickSeconds,
+    current_simulation_seconds: nextSeconds,
+    current_day: position.day,
+    current_time: position.displayTime,
+    current_clock_time: position.clockTime,
+    current_day_tick: position.dayTick,
+    current_run_tick: (Number(simulationRun.current_run_tick) || 0) + 1,
+    current_global_tick: (Number(simulationRun.current_global_tick) || 0) + 1,
+    trigger_ticks_completed: (Number(simulationRun.trigger_ticks_completed) || 0) + (phase === "RUNNING" ? 1 : 0),
+    drain_ticks: (Number(simulationRun.drain_ticks) || 0) + (phase === "DRAINING" ? 1 : 0),
   };
 }
 
-/**
- * 判断 SimulationRun 是否已完成
- */
 export function isSimulationComplete(simulationRun) {
-  return simulationRun.current_global_tick >= simulationRun.total_ticks;
+  return (Number(simulationRun.trigger_ticks_completed) || 0) >= Number(simulationRun.total_ticks || 0);
 }
-
-// ============================================================================
-// 辅助函数
-// ============================================================================
 
 function getTimePeriod(time, policySnapshot) {
   const configs = policySnapshot.time_period_configs || [];
@@ -112,25 +103,15 @@ function getTimeWindow(time, policySnapshot) {
 
 function isWithinTimeRange(time, start, end) {
   if (!start || !end) return false;
-  const t = timeToMinutes(time);
-  const s = timeToMinutes(start);
-  const e = timeToMinutes(end);
-  return t >= s && t < e;
-}
-
-function timeToMinutes(time) {
-  const [h, m] = (time || "0:0").split(":").map(Number);
-  return h * 60 + (m || 0);
-}
-
-function minutesToTime(minutes) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  const value = clockTimeToSeconds(time);
+  const rangeStart = clockTimeToSeconds(start);
+  const rangeEnd = clockTimeToSeconds(end);
+  return value >= rangeStart && value < rangeEnd;
 }
 
 function buildSceneSummary(context, supplySummary, demandSummary) {
   return {
+    simulation_time: context.current_time,
     time_period: context.time_period,
     period_type: context.period_type,
     worker_working: context.is_worker_working_time,

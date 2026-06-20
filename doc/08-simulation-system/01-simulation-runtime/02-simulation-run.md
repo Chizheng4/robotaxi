@@ -278,6 +278,24 @@ SimulationRun 运行过程中维护当前模拟位置。
 |current_day_tick|当天 Tick|
 |current_global_tick|全局 Tick|
 
+### 9.1 v027 连续运行关系
+
+同一连续模拟使用 `simulation_timeline_id` 串联。后一运行通过 `previous_simulation_run_id` 指向前一运行，并满足：
+
+```text
+next.simulation_start_seconds = previous.simulation_end_seconds
+next.simulation_start_at = previous.simulation_end_at
+next.current_global_tick = previous.current_global_tick
+```
+
+同一时间轴只允许一个未结束运行；存在 `READY / RUNNING / PAUSED / DRAINING` 运行时，不得创建下一运行。历史节点重跑必须创建新的时间轴分支，不能覆盖主时间线。
+
+SimulationRun 同时记录计划结束和实际结束：
+
+- `planned_simulation_end_at`：停止产生新供给/需求触发的时间；
+- `simulation_end_at`：既有工作流排空后的实际结束时间；
+- 两者差值是排空阶段消耗的模拟时长。
+
 示例：
 
 ```json

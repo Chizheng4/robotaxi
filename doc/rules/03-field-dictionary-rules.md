@@ -4,7 +4,7 @@
 
 字段字典有两个文件，必须同时维护：
 
-- `doc/common/field-dictionary.md` — 文档版，供人阅读
+- `doc/rules/field-dictionary.md` — 文档版，供人阅读
 - `src/domain/fieldDictionary.js` — 前端代码版，供程序使用
 
 代码版分为两个对象：
@@ -82,7 +82,7 @@ Robotaxi、任务、行驶记录、服务订单等对象展示位置时，应尽
 每轮编码结束后，准备告知用户「完成」之前，必须检查：
 
 1. 本轮新增或修改了哪些业务对象、字段、状态、枚举；
-2. `doc/common/field-dictionary.md` 是否已包含上述所有内容；
+2. `doc/rules/field-dictionary.md` 是否已包含上述所有内容；
 3. 枚举值字典是否已包含所有新增枚举的中文映射。
 
 任何未同步的字段或枚举，必须在告知用户完成前补充。

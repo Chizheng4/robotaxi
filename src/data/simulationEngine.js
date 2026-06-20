@@ -15,7 +15,7 @@ import {
   createSimulationEvent,
 } from "../domain/simulationTypes.js";
 
-import { computeTimeContext, advanceTick, updateSimulationRunScene, isSimulationComplete } from "./simulationClock.js";
+import { computeTimeContext, advanceTick, formatSimulationTimestamp, updateSimulationRunScene, isSimulationComplete } from "./simulationClock.js";
 
 // ============================================================================
 // 1. SimulationRun 生命周期管理
@@ -47,13 +47,21 @@ function nextSimulationEventId() {
  * @param {number} [params.tickMinutes] - 每 Tick 分钟数（默认从 Policy 读取）
  * @returns {Object} { simulationRun, event }
  */
-export function initSimulationRun({ simulationName, simulationPolicy, totalDays, tickMinutes }) {
+export function initSimulationRun({ simulationName, simulationPolicy, totalDays, tickMinutes, previousSimulationRun = null }) {
+  const startSimulationSeconds = Number(previousSimulationRun?.simulation_end_seconds);
+  const inheritedStartSeconds = Number.isFinite(startSimulationSeconds)
+    ? startSimulationSeconds
+    : Number(previousSimulationRun?.current_simulation_seconds) || 0;
   const run = createSimulationRun({
     simulationRunId: nextSimulationRunId(),
     simulationName,
     simulationPolicy,
     totalDays: totalDays || simulationPolicy.simulation_days,
     tickMinutes: tickMinutes || simulationPolicy.tick_minutes,
+    startSimulationSeconds: inheritedStartSeconds,
+    startGlobalTick: previousSimulationRun?.current_global_tick || 0,
+    simulationTimelineId: previousSimulationRun?.simulation_timeline_id || "SIM-TIMELINE-001",
+    previousSimulationRunId: previousSimulationRun?.simulation_run_id || null,
   });
 
   const event = createSimulationEvent({
@@ -143,7 +151,13 @@ export function resumeSimulationRun(simulationRun) {
  */
 export function stopSimulationRun(simulationRun) {
   if (![SimulationStatus.RUNNING, SimulationStatus.PAUSED].includes(simulationRun.simulation_status)) return null;
-  const updated = { ...simulationRun, simulation_status: SimulationStatus.STOPPED, stopped_at: new Date().toISOString() };
+  const updated = {
+    ...simulationRun,
+    simulation_status: SimulationStatus.STOPPED,
+    stopped_at: new Date().toISOString(),
+    simulation_end_seconds: simulationRun.current_simulation_seconds,
+    simulation_end_at: formatSimulationTimestamp(simulationRun.current_simulation_seconds),
+  };
   const event = createSimulationEvent({
     simulationEventId: nextSimulationEventId(), simulationRunId: updated.simulation_run_id,
     simulationDay: updated.current_day, simulationTime: updated.current_time,
@@ -169,20 +183,16 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   // 更新场景
   let updated = updateSimulationRunScene(simulationRun, tickContext, supplyResult, demandResult);
 
-  // 推进 Tick
-  const tickMinutes = updated.tick_minutes || updated.simulation_policy_snapshot?.tick_minutes || 10;
-  updated = advanceTick(updated, tickMinutes);
-
   const events = [];
-  const tick = updated.current_global_tick;
-  const day = updated.current_day;
-  const time = updated.current_time;
-  const dayT = updated.current_day_tick;
+  const tick = (Number(tickContext?.global_tick) || 0) + 1;
+  const day = tickContext?.current_day || updated.current_day;
+  const time = tickContext?.current_time || updated.current_time;
+  const dayT = tickContext?.day_tick ?? updated.current_day_tick;
   const runId = updated.simulation_run_id;
 
   // === Phase 1: TICK_STARTED ===
   events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_STARTED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
-    `Tick #${tick} 开始 | Day ${day} ${time} | 时段 ${tickContext?.period_type || tickContext?.time_period || 'N/A'}`));
+    `Tick #${tick} 开始 | ${time} | 时段 ${tickContext?.period_type || tickContext?.time_period || 'N/A'}`));
 
   // === Phase 2: SUPPLY_TRIGGER ===
   if (supplyResult) {
@@ -250,10 +260,19 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
     `Tick #${tick} 完成 | 创建 ${created} 订单 | 执行 ${execResults.length} 动作（成功 ${succeeded} / 失败 ${failed}）`));
 
-    // 判断是否完成
+  // 所有事件使用本 Tick 实际发生时刻，记录完成后再推进运行游标。
+  updated = advanceTick(updated, { tickSeconds: tickContext?.tick_seconds, phase: "RUNNING" });
+
+  // 判断是否完成
   if (isSimulationComplete(updated)) {
-    updated = { ...updated, simulation_status: SimulationStatus.COMPLETED, completed_at: new Date().toISOString() };
-    events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_RUN_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
+    updated = {
+      ...updated,
+      simulation_status: SimulationStatus.COMPLETED,
+      completed_at: new Date().toISOString(),
+      simulation_end_seconds: updated.current_simulation_seconds,
+      simulation_end_at: formatSimulationTimestamp(updated.current_simulation_seconds),
+    };
+    events.push(makeEvent(runId, updated.current_day, updated.current_time, updated.current_day_tick, updated.current_global_tick, EventType.SIMULATION_RUN_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
       `模拟运行 ${runId} 已完成`));
   }
 

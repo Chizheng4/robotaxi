@@ -1,3 +1,5 @@
+import { formatSimulationTimestamp, getSimulationPosition } from "./simulationTime.js";
+
 /**
  * Simulation System 类型定义
  *
@@ -14,6 +16,7 @@ export const SimulationStatus = {
   READY: "READY",
   RUNNING: "RUNNING",
   PAUSED: "PAUSED",
+  DRAINING: "DRAINING",
   COMPLETED: "COMPLETED",
   STOPPED: "STOPPED",
   FAILED: "FAILED",
@@ -23,6 +26,7 @@ export const SimulationStatusLabel = {
   [SimulationStatus.READY]: "待启动",
   [SimulationStatus.RUNNING]: "运行中",
   [SimulationStatus.PAUSED]: "暂停中",
+  [SimulationStatus.DRAINING]: "排空中",
   [SimulationStatus.COMPLETED]: "已完成",
   [SimulationStatus.STOPPED]: "已停止",
   [SimulationStatus.FAILED]: "失败",
@@ -235,6 +239,7 @@ export function createDefaultSimulationPolicy(overrides = {}) {
     policy_name: "1天自动运营模拟默认配置",
     policy_status: PolicyStatus.ACTIVE,
     tick_minutes: 10,
+    tick_seconds: 600,
     simulation_days: 1,
     run_speed_level: RunSpeedLevel.FAST,
     random_seed: 20260101,
@@ -294,21 +299,50 @@ export function createDefaultSimulationPolicy(overrides = {}) {
  * @param {number} params.tickMinutes - 每 Tick 分钟数
  * @returns {Object} SimulationRun 对象
  */
-export function createSimulationRun({ simulationRunId, simulationName, simulationPolicy, totalDays, tickMinutes }) {
-  const totalTicks = totalDays * 24 * 60 / tickMinutes;
+export function createSimulationRun({
+  simulationRunId,
+  simulationName,
+  simulationPolicy,
+  totalDays,
+  tickMinutes,
+  startSimulationSeconds = 0,
+  startGlobalTick = 0,
+  simulationTimelineId = "SIM-TIMELINE-001",
+  previousSimulationRunId = null,
+}) {
+  const tickSeconds = Number(simulationPolicy.tick_seconds) || tickMinutes * 60;
+  const totalSeconds = totalDays * 24 * 60 * 60;
+  const totalTicks = Math.ceil(totalSeconds / tickSeconds);
+  const startSeconds = Math.max(0, Number(startSimulationSeconds) || 0);
+  const plannedEndSeconds = startSeconds + totalSeconds;
+  const position = getSimulationPosition(startSeconds, tickSeconds);
   return {
     simulation_run_id: simulationRunId,
     simulation_name: simulationName,
     simulation_status: SimulationStatus.READY,
     simulation_policy_id: simulationPolicy.simulation_policy_id,
     simulation_policy_snapshot: JSON.parse(JSON.stringify(simulationPolicy)),
+    simulation_timeline_id: simulationTimelineId,
+    previous_simulation_run_id: previousSimulationRunId,
     total_days: totalDays,
     tick_minutes: tickMinutes,
+    tick_seconds: tickSeconds,
     total_ticks: totalTicks,
-    current_day: 1,
-    current_time: "00:00",
-    current_day_tick: 0,
-    current_global_tick: 0,
+    simulation_start_seconds: startSeconds,
+    planned_simulation_end_seconds: plannedEndSeconds,
+    simulation_end_seconds: null,
+    simulation_start_at: formatSimulationTimestamp(startSeconds),
+    planned_simulation_end_at: formatSimulationTimestamp(plannedEndSeconds),
+    simulation_end_at: null,
+    current_simulation_seconds: startSeconds,
+    current_day: position.day,
+    current_time: position.displayTime,
+    current_clock_time: position.clockTime,
+    current_day_tick: position.dayTick,
+    current_run_tick: 0,
+    current_global_tick: Number(startGlobalTick) || 0,
+    trigger_ticks_completed: 0,
+    drain_ticks: 0,
     current_time_period: null,
     current_period_type: null,
     current_supply_scene: null,

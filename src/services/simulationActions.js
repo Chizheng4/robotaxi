@@ -67,9 +67,20 @@ export function useSimulationActions({
     if (!simulationEngine || !simulationPolicies.length) { debug("createSimulationRun 失败: engine或policies缺失"); return; }
     const policy = simulationPolicies.find((p) => p.policy_status === "ACTIVE");
     if (!policy) { debug("createSimulationRun 失败: 无ACTIVE策略"); return; }
+    const unfinishedRun = simulationRuns.find((run) => ["READY", "RUNNING", "PAUSED", "DRAINING"].includes(run.simulation_status));
+    if (unfinishedRun) {
+      debug("createSimulationRun 失败: 存在未结束运行 " + unfinishedRun.simulation_run_id);
+      return;
+    }
+    const previousSimulationRun = simulationRuns.reduce((latest, run) => {
+      const runEnd = Number(run.simulation_end_seconds ?? run.current_simulation_seconds) || 0;
+      const latestEnd = Number(latest?.simulation_end_seconds ?? latest?.current_simulation_seconds) || -1;
+      return runEnd > latestEnd ? run : latest;
+    }, null);
     const { simulationRun: run, event: evt } = simulationEngine.initSimulationRun({
       simulationName: `模拟运行 ${simulationRuns.length + 1}`,
       simulationPolicy: policy,
+      previousSimulationRun,
     });
     debug("createSimulationRun 成功: " + run.simulation_run_id + " status=" + run.simulation_status);
     setSimulationRuns((prev) => [run, ...prev]);
@@ -142,12 +153,12 @@ export function useSimulationActions({
         stopTickInterval();
         return prev;
       }
-      debug("Tick #" + (run.current_global_tick+1) + " | time=" + run.current_time + " Day=" + run.current_day);
+      debug("Tick #" + (run.current_global_tick+1) + " | time=" + run.current_time);
       const businessData = getBD ? getBD() : null;
       const tickResult = loop.executeTick({
         simulationRun: run,
         policySnapshot: run.simulation_policy_snapshot,
-        randomSeed: Date.now(),
+        randomSeed: run.simulation_policy_snapshot?.random_seed,
         businessData,
         refreshBusinessData: getBD || null,
       });
