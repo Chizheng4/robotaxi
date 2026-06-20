@@ -27,7 +27,8 @@ import { executeActions } from "./simulationExecutionEngine.js";
  */
 export function executeTick({ simulationRun, policySnapshot, randomSeed, businessData, refreshBusinessData }) {
   // 1. 校验 SimulationRun 状态
-  if (simulationRun.simulation_status !== SimulationStatus.RUNNING) {
+  const isDraining = simulationRun.simulation_status === SimulationStatus.DRAINING;
+  if (![SimulationStatus.RUNNING, SimulationStatus.DRAINING].includes(simulationRun.simulation_status)) {
     return null;
   }
 
@@ -44,15 +45,19 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   });
 
   // 3. 供给侧触发判断
-  const supplyResult = runSupplyTrigger({ timeContext: tickContext, policySnapshot });
+  const supplyResult = isDraining
+    ? createEmptySupplyResult()
+    : runSupplyTrigger({ timeContext: tickContext, policySnapshot });
 
   // 4. 需求侧触发判断
   const tickRandomSeed = `${randomSeed ?? simulationRun.simulation_policy_snapshot?.random_seed ?? simulationRun.simulation_run_id}-${simulationRun.current_global_tick}`;
-  const demandResult = runDemandTrigger({ timeContext: tickContext, policySnapshot, randomSeed: tickRandomSeed });
+  const demandResult = isDraining
+    ? createEmptyDemandResult()
+    : runDemandTrigger({ timeContext: tickContext, policySnapshot, randomSeed: tickRandomSeed });
 
   // 5. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
   const demandActions = [];
-  if (businessData && demandResult.order_count > 0) {
+  if (!isDraining && businessData && demandResult.order_count > 0) {
     for (let i = 0; i < demandResult.order_count; i++) {
       demandActions.push({
         actionType: "SERVICE_ORDER_CREATE",
@@ -64,7 +69,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   }
 
   // 5. 供给侧点火动作
-  const supplyActions = (supplyResult && supplyResult.actions) ? supplyResult.actions : [];
+  const supplyActions = !isDraining && supplyResult?.actions ? supplyResult.actions : [];
 
   // 6. 先执行触发层动作（创建准入/投放任务 + 创建订单）
   const preActions = [...supplyActions, ...demandActions];
@@ -122,6 +127,8 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     workflowActions,
     executionResults: allResults,
     tickEventSummary,
+    phase: isDraining ? SimulationStatus.DRAINING : SimulationStatus.RUNNING,
+    workflowActionCount: workflowActions.length,
   };
 }
 
@@ -155,5 +162,24 @@ function buildTickEventSummary(supplyResult, demandResult, executionResults = []
     completed_trips: 0,
     completed_route_executions: 0,
     no_action_events: supplyResult.no_action_count || 0,
+  };
+}
+
+function createEmptySupplyResult() {
+  return {
+    triggered_event_count: 0,
+    no_action_count: 0,
+    readiness_triggered: false,
+    deployment_triggered: false,
+    actions: [],
+  };
+}
+
+function createEmptyDemandResult() {
+  return {
+    order_count: 0,
+    triggered_event_count: 0,
+    demand_profile_id: null,
+    actions: [],
   };
 }

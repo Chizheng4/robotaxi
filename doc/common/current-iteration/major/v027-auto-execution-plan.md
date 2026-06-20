@@ -75,7 +75,7 @@ READY → RUNNING → DRAINING → COMPLETED
 
 ### v027.2 工作流排空阶段
 
-状态：进行中。
+状态：已完成。
 
 - 新增 `DRAINING` 状态和中文展示。
 - 计划 Tick 到期后关闭 SupplyTrigger / DemandTrigger。
@@ -83,9 +83,19 @@ READY → RUNNING → DRAINING → COMPLETED
 - 增加最大排空 Tick、完成摘要和失败保护。
 - 验证最后 Tick 产生的业务对象能够完整闭环。
 
+完成记录：
+
+- SimulationLoop 在 `DRAINING` 阶段跳过 SupplyTrigger、DemandTrigger 和新建动作，仅查询既有工作流。
+- 计划 Tick 到期进入 `DRAINING`，工作流为空后进入 `COMPLETED`。
+- 超过 `max_drain_ticks` 未收敛时进入 `FAILED`，记录失败事件和原因。
+- 新增排空开始、完成、失败事件及中文状态显示，前端将“排空中”归入进行中语义色。
+- 连续时间轴验证脚本覆盖无新触发、正常排空和排空超限失败。
+
+下一断点：将 Tick 时间上下文贯穿所有模拟 handler，为需求、供给及派生业务对象写入统一模拟审计字段。
+
 ### v027.3 业务对象模拟时间溯源
 
-状态：待执行。
+状态：进行中。
 
 - 为需求、供给及后续工作流对象增加统一模拟审计字段。
 - 保留真实时间字段，人工操作不伪造模拟时间。

@@ -179,7 +179,10 @@ export function stopSimulationRun(simulationRun) {
  * @param {Object|null} tickEventSummary
  * @returns {{ simulationRun: Object, events: Object[] }}
  */
-export function completeTick(simulationRun, tickContext, supplyResult, demandResult, executionResults, tickEventSummary) {
+export function completeTick(simulationRun, tickContext, supplyResult, demandResult, executionResults, tickEventSummary, lifecycle = {}) {
+  const phase = lifecycle.phase || simulationRun.simulation_status || SimulationStatus.RUNNING;
+  const isDraining = phase === SimulationStatus.DRAINING;
+  const workflowActionCount = Number(lifecycle.workflowActionCount) || 0;
   // 更新场景
   let updated = updateSimulationRunScene(simulationRun, tickContext, supplyResult, demandResult);
 
@@ -192,10 +195,10 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
 
   // === Phase 1: TICK_STARTED ===
   events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_STARTED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
-    `Tick #${tick} 开始 | ${time} | 时段 ${tickContext?.period_type || tickContext?.time_period || 'N/A'}`));
+    `Tick #${tick} 开始 | ${time} | ${isDraining ? "工作流排空" : `时段 ${tickContext?.period_type || tickContext?.time_period || "N/A"}`}`));
 
   // === Phase 2: SUPPLY_TRIGGER ===
-  if (supplyResult) {
+  if (!isDraining && supplyResult) {
     const triggered = supplyResult.triggered_event_count || 0;
     const noAction = supplyResult.no_action_count || 0;
     const readinessMsg = supplyResult.readiness_triggered ? '准入检查已触发' : '准入检查跳过';
@@ -206,7 +209,7 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   }
 
   // === Phase 3: DEMAND_TRIGGER ===
-  if (demandResult) {
+  if (!isDraining && demandResult) {
     const count = demandResult.order_count || 0;
     const profileName = demandResult.demand_profile_id ? String(demandResult.demand_profile_id).replace(/^DP-/, '') : '无';
     events.push(makeEvent(runId, day, time, dayT, tick, EventType.DEMAND_TRIGGER_COMPLETED, EventSource.DEMAND_TRIGGER,
@@ -261,19 +264,55 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
     `Tick #${tick} 完成 | 创建 ${created} 订单 | 执行 ${execResults.length} 动作（成功 ${succeeded} / 失败 ${failed}）`));
 
   // 所有事件使用本 Tick 实际发生时刻，记录完成后再推进运行游标。
-  updated = advanceTick(updated, { tickSeconds: tickContext?.tick_seconds, phase: "RUNNING" });
+  updated = advanceTick(updated, { tickSeconds: tickContext?.tick_seconds, phase });
 
-  // 判断是否完成
-  if (isSimulationComplete(updated)) {
+  if (!isDraining && isSimulationComplete(updated)) {
+    updated = { ...updated, simulation_status: SimulationStatus.DRAINING };
+    events.push(makeEvent(
+      runId,
+      updated.current_day,
+      updated.current_time,
+      updated.current_day_tick,
+      updated.current_global_tick,
+      EventType.SIMULATION_DRAIN_STARTED,
+      EventSource.SIMULATION_SYSTEM,
+      EventResult.SUCCESS,
+      `计划 Tick 已结束，开始排空既有工作流 | ${updated.current_time}`,
+    ));
+  } else if (isDraining && workflowActionCount === 0) {
     updated = {
       ...updated,
       simulation_status: SimulationStatus.COMPLETED,
       completed_at: new Date().toISOString(),
       simulation_end_seconds: updated.current_simulation_seconds,
       simulation_end_at: formatSimulationTimestamp(updated.current_simulation_seconds),
+      result_summary: {
+        trigger_ticks: updated.trigger_ticks_completed,
+        drain_ticks: updated.drain_ticks,
+        actual_ticks: updated.current_run_tick,
+      },
     };
+    events.push(makeEvent(runId, updated.current_day, updated.current_time, updated.current_day_tick, updated.current_global_tick,
+      EventType.SIMULATION_DRAIN_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
+      `既有工作流已全部排空 | 排空 Tick ${updated.drain_ticks}`));
     events.push(makeEvent(runId, updated.current_day, updated.current_time, updated.current_day_tick, updated.current_global_tick, EventType.SIMULATION_RUN_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
       `模拟运行 ${runId} 已完成`));
+  } else if (isDraining && updated.drain_ticks >= updated.max_drain_ticks) {
+    const failureReason = `工作流在 ${updated.max_drain_ticks} 个排空 Tick 内未收敛`;
+    updated = {
+      ...updated,
+      simulation_status: SimulationStatus.FAILED,
+      completed_at: new Date().toISOString(),
+      simulation_end_seconds: updated.current_simulation_seconds,
+      simulation_end_at: formatSimulationTimestamp(updated.current_simulation_seconds),
+      failure_reason: failureReason,
+    };
+    events.push(makeEvent(runId, updated.current_day, updated.current_time, updated.current_day_tick, updated.current_global_tick,
+      EventType.SIMULATION_DRAIN_FAILED, EventSource.SIMULATION_SYSTEM, EventResult.FAILED, failureReason,
+      { failureReason }));
+    events.push(makeEvent(runId, updated.current_day, updated.current_time, updated.current_day_tick, updated.current_global_tick,
+      EventType.SIMULATION_RUN_FAILED, EventSource.SIMULATION_SYSTEM, EventResult.FAILED,
+      `模拟运行 ${runId} 排空失败`, { failureReason }));
   }
 
   return { simulationRun: updated, events };

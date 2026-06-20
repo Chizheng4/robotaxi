@@ -823,6 +823,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |SIMULATION_RUN_COMPLETED|模拟运行已完成|
 |SIMULATION_RUN_STOPPED|模拟运行已停止|
 |SIMULATION_RUN_FAILED|模拟运行失败|
+|SIMULATION_DRAIN_STARTED|工作流排空开始|
+|SIMULATION_DRAIN_COMPLETED|工作流排空完成|
+|SIMULATION_DRAIN_FAILED|工作流排空失败|
 |SIMULATION_TICK_STARTED|模拟 Tick 开始|
 |SIMULATION_TICK_COMPLETED|模拟 Tick 完成|
 |SIMULATION_SCENE_UPDATED|模拟场景已更新|
@@ -931,6 +934,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |current_global_tick|全局 Tick 序号|运行态字段|同一时间轴连续累计的 Tick 序号|
 |trigger_ticks_completed|已完成触发 Tick 数|运行态字段|已执行供给和需求触发的计划 Tick 数|
 |drain_ticks|排空 Tick 数|运行态字段|计划周期结束后用于完成既有工作流的 Tick 数|
+|max_drain_ticks|最大排空 Tick 数|持久化字段|排空未收敛前允许执行的最大 Tick 数|
 |current_time_period|当前时间段|运行态字段|当前所处时间段|
 |current_period_type|当前时段类型|运行态字段|当前时段类型：PEAK / NORMAL / LOW|
 |current_supply_scene|当前供给侧场景|运行态字段|当前供给侧 Tick 场景快照|

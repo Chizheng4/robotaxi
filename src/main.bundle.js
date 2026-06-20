@@ -3511,7 +3511,7 @@ function getStatusTone(value) {
   if (["ACTIVE", "AVAILABLE", "COMPLETED", "PAID", "PASSED", "PASS", "SUCCESS", "IDLE", "ARRIVED", "NORMAL_ARRIVAL"].includes(normalized)) return "success";
   if (["FAILED", "FAIL", "BLOCKED", "UNAVAILABLE", "CANCELLED"].some(token => normalized.includes(token)) || normalized.includes("ABNORMAL")) return "danger";
   if (["WAITING", "PENDING", "PAUSED", "DRAFT", "RESTRICTED", "STOPPED"].some(token => normalized.includes(token))) return "warning";
-  if (["RUNNING", "MOVING", "CHECKING", "INSPECTION", "ASSIGNED", "PROCESSING", "ON_THE_WAY", "CALCULATING", "SETTLING", "BUSY"].some(token => normalized.includes(token))) return "info";
+  if (["RUNNING", "DRAINING", "MOVING", "CHECKING", "INSPECTION", "ASSIGNED", "PROCESSING", "ON_THE_WAY", "CALCULATING", "SETTLING", "BUSY"].some(token => normalized.includes(token))) return "info";
   return "neutral";
 }
 function RowActionButton({

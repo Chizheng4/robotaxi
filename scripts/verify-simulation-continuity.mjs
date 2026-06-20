@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { initializeDefaultSimulationPolicy } from "../src/data/simulationInitialization.js";
 import { advanceTick, computeTimeContext, formatSimulationTimestamp, getSimulationPosition } from "../src/data/simulationClock.js";
 import { completeTick, initSimulationRun, resetSimulationCounters, startSimulationRun } from "../src/data/simulationEngine.js";
+import { executeTick } from "../src/data/simulationLoop.js";
 
 const policy = initializeDefaultSimulationPolicy();
 
@@ -58,9 +59,51 @@ const context = computeTimeContext({
   tickSeconds: running.tick_seconds,
   policySnapshot: running.simulation_policy_snapshot,
 });
-const tickResult = completeTick(running, context, { triggered_event_count: 0, no_action_count: 0 }, { order_count: 0 }, [], {});
+const tickResult = completeTick(running, context, { triggered_event_count: 0, no_action_count: 0 }, { order_count: 0 }, [], {}, {
+  phase: "RUNNING",
+  workflowActionCount: 0,
+});
 const tickCompletedEvent = tickResult.events.find((event) => event.event_type === "SIMULATION_TICK_COMPLETED");
 assert.equal(tickCompletedEvent.simulation_time, "Day 1 00:00:00");
-assert.equal(tickResult.simulationRun.simulation_end_at, "Day 1 00:10:00");
+assert.equal(tickResult.simulationRun.simulation_status, "DRAINING");
+assert.equal(tickResult.simulationRun.simulation_end_at, null);
+
+const drainingRun = tickResult.simulationRun;
+const drainTick = executeTick({
+  simulationRun: drainingRun,
+  policySnapshot: drainingRun.simulation_policy_snapshot,
+  businessData: {
+    serviceOrders: [], trips: [], readinessTasks: [], deploymentTasks: [], routeExecutions: [],
+  },
+});
+assert.equal(drainTick.phase, "DRAINING");
+assert.equal(drainTick.supplyResult.triggered_event_count, 0);
+assert.equal(drainTick.demandResult.order_count, 0);
+assert.equal(drainTick.workflowActionCount, 0);
+
+const drained = completeTick(
+  drainingRun,
+  drainTick.tickContext,
+  drainTick.supplyResult,
+  drainTick.demandResult,
+  drainTick.executionResults,
+  drainTick.tickEventSummary,
+  { phase: drainTick.phase, workflowActionCount: drainTick.workflowActionCount },
+);
+assert.equal(drained.simulationRun.simulation_status, "COMPLETED");
+assert.equal(drained.simulationRun.simulation_end_at, "Day 1 00:20:00");
+assert.equal(drained.simulationRun.drain_ticks, 1);
+
+const stalled = completeTick(
+  { ...drainingRun, max_drain_ticks: 1 },
+  drainTick.tickContext,
+  drainTick.supplyResult,
+  drainTick.demandResult,
+  [{ success: false, actionType: "TEST_STALLED" }],
+  drainTick.tickEventSummary,
+  { phase: "DRAINING", workflowActionCount: 1 },
+);
+assert.equal(stalled.simulationRun.simulation_status, "FAILED");
+assert.match(stalled.simulationRun.failure_reason, /未收敛/);
 
 console.log("连续模拟时间轴代码级验证通过");

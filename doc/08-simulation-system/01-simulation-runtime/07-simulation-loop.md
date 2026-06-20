@@ -183,6 +183,7 @@ SimulationLoop 只在以下状态执行：
 
 ```text
 RUNNING
+DRAINING
 ```
 
 如果 SimulationRun 状态为：
@@ -203,6 +204,7 @@ FAILED
 |---|---|
 |READY|否|
 |RUNNING|是|
+|DRAINING|是，仅执行既有工作流，不产生新触发|
 |PAUSED|否|
 |COMPLETED|否|
 |STOPPED|否|
@@ -832,6 +834,20 @@ SimulationLoop 负责：
     
 16. 单个业务事件失败不一定导致 SimulationRun 失败；
     
-17. SimulationRun 达到 total_ticks 后进入 COMPLETED；
+17. SimulationRun 达到 total_ticks 后进入 DRAINING；
     
 18. SimulationRun 完成后应生成 result_summary。
+
+---
+
+## 16. v027 工作流排空阶段
+
+计划触发 Tick 达到 `total_ticks` 时，SimulationRun 不得直接完成，而是进入：
+
+```text
+RUNNING → DRAINING → COMPLETED
+```
+
+`DRAINING` 每个 Tick 只计算连续模拟时间、查询既有 ServiceOrder、Trip、ReadinessTask、DeploymentTask 和 RouteExecution 的工作流，并通过 ExecutionEngine 执行动作。此阶段不得调用 SupplyTrigger 或 DemandTrigger，也不得产生新的需求或供给业务单据。
+
+工作流动作数为 0 时完成运行。达到 `max_drain_ticks` 仍有动作时，运行进入 `FAILED` 并记录未收敛原因；不得为了结束运行而把未完成对象强制标记成功。

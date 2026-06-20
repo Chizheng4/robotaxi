@@ -147,7 +147,7 @@ export function useSimulationActions({
     if (!engine || !loop) { debug("executeTickForRun 退出: engine/loop缺失"); return; }
     setSimulationRuns((prev) => {
       const run = prev.find((r) => r.simulation_run_id === runId);
-      if (!run || run.simulation_status !== "RUNNING") {
+      if (!run || !["RUNNING", "DRAINING"].includes(run.simulation_status)) {
         if (run) debug("Tick停止: status=" + run.simulation_status);
         else debug("Tick停止: 未找到run");
         stopTickInterval();
@@ -164,7 +164,13 @@ export function useSimulationActions({
       });
       if (!tickResult) { debug("Tick: executeTick返回null"); return prev; }
       const result = engine.completeTick(
-        run, tickResult.tickContext, tickResult.supplyResult, tickResult.demandResult, tickResult.executionResults, tickResult.tickEventSummary
+        run,
+        tickResult.tickContext,
+        tickResult.supplyResult,
+        tickResult.demandResult,
+        tickResult.executionResults,
+        tickResult.tickEventSummary,
+        { phase: tickResult.phase, workflowActionCount: tickResult.workflowActionCount }
       );
       debug("Tick完成: " + result.events.length + "条事件 | 新状态=" + result.simulationRun.simulation_status);
       setSimulationEvents((evts) => [...result.events, ...evts]);
