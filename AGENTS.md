@@ -16,11 +16,10 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 
 1. `doc/iteration-rules.md` — 迭代流程、版本归档规则
 2. `doc/rules/03-field-dictionary-rules.md` — 字段字典规则
-3. `doc/rules/04-frontend-ux-rules.md` — 前端布局与展示规则
-4. `doc/rules/07-frontend-design-system.md` — 前端设计系统与标准化接入规则
-5. `doc/rules/05-codex-execution-rules.md` — 执行、验证与禁止行为
-6. `doc/common/field-dictionary.md` — 字段字典（文档）
-7. `src/domain/fieldDictionary.js` — 字段字典（前端代码，含 fieldDictionary 和 valueDictionary）
+3. `doc/rules/04-frontend-ux-rules.md` — 前端体验、设计系统与标准化接入规则
+4. `doc/rules/05-codex-execution-rules.md` — 执行、验证与禁止行为
+5. `doc/common/field-dictionary.md` — 字段字典（文档）
+6. `src/domain/fieldDictionary.js` — 字段字典（前端代码，含 fieldDictionary 和 valueDictionary）
 
 #### B. 业务对象 / 字段 / 状态 / 枚举修改
 
@@ -35,8 +34,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 当任务修改前端页面、表格、详情、筛选、按钮、布局、中文展示时，必须读取：
 
 1. `doc/rules/04-frontend-ux-rules.md`
-2. `doc/rules/07-frontend-design-system.md`
-3. `src/domain/fieldDictionary.js`
+2. `src/domain/fieldDictionary.js`
 
 如同时涉及字段、状态或枚举，按 B 类补读字段字典文档。
 
@@ -91,7 +89,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 - [ ] **字段字典**：若涉及业务字段、状态、枚举，`doc/common/field-dictionary.md` 和 `src/domain/fieldDictionary.js` 是否都已更新？
 - [ ] **前端中文**：若涉及前端展示，表格列名、按钮、状态标签是否全部中文？
 - [ ] **前端布局**：若涉及业务页面，是否保持状态筛选栏、搜索过滤区、操作列、详情面板等必要结构？
-- [ ] **设计系统**：若涉及前端，是否复用 `07-frontend-design-system.md` 的令牌、页面模板、组件状态和验收标准，避免一次性样式？
+- [ ] **设计系统**：若涉及前端，是否复用 `04-frontend-ux-rules.md` 的令牌、页面模板、组件状态和验收标准，避免一次性样式？
 - [ ] **Bundle**：若修改 `src/main.jsx`，`src/main.bundle.js` 是否已重新编译？
 - [ ] **语法**：修改过的 JS 文件是否通过语法检查？
 - [ ] **页面**：若修改前端页面或入口，页面是否可正常加载，核心路径是否可用？
@@ -122,8 +120,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 | `doc/rules/01-iteration-workflow.md`              | 迭代类型与标准执行流程   |
 | `doc/rules/02-version-git-rules.md`               | 版本号、提交、标签     |
 | `doc/rules/03-field-dictionary-rules.md`          | 字段字典维护与中文展示   |
-| `doc/rules/04-frontend-ux-rules.md`               | B 端页面布局与交互规则  |
+| `doc/rules/04-frontend-ux-rules.md`               | 前端体验、设计系统与标准化规则 |
 | `doc/rules/05-codex-execution-rules.md`           | 执行要求、验证与暂停条件  |
 | `doc/rules/06-document-driven-iteration-rules.md` | 文档差异驱动迭代协议    |
-| `doc/rules/07-frontend-design-system.md`          | 前端设计系统与标准化规则  |
 | `doc/common/field-dictionary.md`                  | 统一字段字典正文      |

@@ -828,7 +828,7 @@ function App() {
       <Sider className="ops-sider" width={232} collapsedWidth={60} collapsed={collapsed} trigger={null}>
         <div className="brand-bar">
           <Button className="brand-title-button" type="text" onClick={goToConsole}>{collapsed ? "RT" : "Robotaxi 运营平台"}</Button>
-          <Button type="text" size="small" onClick={() => setCollapsed((value) => !value)}>
+          <Button type="text" size="small" aria-label={collapsed ? "展开菜单" : "收起菜单"} onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? "≡" : "‹"}
           </Button>
         </div>
@@ -931,7 +931,7 @@ function App() {
           </Content>
           <aside className="detail-rail">
             {detailCollapsed ? (
-              <Button className="detail-toggle-button" size="small" title="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>‹</Button>
+              <Button className="detail-toggle-button" size="small" aria-label="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>‹</Button>
             ) : (
               <DetailPanel
                 selectedObject={detailSelectedObject}
@@ -2986,7 +2986,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
       <section className="detail-panel-new">
         <div className="panel-title">
           <span>{getDetailTitle(selectedType)}</span>
-          <Button size="small" type="text" title="隐藏详情" onClick={onCollapse}>›</Button>
+          <Button size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
         </div>
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择对象查看详情" />
       </section>
@@ -2997,7 +2997,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
     <section className="detail-panel-new">
       <div className="panel-title">
         <span>{getDetailTitle(selectedType)}</span>
-        <Button size="small" type="text" title="隐藏详情" onClick={onCollapse}>›</Button>
+        <Button size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
       </div>
       {hasTabbedDetail(selectedType) ? (
         <TabbedDetail selectedObject={selectedObject} selectedType={selectedType} />

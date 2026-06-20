@@ -74,3 +74,29 @@
 - P3：全局搜索形成真实跨对象检索能力后，可接入顶部工作栏。
 
 final result: passed
+
+---
+
+# v026.1 设计 QA
+
+- 1280 x 720：`doc/common/iteration-history/minor/v026.1-1280x720.png`
+- 1440 x 900：`doc/common/iteration-history/minor/v026.1-1440x900.png`
+- 三级菜单状态：`doc/common/iteration-history/minor/v026.1-three-level-menu.png`
+
+## Focused Findings
+
+- 菜单一级、二级、三级实测缩进为 `14px / 34px / 54px`，字重保持 `500 / 400 / 400`；选中三级菜单仅提升至 `600`。
+- 选中态实测为 `rgb(226, 236, 255)` 背景和 `rgb(32, 93, 204)` 文字，并有左侧内嵌标记；悬停态为中性灰，二者辨识明确。
+- 平台名称、菜单收展与详情收展控件均无 `title` 原生气泡；悬停不产生玻璃浮层。
+- 左侧导航可在 `60px / 232px` 间收展，右侧详情可隐藏并恢复。
+- 两个目标桌面尺寸均无页面级横向或纵向溢出；清晰度主要由颜色和层级建立，字体轻盈，无重叠与遮挡。
+- 视觉验收以精致和轻为首要感受，比例、留白、细边界、对齐和状态差异保持克制，没有通过粗大字体或厚重色块强化界面。
+- 页面请求无 4xx/5xx，控制台无新增错误或警告。
+
+## Rule Consolidation
+
+- 前端结构、视觉令牌、组件状态、交互和模型接入标准已统一收录于 `04-frontend-ux-rules.md`。
+- 删除活动规则 `07-frontend-design-system.md`，历史归档保持不变。
+- `AGENTS.md` 是唯一任务分流入口，其他索引只负责说明文件职责。
+
+final result: passed

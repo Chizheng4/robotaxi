@@ -15,22 +15,15 @@
 | `01-iteration-workflow.md` | 迭代类型、执行顺序、当前迭代和历史归档 |
 | `02-version-git-rules.md` | 版本号、Git 提交、tag、版本记录 |
 | `03-field-dictionary-rules.md` | 字段、枚举、状态、中文显示、字典维护 |
-| `04-frontend-ux-rules.md` | B 端运营平台页面布局、字体、密度、交互 |
+| `04-frontend-ux-rules.md` | 前端结构、视觉令牌、组件状态、交互与模型接入标准 |
 | `05-codex-execution-rules.md` | 执行方式、验证要求、禁止行为、暂停条件 |
 | `06-document-driven-iteration-rules.md` | 用户更新文档后的差异分析、确认和自动执行协议 |
-| `07-frontend-design-system.md` | 前端设计令牌、页面模板、组件规范、体验一致性与模型接入规则 |
 
 ## 3. 读取规则
 
-所有编码任务必须完整读取以下文件（不分任务类型）：
+根目录 `AGENTS.md` 是唯一任务分流入口。本索引不建立独立的强制读取清单；编码前应先由 `AGENTS.md` 判断任务类型，再读取对应规则。
 
-1. `AGENTS.md`
-2. `doc/iteration-rules.md`
-3. `doc/rules/03-field-dictionary-rules.md`
-4. `doc/rules/04-frontend-ux-rules.md`
-5. `doc/rules/07-frontend-design-system.md`
-6. `doc/rules/05-codex-execution-rules.md`
-7. `doc/common/field-dictionary.md`
+版本迭代按 `doc/iteration-rules.md` 执行。只分析、文档修改、小型缺陷及其他任务仍以 `AGENTS.md` 的分类为准，不得因本索引重复扩大读取范围。
 
 文档差异驱动迭代（用户更新文档后要求分析）额外读取：
 

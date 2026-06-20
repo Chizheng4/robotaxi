@@ -3,14 +3,14 @@
   --bg: #f6f7f9;
   --surface: #ffffff;
   --surface-soft: #f8f9fb;
-  --surface-muted: #f1f3f6;
+  --surface-muted: #eceff3;
   --line: #e1e4e9;
   --line-strong: #d4d8df;
   --line-soft: #eceef2;
   --text: #181b20;
   --muted: #6f7580;
   --accent: #2f6fed;
-  --accent-soft: #eef4ff;
+  --accent-soft: #e2ecff;
   --success: #2f9e61;
   --warning: #d9822b;
   --danger: #d94a4a;
@@ -55,8 +55,9 @@ body {
   background: var(--bg);
   font-size: var(--font-xs);
   font-family: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  font-weight: 400;
+  -webkit-font-smoothing: auto;
+  text-rendering: auto;
 }
 
 .ops-shell {
@@ -847,7 +848,7 @@ body {
 .brand-title-button.ant-btn {
   color: var(--text);
   font-size: var(--font-md);
-  font-weight: 760;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -864,6 +865,7 @@ body {
   padding: 10px 8px;
   color: #30343a;
   font-size: var(--font-sm);
+  font-weight: 400;
 }
 
 .ops-menu .ant-menu-item,
@@ -876,24 +878,47 @@ body {
   transition: color 140ms ease, background 140ms ease;
 }
 
-.ops-menu .ant-menu-submenu .ant-menu-item {
-  padding-inline-start: 36px !important;
+.ops-menu.ant-menu-root > .ant-menu-item,
+.ops-menu.ant-menu-root > .ant-menu-submenu > .ant-menu-submenu-title {
+  padding-inline-start: 14px !important;
+  font-weight: 500;
+}
+
+.ops-menu.ant-menu-root > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
+.ops-menu.ant-menu-root > .ant-menu-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-submenu-title {
+  padding-inline-start: 34px !important;
+  font-weight: 400;
+}
+
+.ops-menu.ant-menu-root > .ant-menu-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item {
+  padding-inline-start: 54px !important;
+  font-weight: 400;
+}
+
+.ops-menu .ant-menu-submenu .ant-menu-sub {
+  background: transparent !important;
 }
 
 .ops-menu .ant-menu-item:hover,
 .ops-menu .ant-menu-submenu-title:hover {
-  color: var(--text) !important;
+  color: #20252c !important;
   background: var(--surface-muted) !important;
 }
 
 .ops-menu .ant-menu-item-selected {
-  color: var(--accent) !important;
+  color: #205dcc !important;
   background: var(--accent-soft) !important;
-  font-weight: 680;
+  font-weight: 600 !important;
+  box-shadow: inset 3px 0 0 #3f73dc;
 }
 
 .ops-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: var(--accent) !important;
+  color: #2b5fac !important;
+  font-weight: 500;
+}
+
+.ops-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
+  color: #2b3037;
 }
 
 .ops-menu .ant-menu-submenu-arrow {
@@ -924,7 +949,7 @@ body {
 .top-strip-title .ant-typography:first-child {
   color: var(--text);
   font-size: var(--font-md);
-  font-weight: 720;
+  font-weight: 600;
 }
 
 .top-strip-title .ant-typography-secondary {
@@ -993,7 +1018,7 @@ body {
 .workspace-tab.active {
   color: var(--accent);
   background: transparent;
-  font-weight: 680;
+  font-weight: 600;
   box-shadow: none;
 }
 
@@ -1042,7 +1067,7 @@ body {
   border-color: var(--line-strong);
   border-radius: 6px;
   box-shadow: 0 1px 1px rgba(24, 27, 32, 0.025);
-  font-weight: 560;
+  font-weight: 500;
 }
 
 .ops-shell .ant-btn:hover {
@@ -1067,6 +1092,20 @@ body {
 .ops-shell .ant-btn-text {
   border-color: transparent;
   box-shadow: none;
+}
+
+.brand-title-button.ant-btn:hover,
+.brand-bar > .ant-btn:last-child:hover,
+.detail-toggle-button.ant-btn:hover,
+.panel-title .ant-btn:hover {
+  border-color: transparent !important;
+  color: #4f5865 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.brand-title-button.ant-btn:hover {
+  color: var(--text) !important;
 }
 
 .ops-shell .ant-input,
@@ -1130,8 +1169,8 @@ body {
 }
 
 .filter-field > span {
-  color: #777d87;
-  font-weight: 560;
+  color: #626a75;
+  font-weight: 500;
 }
 
 .filter-field.keyword-field {
@@ -1151,7 +1190,8 @@ body {
 }
 
 .record-page-new .ant-table {
-  color: #2c3036;
+  color: #252a31;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1164,9 +1204,9 @@ body {
   height: 36px;
   padding: 8px 10px !important;
   border-bottom: 1px solid var(--line) !important;
-  color: #555c66;
+  color: #454c56;
   background: #f7f8fa !important;
-  font-weight: 660;
+  font-weight: 600;
 }
 
 .record-page-new .ant-table-thead > tr > th::before {
@@ -1270,7 +1310,7 @@ body {
   padding: 0 14px;
   border-bottom-color: var(--line-soft);
   color: var(--text);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .panel-title .ant-btn {
@@ -1304,7 +1344,7 @@ body {
 
 .detail-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .compact-descriptions {
@@ -1334,7 +1374,7 @@ body {
   margin-bottom: 8px;
   padding: 0 12px;
   color: #4f5661;
-  font-weight: 680;
+  font-weight: 600;
 }
 
 .event-log-resizer {

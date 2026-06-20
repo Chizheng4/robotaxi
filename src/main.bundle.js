@@ -831,6 +831,7 @@ function App() {
   }, collapsed ? "RT" : "Robotaxi 运营平台"), /*#__PURE__*/React.createElement(Button, {
     type: "text",
     size: "small",
+    "aria-label": collapsed ? "展开菜单" : "收起菜单",
     onClick: () => setCollapsed(value => !value)
   }, collapsed ? "≡" : "‹")), /*#__PURE__*/React.createElement(Menu, {
     mode: "inline",
@@ -936,7 +937,7 @@ function App() {
   }, detailCollapsed ? /*#__PURE__*/React.createElement(Button, {
     className: "detail-toggle-button",
     size: "small",
-    title: "\u5C55\u5F00\u8BE6\u60C5",
+    "aria-label": "\u5C55\u5F00\u8BE6\u60C5",
     onClick: () => setDetailCollapsedForPage(activePage, false)
   }, "\u2039") : /*#__PURE__*/React.createElement(DetailPanel, {
     selectedObject: detailSelectedObject,
@@ -3027,7 +3028,7 @@ function DetailPanel({
     }, /*#__PURE__*/React.createElement("span", null, getDetailTitle(selectedType)), /*#__PURE__*/React.createElement(Button, {
       size: "small",
       type: "text",
-      title: "\u9690\u85CF\u8BE6\u60C5",
+      "aria-label": "\u9690\u85CF\u8BE6\u60C5",
       onClick: onCollapse
     }, "\u203A")), /*#__PURE__*/React.createElement(Empty, {
       image: Empty.PRESENTED_IMAGE_SIMPLE,
@@ -3041,7 +3042,7 @@ function DetailPanel({
   }, /*#__PURE__*/React.createElement("span", null, getDetailTitle(selectedType)), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     type: "text",
-    title: "\u9690\u85CF\u8BE6\u60C5",
+    "aria-label": "\u9690\u85CF\u8BE6\u60C5",
     onClick: onCollapse
   }, "\u203A")), hasTabbedDetail(selectedType) ? /*#__PURE__*/React.createElement(TabbedDetail, {
     selectedObject: selectedObject,
