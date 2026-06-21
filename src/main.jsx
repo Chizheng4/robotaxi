@@ -239,7 +239,7 @@ const tableConfig = {
   serviceOrders: {
     title: "服务订单管理",
     description: "服务订单记录客户发起的出行服务需求，当前支持创建、定价和车辆匹配。",
-    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "customer_origin_cell_id", "pickup_cell_id", "dropoff_cell_id", "price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "trip_id", "actual_distance_km", "actual_duration_min", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "matched_robotaxi_id", "matched_robotaxi_location_summary", "order_matching_decision_id", "payment_status", "created_at"],
+    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "customer_origin_cell_id", "pickup_cell_id", "dropoff_cell_id", "price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "trip_id", "actual_distance_km", "actual_duration_min", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "matched_robotaxi_id", "matched_robotaxi_location_summary", "order_matching_decision_id", "payment_status", "created_at", "simulation_created_at"],
   },
   opsCenters: {
     title: "运营中心管理",
@@ -254,17 +254,17 @@ const tableConfig = {
   readinessTasks: {
     title: "运营准入任务",
     description: "用于将待检查 Robotaxi 转化为可运营车辆的准入任务单。",
-    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "worker_id", "check_result", "issue_type", "created_at"],
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "worker_id", "check_result", "issue_type", "created_at", "simulation_created_at"],
   },
   deploymentTasks: {
     title: "运营投放任务",
     description: "用于将可运营 Robotaxi 投放到指定服务区或待命位置。",
-    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "planned_target_service_area_id", "target_service_area_id", "actual_target_service_area_id", "route_id", "route_strategy_id", "route_summary", "created_at"],
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "planned_target_service_area_id", "target_service_area_id", "actual_target_service_area_id", "route_id", "route_strategy_id", "route_summary", "created_at", "simulation_created_at"],
   },
   routeExecutions: {
     title: "运营行驶记录",
     description: "记录 Robotaxi 执行任务时的模拟行驶过程。",
-    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_strategy_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "planned_target_service_area_id", "current_target_service_area_id", "actual_target_service_area_id", "arrival_execution_result", "route_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km"],
+    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_strategy_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "planned_target_service_area_id", "current_target_service_area_id", "actual_target_service_area_id", "arrival_execution_result", "route_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "created_at", "simulation_created_at"],
   },
   taskEventLogs: {
     title: "任务事件日志",
@@ -314,7 +314,7 @@ const tableConfig = {
   serviceFulfillmentRecords: {
     title: "履约行驶记录",
     description: "履约行驶记录用于模拟 Robotaxi 执行客户服务订单的接驾、载客和完成过程。",
-    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "route_id", "created_at"],
+    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "route_id", "created_at", "simulation_created_at"],
   },
   robotaxis: {
     title: "Robotaxi 管理",
@@ -3077,7 +3077,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -3133,13 +3133,19 @@ function getDetailTabs(selectedType) {
       { key: "metrics", label: "路径指标", keys: ["total_distance_m", "related_service_area_ids"] },
     ];
   }
+  if (selectedType === "readinessTask") {
+    return [
+      { key: "basic", label: "任务信息", keys: ["task_id", "task_type", "task_status", "task_priority", "trigger_type", "source_type", "robotaxi_id", "worker_id", "check_result", "issue_type"] },
+      { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
+    ];
+  }
   if (selectedType === "deploymentTask") {
     return [
       { key: "basic", label: "任务信息", keys: ["task_id", "task_type", "task_status", "task_priority", "trigger_type", "source_type", "robotaxi_id"] },
       { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "route_summary", "route_detail"] },
       { key: "arrival", label: "到达处理", keys: ["arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "actual_target_cell_id", "actual_target_service_area_id"] },
       { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "target_zone_id"] },
-      { key: "time", label: "时间", keys: ["created_at", "started_at", "completed_at", "failure_reason"] },
+      { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
     ];
   }
   if (selectedType === "routeExecution") {
@@ -3147,25 +3153,26 @@ function getDetailTabs(selectedType) {
       { key: "basic", label: "执行信息", keys: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "arrival_execution_result"] },
       { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "current_target_service_area_id", "route_summary", "route_detail", "route_history"] },
       { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "current_cell_id", "current_location_summary", "current_location_detail"] },
-      { key: "progress", label: "执行进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent", "started_at", "completed_at", "failure_reason"] },
+      { key: "progress", label: "执行进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent"] },
+      { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
     ];
   }
   if (selectedType === "serviceOrder") {
     return [
-      { key: "basic", label: "订单信息", keys: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "demand_simulation_run_id", "payment_status", "created_at"] },
+      { key: "basic", label: "订单信息", keys: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "demand_simulation_run_id", "payment_status"] },
       { key: "location", label: "需求位置", keys: ["customer_origin_location_type", "customer_origin_place_id", "customer_origin_road_segment_id", "customer_origin_cell_id", "pickup_service_area_id", "pickup_cell_id", "dropoff_service_area_id", "dropoff_cell_id"] },
       { key: "pricing", label: "报价结算", keys: ["price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "quote_base_fare", "quote_distance_unit_price", "quote_time_unit_price", "estimated_distance_km", "estimated_duration_min", "estimated_price", "quoted_price", "final_price", "pricing_explanation", "pricing_breakdown_snapshot"] },
       { key: "matching", label: "匹配履约", keys: ["matched_robotaxi_id", "matched_robotaxi_location_summary", "matched_robotaxi_location_detail", "order_matching_decision_id", "trip_id", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "paid_amount"] },
-      { key: "time", label: "状态时间", keys: ["confirmed_at", "matched_at", "completed_at", "cancelled_at", "payment_completed_at", "failure_reason"] },
+      { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "confirmed_at", "matched_at", "simulation_matched_at", "completed_at", "simulation_completed_at", "cancelled_at", "payment_completed_at", "simulation_payment_completed_at", "failure_reason"] },
     ];
   }
   if (selectedType === "trip") {
     return [
-      { key: "basic", label: "履约信息", keys: ["trip_id", "trip_status", "trip_phase", "service_order_id", "robotaxi_id", "created_at"] },
+      { key: "basic", label: "履约信息", keys: ["trip_id", "trip_status", "trip_phase", "service_order_id", "robotaxi_id"] },
       { key: "location", label: "服务位置", keys: ["pickup_service_area_id", "pickup_cell_id", "pickup_location_summary", "pickup_location_detail", "dropoff_service_area_id", "dropoff_cell_id", "dropoff_location_summary", "dropoff_location_detail", "current_cell_id", "current_location_summary", "current_location_detail"] },
       { key: "progress", label: "履约进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"] },
       { key: "route", label: "路径关联", keys: ["route_id", "route_planning_run_id", "route_summary", "route_detail", "route_history", "route_history_detail"] },
-      { key: "time", label: "状态时间", keys: ["started_at", "completed_at", "failure_reason", "event_log"] },
+      { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason", "event_log"] },
     ];
   }
   if (selectedType === "simulationPolicy") {

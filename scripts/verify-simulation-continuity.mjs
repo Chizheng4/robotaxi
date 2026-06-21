@@ -4,7 +4,7 @@ import { initializeDefaultSimulationPolicy } from "../src/data/simulationInitial
 import { advanceTick, computeTimeContext, formatSimulationTimestamp, getSimulationPosition } from "../src/data/simulationClock.js";
 import { completeTick, initSimulationRun, resetSimulationCounters, startSimulationRun, synchronizeSimulationCounters } from "../src/data/simulationEngine.js";
 import { executeTick } from "../src/data/simulationLoop.js";
-import { handlePaymentExecute, handleReadinessTaskCreate, handleServiceOrderCreate } from "../src/services/simulationHandlers.js";
+import { handleDeploymentTaskCreate, handlePaymentExecute, handleReadinessTaskCreate, handleServiceOrderCreate, handleTripStepExecute } from "../src/services/simulationHandlers.js";
 import { registerActionHandlers } from "../src/data/simulationExecutionEngine.js";
 
 const policy = initializeDefaultSimulationPolicy();
@@ -123,6 +123,7 @@ handleReadinessTaskCreate({
     setRobotaxis: (updater) => { robotaxis = updater(robotaxis); },
   },
 });
+assert.ok(readinessTasks[0].created_at);
 assert.equal(readinessTasks[0].record_source, "SIMULATION");
 assert.equal(readinessTasks[0].simulation_created_at, "Day 3 12:34:56");
 assert.equal(readinessTasks[0].simulation_run_id, "SIM-RUN-AUDIT");
@@ -154,8 +155,45 @@ handleServiceOrderCreate({
   },
 });
 assert.equal(demandRuns[0].simulation_created_at, "Day 3 12:34:56");
+assert.ok(serviceOrders[0].created_at);
 assert.equal(serviceOrders[0].record_source, "SIMULATION");
 assert.equal(serviceOrders[0].simulation_created_at, "Day 3 12:34:56");
+
+let deploymentTasks = [];
+let routeExecutions = [];
+let deploymentRobotaxis = [{ robotaxi_id: "RTX-DEPLOY", availability_status: "AVAILABLE", current_task_id: null, current_order_id: null, current_cell_id: "CELL-1" }];
+handleDeploymentTaskCreate({
+  context: auditContext,
+  data: {
+    deploymentTasks,
+    routeExecutions,
+    data: { robotaxis: deploymentRobotaxis },
+    setDeploymentTasks: (updater) => { deploymentTasks = updater(deploymentTasks); },
+    setRouteExecutions: (updater) => { routeExecutions = updater(routeExecutions); },
+    setRobotaxis: (updater) => { deploymentRobotaxis = updater(deploymentRobotaxis); },
+  },
+});
+assert.ok(deploymentTasks[0].created_at);
+assert.equal(deploymentTasks[0].simulation_created_at, "Day 3 12:34:56");
+assert.ok(routeExecutions[0].created_at);
+assert.equal(routeExecutions[0].simulation_created_at, "Day 3 12:34:56");
+
+let createdTrips = [];
+let tripOrders = [{ ...serviceOrders[0], matched_robotaxi_id: "RTX-TRIP", trip_id: null }];
+handleTripStepExecute({
+  objectId: tripOrders[0].service_order_id,
+  context: auditContext,
+  data: {
+    data: {},
+    serviceOrders: tripOrders,
+    trips: createdTrips,
+    setServiceOrders: (updater) => { tripOrders = updater(tripOrders); },
+    setTrips: (updater) => { createdTrips = updater(createdTrips); },
+    setRobotaxis: () => {},
+  },
+});
+assert.ok(createdTrips[0].created_at);
+assert.equal(createdTrips[0].simulation_created_at, "Day 3 12:34:56");
 
 registerActionHandlers({ PAYMENT_EXECUTE: handlePaymentExecute });
 let drainBusinessData = {
