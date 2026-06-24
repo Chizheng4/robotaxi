@@ -4176,6 +4176,12 @@ function renderDetailValue(key, value, row = null) {
       routeSteps: value
     });
   }
+  if (Array.isArray(value) || value && typeof value === "object") {
+    return /*#__PURE__*/React.createElement(StructuredDetailValue, {
+      value: value,
+      fieldKey: key
+    });
+  }
   return /*#__PURE__*/React.createElement(Text, {
     className: "detail-value"
   }, formatDetailValue(value, key, row) || "无");
@@ -4214,6 +4220,101 @@ function RouteStepsDetail({
   }, movementSteps.map((step, index) => /*#__PURE__*/React.createElement("div", {
     key: `${step.step_index}-${step.cell_id}`
   }, index + 1, " \u2192 ", step.cell_id, " \u2192 ", step.road_segment_id || "无道路片段", " \u2192 ", getDisplayValue(step.direction) || "未知方向", " \u2192 ", step.distance_km ?? 0, " km")))));
+}
+function StructuredDetailValue({
+  value,
+  fieldKey
+}) {
+  const empty = Array.isArray(value) ? value.length === 0 : !value || Object.keys(value).length === 0;
+  if (empty) return /*#__PURE__*/React.createElement(Text, {
+    className: "detail-value"
+  }, "\u65E0");
+  return /*#__PURE__*/React.createElement("details", {
+    className: "structured-detail"
+  }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", {
+    className: "structured-detail-summary"
+  }, summarizeStructuredValue(value)), /*#__PURE__*/React.createElement("span", {
+    className: "structured-detail-action structured-detail-action-closed"
+  }, "\u5C55\u5F00"), /*#__PURE__*/React.createElement("span", {
+    className: "structured-detail-action structured-detail-action-open"
+  }, "\u6536\u8D77")), /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-body"
+  }, /*#__PURE__*/React.createElement(StructuredDetailNode, {
+    value: value,
+    fieldKey: fieldKey
+  })));
+}
+function StructuredDetailNode({
+  value,
+  fieldKey
+}) {
+  if (value === null || typeof value !== "object") {
+    return /*#__PURE__*/React.createElement("div", {
+      className: "structured-value-list"
+    }, /*#__PURE__*/React.createElement("span", null, formatStructuredScalar(value, fieldKey)));
+  }
+  if (Array.isArray(value)) {
+    const complexItems = value.some(item => item && typeof item === "object");
+    if (!complexItems) {
+      return /*#__PURE__*/React.createElement("div", {
+        className: "structured-value-list"
+      }, value.map((item, index) => /*#__PURE__*/React.createElement("span", {
+        key: `${fieldKey}-${index}`
+      }, formatStructuredScalar(item, fieldKey))));
+    }
+    return /*#__PURE__*/React.createElement("div", {
+      className: "structured-detail-groups"
+    }, value.map((item, index) => /*#__PURE__*/React.createElement("details", {
+      className: "structured-detail-group",
+      key: `${fieldKey}-${index}`
+    }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", null, getStructuredItemTitle(item, index)), /*#__PURE__*/React.createElement("span", null, summarizeStructuredValue(item))), /*#__PURE__*/React.createElement("div", {
+      className: "structured-detail-group-body"
+    }, /*#__PURE__*/React.createElement(StructuredDetailNode, {
+      value: item,
+      fieldKey: fieldKey
+    })))));
+  }
+  const entries = Object.entries(value || {}).filter(([, itemValue]) => itemValue !== undefined);
+  const scalarEntries = entries.filter(([, itemValue]) => !itemValue || typeof itemValue !== "object");
+  const complexEntries = entries.filter(([, itemValue]) => itemValue && typeof itemValue === "object");
+  return /*#__PURE__*/React.createElement(React.Fragment, null, scalarEntries.length > 0 && /*#__PURE__*/React.createElement("dl", {
+    className: "structured-detail-fields"
+  }, scalarEntries.map(([key, itemValue]) => /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-field",
+    key: key
+  }, /*#__PURE__*/React.createElement("dt", null, getFieldLabel(key)), /*#__PURE__*/React.createElement("dd", null, formatStructuredScalar(itemValue, key, value))))), complexEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-groups"
+  }, complexEntries.map(([key, itemValue]) => /*#__PURE__*/React.createElement("details", {
+    className: "structured-detail-group",
+    key: key
+  }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", null, getFieldLabel(key)), /*#__PURE__*/React.createElement("span", null, summarizeStructuredValue(itemValue))), /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-group-body"
+  }, /*#__PURE__*/React.createElement(StructuredDetailNode, {
+    value: itemValue,
+    fieldKey: key
+  }))))));
+}
+function summarizeStructuredValue(value) {
+  if (Array.isArray(value)) return `共 ${value.length} 项`;
+  if (!value || typeof value !== "object") return formatStructuredScalar(value);
+  const entries = Object.entries(value).filter(([, itemValue]) => itemValue !== null && itemValue !== undefined);
+  const nameKey = ["policy_name", "profile_name", "strategy_name", "simulation_name", "name"].find(key => value[key]);
+  const enabledCount = entries.filter(([, itemValue]) => itemValue === true).length;
+  const parts = [];
+  if (nameKey) parts.push(String(value[nameKey]));
+  parts.push(`${entries.length} 项`);
+  if (enabledCount > 0) parts.push(`启用 ${enabledCount} 项`);
+  return parts.join(" · ");
+}
+function getStructuredItemTitle(item, index) {
+  if (!item || typeof item !== "object") return `第 ${index + 1} 项`;
+  const key = ["policy_name", "profile_name", "strategy_name", "simulation_name", "name", "time_window", "demand_profile_id", "route_id", "task_id", "event_id"].find(candidate => item[candidate]);
+  return key ? String(item[key]) : `第 ${index + 1} 项`;
+}
+function formatStructuredScalar(value, key = null, row = null) {
+  if (value === null || value === undefined || value === "") return "无";
+  if (typeof value === "boolean") return value ? "是" : "否";
+  return String(getFieldDisplayValue(key, value, row));
 }
 function summarizeObject(value) {
   const enabled = Object.entries(value).filter(([, itemValue]) => itemValue === true).map(([key]) => getFieldLabel(key));

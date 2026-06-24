@@ -810,6 +810,118 @@ body {
   font-size: var(--font-xs);
 }
 
+.structured-detail {
+  width: 100%;
+  min-width: 0;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  font-size: var(--font-xs);
+  font-weight: 400;
+}
+
+.structured-detail > summary,
+.structured-detail-group > summary {
+  display: list-item;
+  cursor: pointer;
+  list-style-position: outside;
+  margin-left: 18px;
+}
+
+.structured-detail > summary::marker,
+.structured-detail-group > summary::marker {
+  color: var(--muted);
+}
+
+.structured-detail > summary {
+  min-height: 34px;
+  padding: 7px 9px;
+  color: var(--text);
+}
+
+.structured-detail-summary {
+  overflow-wrap: anywhere;
+}
+
+.structured-detail-action {
+  float: right;
+  margin-left: 8px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.structured-detail-action-open,
+.structured-detail[open] > summary .structured-detail-action-closed {
+  display: none;
+}
+
+.structured-detail[open] > summary .structured-detail-action-open {
+  display: inline;
+}
+
+.structured-detail-body {
+  padding: 0 9px 9px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.structured-detail-fields {
+  margin: 0;
+}
+
+.structured-detail-field {
+  display: grid;
+  grid-template-columns: minmax(82px, 42%) minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.structured-detail-field dt {
+  color: var(--muted);
+}
+
+.structured-detail-field dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.structured-detail-groups {
+  display: grid;
+}
+
+.structured-detail-group {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.structured-detail-group > summary {
+  min-height: 32px;
+  padding: 6px 0;
+  color: var(--text);
+}
+
+.structured-detail-group > summary span:last-child {
+  float: right;
+  margin-left: 8px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.structured-detail-group-body {
+  margin: 0 0 6px 6px;
+  padding-left: 9px;
+  border-left: 1px solid var(--line-strong);
+}
+
+.structured-value-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 7px 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .compact-location-detail {
   display: grid;
   gap: 3px;

@@ -3912,6 +3912,9 @@ function renderDetailValue(key, value, row = null) {
   if (key === "route_steps" && Array.isArray(value)) {
     return <RouteStepsDetail routeSteps={value} />;
   }
+  if ((Array.isArray(value) || (value && typeof value === "object"))) {
+    return <StructuredDetailValue value={value} fieldKey={key} />;
+  }
   return <Text className="detail-value">{formatDetailValue(value, key, row) || "无"}</Text>;
 }
 
@@ -3971,6 +3974,121 @@ function RouteStepsDetail({ routeSteps }) {
       </details>
     </div>
   );
+}
+
+function StructuredDetailValue({ value, fieldKey }) {
+  const empty = Array.isArray(value)
+    ? value.length === 0
+    : !value || Object.keys(value).length === 0;
+  if (empty) return <Text className="detail-value">无</Text>;
+
+  return (
+    <details className="structured-detail">
+      <summary>
+        <span className="structured-detail-summary">{summarizeStructuredValue(value)}</span>
+        <span className="structured-detail-action structured-detail-action-closed">展开</span>
+        <span className="structured-detail-action structured-detail-action-open">收起</span>
+      </summary>
+      <div className="structured-detail-body">
+        <StructuredDetailNode value={value} fieldKey={fieldKey} />
+      </div>
+    </details>
+  );
+}
+
+function StructuredDetailNode({ value, fieldKey }) {
+  if (value === null || typeof value !== "object") {
+    return <div className="structured-value-list"><span>{formatStructuredScalar(value, fieldKey)}</span></div>;
+  }
+  if (Array.isArray(value)) {
+    const complexItems = value.some((item) => item && typeof item === "object");
+    if (!complexItems) {
+      return (
+        <div className="structured-value-list">
+          {value.map((item, index) => (
+            <span key={`${fieldKey}-${index}`}>{formatStructuredScalar(item, fieldKey)}</span>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="structured-detail-groups">
+        {value.map((item, index) => (
+          <details className="structured-detail-group" key={`${fieldKey}-${index}`}>
+            <summary>
+              <span>{getStructuredItemTitle(item, index)}</span>
+              <span>{summarizeStructuredValue(item)}</span>
+            </summary>
+            <div className="structured-detail-group-body">
+              <StructuredDetailNode value={item} fieldKey={fieldKey} />
+            </div>
+          </details>
+        ))}
+      </div>
+    );
+  }
+
+  const entries = Object.entries(value || {}).filter(([, itemValue]) => itemValue !== undefined);
+  const scalarEntries = entries.filter(([, itemValue]) => !itemValue || typeof itemValue !== "object");
+  const complexEntries = entries.filter(([, itemValue]) => itemValue && typeof itemValue === "object");
+
+  return (
+    <>
+      {scalarEntries.length > 0 && (
+        <dl className="structured-detail-fields">
+          {scalarEntries.map(([key, itemValue]) => (
+            <div className="structured-detail-field" key={key}>
+              <dt>{getFieldLabel(key)}</dt>
+              <dd>{formatStructuredScalar(itemValue, key, value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {complexEntries.length > 0 && (
+        <div className="structured-detail-groups">
+          {complexEntries.map(([key, itemValue]) => (
+            <details className="structured-detail-group" key={key}>
+              <summary>
+                <span>{getFieldLabel(key)}</span>
+                <span>{summarizeStructuredValue(itemValue)}</span>
+              </summary>
+              <div className="structured-detail-group-body">
+                <StructuredDetailNode value={itemValue} fieldKey={key} />
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function summarizeStructuredValue(value) {
+  if (Array.isArray(value)) return `共 ${value.length} 项`;
+  if (!value || typeof value !== "object") return formatStructuredScalar(value);
+  const entries = Object.entries(value).filter(([, itemValue]) => itemValue !== null && itemValue !== undefined);
+  const nameKey = ["policy_name", "profile_name", "strategy_name", "simulation_name", "name"].find((key) => value[key]);
+  const enabledCount = entries.filter(([, itemValue]) => itemValue === true).length;
+  const parts = [];
+  if (nameKey) parts.push(String(value[nameKey]));
+  parts.push(`${entries.length} 项`);
+  if (enabledCount > 0) parts.push(`启用 ${enabledCount} 项`);
+  return parts.join(" · ");
+}
+
+function getStructuredItemTitle(item, index) {
+  if (!item || typeof item !== "object") return `第 ${index + 1} 项`;
+  const key = [
+    "policy_name", "profile_name", "strategy_name", "simulation_name", "name",
+    "time_window", "demand_profile_id", "route_id", "task_id", "event_id",
+  ].find((candidate) => item[candidate]);
+  return key ? String(item[key]) : `第 ${index + 1} 项`;
+}
+
+function formatStructuredScalar(value, key = null, row = null) {
+  if (value === null || value === undefined || value === "") return "无";
+  if (typeof value === "boolean") return value ? "是" : "否";
+  return String(getFieldDisplayValue(key, value, row));
 }
 
 function summarizeObject(value) {
