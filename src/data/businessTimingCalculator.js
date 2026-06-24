@@ -1,4 +1,7 @@
 import { formatSimulationTimestamp } from "../domain/simulationTime.js";
+import { getTimingTransitions, TimingDurationMode } from "../domain/workflowTransitionRegistry.js";
+
+export { TimingDurationMode };
 
 export const TimingCalculationStatus = {
   NOT_CALCULATED: "NOT_CALCULATED",
@@ -9,30 +12,6 @@ export const TimingCalculationStatus = {
   FAILED: "FAILED",
 };
 
-export const TimingDurationMode = {
-  FIXED_DURATION: "FIXED_DURATION",
-  PER_CELL_DURATION: "PER_CELL_DURATION",
-};
-
-const RULE_DEFINITIONS = [
-  ["readinessTask", "WAITING_ASSIGNMENT", "READINESS_TASK_ASSIGN", "WAITING_CHECK", 3],
-  ["readinessTask", "WAITING_CHECK", "READINESS_TASK_START", "CHECKING", 5],
-  ["readinessTask", "CHECKING", "READINESS_TASK_PASS", "COMPLETED", 30],
-  ["routeExecution", "WAITING_ROUTE", "ROUTE_PLAN", "MOVING", 8],
-  ["routeExecution", "MOVING", "ROUTE_EXECUTION_STEP", "ARRIVED", 4, TimingDurationMode.PER_CELL_DURATION],
-  ["routeExecution", "ARRIVED", "ARRIVAL_CONFIRM", "COMPLETED", 3],
-  ["serviceOrder", "CREATED", "PRICING_EXECUTE", "WAITING_ROBOTAXI_CALL", 2],
-  ["serviceOrder", "WAITING_ROBOTAXI_CALL", "ROBOTAXI_CALL", "WAITING_ROBOTAXI_ASSIGNMENT", 2],
-  ["serviceOrder", "WAITING_ROBOTAXI_ASSIGNMENT", "ORDER_MATCHING_EXECUTE", "VEHICLE_ASSIGNED", 4],
-  ["serviceOrder", "ARRIVED_DESTINATION", "SETTLEMENT_EXECUTE", "WAITING_PAYMENT", 5],
-  ["serviceOrder", "WAITING_PAYMENT", "PAYMENT_EXECUTE", "COMPLETED", 3],
-  ["trip", "PENDING", "TRIP_START", "ON_THE_WAY_PICKUP", 2],
-  ["trip", "ON_THE_WAY_PICKUP", "TRIP_PICKUP_TRAVEL", "WAITING_CUSTOMER_BOARDING", 4, TimingDurationMode.PER_CELL_DURATION],
-  ["trip", "WAITING_CUSTOMER_BOARDING", "PASSENGER_BOARD", "CUSTOMER_ONBOARD", 45],
-  ["trip", "CUSTOMER_ONBOARD", "TRIP_DEPART", "ON_THE_WAY_DESTINATION", 2],
-  ["trip", "ON_THE_WAY_DESTINATION", "TRIP_DESTINATION_TRAVEL", "ARRIVED_DESTINATION", 4, TimingDurationMode.PER_CELL_DURATION],
-];
-
 export function initializeDefaultWorkflowTimingProfile() {
   return {
     workflow_timing_profile_id: "WTP-001",
@@ -42,17 +21,58 @@ export function initializeDefaultWorkflowTimingProfile() {
     description: "用于模拟完成后计算业务状态时间线，不控制 Tick 执行速度。",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    timing_rules: RULE_DEFINITIONS.map((definition, index) => createRule(definition, index)),
+    timing_rules: getTimingTransitions().map((definition, index) => createRule(definition, index)),
+  };
+}
+
+export function normalizeWorkflowTimingProfile(profile) {
+  const definitions = getTimingTransitions();
+  if (profile?.timing_rules?.length === definitions.length
+    && profile.timing_rules.every((rule) => rule.workflow_transition_definition_id)) return profile;
+
+  const migrated = initializeDefaultWorkflowTimingProfile();
+  const legacyByKey = new Map((profile?.timing_rules || []).map((rule) => [ruleKey(rule.business_object_type, rule.from_status, rule.action_type), rule]));
+  migrated.timing_rules = migrated.timing_rules.map((rule) => {
+    const legacy = legacyByKey.get(ruleKey(rule.business_object_type, rule.from_status, rule.action_type));
+    if (!legacy) return rule;
+    return {
+      ...rule,
+      configured_duration_seconds: rule.duration_mode === TimingDurationMode.FIXED_DURATION
+        ? legacy.configured_duration_seconds ?? rule.configured_duration_seconds
+        : null,
+      seconds_per_cell: rule.duration_mode === TimingDurationMode.PER_CELL_DURATION
+        ? legacy.seconds_per_cell ?? rule.seconds_per_cell
+        : null,
+    };
+  });
+  const configuredByGroup = new Map(migrated.timing_rules
+    .filter((rule) => rule.duration_source_type === "CONFIGURED")
+    .map((rule) => [rule.timing_rule_group_id, rule]));
+  migrated.timing_rules = migrated.timing_rules.map((rule) => {
+    const source = configuredByGroup.get(rule.timing_rule_group_id);
+    return rule.duration_source_type === "INHERITED" && source ? {
+      ...rule,
+      configured_duration_seconds: source.configured_duration_seconds,
+      seconds_per_cell: source.seconds_per_cell,
+    } : rule;
+  });
+  return {
+    ...migrated,
+    workflow_timing_profile_id: profile?.workflow_timing_profile_id || migrated.workflow_timing_profile_id,
+    profile_name: profile?.profile_name || migrated.profile_name,
+    profile_version: Number(profile?.profile_version || 0) + 1,
   };
 }
 
 export function updateWorkflowTimingRule(profile, ruleId, value) {
   const seconds = Math.max(0, Math.floor(Number(value) || 0));
+  const selectedRule = profile.timing_rules.find((rule) => rule.workflow_timing_rule_id === ruleId);
+  if (!selectedRule) return profile;
   return {
     ...profile,
     profile_version: Number(profile.profile_version || 0) + 1,
     updated_at: new Date().toISOString(),
-    timing_rules: profile.timing_rules.map((rule) => rule.workflow_timing_rule_id === ruleId
+    timing_rules: profile.timing_rules.map((rule) => rule.timing_rule_group_id === selectedRule?.timing_rule_group_id
       ? {
         ...rule,
         ...(rule.duration_mode === TimingDurationMode.PER_CELL_DURATION
@@ -178,24 +198,29 @@ function calculateServiceTimelines(serviceOrders = [], trips = [], simulationRun
   mapRunObjects(trips, simulationRun).forEach((item) => tripById.set(item.trip_id, item));
 
   for (const order of orderById.values()) {
-    const orderTimeline = createTimeline(order, "serviceOrder", "CREATED", context);
+    const orderTimeline = createTimeline(order, "serviceOrder", "WAITING_PRICE_ESTIMATE", context);
     advance(orderTimeline, "serviceOrder", "PRICING_EXECUTE", context);
     advance(orderTimeline, "serviceOrder", "ROBOTAXI_CALL", context);
     const matched = advance(orderTimeline, "serviceOrder", "ORDER_MATCHING_EXECUTE", context);
     const trip = tripById.get(order.trip_id) || [...tripById.values()].find((item) => item.service_order_id === order.service_order_id);
     if (trip && matched) {
-      const tripTimeline = createTimeline(trip, "trip", "PENDING", context, matched.calculatedSeconds);
-      advance(tripTimeline, "trip", "TRIP_START", context);
-      advance(tripTimeline, "trip", "TRIP_PICKUP_TRAVEL", context, tripMovementSteps(trip, context.businessData, "PICKUP"));
-      advance(tripTimeline, "trip", "PASSENGER_BOARD", context);
-      advance(tripTimeline, "trip", "TRIP_DEPART", context);
-      const arrived = advance(tripTimeline, "trip", "TRIP_DESTINATION_TRAVEL", context, tripMovementSteps(trip, context.businessData, "DESTINATION"));
-      if (arrived) appendProjected(orderTimeline, "VEHICLE_ASSIGNED", "TRIP_DESTINATION_TRAVEL", "ARRIVED_DESTINATION", arrived);
+      const tripTimeline = createTimeline(trip, "trip", "WAITING_ROUTE", context, matched.calculatedSeconds);
+      advance(tripTimeline, "trip", "ROUTE_PLAN", context);
+      const pickupArrived = advance(tripTimeline, "trip", "TRIP_STEP_EXECUTE", context, tripMovementSteps(trip, context.businessData, "PICKUP"));
+      if (pickupArrived) appendProjected(orderTimeline, "ON_THE_WAY_PICKUP", "TRIP_STEP_EXECUTE", "WAITING_CUSTOMER_BOARDING", pickupArrived);
+      const boarded = advance(tripTimeline, "trip", "PASSENGER_BOARD", context);
+      if (boarded) appendProjected(orderTimeline, "WAITING_CUSTOMER_BOARDING", "PASSENGER_BOARD", "CUSTOMER_ONBOARD", boarded);
+      const destinationPlanned = advance(tripTimeline, "trip", "ROUTE_PLAN", context);
+      if (destinationPlanned) appendProjected(orderTimeline, "CUSTOMER_ONBOARD", "ROUTE_PLAN", "ON_THE_WAY_DESTINATION", destinationPlanned);
+      const arrived = advance(tripTimeline, "trip", "TRIP_STEP_EXECUTE", context, tripMovementSteps(trip, context.businessData, "DESTINATION"));
+      if (arrived) appendProjected(orderTimeline, "ON_THE_WAY_DESTINATION", "TRIP_STEP_EXECUTE", "ARRIVED_DESTINATION", arrived);
+      const completed = advance(tripTimeline, "trip", "PASSENGER_DROPOFF", context);
+      if (completed) appendProjected(orderTimeline, "ARRIVED_DESTINATION", "PASSENGER_DROPOFF", "SETTLING", completed);
       tripById.set(trip.trip_id, projectTimeline(trip, tripTimeline, context.calculationRunId));
     } else if (!trip) {
       addError(context, "DEPENDENCY_MISSING", "serviceOrder", order.service_order_id, "未找到关联履约行驶记录");
     }
-    if (orderTimeline.currentStatus === "ARRIVED_DESTINATION") {
+    if (orderTimeline.currentStatus === "SETTLING") {
       advance(orderTimeline, "serviceOrder", "SETTLEMENT_EXECUTE", context);
       advance(orderTimeline, "serviceOrder", "PAYMENT_EXECUTE", context);
     }
@@ -281,7 +306,9 @@ function appendProjected(timeline, fromStatus, actionType, toStatus, source) {
 function projectTimeline(item, timeline, calculationRunId, forcedStatus = null) {
   const last = timeline.history[timeline.history.length - 1];
   const completed = ["COMPLETED", "FAILED", "CANCELLED"].includes(last.to_status);
-  const matched = timeline.history.find((entry) => entry.to_status === "VEHICLE_ASSIGNED");
+  const matched = timeline.objectType === "serviceOrder"
+    ? timeline.history.find((entry) => entry.action_type === "ORDER_MATCHING_EXECUTE")
+    : null;
   const paid = timeline.objectType === "serviceOrder" && last.to_status === "COMPLETED" ? last : null;
   return {
     ...item,
@@ -318,14 +345,22 @@ function createTransition(timeline, rule, actionType, duration, changed, stepCou
 }
 
 function createRule(definition, index) {
-  const [businessObjectType, fromStatus, actionType, toStatus, duration, durationMode = TimingDurationMode.FIXED_DURATION] = definition;
+  const durationMode = definition.duration_mode || TimingDurationMode.FIXED_DURATION;
+  const duration = definition.default_duration_value;
   return {
     workflow_timing_rule_id: `WTR-${String(index + 1).padStart(3, "0")}`,
-    business_object_type: businessObjectType,
-    from_status: fromStatus,
-    action_type: actionType,
-    to_status: toStatus,
+    workflow_transition_definition_id: definition.workflow_transition_definition_id,
+    business_object_type: definition.business_object_type,
+    from_status: definition.from_status,
+    action_type: definition.action_type,
+    to_status: definition.to_status,
     result_type: "SUCCESS",
+    transition_mode: definition.transition_mode,
+    timing_rule_group_id: definition.timing_rule_group_id,
+    duration_source_type: definition.duration_source_type,
+    source_business_object_type: definition.source_business_object_type || null,
+    source_from_status: definition.source_from_status || null,
+    source_transition_definition_id: definition.source_transition_definition_id || null,
     duration_mode: durationMode,
     configured_duration_seconds: durationMode === TimingDurationMode.FIXED_DURATION ? duration : null,
     seconds_per_cell: durationMode === TimingDurationMode.PER_CELL_DURATION ? duration : null,

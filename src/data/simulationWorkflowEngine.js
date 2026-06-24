@@ -7,19 +7,7 @@
  * 参考文档：doc/08-simulation-system/02-workflow-engine/
  */
 
-import {
-  ServiceOrderStatus as SO,
-} from "../domain/serviceOrderTypes.js";
-
-import {
-  TripStatus as T,
-} from "../domain/tripTypes.js";
-
-import {
-  ReadinessTaskStatus as RT,
-  DeploymentTaskStatus as DT,
-  RouteExecutionStatus as RE,
-} from "../domain/taskTypes.js";
+import { getExecutableTransitions } from "../domain/workflowTransitionRegistry.js";
 
 // ============================================================================
 // 流转规则表
@@ -29,60 +17,6 @@ import {
  * ServiceOrder 流转规则
  * 格式：{ fromState, actionType, conditions }
  */
-const SERVICE_ORDER_RULES = [
-  { fromState: SO.WAITING_PRICE_ESTIMATE, actionType: "PRICING_EXECUTE", condition: "auto_pricing_enabled" },
-  { fromState: SO.CREATED, actionType: "PRICING_EXECUTE", condition: "auto_pricing_enabled" },
-  { fromState: SO.WAITING_ROBOTAXI_CALL, actionType: "ROBOTAXI_CALL", condition: null },
-  { fromState: SO.WAITING_ROBOTAXI_ASSIGNMENT, actionType: "ORDER_MATCHING_EXECUTE", condition: "auto_order_matching_enabled" },
-  { fromState: SO.ROBOTAXI_ASSIGNMENT_FAILED, actionType: "ORDER_MATCHING_EXECUTE", condition: "auto_order_matching_enabled" },
-  { fromState: SO.VEHICLE_ASSIGNED, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_creation_enabled" },
-  { fromState: SO.ARRIVED_DESTINATION, actionType: "SETTLEMENT_EXECUTE", condition: null },
-  { fromState: SO.SETTLING, actionType: "PAYMENT_EXECUTE", condition: "auto_payment_enabled" },
-  { fromState: SO.WAITING_PAYMENT, actionType: "PAYMENT_EXECUTE", condition: "auto_payment_enabled" },
-];
-
-/**
- * Trip 流转规则
- */
-const TRIP_RULES = [
-  { fromState: T.WAITING_ROUTE, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-  { fromState: T.PENDING, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-  { fromState: T.ASSIGNED, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-  { fromState: T.ON_THE_WAY_PICKUP, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-  { fromState: T.ARRIVED_PICKUP, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-  { fromState: T.WAITING_CUSTOMER_BOARDING, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-  { fromState: T.CUSTOMER_ONBOARD, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-  { fromState: T.PASSENGER_ONBOARD, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-  { fromState: T.ON_THE_WAY_DESTINATION, actionType: "TRIP_STEP_EXECUTE", condition: "auto_trip_progress_enabled" },
-];
-
-/**
- * ReadinessTask 流转规则
- */
-const READINESS_TASK_RULES = [
-  { fromState: RT.WAITING_ASSIGNMENT, actionType: "READINESS_TASK_ASSIGN", condition: null },
-  { fromState: RT.WAITING_CHECK, actionType: "READINESS_TASK_START", condition: null },
-  { fromState: RT.CHECKING, actionType: "READINESS_TASK_PASS", condition: "default_readiness_passed" },
-];
-
-/**
- * DeploymentTask 流转规则
- */
-const DEPLOYMENT_TASK_RULES = [
-  { fromState: DT.WAITING_START, actionType: "ROUTE_PLAN", condition: null },
-  { fromState: DT.MOVING, actionType: "ROUTE_EXECUTION_STEP", condition: null },
-  { fromState: DT.ARRIVED, actionType: "ARRIVAL_CONFIRM", condition: "default_deployment_arrival_normal" },
-];
-
-/**
- * DeploymentTask / RouteExecution 流转规则
- */
-const ROUTE_EXECUTION_RULES = [
-  { fromState: RE.WAITING_ROUTE, actionType: "ROUTE_PLAN", condition: null },
-  { fromState: RE.MOVING, actionType: "ROUTE_EXECUTION_STEP", condition: null },
-  { fromState: RE.ARRIVED, actionType: "ARRIVAL_CONFIRM", condition: "default_deployment_arrival_normal" },
-];
-
 // ============================================================================
 // 查询接口
 // ============================================================================
@@ -99,33 +33,20 @@ const ROUTE_EXECUTION_RULES = [
 export function queryWorkflowRules(objectType, currentState, autoConfig = {}, defaultCompletionConfig = {}) {
   const allConfig = { ...autoConfig, ...defaultCompletionConfig };
 
-  let rules;
-  switch (objectType) {
-    case "serviceOrder":
-      rules = SERVICE_ORDER_RULES;
-      break;
-    case "trip":
-      rules = TRIP_RULES;
-      break;
-    case "readinessTask":
-      rules = READINESS_TASK_RULES;
-      break;
-    case "deploymentTask":
-      rules = DEPLOYMENT_TASK_RULES;
-      break;
-    case "routeExecution":
-      rules = ROUTE_EXECUTION_RULES;
-      break;
-    default:
-      return [];
-  }
+  const rules = getExecutableTransitions(objectType, currentState);
 
   return rules
-    .filter((rule) => rule.fromState === currentState)
     .filter((rule) => {
       if (!rule.condition) return true;
       return allConfig[rule.condition] === true;
-    });
+    })
+    .map((rule) => ({
+      actionType: rule.action_type,
+      fromState: rule.from_status,
+      toState: rule.to_status,
+      transitionDefinitionId: rule.workflow_transition_definition_id,
+      transitionMode: rule.transition_mode,
+    }));
 }
 
 /**

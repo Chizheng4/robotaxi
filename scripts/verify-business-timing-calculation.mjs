@@ -3,8 +3,14 @@ import assert from "node:assert/strict";
 import {
   createBusinessTimingCalculation,
   initializeDefaultWorkflowTimingProfile,
+  normalizeWorkflowTimingProfile,
   updateWorkflowTimingRule,
 } from "../src/data/businessTimingCalculator.js";
+import {
+  getExecutableTransitions,
+  getTimingTransitions,
+  preservedWorkflowTransitions,
+} from "../src/domain/workflowTransitionRegistry.js";
 
 const simulationRun = {
   simulation_run_id: "SIM-RUN-TIMING",
@@ -31,6 +37,22 @@ const businessData = {
 };
 
 const profile = initializeDefaultWorkflowTimingProfile();
+const migratedProfile = normalizeWorkflowTimingProfile({
+  workflow_timing_profile_id: "WTP-001",
+  profile_version: 3,
+  timing_rules: [{ business_object_type: "routeExecution", from_status: "WAITING_ROUTE", action_type: "ROUTE_PLAN", configured_duration_seconds: 11 }],
+});
+assert.equal(migratedProfile.profile_version, 4);
+assert.equal(migratedProfile.timing_rules.find((rule) => rule.workflow_transition_definition_id === "ROUTE_PLAN").configured_duration_seconds, 11);
+assert.equal(migratedProfile.timing_rules.find((rule) => rule.workflow_transition_definition_id === "DEPLOYMENT_PLAN").configured_duration_seconds, 11);
+assert.equal(profile.timing_rules.length, getTimingTransitions().length);
+assert.ok(profile.timing_rules.some((rule) => rule.business_object_type === "deploymentTask"));
+assert.deepEqual(getExecutableTransitions("deploymentTask", "WAITING_START"), []);
+assert.equal(getExecutableTransitions("routeExecution", "WAITING_ROUTE")[0].action_type, "ROUTE_PLAN");
+assert.equal(getExecutableTransitions("trip", "WAITING_ROUTE")[0].action_type, "ROUTE_PLAN");
+assert.equal(getExecutableTransitions("trip", "WAITING_CUSTOMER_BOARDING")[0].action_type, "PASSENGER_BOARD");
+assert.equal(getExecutableTransitions("trip", "ARRIVED_DESTINATION")[0].action_type, "PASSENGER_DROPOFF");
+assert.ok(preservedWorkflowTransitions.some((rule) => rule.transition_mode === "EXCEPTION"));
 const result = createBusinessTimingCalculation({
   simulationRun,
   profile,
@@ -55,16 +77,40 @@ const order = result.businessData.serviceOrders[0];
 assert.ok(order.calculated_simulation_matched_at);
 assert.ok(order.calculated_simulation_payment_completed_at);
 assert.equal(order.simulation_status_transition_history.at(-1).to_status, "COMPLETED");
+assert.deepEqual(order.simulation_status_transition_history.map((item) => item.to_status), [
+  "WAITING_PRICE_ESTIMATE",
+  "WAITING_ROBOTAXI_CALL",
+  "WAITING_ROBOTAXI_ASSIGNMENT",
+  "ON_THE_WAY_PICKUP",
+  "WAITING_CUSTOMER_BOARDING",
+  "CUSTOMER_ONBOARD",
+  "ON_THE_WAY_DESTINATION",
+  "ARRIVED_DESTINATION",
+  "SETTLING",
+  "WAITING_PAYMENT",
+  "COMPLETED",
+]);
 
 const trip = result.businessData.trips[0];
+assert.deepEqual(trip.simulation_status_transition_history.map((item) => item.to_status), [
+  "WAITING_ROUTE",
+  "ON_THE_WAY_PICKUP",
+  "WAITING_CUSTOMER_BOARDING",
+  "CUSTOMER_ONBOARD",
+  "ON_THE_WAY_DESTINATION",
+  "ARRIVED_DESTINATION",
+  "COMPLETED",
+]);
 const orderArrival = order.simulation_status_transition_history.find((item) => item.to_status === "ARRIVED_DESTINATION");
 const tripArrival = trip.simulation_status_transition_history.find((item) => item.to_status === "ARRIVED_DESTINATION");
 assert.equal(orderArrival.calculated_simulation_status_changed_at, tripArrival.calculated_simulation_status_changed_at);
 
-const fixedRule = profile.timing_rules.find((item) => item.workflow_timing_rule_id === "WTR-001");
+const fixedRule = profile.timing_rules.find((item) => item.workflow_transition_definition_id === "ROUTE_PLAN");
 const updatedProfile = updateWorkflowTimingRule(profile, fixedRule.workflow_timing_rule_id, 9);
 assert.equal(updatedProfile.profile_version, 2);
-assert.equal(updatedProfile.timing_rules[0].configured_duration_seconds, 9);
-assert.equal(profile.timing_rules[0].configured_duration_seconds, 3);
+const updatedGroup = updatedProfile.timing_rules.filter((item) => item.timing_rule_group_id === fixedRule.timing_rule_group_id);
+assert.equal(updatedGroup.length, 2);
+assert.ok(updatedGroup.every((item) => item.configured_duration_seconds === 9));
+assert.equal(fixedRule.configured_duration_seconds, 8);
 
 console.log("业务时效配置、跨单据依赖和状态时间线验证通过");

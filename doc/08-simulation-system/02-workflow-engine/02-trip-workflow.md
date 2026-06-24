@@ -13,19 +13,19 @@ Trip 在 ServiceOrder 订单匹配成功后自动创建，记录 Robotaxi 从接
 ```
 订单匹配成功 → 自动创建 Trip
     ↓
-WAITING_ROUTE / PENDING / ASSIGNED
-    ↓ advanceTrip（模拟系统每 Tick 触发）
+WAITING_ROUTE
+    ↓ 规划行驶路径
 ON_THE_WAY_PICKUP（接驾行驶中）
     ↓ advanceTrip（逐 Tick 推进行驶步数）
 到达上车点 → WAITING_CUSTOMER_BOARDING
-    ↓ advanceTrip
-乘客上车 → CUSTOMER_ONBOARD / PASSENGER_ONBOARD
-    ↓ advanceTrip
+    ↓ 确认客户上车
+乘客上车 → CUSTOMER_ONBOARD
+    ↓ 规划行驶路径
 ON_THE_WAY_DESTINATION（载客行驶中）
     ↓ advanceTrip（逐 Tick 推进行驶步数）
 到达目的地 → ARRIVED_DESTINATION
-    ↓ （触发 ServiceOrder 结算）
-SETTLING → COMPLETED
+    ↓ 确认客户下车
+COMPLETED（同步 ServiceOrder 进入 SETTLING）
 ```
 
 ---
@@ -66,16 +66,14 @@ COMPLETED    → 完成
 
 | 当前状态 | 触发动作 | 目标状态 | 条件 | 说明 |
 |---|---|---|---|---|
-| WAITING_ROUTE | advanceTrip | ON_THE_WAY_PICKUP | auto_trip_progress_enabled | 跳转到接驾行驶 |
-| PENDING | advanceTrip | ON_THE_WAY_PICKUP | auto_trip_progress_enabled | 同上 |
-| ASSIGNED | advanceTrip | ON_THE_WAY_PICKUP | auto_trip_progress_enabled | 同上 |
-| ON_THE_WAY_PICKUP | advanceTrip | WAITING_CUSTOMER_BOARDING | auto_trip_progress_enabled | 逐 Tick 推进行驶步数，到达上车点后自动跳转 |
-| ARRIVED_PICKUP | advanceTrip | CUSTOMER_ONBOARD | auto_trip_progress_enabled | — |
-| WAITING_CUSTOMER_BOARDING | advanceTrip | CUSTOMER_ONBOARD | auto_trip_progress_enabled | 乘客自动上车 |
-| CUSTOMER_ONBOARD | advanceTrip | ON_THE_WAY_DESTINATION | auto_trip_progress_enabled | 出发前往目的地 |
-| PASSENGER_ONBOARD | advanceTrip | ON_THE_WAY_DESTINATION | auto_trip_progress_enabled | 出发前往目的地 |
-| ON_THE_WAY_DESTINATION | advanceTrip | ARRIVED_DESTINATION | auto_trip_progress_enabled | 逐 Tick 推进行驶步数，到达目的地后自动跳转 |
-| ARRIVED_DESTINATION | advanceTrip | SETTLING → COMPLETED | auto_trip_progress_enabled | 到达后自动进入结算 |
+| WAITING_ROUTE | 规划行驶路径 | ON_THE_WAY_PICKUP | auto_trip_progress_enabled | 接驾路径规划 |
+| ON_THE_WAY_PICKUP | 行驶推进 | WAITING_CUSTOMER_BOARDING | auto_trip_progress_enabled | 按路径 Cell 推进至上车点 |
+| WAITING_CUSTOMER_BOARDING | 确认客户上车 | CUSTOMER_ONBOARD | auto_trip_progress_enabled | 客户上车操作 |
+| CUSTOMER_ONBOARD | 规划行驶路径 | ON_THE_WAY_DESTINATION | auto_trip_progress_enabled | 送达路径规划 |
+| ON_THE_WAY_DESTINATION | 行驶推进 | ARRIVED_DESTINATION | auto_trip_progress_enabled | 按路径 Cell 推进至目的地 |
+| ARRIVED_DESTINATION | 确认客户下车 | COMPLETED | auto_trip_progress_enabled | Trip 完成，订单进入结算中 |
+
+`PENDING`、`ASSIGNED`、`ARRIVED_PICKUP`、`PASSENGER_ONBOARD` 与 Trip `SETTLING` 仅保留为历史数据兼容状态，不进入新的自动化正常主链。异常状态和人工异常操作保持原定义。
 
 ### 4.1 行驶推进说明
 
@@ -109,6 +107,7 @@ COMPLETED    → 完成
 | → CUSTOMER_ONBOARD | CUSTOMER_ONBOARD |
 | → ON_THE_WAY_DESTINATION | ON_THE_WAY_DESTINATION |
 | → ARRIVED_DESTINATION | ARRIVED_DESTINATION |
+| → COMPLETED | SETTLING |
 
 因此 SimulationLoop **不需要**为 ServiceOrder 的这些中间状态单独触发动作——Trip 推进已经自动完成了联动。
 

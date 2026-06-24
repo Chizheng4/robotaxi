@@ -503,10 +503,17 @@ export const fieldDictionary = {
   profile_status: "配置状态",
   timing_rules: "工作流时效规则",
   workflow_timing_rule_id: "工作流时效规则编号",
+  workflow_transition_definition_id: "工作流状态边编号",
   business_object_type: "业务对象类型",
   from_status: "变更前状态",
   to_status: "变更后状态",
   duration_mode: "耗时模式",
+  transition_mode: "状态边模式",
+  timing_rule_group_id: "时效规则组编号",
+  duration_source_type: "时长来源类型",
+  source_business_object_type: "来源业务对象类型",
+  source_from_status: "来源变更前状态",
+  source_transition_definition_id: "来源工作流状态边编号",
   configured_duration_seconds: "配置操作时长（秒）",
   seconds_per_cell: "单 Cell 行驶时长（秒）",
   rule_status: "规则状态",
@@ -558,7 +565,7 @@ export const fieldDictionary = {
   time_period: "时间段",
   demand_generation_enabled: "需求生成开关",
   demand_generation_mode: "需求生成模式",
-  max_orders_per_tick_global: "全局每 Tick 最大订单数",
+  max_orders_per_tick_global: "每 Tick 最大订单数",
   supply_trigger_enabled: "供给侧触发开关",
   readiness_trigger_enabled: "准入检查触发开关",
   deployment_trigger_enabled: "投放触发开关",
@@ -569,10 +576,10 @@ export const fieldDictionary = {
   auto_trip_creation_enabled: "自动履约创建开关",
   auto_trip_progress_enabled: "自动履约推进开关",
   auto_payment_enabled: "自动支付开关",
-  worker_readiness_check_ticks: "准入检查 Tick 数",
-  passenger_boarding_ticks: "乘客上车 Tick 数",
-  dropoff_and_payment_ticks: "下车支付 Tick 数",
-  robotaxi_speed_kmh: "Robotaxi 速度（km/h）",
+  worker_readiness_check_ticks: "准入检查耗时（Tick）",
+  passenger_boarding_ticks: "乘客上车耗时（Tick）",
+  dropoff_and_payment_ticks: "下车与支付耗时（Tick）",
+  robotaxi_speed_kmh: "Robotaxi 行驶速度（km/h）",
   enable_exception_probability: "异常概率开关",
   default_readiness_passed: "准入检查默认通过",
   default_deployment_arrival_normal: "投放到达默认正常",
@@ -582,8 +589,8 @@ export const fieldDictionary = {
   default_payment_success: "支付默认成功",
   robotaxi_operating_start_time: "Robotaxi 运营开始时间",
   robotaxi_operating_end_time: "Robotaxi 运营结束时间",
-  worker_work_start_time: "作业人员上班时间",
-  worker_work_end_time: "作业人员下班时间",
+  worker_work_start_time: "作业人员工作开始时间",
+  worker_work_end_time: "作业人员工作结束时间",
 };
 
 export function getFieldLabel(field) {
@@ -971,6 +978,12 @@ export const valueDictionary = {
   PARTIALLY_SUCCEEDED: "部分成功",
   FIXED_DURATION: "固定操作时长",
   PER_CELL_DURATION: "按 Cell 行驶时长",
+  DIRECT: "直接执行",
+  PROJECTED: "关联投影",
+  COMPATIBILITY: "兼容路径",
+  EXCEPTION: "异常路径",
+  CONFIGURED: "独立配置",
+  INHERITED: "继承来源配置",
   TIMING_RULE_MISSING: "缺少时效规则",
   ROUTE_DATA_MISSING: "缺少路径数据",
   DEPENDENCY_MISSING: "缺少时间依赖",
@@ -982,7 +995,8 @@ export const valueDictionary = {
   trip: "履约行驶记录",
   TRIP_START: "开始履约",
   TRIP_PICKUP_TRAVEL: "接驾行驶",
-  PASSENGER_BOARD: "乘客上车",
+  PASSENGER_BOARD: "确认客户上车",
+  PASSENGER_DROPOFF: "确认客户下车",
   TRIP_DEPART: "出发前往目的地",
   TRIP_DESTINATION_TRAVEL: "送达行驶",
   MORNING: "上午",
@@ -1090,6 +1104,15 @@ export const valueDictionary = {
   DOMAIN_STATE_CHANGED: "领域状态已变更",
 };
 
-export function getDisplayValue(value) {
-  return valueDictionary[value] || value;
+export const fieldValueDictionary = {
+  base_cell_type: { BLOCKED: "不可通行区域" },
+  segment_status: { BLOCKED: "阻塞" },
+  motion_status: { STOPPED: "临停中" },
+  simulation_status: { STOPPED: "已停止" },
+  trigger_type: { MANUAL: "手动触发" },
+  record_source: { MANUAL: "人工操作" },
+};
+
+export function getDisplayValue(value, field = null) {
+  return fieldValueDictionary[field]?.[value] || valueDictionary[value] || value;
 }

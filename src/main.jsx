@@ -336,7 +336,7 @@ const tableConfig = {
   workflowTimingRules: {
     title: "工作流时效配置",
     description: "配置业务状态边的操作时长，用于模拟完成后的状态时间线计算。",
-    columns: ["workflow_timing_rule_id", "business_object_type", "from_status", "action_type", "to_status", "duration_mode", "configured_duration_seconds", "seconds_per_cell", "rule_status", "profile_version"],
+    columns: ["workflow_timing_rule_id", "business_object_type", "from_status", "action_type", "to_status", "transition_mode", "duration_source_type", "duration_mode", "configured_duration_seconds", "seconds_per_cell", "rule_status", "profile_version"],
   },
   simulationRuns: {
     title: "模拟运行管理",
@@ -632,7 +632,7 @@ function App() {
       setTaskEventLogs(normalizeRouteStrategyReferences(snapshot.taskEventLogs || []));
       setSimulationPolicies(snapshot.simulationPolicies || []);
       setWorkflowTimingProfiles(snapshot.workflowTimingProfiles?.length
-        ? snapshot.workflowTimingProfiles
+        ? snapshot.workflowTimingProfiles.map((profile) => businessTimingCalculator.normalizeWorkflowTimingProfile(profile))
         : [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()]);
       setBusinessTimingCalculationRuns(snapshot.businessTimingCalculationRuns || []);
       setSimulationRuns(snapshot.simulationRuns || []);
@@ -3969,7 +3969,7 @@ function getFieldDisplayValue(key, value, row = null) {
   if (key === "check_result" && value === "FAILED") return "检查不通过";
   if (key === "event_result" && value === "FAILED") return "失败";
   if (isStatusField(key)) return getStatusDisplayValue(key, value, row);
-  return getDisplayValue(value);
+  return getDisplayValue(value, key);
 }
 
 function summarizeRouteDetail(routeDetail) {
@@ -4062,7 +4062,7 @@ function getStatusDisplayValue(key, value, row = null) {
   if (value === "WAITING_START" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution")) return "待行驶";
   if (value === "WAITING_START" && isDeploymentLike(row)) return "待行驶";
   if (value === "MOVING" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution" || isDeploymentLike(row))) return "行驶中";
-  return getDisplayValue(value);
+  return getDisplayValue(value, key);
 }
 
 function isDeploymentLike(row) {
@@ -4172,22 +4172,22 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/fieldDictionary.js?v=20260624-v028-1"),
+    import("./domain/fieldDictionary.js?v=20260624-v028-1-1"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
     import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"),
 	    import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"),
-	    import("./services/tripService.js?v=20260617-v023-1-service-extraction"),
+	    import("./services/tripService.js?v=20260624-v028-1-1"),
 		    import("./domain/simulationTypes.js?v=20260620-v027-4"),
 		    import("./data/simulationInitialization.js?v=20260620-v027-4"),
 		    import("./data/simulationEngine.js?v=20260620-v027-4"),
 			    import("./services/simulationActions.js?v=20260620-v027-4"),
 			    import("./data/simulationLoop.js?v=20260620-v027-4"),
-			    import("./services/simulationHandlers.js?v=20260624-v028-1"),
-		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1"),
+			    import("./services/simulationHandlers.js?v=20260624-v028-1-1"),
+		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"),
 		    import("./data/simulationExecutionEngine.js"),
-		    import("./data/businessTimingCalculator.js?v=20260624-v028-1"),
+		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-1"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -4236,6 +4236,8 @@ async function bootstrap() {
       ROBOTAXI_CALL: simulationHandlersModule.handleRobotaxiCall,
       ORDER_MATCHING_EXECUTE: simulationHandlersModule.handleOrderMatchingExecute,
       TRIP_STEP_EXECUTE: simulationHandlersModule.handleTripStepExecute,
+      PASSENGER_BOARD: simulationHandlersModule.handleTripStepExecute,
+      PASSENGER_DROPOFF: simulationHandlersModule.handleTripStepExecute,
       SETTLEMENT_EXECUTE: simulationHandlersModule.handleSettlementExecute,
       PAYMENT_EXECUTE: simulationHandlersModule.handlePaymentExecute,
       READINESS_TASK_ASSIGN: simulationHandlersModule.handleReadinessTaskAssign,
@@ -5628,7 +5630,7 @@ function loadRuntimeSnapshot(initialData) {
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const simulationPolicies = Array.isArray(snapshot.simulationPolicies) ? snapshot.simulationPolicies : [];
     const workflowTimingProfiles = Array.isArray(snapshot.workflowTimingProfiles) && snapshot.workflowTimingProfiles.length
-      ? snapshot.workflowTimingProfiles
+      ? snapshot.workflowTimingProfiles.map((profile) => businessTimingCalculator.normalizeWorkflowTimingProfile(profile))
       : [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()];
     const businessTimingCalculationRuns = Array.isArray(snapshot.businessTimingCalculationRuns) ? snapshot.businessTimingCalculationRuns : [];
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];

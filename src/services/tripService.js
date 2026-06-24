@@ -160,9 +160,10 @@ export function getNextTripState(trip) {
       arrival_execution_result: "NORMAL_ARRIVAL",
     },
     [status.ARRIVED_DESTINATION]: {
-      trip_status: status.SETTLING,
-      trip_phase: phase.DESTINATION,
+      trip_status: status.COMPLETED,
+      trip_phase: phase.COMPLETED,
       current_cell_id: trip.dropoff_cell_id,
+      completed_at: timestamp,
       time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
     },
     [status.SETTLING]: {

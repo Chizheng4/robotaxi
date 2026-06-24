@@ -219,7 +219,7 @@ export function handleRobotaxiCall({ objectId, data, context }) {
  * 对服务订单执行 Robotaxi 匹配
  */
 export function handleOrderMatchingExecute({ objectId, data, context }) {
-  const { serviceOrderService: sosService, data: appData, serviceOrders, robotaxis, orderMatchingRuns, orderMatchingDecisions, setServiceOrders, setRobotaxis, setOrderMatchingRuns, setOrderMatchingDecisions } = data;
+  const { serviceOrderService: sosService, data: appData, serviceOrders, robotaxis, orderMatchingRuns, orderMatchingDecisions, setServiceOrders, setTrips, setRobotaxis, setOrderMatchingRuns, setOrderMatchingDecisions } = data;
   const order = serviceOrders.find((o) => o.service_order_id === objectId);
   if (!order) return { success: false, message: `未找到服务订单 ${objectId}` };
 
@@ -253,14 +253,18 @@ export function handleOrderMatchingExecute({ objectId, data, context }) {
   }
 
   const robotaxiId = result.decision?.selected_robotaxi_id;
+  const matchedOrder = { ...order, matched_robotaxi_id: robotaxiId };
+  const trip = createTripForOrderSimple(matchedOrder, appData, context);
 
-  // 更新订单
+  // 匹配成功同时创建履约行驶记录；订单状态由履约主链投影。
+  setTrips((prev) => [trip, ...prev]);
   setServiceOrders((prev) => prev.map((o) => {
     if (o.service_order_id !== objectId) return o;
     return {
       ...o,
-      order_status: "VEHICLE_ASSIGNED",
+      order_status: "ON_THE_WAY_PICKUP",
       matched_robotaxi_id: robotaxiId,
+      trip_id: trip.trip_id,
       order_matching_decision_id: decisionId,
       matched_at: new Date().toISOString(),
       simulation_matched_at: context?.tickContext?.current_time || null,
@@ -279,7 +283,7 @@ export function handleOrderMatchingExecute({ objectId, data, context }) {
   if (result.run) setOrderMatchingRuns((prev) => [{ ...result.run, ...getSimulationAudit(context, { created: true }) }, ...prev]);
   if (result.decision) setOrderMatchingDecisions((prev) => [{ ...result.decision, ...getSimulationAudit(context, { created: true }) }, ...prev]);
 
-  return { success: true, resultType: "MATCHING_COMPLETED", message: `服务订单 ${objectId} 匹配成功，Robotaxi: ${robotaxiId}`, data: { objectType: "serviceOrder", objectId, robotaxiId } };
+  return { success: true, resultType: "MATCHING_COMPLETED", message: `服务订单 ${objectId} 匹配成功，Robotaxi: ${robotaxiId}`, data: { objectType: "serviceOrder", objectId, robotaxiId, tripId: trip.trip_id } };
 }
 
 // ============================================================================
@@ -328,6 +332,7 @@ export function handleTripStepExecute({ objectId, data, context }) {
       const auditedMoveResult = { ...moveResult, ...getSimulationAudit(context) };
       setTrips((prev) => prev.map((t) => t.trip_id === trip.trip_id ? auditedMoveResult : t));
       updateRobotaxiPosition(auditedMoveResult, setRobotaxis, context);
+      syncServiceOrderFromTrip(order.service_order_id, auditedMoveResult, setServiceOrders, context);
       return { success: true, resultType: "TRIP_STEPPED", message: `履约行驶 ${trip.trip_id} 步进完成`, data: { objectType: "trip", objectId: trip.trip_id } };
     }
     return { success: false, resultType: "TRIP_NO_ACTION", message: `Trip ${trip.trip_id} 无需推进`, data: { objectType: "trip", objectId: trip.trip_id, failureReason: "当前状态无需推进" } };
@@ -336,20 +341,7 @@ export function handleTripStepExecute({ objectId, data, context }) {
   const auditedNextTrip = { ...nextTrip, ...getSimulationAudit(context) };
   setTrips((prev) => prev.map((t) => t.trip_id === trip.trip_id ? auditedNextTrip : t));
   updateRobotaxiPosition(auditedNextTrip, setRobotaxis, context);
-
-  // 如果 Trip 完成，反馈到 ServiceOrder
-  if (nextTrip.trip_status === "ARRIVED_DESTINATION" || nextTrip.trip_status === "SETTLING") {
-    setServiceOrders((prev) => prev.map((o) => {
-      if (o.service_order_id !== objectId) return o;
-      return {
-        ...o,
-        order_status: "ARRIVED_DESTINATION",
-        actual_distance_km: nextTrip.distance_traveled_km,
-        actual_duration_min: parseTimeElapsed(nextTrip.time_elapsed),
-        ...getSimulationAudit(context),
-      };
-    }));
-  }
+  syncServiceOrderFromTrip(order.service_order_id, auditedNextTrip, setServiceOrders, context);
 
   return { success: true, resultType: "TRIP_ADVANCED", message: `履约行驶 ${trip.trip_id} 推进至 ${nextTrip.trip_status}`, data: { objectType: "trip", objectId: trip.trip_id } };
 }
@@ -565,6 +557,9 @@ export function handleReadinessTaskPass({ objectId, data, context }) {
  * 自动规划行驶路径
  */
 export function handleRoutePlan({ objectId, data, context }) {
+  if (context?.action?.objectType === "trip") {
+    return handleTripStepExecute({ objectId, data, context });
+  }
   const { deploymentTasks, routeExecutions, setDeploymentTasks, setRouteExecutions } = data;
   const re = routeExecutions.find((r) => r.route_execution_id === objectId || r.deployment_task_id === objectId);
   if (!re) return { success: false, resultType: "ROUTE_PLAN_FAILED", message: `未找到行驶执行 ${objectId}`, data: { objectType: "routeExecution", objectId, failureReason: "未找到行驶执行" } };
@@ -662,7 +657,7 @@ function createServiceOrderFromDemandResult(dsResult, orderChannel, appData, con
     pickup_cell_id: dsResult.pickup_cell_id,
     dropoff_service_area_id: dsResult.dropoff_service_area_id,
     dropoff_cell_id: dsResult.dropoff_cell_id,
-    order_status: "CREATED",
+    order_status: "WAITING_PRICE_ESTIMATE",
     payment_status: "UNPAID",
     estimated_price: null,
     quoted_price: null,
@@ -687,11 +682,31 @@ function createTripForOrderSimple(order, appData, context) {
     distance_traveled_km: 0,
     distance_remaining_km: order.estimated_distance_km || 1.5,
     time_elapsed: "0:00",
-    trip_status: "PENDING",
+    trip_status: "WAITING_ROUTE",
     trip_phase: "PICKUP",
     created_at: new Date().toISOString(),
     ...getSimulationAudit(context, { created: true }),
   };
+}
+
+function syncServiceOrderFromTrip(serviceOrderId, trip, setServiceOrders, context) {
+  const statusByTripStatus = {
+    ON_THE_WAY_PICKUP: "ON_THE_WAY_PICKUP",
+    WAITING_CUSTOMER_BOARDING: "WAITING_CUSTOMER_BOARDING",
+    CUSTOMER_ONBOARD: "CUSTOMER_ONBOARD",
+    ON_THE_WAY_DESTINATION: "ON_THE_WAY_DESTINATION",
+    ARRIVED_DESTINATION: "ARRIVED_DESTINATION",
+    COMPLETED: "SETTLING",
+  };
+  const orderStatus = statusByTripStatus[trip.trip_status];
+  if (!orderStatus) return;
+  setServiceOrders((prev) => prev.map((order) => order.service_order_id === serviceOrderId ? {
+    ...order,
+    order_status: orderStatus,
+    actual_distance_km: trip.distance_traveled_km,
+    actual_duration_min: parseTimeElapsed(trip.time_elapsed),
+    ...getSimulationAudit(context),
+  } : order));
 }
 
 function updateRobotaxiPosition(trip, setRobotaxis, context) {

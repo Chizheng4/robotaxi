@@ -1117,12 +1117,19 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |workflow_timing_rule_id|工作流时效规则编号|持久化字段|规则唯一编号|
-|business_object_type|业务对象类型|持久化字段|readinessTask、routeExecution、serviceOrder 或 trip|
+|workflow_transition_definition_id|工作流状态边编号|持久化字段|与统一工作流注册表中的状态边一一对应|
+|business_object_type|业务对象类型|持久化字段|readinessTask、deploymentTask、routeExecution、serviceOrder 或 trip|
 |from_status|变更前状态|持久化字段|动作执行前状态|
 |action_type|动作类型|持久化字段|与工作流功能操作一致的动作|
 |to_status|变更后状态|持久化字段|动作完成后进入的状态|
 |result_type|执行结果类型|持久化字段|当前规则适用的结果分支|
 |duration_mode|耗时模式|持久化字段|FIXED_DURATION 或 PER_CELL_DURATION|
+|transition_mode|状态边模式|持久化字段|DIRECT 为直接执行，PROJECTED 为关联对象投影|
+|timing_rule_group_id|时效规则组编号|持久化字段|同一来源状态变更及其投影共用的配置组|
+|duration_source_type|时长来源类型|持久化字段|CONFIGURED 为独立配置，INHERITED 为继承来源配置|
+|source_business_object_type|来源业务对象类型|持久化字段|投影状态边依赖的源业务对象类型|
+|source_from_status|来源变更前状态|持久化字段|投影状态边依赖的源状态|
+|source_transition_definition_id|来源工作流状态边编号|持久化字段|投影状态边依赖的源状态边编号|
 |configured_duration_seconds|配置操作时长（秒）|持久化字段|固定操作耗时|
 |seconds_per_cell|单 Cell 行驶时长（秒）|持久化字段|行驶动作的单位 Cell 耗时|
 |rule_status|规则状态|运行态字段|ACTIVE / DISABLED|
@@ -1194,6 +1201,14 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |PARTIALLY_SUCCEEDED|部分成功|
 |FIXED_DURATION|固定操作时长|
 |PER_CELL_DURATION|按 Cell 行驶时长|
+|DIRECT|直接执行|
+|PROJECTED|关联投影|
+|COMPATIBILITY|兼容路径|
+|EXCEPTION|异常路径|
+|CONFIGURED|独立配置|
+|INHERITED|继承来源配置|
+|PASSENGER_BOARD|确认客户上车|
+|PASSENGER_DROPOFF|确认客户下车|
 |TIMING_RULE_MISSING|缺少时效规则|
 |ROUTE_DATA_MISSING|缺少路径数据|
 |DEPENDENCY_MISSING|缺少时间依赖|
