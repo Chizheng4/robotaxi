@@ -1039,8 +1039,14 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |TRIP_STEP_EXECUTE|推进履约行驶|event_type / action_type|
 |SETTLEMENT_EXECUTE|执行结算|event_type / action_type|
 |PAYMENT_EXECUTE|执行支付|event_type / action_type|
-|READINESS_TASK_CREATE|创建准入任务|event_type / action_type|
-|DEPLOYMENT_TASK_CREATE|创建投放任务|event_type / action_type|
+|READINESS_TASK_CREATE|创建运营准入任务|event_type / action_type|
+|DEPLOYMENT_TASK_CREATE|创建运营投放任务|event_type / action_type|
+|ROUTE_EXECUTION_CREATE|创建运营行驶记录|action_type|
+|TRIP_CREATE|创建履约行驶记录|action_type|
+|READINESSTASK_CREATE|创建运营准入任务|action_type（兼容旧值）|
+|DEPLOYMENTTASK_CREATE|创建运营投放任务|action_type（兼容旧值）|
+|ROUTEEXECUTION_CREATE|创建运营行驶记录|action_type（兼容旧值）|
+|SERVICEORDER_CREATE|创建服务订单|action_type（兼容旧值）|
 |READINESS_TASK_ASSIGN|分配准入任务|event_type / action_type|
 |READINESS_TASK_START|开始准入检查|event_type / action_type|
 |READINESS_TASK_PASS|准入检查通过|event_type / action_type|

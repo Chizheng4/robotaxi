@@ -1055,8 +1055,10 @@ export const valueDictionary = {
   TRIP_STEP_EXECUTE: "推进履约行驶",
   SETTLEMENT_EXECUTE: "执行结算",
   PAYMENT_EXECUTE: "执行支付",
-  READINESS_TASK_CREATE: "创建准入任务",
-  DEPLOYMENT_TASK_CREATE: "创建投放任务",
+  READINESS_TASK_CREATE: "创建运营准入任务",
+  DEPLOYMENT_TASK_CREATE: "创建运营投放任务",
+  ROUTE_EXECUTION_CREATE: "创建运营行驶记录",
+  TRIP_CREATE: "创建履约行驶记录",
   READINESS_TASK_ASSIGN: "分配准入任务",
   READINESS_TASK_START: "开始准入检查",
   READINESS_TASK_PASS: "准入检查通过",
@@ -1109,6 +1111,12 @@ export const valueDictionary = {
 };
 
 export const fieldValueDictionary = {
+  action_type: {
+    READINESSTASK_CREATE: "创建运营准入任务",
+    DEPLOYMENTTASK_CREATE: "创建运营投放任务",
+    ROUTEEXECUTION_CREATE: "创建运营行驶记录",
+    SERVICEORDER_CREATE: "创建服务订单",
+  },
   base_cell_type: { BLOCKED: "不可通行区域" },
   segment_status: { BLOCKED: "阻塞" },
   motion_status: { STOPPED: "临停中" },

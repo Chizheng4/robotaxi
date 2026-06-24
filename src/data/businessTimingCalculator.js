@@ -247,12 +247,19 @@ function calculateDerivedRecords(data, simulationRun, calculationRunId) {
 }
 
 function createTimeline(item, objectType, initialStatus, context, anchor = null) {
+  const creationActionByObjectType = {
+    readinessTask: "READINESS_TASK_CREATE",
+    deploymentTask: "DEPLOYMENT_TASK_CREATE",
+    routeExecution: "ROUTE_EXECUTION_CREATE",
+    serviceOrder: "SERVICE_ORDER_CREATE",
+    trip: "TRIP_CREATE",
+  };
   const seconds = anchor ?? parseSimulationTimestamp(item.simulation_created_at);
   const history = [{
     status_transition_id: `${context.calculationRunId}-${objectId(item, objectType)}-001`,
     transition_sequence: 1,
     from_status: null,
-    action_type: `${objectType.toUpperCase()}_CREATE`,
+    action_type: creationActionByObjectType[objectType] || "BUSINESS_OBJECT_CREATE",
     result_type: "SUCCESS",
     to_status: initialStatus,
     calculated_simulation_action_started_at: formatSimulationTimestamp(seconds),

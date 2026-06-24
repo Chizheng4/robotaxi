@@ -13,6 +13,7 @@ import {
   preservedWorkflowTransitions,
 } from "../src/domain/workflowTransitionRegistry.js";
 import { createOperatingSimulationTimeCalculationEvent, resetSimulationCounters } from "../src/data/simulationEngine.js";
+import { getDisplayValue } from "../src/domain/fieldDictionary.js";
 
 const simulationRun = {
   simulation_run_id: "SIM-RUN-TIMING",
@@ -79,6 +80,9 @@ assert.equal(result.calculationRun.total_object_count, 5);
 
 const deployment = result.businessData.deploymentTasks[0];
 const execution = result.businessData.routeExecutions[0];
+assert.equal(result.businessData.readinessTasks[0].simulation_status_transition_history[0].action_type, "READINESS_TASK_CREATE");
+assert.equal(deployment.simulation_status_transition_history[0].action_type, "DEPLOYMENT_TASK_CREATE");
+assert.equal(execution.simulation_status_transition_history[0].action_type, "ROUTE_EXECUTION_CREATE");
 const deploymentMoving = deployment.simulation_status_transition_history.find((item) => item.to_status === "MOVING");
 const executionMoving = execution.simulation_status_transition_history.find((item) => item.to_status === "MOVING");
 assert.equal(deploymentMoving.calculated_simulation_status_changed_at, executionMoving.calculated_simulation_status_changed_at);
@@ -88,6 +92,7 @@ assert.equal(routeTravel.movement_step_count, 3);
 assert.equal(routeTravel.configured_duration_seconds, 12);
 
 const order = result.businessData.serviceOrders[0];
+assert.equal(order.simulation_status_transition_history[0].action_type, "SERVICE_ORDER_CREATE");
 assert.ok(order.calculated_simulation_matched_at);
 assert.ok(order.calculated_simulation_payment_completed_at);
 assert.equal(order.simulation_status_transition_history.at(-1).to_status, "COMPLETED");
@@ -106,6 +111,7 @@ assert.deepEqual(order.simulation_status_transition_history.map((item) => item.t
 ]);
 
 const trip = result.businessData.trips[0];
+assert.equal(trip.simulation_status_transition_history[0].action_type, "TRIP_CREATE");
 assert.deepEqual(trip.simulation_status_transition_history.map((item) => item.to_status), [
   "WAITING_ROUTE",
   "ON_THE_WAY_PICKUP",
@@ -133,5 +139,20 @@ assert.match(mainSource, /if \(rule\.duration_source_type === "INHERITED"\) retu
 assert.doesNotMatch(mainSource, /key: "timing", label: "时效计算"/);
 assert.match(mainSource, /重算运营模拟时间/);
 assert.match(mainSource, /OPERATING_SIMULATION_TIME_CALCULATION_COMPLETED/);
+
+const createActionLabels = {
+  READINESS_TASK_CREATE: "创建运营准入任务",
+  DEPLOYMENT_TASK_CREATE: "创建运营投放任务",
+  ROUTE_EXECUTION_CREATE: "创建运营行驶记录",
+  SERVICE_ORDER_CREATE: "创建服务订单",
+  TRIP_CREATE: "创建履约行驶记录",
+  READINESSTASK_CREATE: "创建运营准入任务",
+  DEPLOYMENTTASK_CREATE: "创建运营投放任务",
+  ROUTEEXECUTION_CREATE: "创建运营行驶记录",
+  SERVICEORDER_CREATE: "创建服务订单",
+};
+Object.entries(createActionLabels).forEach(([value, label]) => {
+  assert.equal(getDisplayValue(value, "action_type"), label);
+});
 
 console.log("业务时效配置、跨单据依赖和状态时间线验证通过");
