@@ -690,7 +690,7 @@ function createTripForOrderSimple(order, appData, context) {
 }
 
 function syncServiceOrderFromTrip(serviceOrderId, trip, setServiceOrders, context) {
-  const statusByTripStatus = {
+  const orderStatusByTripStatus = {
     ON_THE_WAY_PICKUP: "ON_THE_WAY_PICKUP",
     WAITING_CUSTOMER_BOARDING: "WAITING_CUSTOMER_BOARDING",
     CUSTOMER_ONBOARD: "CUSTOMER_ONBOARD",
@@ -698,7 +698,7 @@ function syncServiceOrderFromTrip(serviceOrderId, trip, setServiceOrders, contex
     ARRIVED_DESTINATION: "ARRIVED_DESTINATION",
     COMPLETED: "SETTLING",
   };
-  const orderStatus = statusByTripStatus[trip.trip_status];
+  const orderStatus = orderStatusByTripStatus[trip.trip_status];
   if (!orderStatus) return;
   setServiceOrders((prev) => prev.map((order) => order.service_order_id === serviceOrderId ? {
     ...order,

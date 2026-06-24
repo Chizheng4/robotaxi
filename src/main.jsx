@@ -628,7 +628,7 @@ function App() {
       setPricingDecisions(snapshot.pricingDecisions || []);
       setOrderMatchingRuns(snapshot.orderMatchingRuns || []);
       setOrderMatchingDecisions(snapshot.orderMatchingDecisions || []);
-      setTrips(snapshot.trips || []);
+      setTrips(Array.isArray(snapshot.trips) ? snapshot.trips.map((trip) => tripTypes.normalizeTripRecord(trip)) : []);
       setTaskEventLogs(normalizeRouteStrategyReferences(snapshot.taskEventLogs || []));
       setSimulationPolicies(snapshot.simulationPolicies || []);
       setWorkflowTimingProfiles(snapshot.workflowTimingProfiles?.length
@@ -3320,7 +3320,7 @@ function TabbedDetail({ selectedObject, selectedType }) {
         key: tab.key,
         label: tab.label,
         children: tab.timeline ? (
-          <StatusTimeline history={selectedObject.simulation_status_transition_history} />
+          <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} />
         ) : (
           <Descriptions
             className="compact-descriptions"
@@ -3439,7 +3439,17 @@ function getDetailTabs(selectedType) {
   return [];
 }
 
-function StatusTimeline({ history }) {
+function getDetailStatusField(selectedType) {
+  return {
+    readinessTask: "task_status",
+    deploymentTask: "task_status",
+    routeExecution: "execution_status",
+    serviceOrder: "order_status",
+    trip: "trip_status",
+  }[selectedType] || null;
+}
+
+function StatusTimeline({ history, statusField }) {
   if (!Array.isArray(history) || history.length === 0) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未计算业务状态时间线" />;
   }
@@ -3450,7 +3460,7 @@ function StatusTimeline({ history }) {
           <span className="status-timeline-marker" />
           <div className="status-timeline-content">
             <div className="status-timeline-heading">
-              <StatusValue value={item.to_status} label={getDisplayValue(item.to_status)} />
+              <StatusValue value={item.to_status} label={getDisplayValue(item.to_status, statusField)} />
               <Text>{item.calculated_simulation_status_changed_at}</Text>
             </div>
             <Text type="secondary">{getDisplayValue(item.action_type, "action_type")} · {item.configured_duration_seconds || 0} 秒</Text>
@@ -4327,21 +4337,21 @@ async function bootstrap() {
     import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"),
     import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"),
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
-    import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"),
+    import("./domain/tripTypes.js?v=20260624-v028-1-5"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/fieldDictionary.js?v=20260624-v028-1-3"),
+    import("./domain/fieldDictionary.js?v=20260624-v028-1-5"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
-    import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"),
+	    import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"),
 	    import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"),
-	    import("./services/tripService.js?v=20260624-v028-1-1"),
+	    import("./services/tripService.js?v=20260624-v028-1-5"),
 		    import("./domain/simulationTypes.js?v=20260624-v028-1-2"),
 		    import("./data/simulationInitialization.js?v=20260620-v027-4"),
 		    import("./data/simulationEngine.js?v=20260624-v028-1-2"),
 			    import("./services/simulationActions.js?v=20260620-v027-4"),
 			    import("./data/simulationLoop.js?v=20260620-v027-4"),
-			    import("./services/simulationHandlers.js?v=20260624-v028-1-1"),
+			    import("./services/simulationHandlers.js?v=20260624-v028-1-5"),
 		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"),
 		    import("./data/simulationExecutionEngine.js"),
 		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"),
@@ -5525,7 +5535,7 @@ function getTripRouteRequest(trip) {
 function updateRobotaxiForTrip(robotaxi, trip) {
   const movingStatuses = ["ON_THE_WAY_PICKUP", "ON_THE_WAY_DESTINATION"];
   const completed = trip.trip_status === "COMPLETED";
-  const waitingDecision = ["WAITING_OPERATION_DECISION", "SETTLING"].includes(trip.trip_status);
+  const waitingDecision = trip.trip_status === "WAITING_OPERATION_DECISION";
   return {
     ...robotaxi,
     current_cell_id: trip.current_cell_id || robotaxi.current_cell_id,
@@ -5538,7 +5548,7 @@ function updateRobotaxiForTrip(robotaxi, trip) {
 }
 
 function updateServiceOrderForTrip(order, trip) {
-  const statusByTripStatus = {
+  const orderStatusByTripStatus = {
     ON_THE_WAY_PICKUP: "ON_THE_WAY_PICKUP",
     WAITING_CUSTOMER_BOARDING: "WAITING_CUSTOMER_BOARDING",
     ARRIVED_PICKUP: "WAITING_CUSTOMER_BOARDING",
@@ -5550,7 +5560,7 @@ function updateServiceOrderForTrip(order, trip) {
     WAITING_OPERATION_DECISION: "WAITING_OPERATION_DECISION",
     COMPLETED: "SETTLING",
   };
-  const nextOrderStatus = statusByTripStatus[trip.trip_status] || order.order_status;
+  const nextOrderStatus = orderStatusByTripStatus[trip.trip_status] || order.order_status;
   const syncedOrder = serviceOrderSettlement.createServiceOrderActualSnapshotFromTrip(order, trip, serviceOrderTypes, tripTypes);
   return {
     ...syncedOrder,
@@ -5783,7 +5793,7 @@ function loadRuntimeSnapshot(initialData) {
     const pricingDecisions = Array.isArray(snapshot.pricingDecisions) ? snapshot.pricingDecisions : [];
     const orderMatchingRuns = Array.isArray(snapshot.orderMatchingRuns) ? snapshot.orderMatchingRuns : [];
     const orderMatchingDecisions = Array.isArray(snapshot.orderMatchingDecisions) ? snapshot.orderMatchingDecisions : [];
-    const trips = Array.isArray(snapshot.trips) ? snapshot.trips : [];
+    const trips = Array.isArray(snapshot.trips) ? snapshot.trips.map((trip) => tripTypes.normalizeTripRecord(trip)) : [];
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const simulationPolicies = Array.isArray(snapshot.simulationPolicies) ? snapshot.simulationPolicies : [];
     const workflowTimingProfiles = Array.isArray(snapshot.workflowTimingProfiles) && snapshot.workflowTimingProfiles.length

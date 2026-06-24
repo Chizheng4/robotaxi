@@ -176,7 +176,6 @@ export function applyServiceOrderSettlementResult({
 export function createServiceOrderActualSnapshotFromTrip(order, trip, serviceOrderTypes, tripTypes) {
   const shouldPersistActuals = trip && [
     tripTypes.TripStatus.ARRIVED_DESTINATION,
-    tripTypes.TripStatus.SETTLING,
     tripTypes.TripStatus.COMPLETED,
   ].includes(trip.trip_status);
 

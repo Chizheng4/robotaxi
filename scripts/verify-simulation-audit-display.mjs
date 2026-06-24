@@ -32,5 +32,9 @@ assert.match(source, /<details className="structured-detail">/, "复杂详情必
 assert.match(source, /<dt>\{getFieldLabel\(key\)\}<\/dt>/, "复杂详情字段必须通过统一字段字典显示中文");
 assert.match(styles, /\.structured-detail-field\s*\{[\s\S]*?grid-template-columns:/, "复杂详情必须使用稳定键值对齐");
 assert.match(styles, /\.structured-detail-group-body\s*\{[\s\S]*?border-left:/, "嵌套详情必须使用轻量层级引导");
+assert.match(source, /StatusTimeline history=\{selectedObject\.simulation_status_transition_history\} statusField=\{getDetailStatusField\(selectedType\)\}/, "状态时间线必须携带所属对象的状态字段");
+assert.match(source, /trip: "trip_status"/, "履约时间线必须使用 trip_status 上下文");
+assert.match(source, /serviceOrder: "order_status"/, "服务订单时间线必须使用 order_status 上下文");
+assert.match(source, /snapshot\.trips\.map\(\(trip\) => tripTypes\.normalizeTripRecord\(trip\)\)/, "持久化 Trip 必须执行状态边界迁移");
 
 console.log("模拟业务双创建时间页面验证通过");

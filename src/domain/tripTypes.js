@@ -2,7 +2,6 @@ export const TripStatus = {
   WAITING_ROUTE: "WAITING_ROUTE",
   WAITING_CUSTOMER_BOARDING: "WAITING_CUSTOMER_BOARDING",
   CUSTOMER_ONBOARD: "CUSTOMER_ONBOARD",
-  SETTLING: "SETTLING",
   PENDING: "PENDING",
   ASSIGNED: "ASSIGNED",
   ON_THE_WAY_PICKUP: "ON_THE_WAY_PICKUP",
@@ -24,4 +23,14 @@ export const TripPhase = {
 
 export function createTrip(trip) {
   return trip;
+}
+
+export function normalizeTripRecord(trip) {
+  if (!trip || trip.trip_status !== "SETTLING") return trip;
+  return {
+    ...trip,
+    trip_status: TripStatus.COMPLETED,
+    trip_phase: TripPhase.COMPLETED,
+    completed_at: trip.completed_at || trip.updated_at || trip.created_at || null,
+  };
 }

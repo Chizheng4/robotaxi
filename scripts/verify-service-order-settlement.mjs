@@ -2,10 +2,25 @@ import assert from "node:assert/strict";
 import { cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as realTripTypes from "../src/domain/tripTypes.js";
+import { getDisplayValue } from "../src/domain/fieldDictionary.js";
 
 const tempModulePath = join(tmpdir(), `robotaxi-service-order-settlement-${Date.now()}.mjs`);
 cpSync(new URL("../src/domain/serviceOrderSettlement.js", import.meta.url), tempModulePath);
 const settlement = await import(`file://${tempModulePath}`);
+
+assert.equal(realTripTypes.TripStatus.SETTLING, undefined);
+const normalizedLegacyTrip = realTripTypes.normalizeTripRecord({
+  trip_id: "TRIP-LEGACY-001",
+  trip_status: "SETTLING",
+  trip_phase: "DESTINATION",
+  created_at: "2026-06-24T00:00:00.000Z",
+});
+assert.equal(normalizedLegacyTrip.trip_status, "COMPLETED");
+assert.equal(normalizedLegacyTrip.trip_phase, "COMPLETED");
+assert.equal(getDisplayValue("SETTLING", "order_status"), "结算中");
+assert.equal(getDisplayValue("COMPLETED", "trip_status"), "已完成");
+assert.equal(getDisplayValue("SETTLING", "trip_status"), "已完成");
 
 const serviceOrderTypes = {
   ServiceOrderStatus: {

@@ -166,13 +166,6 @@ export function getNextTripState(trip) {
       completed_at: timestamp,
       time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
     },
-    [status.SETTLING]: {
-      trip_status: status.COMPLETED,
-      trip_phase: phase.COMPLETED,
-      current_cell_id: trip.dropoff_cell_id,
-      completed_at: timestamp,
-      time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
-    },
     [status.WAITING_OPERATION_DECISION]: {
       trip_status: status.FAILED,
       trip_phase: phase.DESTINATION,

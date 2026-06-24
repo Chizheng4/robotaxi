@@ -412,6 +412,7 @@
 
 - ServiceOrder 表达客户服务承诺，不负责价格算法、车辆匹配算法、路径规划算法或实际行驶过程；
 - 订单来源 `order_channel` 与 Customer 的 `default_order_channel` 不是同一字段，前者是本次订单来源，后者是客户默认偏好。
+- `SETTLING / 结算中` 仅属于 `order_status`，表示服务订单等待执行结算；不得写入 Trip。
 
 ---
 
@@ -449,6 +450,21 @@
 |started_at|开始时间|运行态字段|履约行驶开始时间|
 |completed_at|完成时间|运行态字段|履约行驶完成时间|
 |event_log|事件记录|运行态字段|履约行驶事件数组|
+
+说明：
+
+- Trip 的完成状态固定为 `trip_status = COMPLETED / 已完成`；
+- 历史数据中的 `trip_status = SETTLING` 为错误兼容值，加载时必须迁移为 `COMPLETED`，不得继续生成；
+- `trip_status` 与 `order_status` 必须按各自字段上下文翻译，不得因英文值相同或流程关联而互相借用状态含义。
+
+### 16.1 订单与履约状态边界
+
+|状态字段|状态值|中文名|所有权|
+|---|---|---|---|
+|order_status|SETTLING|结算中|仅 ServiceOrder 使用|
+|order_status|COMPLETED|已完成|ServiceOrder 支付完成|
+|trip_status|COMPLETED|已完成|Trip 客户下车后完成|
+|trip_status|SETTLING|已完成|仅兼容历史错误值，加载时迁移为 COMPLETED，禁止新写入|
 
 说明：
 
