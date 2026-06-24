@@ -69,7 +69,7 @@ const READINESS_TASK_RULES = [
  * DeploymentTask 流转规则
  */
 const DEPLOYMENT_TASK_RULES = [
-  { fromState: DT.WAITING_ROUTE, actionType: "ROUTE_PLAN", condition: null },
+  { fromState: DT.WAITING_START, actionType: "ROUTE_PLAN", condition: null },
   { fromState: DT.MOVING, actionType: "ROUTE_EXECUTION_STEP", condition: null },
   { fromState: DT.ARRIVED, actionType: "ARRIVAL_CONFIRM", condition: "default_deployment_arrival_normal" },
 ];

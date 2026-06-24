@@ -468,7 +468,7 @@ export function handleDeploymentTaskCreate({ data, context }) {
 
   const dt = {
     task_id: dtId, task_type: "DEPLOYMENT",
-    task_status: "WAITING_ROUTE",
+    task_status: "WAITING_START",
     robotaxi_id: candidate.robotaxi_id,
     route_execution_id: reId,
     created_at: new Date().toISOString(),

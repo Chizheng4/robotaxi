@@ -55,6 +55,7 @@ let validateReadinessCheckTasks;
 let validateDeploymentTasks;
 let taskTypes;
 let serviceOrderSettlement;
+let businessTimingCalculator;
 let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
@@ -215,6 +216,9 @@ const pageGroups = [{
   children: [{
     key: "simulationPolicies",
     label: "模拟规则配置"
+  }, {
+    key: "workflowTimingRules",
+    label: "工作流时效配置"
   }, {
     key: "simulationRuns",
     label: "模拟运行管理"
@@ -382,10 +386,15 @@ const tableConfig = {
     description: "配置模拟运行的规则参数，包括 Tick 粒度、时间段、需求分布和自动化开关。",
     columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"]
   },
+  workflowTimingRules: {
+    title: "工作流时效配置",
+    description: "配置业务状态边的操作时长，用于模拟完成后的状态时间线计算。",
+    columns: ["workflow_timing_rule_id", "business_object_type", "from_status", "action_type", "to_status", "duration_mode", "configured_duration_seconds", "seconds_per_cell", "rule_status", "profile_version"]
+  },
   simulationRuns: {
     title: "模拟运行管理",
     description: "创建和管理自动运营模拟运行，查看实时进度和结果。",
-    columns: ["simulation_run_id", "simulation_name", "simulation_status", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"]
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "business_timing_calculation_status", "calculation_progress_percent", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"]
   },
   simulationEvents: {
     title: "模拟事件记录",
@@ -426,6 +435,7 @@ const pageObjectType = {
   robotaxis: "robotaxi",
   validations: "validation",
   simulationPolicies: "simulationPolicy",
+  workflowTimingRules: "workflowTimingRule",
   simulationRuns: "simulationRun",
   simulationEvents: "simulationEvent"
 };
@@ -455,6 +465,7 @@ const idFieldByType = {
   pricingStrategy: "pricing_strategy_id",
   pricingStrategyRun: "pricing_strategy_run_id",
   simulationPolicy: "simulation_policy_id",
+  workflowTimingRule: "workflow_timing_rule_id",
   simulationRun: "simulation_run_id",
   simulationEvent: "simulation_event_id",
   pricingDecision: "pricing_decision_id",
@@ -495,6 +506,7 @@ const statusFieldByPage = {
   robotaxis: "availability_status",
   validations: "result",
   simulationPolicies: "policy_status",
+  workflowTimingRules: "rule_status",
   simulationRuns: "simulation_status",
   simulationEvents: "event_result"
 };
@@ -555,6 +567,8 @@ function App() {
   const [trips, setTrips] = useState(initialRuntime.trips);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const [simulationPolicies, setSimulationPolicies] = useState(initialRuntime.simulationPolicies);
+  const [workflowTimingProfiles, setWorkflowTimingProfiles] = useState(initialRuntime.workflowTimingProfiles);
+  const [businessTimingCalculationRuns, setBusinessTimingCalculationRuns] = useState(initialRuntime.businessTimingCalculationRuns);
   const [simulationRuns, setSimulationRuns] = useState(initialRuntime.simulationRuns);
   const [simulationEvents, setSimulationEvents] = useState(initialRuntime.simulationEvents);
   useEffect(() => {
@@ -593,6 +607,10 @@ function App() {
   const [pageSelections, setPageSelections] = useState(initialRuntime.pageSelections);
   const [pageUiState, setPageUiState] = useState(initialRuntime.pageUiState);
   const [runtimeHydrated, setRuntimeHydrated] = useState(false);
+  const [pendingTimingRule, setPendingTimingRule] = useState(null);
+  const [timingRuleModalOpen, setTimingRuleModalOpen] = useState(false);
+  const [timingRuleValue, setTimingRuleValue] = useState(0);
+  const [pendingCalculationRunId, setPendingCalculationRunId] = useState(null);
   useEffect(() => {
     let cancelled = false;
     loadPersistedRuntimeSnapshot().then(snapshot => {
@@ -611,6 +629,8 @@ function App() {
       setTrips(snapshot.trips || []);
       setTaskEventLogs(normalizeRouteStrategyReferences(snapshot.taskEventLogs || []));
       setSimulationPolicies(snapshot.simulationPolicies || []);
+      setWorkflowTimingProfiles(snapshot.workflowTimingProfiles?.length ? snapshot.workflowTimingProfiles : [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()]);
+      setBusinessTimingCalculationRuns(snapshot.businessTimingCalculationRuns || []);
       setSimulationRuns(snapshot.simulationRuns || []);
       const restoredPage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
       const restoredSelections = snapshot.pageSelections || {};
@@ -664,10 +684,16 @@ function App() {
     serviceFulfillmentRecords: trips.map(trip => enrichTripForDisplay(trip, data)),
     robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     simulationPolicies,
+    workflowTimingRules: (workflowTimingProfiles[0]?.timing_rules || []).map(rule => ({
+      ...rule,
+      workflow_timing_profile_id: workflowTimingProfiles[0]?.workflow_timing_profile_id,
+      profile_name: workflowTimingProfiles[0]?.profile_name,
+      profile_version: workflowTimingProfiles[0]?.profile_version
+    })),
     simulationRuns,
     simulationEvents,
     validations
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, simulationRuns, simulationEvents, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, simulationRuns, simulationEvents, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -713,6 +739,7 @@ function App() {
       orderMatchingDecision: rowsByPage.orderMatchingDecisions,
       trip: rowsByPage.serviceFulfillmentRecords,
       simulationPolicy: simulationPolicies,
+      workflowTimingRule: rowsByPage.workflowTimingRules,
       simulationRun: simulationRuns,
       simulationEvent: simulationEvents,
       opsCenter: data.opsCenters,
@@ -768,6 +795,8 @@ function App() {
       trips,
       taskEventLogs,
       simulationPolicies,
+      workflowTimingProfiles,
+      businessTimingCalculationRuns,
       simulationRuns,
       simulationEvents,
       activePage,
@@ -777,7 +806,7 @@ function App() {
       pageUiState
     });
     persistSimulationEvents(simulationEvents);
-  }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workflowTimingProfiles, workspacePages]);
 
   // ===== Simulation 控制 =====
   const getBusinessData = () => {
@@ -873,6 +902,113 @@ function App() {
       if (simActionsRef.current) simActionsRef.current.cleanup();
     };
   }, []);
+  useEffect(() => {
+    if (!runtimeHydrated || !businessTimingCalculator || workflowTimingProfiles.length === 0) return;
+    const completedRun = simulationRuns.find(run => run.simulation_status === "COMPLETED" && !run.business_timing_calculation_status);
+    if (completedRun) runBusinessTimingCalculation(completedRun.simulation_run_id, {
+      automatic: true
+    });
+  }, [runtimeHydrated, simulationRuns, workflowTimingProfiles]);
+  function requestBusinessTimingCalculation(runId) {
+    const run = simulationRuns.find(item => item.simulation_run_id === runId);
+    if (!run) return;
+    setPendingCalculationRunId(runId);
+  }
+  function runBusinessTimingCalculation(runId, {
+    automatic = false
+  } = {}) {
+    const run = simulationRuns.find(item => item.simulation_run_id === runId);
+    const profile = workflowTimingProfiles.find(item => item.profile_status === "ACTIVE");
+    if (!run || !profile || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
+    const calculationRunId = `BTCR-${String(businessTimingCalculationRuns.length + 1).padStart(4, "0")}`;
+    setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
+      ...item,
+      business_timing_calculation_status: "CALCULATING",
+      calculation_progress_percent: 12,
+      active_business_timing_calculation_run_id: calculationRunId
+    } : item));
+    setTimeout(() => {
+      try {
+        const result = businessTimingCalculator.createBusinessTimingCalculation({
+          simulationRun: run,
+          profile,
+          calculationRunId,
+          businessData: {
+            ...data,
+            readinessTasks,
+            deploymentTasks,
+            routeExecutions,
+            serviceOrders,
+            trips,
+            pricingStrategyRuns,
+            pricingDecisions,
+            orderMatchingRuns,
+            orderMatchingDecisions,
+            routePlanningRuns,
+            demandSimulationRuns
+          }
+        });
+        const calculated = result.businessData;
+        setReadinessTasks(current => mergeCalculatedObjects(current, calculated.readinessTasks, "task_id"));
+        setDeploymentTasks(current => mergeCalculatedObjects(current, calculated.deploymentTasks, "task_id"));
+        setRouteExecutions(current => mergeCalculatedObjects(current, calculated.routeExecutions, "route_execution_id"));
+        setServiceOrders(current => mergeCalculatedObjects(current, calculated.serviceOrders, "service_order_id"));
+        setTrips(current => mergeCalculatedObjects(current, calculated.trips, "trip_id"));
+        setPricingStrategyRuns(current => mergeCalculatedObjects(current, calculated.pricingStrategyRuns, "pricing_strategy_run_id"));
+        setPricingDecisions(current => mergeCalculatedObjects(current, calculated.pricingDecisions, "pricing_decision_id"));
+        setOrderMatchingRuns(current => mergeCalculatedObjects(current, calculated.orderMatchingRuns, "order_matching_run_id"));
+        setOrderMatchingDecisions(current => mergeCalculatedObjects(current, calculated.orderMatchingDecisions, "order_matching_decision_id"));
+        setRoutePlanningRuns(current => mergeCalculatedObjects(current, calculated.routePlanningRuns, "route_planning_run_id"));
+        setDemandSimulationRuns(current => mergeCalculatedObjects(current, calculated.demandSimulationRuns, "demand_simulation_run_id"));
+        setBusinessTimingCalculationRuns(current => [result.calculationRun, ...current]);
+        setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
+          ...item,
+          business_timing_calculation_status: result.calculationRun.calculation_status,
+          calculation_progress_percent: 100,
+          active_business_timing_calculation_run_id: calculationRunId,
+          workflow_timing_profile_id: profile.workflow_timing_profile_id,
+          workflow_timing_profile_version: profile.profile_version,
+          business_timing_result_summary: {
+            total_object_count: result.calculationRun.total_object_count,
+            success_object_count: result.calculationRun.success_object_count,
+            failed_object_count: result.calculationRun.failed_object_count,
+            total_transition_count: result.calculationRun.total_transition_count
+          },
+          business_timing_calculation_errors: result.calculationRun.calculation_errors
+        } : item));
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "业务时效计算完成" : "业务时效计算完成，存在待检查项");
+      } catch (error) {
+        setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
+          ...item,
+          business_timing_calculation_status: "FAILED",
+          calculation_progress_percent: 100,
+          business_timing_calculation_errors: [{
+            error_type: "CALCULATION_FAILED",
+            error_message: error.message
+          }]
+        } : item));
+        if (!automatic) antd.message.error(`业务时效计算失败：${error.message}`);
+      }
+    }, 80);
+  }
+  function editWorkflowTimingRule(rule) {
+    setPendingTimingRule(rule);
+    setTimingRuleValue(rule.duration_mode === "PER_CELL_DURATION" ? rule.seconds_per_cell : rule.configured_duration_seconds);
+    setTimingRuleModalOpen(true);
+  }
+  function saveWorkflowTimingRule() {
+    if (!pendingTimingRule) return;
+    setWorkflowTimingProfiles(profiles => profiles.map(profile => profile.profile_status === "ACTIVE" ? businessTimingCalculator.updateWorkflowTimingRule(profile, pendingTimingRule.workflow_timing_rule_id, timingRuleValue) : profile));
+    setTimingRuleModalOpen(false);
+  }
+  function confirmBusinessTimingCalculation() {
+    if (!pendingCalculationRunId) return;
+    const runId = pendingCalculationRunId;
+    setPendingCalculationRunId(null);
+    runBusinessTimingCalculation(runId, {
+      automatic: false
+    });
+  }
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -988,6 +1124,10 @@ function App() {
       simActions,
       clearSimulationEvents,
       simulationPolicies,
+      workflowTimingProfiles,
+      editWorkflowTimingRule,
+      requestBusinessTimingCalculation,
+      businessTimingCalculationRuns,
       simulationRuns,
       simulationEvents
     }
@@ -1002,7 +1142,54 @@ function App() {
     selectedObject: detailSelectedObject,
     selectedType: detailSelectedType,
     onCollapse: () => setDetailCollapsedForPage(activePage, true)
-  })))));
+  })))), /*#__PURE__*/React.createElement(Modal, {
+    title: "\u8C03\u6574\u5DE5\u4F5C\u6D41\u65F6\u6548",
+    open: timingRuleModalOpen,
+    okText: "\u4FDD\u5B58\u914D\u7F6E",
+    cancelText: "\u53D6\u6D88",
+    width: 520,
+    onCancel: () => setTimingRuleModalOpen(false),
+    footer: [/*#__PURE__*/React.createElement(Button, {
+      key: "cancel",
+      onClick: () => setTimingRuleModalOpen(false)
+    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement(Button, {
+      key: "save",
+      type: "primary",
+      onClick: saveWorkflowTimingRule
+    }, "\u4FDD\u5B58\u914D\u7F6E")]
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "timing-rule-editor"
+  }, /*#__PURE__*/React.createElement(Descriptions, {
+    size: "small",
+    column: 1,
+    colon: false
+  }, /*#__PURE__*/React.createElement(Descriptions.Item, {
+    label: "\u4E1A\u52A1\u5BF9\u8C61"
+  }, getDisplayValue(pendingTimingRule?.business_object_type)), /*#__PURE__*/React.createElement(Descriptions.Item, {
+    label: "\u72B6\u6001\u53D8\u5316"
+  }, getDisplayValue(pendingTimingRule?.from_status), " \u2192 ", getDisplayValue(pendingTimingRule?.to_status)), /*#__PURE__*/React.createElement(Descriptions.Item, {
+    label: "\u529F\u80FD\u64CD\u4F5C"
+  }, getDisplayValue(pendingTimingRule?.action_type))), /*#__PURE__*/React.createElement("label", null, /*#__PURE__*/React.createElement("span", null, pendingTimingRule?.duration_mode === "PER_CELL_DURATION" ? "单 Cell 行驶时长（秒）" : "操作时长（秒）"), /*#__PURE__*/React.createElement(Input, {
+    type: "number",
+    min: 0,
+    value: timingRuleValue,
+    onChange: event => setTimingRuleValue(event.target.value)
+  })))), /*#__PURE__*/React.createElement(Modal, {
+    title: simulationRuns.find(item => item.simulation_run_id === pendingCalculationRunId)?.business_timing_calculation_status ? "重新计算业务时效" : "计算业务时效",
+    open: Boolean(pendingCalculationRunId),
+    okText: "\u5F00\u59CB\u8BA1\u7B97",
+    cancelText: "\u53D6\u6D88",
+    width: 520,
+    onCancel: () => setPendingCalculationRunId(null),
+    footer: [/*#__PURE__*/React.createElement(Button, {
+      key: "cancel",
+      onClick: () => setPendingCalculationRunId(null)
+    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement(Button, {
+      key: "calculate",
+      type: "primary",
+      onClick: confirmBusinessTimingCalculation
+    }, "\u5F00\u59CB\u8BA1\u7B97")]
+  }, /*#__PURE__*/React.createElement(Text, null, "\u5C06\u4F7F\u7528\u5F53\u524D\u751F\u6548\u7684\u5DE5\u4F5C\u6D41\u65F6\u6548\u914D\u7F6E\u751F\u6210\u65B0\u7684\u72B6\u6001\u65F6\u95F4\u7EBF\u7248\u672C\u3002\u539F\u59CB\u6A21\u62DF\u65F6\u95F4\u4E0D\u4F1A\u88AB\u4FEE\u6539\u3002")));
   function handleMenuClick(key) {
     activateWorkspacePage(key);
   }
@@ -1057,6 +1244,8 @@ function App() {
     setTrips([]);
     setTaskEventLogs([]);
     setSimulationPolicies([]);
+    setWorkflowTimingProfiles([businessTimingCalculator.initializeDefaultWorkflowTimingProfile()]);
+    setBusinessTimingCalculationRuns([]);
     setSimulationRuns([]);
     setSimulationEvents([]);
     setActivePage("console");
@@ -2575,6 +2764,7 @@ function RecordTable({
   const isOrderMatchingPage = page === "orderMatchingStrategies";
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
   const isSimulationPolicyPage = page === "simulationPolicies";
+  const isWorkflowTimingRulePage = page === "workflowTimingRules";
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
@@ -2944,6 +3134,17 @@ function RecordTable({
         }))
       };
     }
+    if (isWorkflowTimingRulePage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 96,
+        render: (_, row) => renderActionCell(row, /*#__PURE__*/React.createElement(RowActionButton, {
+          onClick: () => actions.editWorkflowTimingRule(row)
+        }, "\u914D\u7F6E\u65F6\u957F"))
+      };
+    }
     return null;
   }
   function renderActionCell(row, actionContent) {
@@ -3136,7 +3337,9 @@ function TabbedDetail({
     items: tabs.map(tab => ({
       key: tab.key,
       label: tab.label,
-      children: /*#__PURE__*/React.createElement(Descriptions, {
+      children: tab.timeline ? /*#__PURE__*/React.createElement(StatusTimeline, {
+        history: selectedObject.simulation_status_transition_history
+      }) : /*#__PURE__*/React.createElement(Descriptions, {
         className: "compact-descriptions",
         column: 1,
         size: "small",
@@ -3217,6 +3420,11 @@ function getDetailTabs(selectedType) {
       key: "time",
       label: "时间与来源",
       keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"]
+    }, {
+      key: "timeline",
+      label: "状态时间线",
+      timeline: true,
+      keys: []
     }];
   }
   if (selectedType === "deploymentTask") {
@@ -3240,6 +3448,11 @@ function getDetailTabs(selectedType) {
       key: "time",
       label: "时间与来源",
       keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"]
+    }, {
+      key: "timeline",
+      label: "状态时间线",
+      timeline: true,
+      keys: []
     }];
   }
   if (selectedType === "routeExecution") {
@@ -3263,6 +3476,11 @@ function getDetailTabs(selectedType) {
       key: "time",
       label: "时间与来源",
       keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"]
+    }, {
+      key: "timeline",
+      label: "状态时间线",
+      timeline: true,
+      keys: []
     }];
   }
   if (selectedType === "serviceOrder") {
@@ -3286,6 +3504,11 @@ function getDetailTabs(selectedType) {
       key: "time",
       label: "时间与来源",
       keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "confirmed_at", "matched_at", "simulation_matched_at", "completed_at", "simulation_completed_at", "cancelled_at", "payment_completed_at", "simulation_payment_completed_at", "failure_reason"]
+    }, {
+      key: "timeline",
+      label: "状态时间线",
+      timeline: true,
+      keys: []
     }];
   }
   if (selectedType === "trip") {
@@ -3309,6 +3532,11 @@ function getDetailTabs(selectedType) {
       key: "time",
       label: "时间与来源",
       keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason", "event_log"]
+    }, {
+      key: "timeline",
+      label: "状态时间线",
+      timeline: true,
+      keys: []
     }];
   }
   if (selectedType === "simulationPolicy") {
@@ -3359,6 +3587,10 @@ function getDetailTabs(selectedType) {
       key: "policy",
       label: "策略快照",
       keys: ["simulation_policy_snapshot"]
+    }, {
+      key: "timing",
+      label: "时效计算",
+      keys: ["business_timing_calculation_status", "calculation_progress_percent", "active_business_timing_calculation_run_id", "workflow_timing_profile_id", "workflow_timing_profile_version", "business_timing_result_summary", "business_timing_calculation_errors"]
     }];
   }
   if (selectedType === "simulationEvent") {
@@ -3373,6 +3605,34 @@ function getDetailTabs(selectedType) {
     }];
   }
   return [];
+}
+function StatusTimeline({
+  history
+}) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return /*#__PURE__*/React.createElement(Empty, {
+      image: Empty.PRESENTED_IMAGE_SIMPLE,
+      description: "\u5C1A\u672A\u8BA1\u7B97\u4E1A\u52A1\u72B6\u6001\u65F6\u95F4\u7EBF"
+    });
+  }
+  return /*#__PURE__*/React.createElement("ol", {
+    className: "status-timeline"
+  }, history.map(item => /*#__PURE__*/React.createElement("li", {
+    key: item.status_transition_id
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "status-timeline-marker"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "status-timeline-content"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "status-timeline-heading"
+  }, /*#__PURE__*/React.createElement(StatusValue, {
+    value: item.to_status,
+    label: getDisplayValue(item.to_status)
+  }), /*#__PURE__*/React.createElement(Text, null, item.calculated_simulation_status_changed_at)), /*#__PURE__*/React.createElement(Text, {
+    type: "secondary"
+  }, getDisplayValue(item.action_type), " \xB7 ", item.configured_duration_seconds || 0, " \u79D2"), item.movement_step_count !== null && item.movement_step_count !== undefined && /*#__PURE__*/React.createElement(Text, {
+    type: "secondary"
+  }, item.movement_step_count, " Cell \xD7 ", item.seconds_per_cell || 0, " \u79D2")))));
 }
 function MapCanvas({
   data,
@@ -3589,6 +3849,7 @@ function getStatusTone(value) {
   if (["ACTIVE", "AVAILABLE", "COMPLETED", "PAID", "PASSED", "PASS", "SUCCESS", "IDLE", "ARRIVED", "NORMAL_ARRIVAL"].includes(normalized)) return "success";
   if (["FAILED", "FAIL", "BLOCKED", "UNAVAILABLE", "CANCELLED"].some(token => normalized.includes(token)) || normalized.includes("ABNORMAL")) return "danger";
   if (["WAITING", "PENDING", "PAUSED", "DRAFT", "RESTRICTED", "STOPPED"].some(token => normalized.includes(token))) return "warning";
+  if (normalized === "PARTIALLY_SUCCEEDED") return "warning";
   if (["RUNNING", "DRAINING", "MOVING", "CHECKING", "INSPECTION", "ASSIGNED", "PROCESSING", "ON_THE_WAY", "CALCULATING", "SETTLING", "BUSY"].some(token => normalized.includes(token))) return "info";
   return "neutral";
 }
@@ -3596,12 +3857,14 @@ function RowActionButton({
   children,
   onClick,
   type = "primary",
-  danger = false
+  danger = false,
+  disabled = false
 }) {
   return /*#__PURE__*/React.createElement(Button, {
     size: "small",
     type: type,
     danger: danger,
+    disabled: disabled,
     className: "row-action-button",
     onClick: event => {
       event.stopPropagation();
@@ -3713,6 +3976,13 @@ function renderSimulationRunActions(row, actions) {
       onClick: () => sim.stopSimulationRun(row.simulation_run_id),
       danger: true
     }, "\u505C\u6B62"));
+  }
+  if (["COMPLETED", "STOPPED", "FAILED"].includes(status)) {
+    const calculating = row.business_timing_calculation_status === "CALCULATING";
+    return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.requestBusinessTimingCalculation(row.simulation_run_id),
+      disabled: calculating
+    }, calculating ? "计算中" : row.business_timing_calculation_status ? "重新计算" : "计算时效"), renderViewDetailAction(row, actions));
   }
   return renderViewDetailAction(row, actions);
 }
@@ -3968,7 +4238,7 @@ function summarizeRecord(record) {
   return Object.entries(record).slice(0, 3).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`).join("，");
 }
 function isStatusField(key) {
-  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "trip_status", "payment_status", "simulation_status", "policy_status", "event_result", "event_source"].includes(key);
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "trip_status", "payment_status", "simulation_status", "business_timing_calculation_status", "policy_status", "profile_status", "rule_status", "event_result", "event_source"].includes(key);
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";
@@ -4022,7 +4292,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260620-v027-4"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260617-v023-1-service-extraction"), import("./domain/simulationTypes.js?v=20260620-v027-4"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260620-v027-4"), import("./services/simulationActions.js?v=20260620-v027-4"), import("./data/simulationLoop.js?v=20260620-v027-4"), import("./services/simulationHandlers.js?v=20260620-v027-4"), import("./data/simulationWorkflowEngine.js?v=20260617-v024-1-handlers"), import("./data/simulationExecutionEngine.js")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDictionary.js?v=20260624-v028-1"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260617-v023-1-service-extraction"), import("./domain/simulationTypes.js?v=20260620-v027-4"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260620-v027-4"), import("./services/simulationActions.js?v=20260620-v027-4"), import("./data/simulationLoop.js?v=20260620-v027-4"), import("./services/simulationHandlers.js?v=20260624-v028-1"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -4059,6 +4329,7 @@ async function bootstrap() {
   simulationEngine = simulationEngineModule;
   simulationLoop = simulationLoopModule;
   simulationActions = simulationActionsModule;
+  businessTimingCalculator = businessTimingCalculatorModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -5284,6 +5555,10 @@ function normalizeWorkspacePages(pages, activePage = "console") {
 function addWorkspacePage(pages, page) {
   return normalizeWorkspacePages([...(Array.isArray(pages) ? pages : []), page], page);
 }
+function mergeCalculatedObjects(current = [], updates = [], idField) {
+  const updateById = new Map((updates || []).map(item => [item[idField], item]));
+  return current.map(item => updateById.get(item[idField]) || item);
+}
 function loadRuntimeSnapshot(initialData) {
   const fallback = {
     operationalData: initialData,
@@ -5300,6 +5575,8 @@ function loadRuntimeSnapshot(initialData) {
     trips: [],
     taskEventLogs: [],
     simulationPolicies: [],
+    workflowTimingProfiles: [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()],
+    businessTimingCalculationRuns: [],
     simulationRuns: [],
     simulationEvents: [],
     activePage: "console",
@@ -5336,6 +5613,8 @@ function loadRuntimeSnapshot(initialData) {
     const trips = Array.isArray(snapshot.trips) ? snapshot.trips : [];
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const simulationPolicies = Array.isArray(snapshot.simulationPolicies) ? snapshot.simulationPolicies : [];
+    const workflowTimingProfiles = Array.isArray(snapshot.workflowTimingProfiles) && snapshot.workflowTimingProfiles.length ? snapshot.workflowTimingProfiles : [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()];
+    const businessTimingCalculationRuns = Array.isArray(snapshot.businessTimingCalculationRuns) ? snapshot.businessTimingCalculationRuns : [];
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
     const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
@@ -5369,6 +5648,8 @@ function loadRuntimeSnapshot(initialData) {
       trips,
       taskEventLogs,
       simulationPolicies,
+      workflowTimingProfiles,
+      businessTimingCalculationRuns,
       simulationRuns,
       simulationEvents,
       activePage: restoredActivePage,
@@ -5443,6 +5724,8 @@ function saveRuntimeSnapshot(snapshot) {
     tripSequence,
     eventSequence,
     simulationPolicies: snapshot.simulationPolicies || [],
+    workflowTimingProfiles: snapshot.workflowTimingProfiles || [],
+    businessTimingCalculationRuns: snapshot.businessTimingCalculationRuns || [],
     simulationRuns: snapshot.simulationRuns || [],
     simulationEvents: []
   };

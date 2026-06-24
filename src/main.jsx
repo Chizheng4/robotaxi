@@ -32,6 +32,7 @@ let validateReadinessCheckTasks;
 let validateDeploymentTasks;
 let taskTypes;
 let serviceOrderSettlement;
+let businessTimingCalculator;
 let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
@@ -163,6 +164,7 @@ const pageGroups = [
     label: "自动运营模拟",
     children: [
       { key: "simulationPolicies", label: "模拟规则配置" },
+      { key: "workflowTimingRules", label: "工作流时效配置" },
       { key: "simulationRuns", label: "模拟运行管理" },
     ],
   },
@@ -331,10 +333,15 @@ const tableConfig = {
     description: "配置模拟运行的规则参数，包括 Tick 粒度、时间段、需求分布和自动化开关。",
     columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"],
   },
+  workflowTimingRules: {
+    title: "工作流时效配置",
+    description: "配置业务状态边的操作时长，用于模拟完成后的状态时间线计算。",
+    columns: ["workflow_timing_rule_id", "business_object_type", "from_status", "action_type", "to_status", "duration_mode", "configured_duration_seconds", "seconds_per_cell", "rule_status", "profile_version"],
+  },
   simulationRuns: {
     title: "模拟运行管理",
     description: "创建和管理自动运营模拟运行，查看实时进度和结果。",
-    columns: ["simulation_run_id", "simulation_name", "simulation_status", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "business_timing_calculation_status", "calculation_progress_percent", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
   },
   simulationEvents: {
     title: "模拟事件记录",
@@ -376,6 +383,7 @@ const pageObjectType = {
   robotaxis: "robotaxi",
   validations: "validation",
   simulationPolicies: "simulationPolicy",
+  workflowTimingRules: "workflowTimingRule",
   simulationRuns: "simulationRun",
   simulationEvents: "simulationEvent",
 };
@@ -406,6 +414,7 @@ const idFieldByType = {
   pricingStrategy: "pricing_strategy_id",
   pricingStrategyRun: "pricing_strategy_run_id",
   simulationPolicy: "simulation_policy_id",
+  workflowTimingRule: "workflow_timing_rule_id",
   simulationRun: "simulation_run_id",
   simulationEvent: "simulation_event_id",
   pricingDecision: "pricing_decision_id",
@@ -447,6 +456,7 @@ const statusFieldByPage = {
   robotaxis: "availability_status",
   validations: "result",
   simulationPolicies: "policy_status",
+  workflowTimingRules: "rule_status",
   simulationRuns: "simulation_status",
   simulationEvents: "event_result",
 };
@@ -546,6 +556,8 @@ function App() {
   const [trips, setTrips] = useState(initialRuntime.trips);
   const [taskEventLogs, setTaskEventLogs] = useState(initialRuntime.taskEventLogs);
   const [simulationPolicies, setSimulationPolicies] = useState(initialRuntime.simulationPolicies);
+  const [workflowTimingProfiles, setWorkflowTimingProfiles] = useState(initialRuntime.workflowTimingProfiles);
+  const [businessTimingCalculationRuns, setBusinessTimingCalculationRuns] = useState(initialRuntime.businessTimingCalculationRuns);
   const [simulationRuns, setSimulationRuns] = useState(initialRuntime.simulationRuns);
   const [simulationEvents, setSimulationEvents] = useState(initialRuntime.simulationEvents);
 
@@ -596,6 +608,10 @@ function App() {
   const [pageSelections, setPageSelections] = useState(initialRuntime.pageSelections);
   const [pageUiState, setPageUiState] = useState(initialRuntime.pageUiState);
   const [runtimeHydrated, setRuntimeHydrated] = useState(false);
+  const [pendingTimingRule, setPendingTimingRule] = useState(null);
+  const [timingRuleModalOpen, setTimingRuleModalOpen] = useState(false);
+  const [timingRuleValue, setTimingRuleValue] = useState(0);
+  const [pendingCalculationRunId, setPendingCalculationRunId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -615,6 +631,10 @@ function App() {
       setTrips(snapshot.trips || []);
       setTaskEventLogs(normalizeRouteStrategyReferences(snapshot.taskEventLogs || []));
       setSimulationPolicies(snapshot.simulationPolicies || []);
+      setWorkflowTimingProfiles(snapshot.workflowTimingProfiles?.length
+        ? snapshot.workflowTimingProfiles
+        : [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()]);
+      setBusinessTimingCalculationRuns(snapshot.businessTimingCalculationRuns || []);
       setSimulationRuns(snapshot.simulationRuns || []);
       const restoredPage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
       const restoredSelections = snapshot.pageSelections || {};
@@ -664,10 +684,16 @@ function App() {
     serviceFulfillmentRecords: trips.map((trip) => enrichTripForDisplay(trip, data)),
     robotaxis: data.robotaxis.map((robotaxi) => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     simulationPolicies,
+    workflowTimingRules: (workflowTimingProfiles[0]?.timing_rules || []).map((rule) => ({
+      ...rule,
+      workflow_timing_profile_id: workflowTimingProfiles[0]?.workflow_timing_profile_id,
+      profile_name: workflowTimingProfiles[0]?.profile_name,
+      profile_version: workflowTimingProfiles[0]?.profile_version,
+    })),
     simulationRuns,
     simulationEvents,
     validations,
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, simulationRuns, simulationEvents, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, simulationRuns, simulationEvents, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -719,6 +745,7 @@ function App() {
       orderMatchingDecision: rowsByPage.orderMatchingDecisions,
       trip: rowsByPage.serviceFulfillmentRecords,
       simulationPolicy: simulationPolicies,
+      workflowTimingRule: rowsByPage.workflowTimingRules,
       simulationRun: simulationRuns,
       simulationEvent: simulationEvents,
       opsCenter: data.opsCenters,
@@ -773,6 +800,8 @@ function App() {
       trips,
       taskEventLogs,
       simulationPolicies,
+      workflowTimingProfiles,
+      businessTimingCalculationRuns,
       simulationRuns,
       simulationEvents,
       activePage,
@@ -782,7 +811,7 @@ function App() {
       pageUiState,
     });
     persistSimulationEvents(simulationEvents);
-  }, [activePage, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workflowTimingProfiles, workspacePages]);
 
 
 
@@ -877,6 +906,112 @@ function App() {
   useEffect(() => {
     return () => { if (simActionsRef.current) simActionsRef.current.cleanup(); };
   }, []);
+
+  useEffect(() => {
+    if (!runtimeHydrated || !businessTimingCalculator || workflowTimingProfiles.length === 0) return;
+    const completedRun = simulationRuns.find((run) => run.simulation_status === "COMPLETED" && !run.business_timing_calculation_status);
+    if (completedRun) runBusinessTimingCalculation(completedRun.simulation_run_id, { automatic: true });
+  }, [runtimeHydrated, simulationRuns, workflowTimingProfiles]);
+
+  function requestBusinessTimingCalculation(runId) {
+    const run = simulationRuns.find((item) => item.simulation_run_id === runId);
+    if (!run) return;
+    setPendingCalculationRunId(runId);
+  }
+
+  function runBusinessTimingCalculation(runId, { automatic = false } = {}) {
+    const run = simulationRuns.find((item) => item.simulation_run_id === runId);
+    const profile = workflowTimingProfiles.find((item) => item.profile_status === "ACTIVE");
+    if (!run || !profile || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
+    const calculationRunId = `BTCR-${String(businessTimingCalculationRuns.length + 1).padStart(4, "0")}`;
+    setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+      ...item,
+      business_timing_calculation_status: "CALCULATING",
+      calculation_progress_percent: 12,
+      active_business_timing_calculation_run_id: calculationRunId,
+    } : item));
+    setTimeout(() => {
+      try {
+        const result = businessTimingCalculator.createBusinessTimingCalculation({
+          simulationRun: run,
+          profile,
+          calculationRunId,
+          businessData: {
+            ...data,
+            readinessTasks,
+            deploymentTasks,
+            routeExecutions,
+            serviceOrders,
+            trips,
+            pricingStrategyRuns,
+            pricingDecisions,
+            orderMatchingRuns,
+            orderMatchingDecisions,
+            routePlanningRuns,
+            demandSimulationRuns,
+          },
+        });
+        const calculated = result.businessData;
+        setReadinessTasks((current) => mergeCalculatedObjects(current, calculated.readinessTasks, "task_id"));
+        setDeploymentTasks((current) => mergeCalculatedObjects(current, calculated.deploymentTasks, "task_id"));
+        setRouteExecutions((current) => mergeCalculatedObjects(current, calculated.routeExecutions, "route_execution_id"));
+        setServiceOrders((current) => mergeCalculatedObjects(current, calculated.serviceOrders, "service_order_id"));
+        setTrips((current) => mergeCalculatedObjects(current, calculated.trips, "trip_id"));
+        setPricingStrategyRuns((current) => mergeCalculatedObjects(current, calculated.pricingStrategyRuns, "pricing_strategy_run_id"));
+        setPricingDecisions((current) => mergeCalculatedObjects(current, calculated.pricingDecisions, "pricing_decision_id"));
+        setOrderMatchingRuns((current) => mergeCalculatedObjects(current, calculated.orderMatchingRuns, "order_matching_run_id"));
+        setOrderMatchingDecisions((current) => mergeCalculatedObjects(current, calculated.orderMatchingDecisions, "order_matching_decision_id"));
+        setRoutePlanningRuns((current) => mergeCalculatedObjects(current, calculated.routePlanningRuns, "route_planning_run_id"));
+        setDemandSimulationRuns((current) => mergeCalculatedObjects(current, calculated.demandSimulationRuns, "demand_simulation_run_id"));
+        setBusinessTimingCalculationRuns((current) => [result.calculationRun, ...current]);
+        setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+          ...item,
+          business_timing_calculation_status: result.calculationRun.calculation_status,
+          calculation_progress_percent: 100,
+          active_business_timing_calculation_run_id: calculationRunId,
+          workflow_timing_profile_id: profile.workflow_timing_profile_id,
+          workflow_timing_profile_version: profile.profile_version,
+          business_timing_result_summary: {
+            total_object_count: result.calculationRun.total_object_count,
+            success_object_count: result.calculationRun.success_object_count,
+            failed_object_count: result.calculationRun.failed_object_count,
+            total_transition_count: result.calculationRun.total_transition_count,
+          },
+          business_timing_calculation_errors: result.calculationRun.calculation_errors,
+        } : item));
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "业务时效计算完成" : "业务时效计算完成，存在待检查项");
+      } catch (error) {
+        setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+          ...item,
+          business_timing_calculation_status: "FAILED",
+          calculation_progress_percent: 100,
+          business_timing_calculation_errors: [{ error_type: "CALCULATION_FAILED", error_message: error.message }],
+        } : item));
+        if (!automatic) antd.message.error(`业务时效计算失败：${error.message}`);
+      }
+    }, 80);
+  }
+
+  function editWorkflowTimingRule(rule) {
+    setPendingTimingRule(rule);
+    setTimingRuleValue(rule.duration_mode === "PER_CELL_DURATION" ? rule.seconds_per_cell : rule.configured_duration_seconds);
+    setTimingRuleModalOpen(true);
+  }
+
+  function saveWorkflowTimingRule() {
+    if (!pendingTimingRule) return;
+    setWorkflowTimingProfiles((profiles) => profiles.map((profile) => profile.profile_status === "ACTIVE"
+      ? businessTimingCalculator.updateWorkflowTimingRule(profile, pendingTimingRule.workflow_timing_rule_id, timingRuleValue)
+      : profile));
+    setTimingRuleModalOpen(false);
+  }
+
+  function confirmBusinessTimingCalculation() {
+    if (!pendingCalculationRunId) return;
+    const runId = pendingCalculationRunId;
+    setPendingCalculationRunId(null);
+    runBusinessTimingCalculation(runId, { automatic: false });
+  }
   return (
     <Layout className="ops-shell">
       <Sider className="ops-sider" width={232} collapsedWidth={60} collapsed={collapsed} trigger={null}>
@@ -977,6 +1112,10 @@ function App() {
                   simActions,
                   clearSimulationEvents,
                   simulationPolicies,
+                  workflowTimingProfiles,
+                  editWorkflowTimingRule,
+                  requestBusinessTimingCalculation,
+                  businessTimingCalculationRuns,
                   simulationRuns,
                   simulationEvents,
                 }}
@@ -996,6 +1135,44 @@ function App() {
           </aside>
         </Layout>
       </Layout>
+      <Modal
+        title="调整工作流时效"
+        open={timingRuleModalOpen}
+        okText="保存配置"
+        cancelText="取消"
+        width={520}
+        onCancel={() => setTimingRuleModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setTimingRuleModalOpen(false)}>取消</Button>,
+          <Button key="save" type="primary" onClick={saveWorkflowTimingRule}>保存配置</Button>,
+        ]}
+      >
+        <div className="timing-rule-editor">
+          <Descriptions size="small" column={1} colon={false}>
+            <Descriptions.Item label="业务对象">{getDisplayValue(pendingTimingRule?.business_object_type)}</Descriptions.Item>
+            <Descriptions.Item label="状态变化">{getDisplayValue(pendingTimingRule?.from_status)} → {getDisplayValue(pendingTimingRule?.to_status)}</Descriptions.Item>
+            <Descriptions.Item label="功能操作">{getDisplayValue(pendingTimingRule?.action_type)}</Descriptions.Item>
+          </Descriptions>
+          <label>
+            <span>{pendingTimingRule?.duration_mode === "PER_CELL_DURATION" ? "单 Cell 行驶时长（秒）" : "操作时长（秒）"}</span>
+            <Input type="number" min={0} value={timingRuleValue} onChange={(event) => setTimingRuleValue(event.target.value)} />
+          </label>
+        </div>
+      </Modal>
+      <Modal
+        title={simulationRuns.find((item) => item.simulation_run_id === pendingCalculationRunId)?.business_timing_calculation_status ? "重新计算业务时效" : "计算业务时效"}
+        open={Boolean(pendingCalculationRunId)}
+        okText="开始计算"
+        cancelText="取消"
+        width={520}
+        onCancel={() => setPendingCalculationRunId(null)}
+        footer={[
+          <Button key="cancel" onClick={() => setPendingCalculationRunId(null)}>取消</Button>,
+          <Button key="calculate" type="primary" onClick={confirmBusinessTimingCalculation}>开始计算</Button>,
+        ]}
+      >
+        <Text>将使用当前生效的工作流时效配置生成新的状态时间线版本。原始模拟时间不会被修改。</Text>
+      </Modal>
     </Layout>
   );
 
@@ -1050,6 +1227,8 @@ function App() {
     setTrips([]);
     setTaskEventLogs([]);
     setSimulationPolicies([]);
+    setWorkflowTimingProfiles([businessTimingCalculator.initializeDefaultWorkflowTimingProfile()]);
+    setBusinessTimingCalculationRuns([]);
     setSimulationRuns([]);
     setSimulationEvents([]);
     setActivePage("console");
@@ -2594,6 +2773,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isOrderMatchingPage = page === "orderMatchingStrategies";
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
   const isSimulationPolicyPage = page === "simulationPolicies";
+  const isWorkflowTimingRulePage = page === "workflowTimingRules";
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
@@ -2907,6 +3087,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderActionCell(row, renderSimulationRunActions(row, { ...actions, page, objectType, idField })),
       };
     }
+    if (isWorkflowTimingRulePage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 96,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editWorkflowTimingRule(row)}>配置时长</RowActionButton>),
+      };
+    }
     return null;
   }
 
@@ -3090,7 +3279,9 @@ function TabbedDetail({ selectedObject, selectedType }) {
       items={tabs.map((tab) => ({
         key: tab.key,
         label: tab.label,
-        children: (
+        children: tab.timeline ? (
+          <StatusTimeline history={selectedObject.simulation_status_transition_history} />
+        ) : (
           <Descriptions
             className="compact-descriptions"
             column={1}
@@ -3137,6 +3328,7 @@ function getDetailTabs(selectedType) {
     return [
       { key: "basic", label: "任务信息", keys: ["task_id", "task_type", "task_status", "task_priority", "trigger_type", "source_type", "robotaxi_id", "worker_id", "check_result", "issue_type"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
+      { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
   if (selectedType === "deploymentTask") {
@@ -3146,6 +3338,7 @@ function getDetailTabs(selectedType) {
       { key: "arrival", label: "到达处理", keys: ["arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "actual_target_cell_id", "actual_target_service_area_id"] },
       { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "target_zone_id"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
+      { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
   if (selectedType === "routeExecution") {
@@ -3155,6 +3348,7 @@ function getDetailTabs(selectedType) {
       { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "current_cell_id", "current_location_summary", "current_location_detail"] },
       { key: "progress", label: "执行进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
+      { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
   if (selectedType === "serviceOrder") {
@@ -3164,6 +3358,7 @@ function getDetailTabs(selectedType) {
       { key: "pricing", label: "报价结算", keys: ["price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "quote_base_fare", "quote_distance_unit_price", "quote_time_unit_price", "estimated_distance_km", "estimated_duration_min", "estimated_price", "quoted_price", "final_price", "pricing_explanation", "pricing_breakdown_snapshot"] },
       { key: "matching", label: "匹配履约", keys: ["matched_robotaxi_id", "matched_robotaxi_location_summary", "matched_robotaxi_location_detail", "order_matching_decision_id", "trip_id", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "paid_amount"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "confirmed_at", "matched_at", "simulation_matched_at", "completed_at", "simulation_completed_at", "cancelled_at", "payment_completed_at", "simulation_payment_completed_at", "failure_reason"] },
+      { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
   if (selectedType === "trip") {
@@ -3173,6 +3368,7 @@ function getDetailTabs(selectedType) {
       { key: "progress", label: "履约进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"] },
       { key: "route", label: "路径关联", keys: ["route_id", "route_planning_run_id", "route_summary", "route_detail", "route_history", "route_history_detail"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason", "event_log"] },
+      { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
   if (selectedType === "simulationPolicy") {
@@ -3192,6 +3388,7 @@ function getDetailTabs(selectedType) {
       { key: "scene", label: "当前场景", keys: ["current_supply_scene", "current_demand_scene", "current_scene_summary", "current_tick_event_summary"] },
       { key: "time", label: "状态时间", keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "result_summary"] },
       { key: "policy", label: "策略快照", keys: ["simulation_policy_snapshot"] },
+      { key: "timing", label: "时效计算", keys: ["business_timing_calculation_status", "calculation_progress_percent", "active_business_timing_calculation_run_id", "workflow_timing_profile_id", "workflow_timing_profile_version", "business_timing_result_summary", "business_timing_calculation_errors"] },
     ];
   }
   if (selectedType === "simulationEvent") {
@@ -3201,6 +3398,31 @@ function getDetailTabs(selectedType) {
     ];
   }
   return [];
+}
+
+function StatusTimeline({ history }) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未计算业务状态时间线" />;
+  }
+  return (
+    <ol className="status-timeline">
+      {history.map((item) => (
+        <li key={item.status_transition_id}>
+          <span className="status-timeline-marker" />
+          <div className="status-timeline-content">
+            <div className="status-timeline-heading">
+              <StatusValue value={item.to_status} label={getDisplayValue(item.to_status)} />
+              <Text>{item.calculated_simulation_status_changed_at}</Text>
+            </div>
+            <Text type="secondary">{getDisplayValue(item.action_type)} · {item.configured_duration_seconds || 0} 秒</Text>
+            {item.movement_step_count !== null && item.movement_step_count !== undefined && (
+              <Text type="secondary">{item.movement_step_count} Cell × {item.seconds_per_cell || 0} 秒</Text>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function MapCanvas({ data, selected, onSelect }) {
@@ -3409,16 +3631,18 @@ function getStatusTone(value) {
   if (["ACTIVE", "AVAILABLE", "COMPLETED", "PAID", "PASSED", "PASS", "SUCCESS", "IDLE", "ARRIVED", "NORMAL_ARRIVAL"].includes(normalized)) return "success";
   if (["FAILED", "FAIL", "BLOCKED", "UNAVAILABLE", "CANCELLED"].some((token) => normalized.includes(token)) || normalized.includes("ABNORMAL")) return "danger";
   if (["WAITING", "PENDING", "PAUSED", "DRAFT", "RESTRICTED", "STOPPED"].some((token) => normalized.includes(token))) return "warning";
+  if (normalized === "PARTIALLY_SUCCEEDED") return "warning";
   if (["RUNNING", "DRAINING", "MOVING", "CHECKING", "INSPECTION", "ASSIGNED", "PROCESSING", "ON_THE_WAY", "CALCULATING", "SETTLING", "BUSY"].some((token) => normalized.includes(token))) return "info";
   return "neutral";
 }
 
-function RowActionButton({ children, onClick, type = "primary", danger = false }) {
+function RowActionButton({ children, onClick, type = "primary", danger = false, disabled = false }) {
   return (
     <Button
       size="small"
       type={type}
       danger={danger}
+      disabled={disabled}
       className="row-action-button"
       onClick={(event) => {
         event.stopPropagation();
@@ -3518,6 +3742,17 @@ function renderSimulationRunActions(row, actions) {
       <RowActionGroup>
         <RowActionButton onClick={() => sim.resumeSimulationRun(row.simulation_run_id)}>继续</RowActionButton>
         <RowActionButton onClick={() => sim.stopSimulationRun(row.simulation_run_id)} danger>停止</RowActionButton>
+      </RowActionGroup>
+    );
+  }
+  if (["COMPLETED", "STOPPED", "FAILED"].includes(status)) {
+    const calculating = row.business_timing_calculation_status === "CALCULATING";
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => actions.requestBusinessTimingCalculation(row.simulation_run_id)} disabled={calculating}>
+          {calculating ? "计算中" : row.business_timing_calculation_status ? "重新计算" : "计算时效"}
+        </RowActionButton>
+        {renderViewDetailAction(row, actions)}
       </RowActionGroup>
     );
   }
@@ -3807,7 +4042,10 @@ function isStatusField(key) {
     "trip_status",
     "payment_status",
     "simulation_status",
+    "business_timing_calculation_status",
     "policy_status",
+    "profile_status",
+    "rule_status",
     "event_result",
     "event_source",
   ].includes(key);
@@ -3910,6 +4148,7 @@ async function bootstrap() {
 		    simulationHandlersModule,
 		    simulationWorkflowEngineModule,
 		    simulationExecutionEngineModule,
+		    businessTimingCalculatorModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -3933,7 +4172,7 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/fieldDictionary.js?v=20260620-v027-4"),
+    import("./domain/fieldDictionary.js?v=20260624-v028-1"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
@@ -3945,9 +4184,10 @@ async function bootstrap() {
 		    import("./data/simulationEngine.js?v=20260620-v027-4"),
 			    import("./services/simulationActions.js?v=20260620-v027-4"),
 			    import("./data/simulationLoop.js?v=20260620-v027-4"),
-			    import("./services/simulationHandlers.js?v=20260620-v027-4"),
-		    import("./data/simulationWorkflowEngine.js?v=20260617-v024-1-handlers"),
+			    import("./services/simulationHandlers.js?v=20260624-v028-1"),
+		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1"),
 		    import("./data/simulationExecutionEngine.js"),
+		    import("./data/businessTimingCalculator.js?v=20260624-v028-1"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -3985,7 +4225,8 @@ async function bootstrap() {
 		  simulationInitialization = simulationInitializationModule;
 		  simulationEngine = simulationEngineModule;
 			  simulationLoop = simulationLoopModule;
-			  simulationActions = simulationActionsModule;
+		  simulationActions = simulationActionsModule;
+		  businessTimingCalculator = businessTimingCalculatorModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -5332,6 +5573,11 @@ function addWorkspacePage(pages, page) {
   return normalizeWorkspacePages([...(Array.isArray(pages) ? pages : []), page], page);
 }
 
+function mergeCalculatedObjects(current = [], updates = [], idField) {
+  const updateById = new Map((updates || []).map((item) => [item[idField], item]));
+  return current.map((item) => updateById.get(item[idField]) || item);
+}
+
 function loadRuntimeSnapshot(initialData) {
   const fallback = {
     operationalData: initialData,
@@ -5348,6 +5594,8 @@ function loadRuntimeSnapshot(initialData) {
     trips: [],
     taskEventLogs: [],
     simulationPolicies: [],
+    workflowTimingProfiles: [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()],
+    businessTimingCalculationRuns: [],
     simulationRuns: [],
     simulationEvents: [],
     activePage: "console",
@@ -5379,6 +5627,10 @@ function loadRuntimeSnapshot(initialData) {
     const trips = Array.isArray(snapshot.trips) ? snapshot.trips : [];
     const taskEventLogs = normalizeRouteStrategyReferences(Array.isArray(snapshot.taskEventLogs) ? snapshot.taskEventLogs : []);
     const simulationPolicies = Array.isArray(snapshot.simulationPolicies) ? snapshot.simulationPolicies : [];
+    const workflowTimingProfiles = Array.isArray(snapshot.workflowTimingProfiles) && snapshot.workflowTimingProfiles.length
+      ? snapshot.workflowTimingProfiles
+      : [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()];
+    const businessTimingCalculationRuns = Array.isArray(snapshot.businessTimingCalculationRuns) ? snapshot.businessTimingCalculationRuns : [];
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
     const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
@@ -5412,6 +5664,8 @@ function loadRuntimeSnapshot(initialData) {
       trips,
       taskEventLogs,
       simulationPolicies,
+      workflowTimingProfiles,
+      businessTimingCalculationRuns,
       simulationRuns,
       simulationEvents,
       activePage: restoredActivePage,
@@ -5495,6 +5749,8 @@ function saveRuntimeSnapshot(snapshot) {
     tripSequence,
     eventSequence,
     simulationPolicies: snapshot.simulationPolicies || [],
+    workflowTimingProfiles: snapshot.workflowTimingProfiles || [],
+    businessTimingCalculationRuns: snapshot.businessTimingCalculationRuns || [],
     simulationRuns: snapshot.simulationRuns || [],
     simulationEvents: [],
   };

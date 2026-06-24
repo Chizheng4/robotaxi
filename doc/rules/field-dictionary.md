@@ -1094,3 +1094,107 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 7. 点击 OpsCenter 覆盖 Cell 时，Cell 聚合详情应展示关联运营中心和当前停放 Robotaxi；
 8. 新增业务对象、单据或字段时，必须先更新本统一字段字典；
 9. 原业务目录下不再维护独立字段字典，只保留迁移说明或引用入口。
+
+---
+
+## 27. SimulationWorkflowTimingProfile：模拟工作流时效配置
+
+时效配置只用于 SimulationRun 完成后的业务时间线计算，不控制 Tick、WorkflowEngine 或 ExecutionEngine 的真实执行等待。
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|workflow_timing_profile_id|工作流时效配置编号|持久化字段|配置唯一编号|
+|profile_name|配置名称|持久化字段|配置中文名称|
+|profile_version|配置版本|运行态字段|每次修改规则后递增的版本|
+|profile_status|配置状态|运行态字段|ACTIVE / DISABLED / ARCHIVED|
+|timing_rules|工作流时效规则|持久化字段|配置包含的 WorkflowTimingRule 列表|
+|description|说明|持久化字段|配置用途说明|
+|created_at|创建时间|运行态字段|真实审计创建时间|
+|updated_at|更新时间|运行态字段|真实审计更新时间|
+
+### 27.1 WorkflowTimingRule：工作流时效规则
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|workflow_timing_rule_id|工作流时效规则编号|持久化字段|规则唯一编号|
+|business_object_type|业务对象类型|持久化字段|readinessTask、routeExecution、serviceOrder 或 trip|
+|from_status|变更前状态|持久化字段|动作执行前状态|
+|action_type|动作类型|持久化字段|与工作流功能操作一致的动作|
+|to_status|变更后状态|持久化字段|动作完成后进入的状态|
+|result_type|执行结果类型|持久化字段|当前规则适用的结果分支|
+|duration_mode|耗时模式|持久化字段|FIXED_DURATION 或 PER_CELL_DURATION|
+|configured_duration_seconds|配置操作时长（秒）|持久化字段|固定操作耗时|
+|seconds_per_cell|单 Cell 行驶时长（秒）|持久化字段|行驶动作的单位 Cell 耗时|
+|rule_status|规则状态|运行态字段|ACTIVE / DISABLED|
+
+## 28. BusinessTimingCalculationRun：业务时效计算运行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|business_timing_calculation_run_id|业务时效计算运行编号|持久化字段|计算运行唯一编号|
+|simulation_run_id|模拟运行编号|持久化字段|来源 SimulationRun|
+|simulation_timeline_id|模拟时间轴编号|持久化字段|来源连续模拟时间轴|
+|workflow_timing_profile_id|工作流时效配置编号|持久化字段|本次使用的配置|
+|workflow_timing_profile_version|工作流时效配置版本|持久化字段|本次使用的配置版本|
+|timing_profile_snapshot|工作流时效配置快照|持久化字段|计算时冻结的不可变配置|
+|calculation_status|计算状态|运行态字段|QUEUED / CALCULATING / SUCCEEDED / PARTIALLY_SUCCEEDED / FAILED|
+|calculation_progress_percent|计算进度（%）|运行态字段|0 到 100|
+|total_object_count|业务对象总数|运行态字段|本次纳入计算的对象数|
+|processed_object_count|已处理业务对象数|运行态字段|已经完成处理的对象数|
+|total_transition_count|状态变更总数|运行态字段|生成的状态变更记录总数|
+|success_object_count|成功对象数|运行态字段|完整计算成功的对象数|
+|failed_object_count|失败对象数|运行态字段|计算失败的对象数|
+|calculation_errors|计算错误列表|运行态字段|结构化错误列表|
+|algorithm_version|计算算法版本|持久化字段|用于保证结果可复现|
+|started_at|开始时间|运行态字段|真实审计开始时间|
+|completed_at|完成时间|运行态字段|真实审计完成时间|
+
+### 28.1 业务单据计算字段
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|business_timing_calculation_status|业务时效计算状态|运行态字段|当前有效计算结果状态|
+|active_business_timing_calculation_run_id|当前业务时效计算运行编号|运行态字段|关联最新有效计算运行|
+|calculated_simulation_created_at|计算模拟创建时间|运行态字段|根据因果链计算的业务创建时间|
+|calculated_simulation_updated_at|计算模拟更新时间|运行态字段|最后状态进入时间|
+|calculated_simulation_completed_at|计算模拟完成时间|运行态字段|终态进入时间|
+|calculated_simulation_matched_at|计算模拟匹配时间|运行态字段|服务订单进入车辆已分配状态的时间|
+|calculated_simulation_payment_completed_at|计算模拟支付完成时间|运行态字段|服务订单进入已完成状态的时间|
+|simulation_status_transition_history|模拟状态变更记录|运行态字段|按顺序保存完整业务状态时间线|
+|business_timing_validation_result|业务时效校验结果|运行态字段|PASS / FAIL|
+|business_timing_failure_reason|业务时效失败原因|运行态字段|未完整计算时的原因|
+
+### 28.2 模拟状态变更记录
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|status_transition_id|状态变更编号|运行态字段|状态变更唯一编号|
+|transition_sequence|状态变更顺序|运行态字段|对象内从 1 开始的顺序|
+|from_status|变更前状态|运行态字段|初始记录为空|
+|action_type|动作类型|运行态字段|产生状态变化的功能操作|
+|result_type|执行结果类型|运行态字段|动作结果分支|
+|to_status|变更后状态|运行态字段|本次进入状态|
+|calculated_simulation_action_started_at|计算模拟动作开始时间|运行态字段|动作开始的模拟时间|
+|configured_duration_seconds|配置操作时长（秒）|运行态字段|本次计算使用的总耗时|
+|movement_step_count|移动步数|运行态字段|行驶动作实际使用的 Cell 移动步数|
+|seconds_per_cell|单 Cell 行驶时长（秒）|运行态字段|行驶动作单位耗时|
+|calculated_simulation_status_changed_at|计算模拟状态变更时间|运行态字段|下一状态进入时间|
+|workflow_timing_rule_id|工作流时效规则编号|运行态字段|来源规则|
+|source_transition_id|来源状态变更编号|运行态字段|直接因果来源|
+|business_timing_calculation_run_id|业务时效计算运行编号|运行态字段|来源计算运行|
+
+### 28.3 新增枚举中文
+
+|枚举值|中文名|
+|---|---|
+|NOT_CALCULATED|未计算|
+|QUEUED|等待计算|
+|CALCULATING|计算中|
+|SUCCEEDED|计算成功|
+|PARTIALLY_SUCCEEDED|部分成功|
+|FIXED_DURATION|固定操作时长|
+|PER_CELL_DURATION|按 Cell 行驶时长|
+|TIMING_RULE_MISSING|缺少时效规则|
+|ROUTE_DATA_MISSING|缺少路径数据|
+|DEPENDENCY_MISSING|缺少时间依赖|
+|CALCULATION_FAILED|计算失败|
