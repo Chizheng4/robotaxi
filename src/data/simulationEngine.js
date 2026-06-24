@@ -34,6 +34,39 @@ export function synchronizeSimulationCounters(simulationRuns = [], simulationEve
   nextEventIdCounter = Math.max(nextEventIdCounter, deriveNextCounter(simulationEvents, "simulation_event_id", "SE-"));
 }
 
+export function createOperatingSimulationTimeCalculationEvent({
+  simulationRun,
+  eventType,
+  eventResult = EventResult.SUCCESS,
+  message,
+  calculationRunId,
+  profile,
+  resultSummary = null,
+  failureReason = null,
+}) {
+  return createSimulationEvent({
+    simulationEventId: nextSimulationEventId(),
+    simulationRunId: simulationRun.simulation_run_id,
+    simulationDay: simulationRun.current_day,
+    simulationTime: simulationRun.current_time,
+    dayTick: simulationRun.current_day_tick,
+    globalTick: simulationRun.current_global_tick,
+    eventType,
+    eventSource: EventSource.SIMULATION_SYSTEM,
+    eventResult,
+    relatedObjectType: "simulationRun",
+    relatedObjectId: simulationRun.simulation_run_id,
+    failureReason,
+    message,
+    eventPayload: {
+      business_timing_calculation_run_id: calculationRunId,
+      workflow_timing_profile_id: profile?.workflow_timing_profile_id || null,
+      workflow_timing_profile_version: profile?.profile_version || null,
+      ...(resultSummary || {}),
+    },
+  });
+}
+
 function nextSimulationRunId() {
   return `SIM-RUN-${String(nextRunIdCounter++).padStart(3, "0")}`;
 }

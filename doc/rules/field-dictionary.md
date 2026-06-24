@@ -1146,6 +1146,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |timing_profile_snapshot|工作流时效配置快照|持久化字段|计算时冻结的不可变配置|
 |calculation_status|计算状态|运行态字段|QUEUED / CALCULATING / SUCCEEDED / PARTIALLY_SUCCEEDED / FAILED|
 |calculation_progress_percent|计算进度（%）|运行态字段|0 到 100|
+|calculation_duration_ms|计算耗时（毫秒）|运行态字段|一次运营模拟时间计算的真实耗时|
 |total_object_count|业务对象总数|运行态字段|本次纳入计算的对象数|
 |processed_object_count|已处理业务对象数|运行态字段|已经完成处理的对象数|
 |total_transition_count|状态变更总数|运行态字段|生成的状态变更记录总数|
@@ -1209,6 +1210,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |INHERITED|继承来源配置|
 |PASSENGER_BOARD|确认客户上车|
 |PASSENGER_DROPOFF|确认客户下车|
+|OPERATING_SIMULATION_TIME_CALCULATION_STARTED|运营模拟时间计算开始|
+|OPERATING_SIMULATION_TIME_CALCULATION_COMPLETED|运营模拟时间计算完成|
+|OPERATING_SIMULATION_TIME_CALCULATION_FAILED|运营模拟时间计算失败|
 |TIMING_RULE_MISSING|缺少时效规则|
 |ROUTE_DATA_MISSING|缺少路径数据|
 |DEPENDENCY_MISSING|缺少时间依赖|

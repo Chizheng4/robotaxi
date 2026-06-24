@@ -522,6 +522,7 @@ export const fieldDictionary = {
   timing_profile_snapshot: "工作流时效配置快照",
   calculation_status: "计算状态",
   calculation_progress_percent: "计算进度（%）",
+  calculation_duration_ms: "计算耗时（毫秒）",
   total_object_count: "业务对象总数",
   processed_object_count: "已处理业务对象数",
   total_transition_count: "状态变更总数",
@@ -1102,6 +1103,9 @@ export const valueDictionary = {
   ACTION_EXECUTED: "动作已执行",
   ACTION_FAILED: "动作失败",
   DOMAIN_STATE_CHANGED: "领域状态已变更",
+  OPERATING_SIMULATION_TIME_CALCULATION_STARTED: "运营模拟时间计算开始",
+  OPERATING_SIMULATION_TIME_CALCULATION_COMPLETED: "运营模拟时间计算完成",
+  OPERATING_SIMULATION_TIME_CALCULATION_FAILED: "运营模拟时间计算失败",
 };
 
 export const fieldValueDictionary = {

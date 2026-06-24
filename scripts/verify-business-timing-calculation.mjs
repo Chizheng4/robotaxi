@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 import {
   createBusinessTimingCalculation,
@@ -11,6 +12,7 @@ import {
   getTimingTransitions,
   preservedWorkflowTransitions,
 } from "../src/domain/workflowTransitionRegistry.js";
+import { createOperatingSimulationTimeCalculationEvent, resetSimulationCounters } from "../src/data/simulationEngine.js";
 
 const simulationRun = {
   simulation_run_id: "SIM-RUN-TIMING",
@@ -37,6 +39,18 @@ const businessData = {
 };
 
 const profile = initializeDefaultWorkflowTimingProfile();
+resetSimulationCounters();
+const calculationEvent = createOperatingSimulationTimeCalculationEvent({
+  simulationRun: { ...simulationRun, current_day: 2, current_time: "Day 2 10:00:00", current_day_tick: 10, current_global_tick: 154 },
+  eventType: "OPERATING_SIMULATION_TIME_CALCULATION_STARTED",
+  message: "开始计算运营模拟时间",
+  calculationRunId: "BTCR-TEST-001",
+  profile,
+});
+assert.equal(calculationEvent.simulation_event_id, "SE-0001");
+assert.equal(calculationEvent.related_object_type, "simulationRun");
+assert.equal(calculationEvent.event_payload.business_timing_calculation_run_id, "BTCR-TEST-001");
+assert.equal(calculationEvent.simulation_time, "Day 2 10:00:00");
 const migratedProfile = normalizeWorkflowTimingProfile({
   workflow_timing_profile_id: "WTP-001",
   profile_version: 3,
@@ -112,5 +126,12 @@ const updatedGroup = updatedProfile.timing_rules.filter((item) => item.timing_ru
 assert.equal(updatedGroup.length, 2);
 assert.ok(updatedGroup.every((item) => item.configured_duration_seconds === 9));
 assert.equal(fixedRule.configured_duration_seconds, 8);
+
+const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+assert.match(mainSource, /row\.duration_source_type === "INHERITED"\s*\? renderViewDetailAction/);
+assert.match(mainSource, /if \(rule\.duration_source_type === "INHERITED"\) return;/);
+assert.doesNotMatch(mainSource, /key: "timing", label: "时效计算"/);
+assert.match(mainSource, /重算运营模拟时间/);
+assert.match(mainSource, /OPERATING_SIMULATION_TIME_CALCULATION_COMPLETED/);
 
 console.log("业务时效配置、跨单据依赖和状态时间线验证通过");

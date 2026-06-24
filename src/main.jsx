@@ -924,6 +924,14 @@ function App() {
     const profile = workflowTimingProfiles.find((item) => item.profile_status === "ACTIVE");
     if (!run || !profile || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
     const calculationRunId = `BTCR-${String(businessTimingCalculationRuns.length + 1).padStart(4, "0")}`;
+    const calculationStartedAt = Date.now();
+    setSimulationEvents((current) => [simulationEngine.createOperatingSimulationTimeCalculationEvent({
+      simulationRun: run,
+      eventType: "OPERATING_SIMULATION_TIME_CALCULATION_STARTED",
+      message: `开始计算 ${run.simulation_run_id} 的运营模拟时间`,
+      calculationRunId,
+      profile,
+    }), ...current]);
     setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
       ...item,
       business_timing_calculation_status: "CALCULATING",
@@ -979,7 +987,26 @@ function App() {
           },
           business_timing_calculation_errors: result.calculationRun.calculation_errors,
         } : item));
-        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "业务时效计算完成" : "业务时效计算完成，存在待检查项");
+        const resultSummary = {
+          calculation_status: result.calculationRun.calculation_status,
+          total_object_count: result.calculationRun.total_object_count,
+          success_object_count: result.calculationRun.success_object_count,
+          failed_object_count: result.calculationRun.failed_object_count,
+          total_transition_count: result.calculationRun.total_transition_count,
+          calculation_duration_ms: Date.now() - calculationStartedAt,
+          calculation_errors: result.calculationRun.calculation_errors,
+        };
+        setSimulationEvents((current) => [simulationEngine.createOperatingSimulationTimeCalculationEvent({
+          simulationRun: run,
+          eventType: "OPERATING_SIMULATION_TIME_CALCULATION_COMPLETED",
+          message: result.calculationRun.calculation_status === "SUCCEEDED"
+            ? `运营模拟时间计算完成：${result.calculationRun.total_object_count} 个对象、${result.calculationRun.total_transition_count} 次状态变更`
+            : `运营模拟时间计算完成，${result.calculationRun.failed_object_count} 个对象需要检查`,
+          calculationRunId,
+          profile,
+          resultSummary,
+        }), ...current]);
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营模拟时间计算完成" : "运营模拟时间计算完成，存在待检查项");
       } catch (error) {
         setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
           ...item,
@@ -987,12 +1014,23 @@ function App() {
           calculation_progress_percent: 100,
           business_timing_calculation_errors: [{ error_type: "CALCULATION_FAILED", error_message: error.message }],
         } : item));
-        if (!automatic) antd.message.error(`业务时效计算失败：${error.message}`);
+        setSimulationEvents((current) => [simulationEngine.createOperatingSimulationTimeCalculationEvent({
+          simulationRun: run,
+          eventType: "OPERATING_SIMULATION_TIME_CALCULATION_FAILED",
+          eventResult: "FAILED",
+          message: `运营模拟时间计算失败：${error.message}`,
+          calculationRunId,
+          profile,
+          failureReason: error.message,
+          resultSummary: { calculation_duration_ms: Date.now() - calculationStartedAt },
+        }), ...current]);
+        if (!automatic) antd.message.error(`运营模拟时间计算失败：${error.message}`);
       }
     }, 80);
   }
 
   function editWorkflowTimingRule(rule) {
+    if (rule.duration_source_type === "INHERITED") return;
     setPendingTimingRule(rule);
     setTimingRuleValue(rule.duration_mode === "PER_CELL_DURATION" ? rule.seconds_per_cell : rule.configured_duration_seconds);
     setTimingRuleModalOpen(true);
@@ -1160,7 +1198,7 @@ function App() {
         </div>
       </Modal>
       <Modal
-        title={simulationRuns.find((item) => item.simulation_run_id === pendingCalculationRunId)?.business_timing_calculation_status ? "重新计算业务时效" : "计算业务时效"}
+        title={simulationRuns.find((item) => item.simulation_run_id === pendingCalculationRunId)?.business_timing_calculation_status ? "重算运营模拟时间" : "计算运营模拟时间"}
         open={Boolean(pendingCalculationRunId)}
         okText="开始计算"
         cancelText="取消"
@@ -3083,7 +3121,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         key: "actions",
         title: "操作",
         fixed: "right",
-        width: 180,
+        width: 220,
         render: (_, row) => renderActionCell(row, renderSimulationRunActions(row, { ...actions, page, objectType, idField })),
       };
     }
@@ -3093,7 +3131,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         title: "操作",
         fixed: "right",
         width: 96,
-        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editWorkflowTimingRule(row)}>配置时长</RowActionButton>),
+        render: (_, row) => renderActionCell(row, row.duration_source_type === "INHERITED"
+          ? renderViewDetailAction(row, { ...actions, page, objectType, idField })
+          : <RowActionButton onClick={() => actions.editWorkflowTimingRule(row)}>配置时长</RowActionButton>),
       };
     }
     return null;
@@ -3388,7 +3428,6 @@ function getDetailTabs(selectedType) {
       { key: "scene", label: "当前场景", keys: ["current_supply_scene", "current_demand_scene", "current_scene_summary", "current_tick_event_summary"] },
       { key: "time", label: "状态时间", keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "result_summary"] },
       { key: "policy", label: "策略快照", keys: ["simulation_policy_snapshot"] },
-      { key: "timing", label: "时效计算", keys: ["business_timing_calculation_status", "calculation_progress_percent", "active_business_timing_calculation_run_id", "workflow_timing_profile_id", "workflow_timing_profile_version", "business_timing_result_summary", "business_timing_calculation_errors"] },
     ];
   }
   if (selectedType === "simulationEvent") {
@@ -3750,7 +3789,7 @@ function renderSimulationRunActions(row, actions) {
     return (
       <RowActionGroup>
         <RowActionButton onClick={() => actions.requestBusinessTimingCalculation(row.simulation_run_id)} disabled={calculating}>
-          {calculating ? "计算中" : row.business_timing_calculation_status ? "重新计算" : "计算时效"}
+          {calculating ? "计算中" : row.business_timing_calculation_status ? "重算运营模拟时间" : "计算运营模拟时间"}
         </RowActionButton>
         {renderViewDetailAction(row, actions)}
       </RowActionGroup>
@@ -4172,16 +4211,16 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260614-v020-4-trip-flow"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/fieldDictionary.js?v=20260624-v028-1-1"),
+    import("./domain/fieldDictionary.js?v=20260624-v028-1-2"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
     import("./domain/serviceOrderSettlement.js?v=20260616-v022-6-1-settlement"),
 	    import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"),
 	    import("./services/tripService.js?v=20260624-v028-1-1"),
-		    import("./domain/simulationTypes.js?v=20260620-v027-4"),
+		    import("./domain/simulationTypes.js?v=20260624-v028-1-2"),
 		    import("./data/simulationInitialization.js?v=20260620-v027-4"),
-		    import("./data/simulationEngine.js?v=20260620-v027-4"),
+		    import("./data/simulationEngine.js?v=20260624-v028-1-2"),
 			    import("./services/simulationActions.js?v=20260620-v027-4"),
 			    import("./data/simulationLoop.js?v=20260620-v027-4"),
 			    import("./services/simulationHandlers.js?v=20260624-v028-1-1"),
