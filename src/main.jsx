@@ -926,6 +926,8 @@ function App() {
       readinessTasks,
       deploymentTasks,
       routeExecutions,
+      routes: data.routes,
+      routePlanningRuns,
       robotaxis: data.robotaxis,
       data,
       serviceOrderService,
@@ -947,6 +949,8 @@ function App() {
         readinessCheckTasks: businessData.readinessTasks,
         deploymentTasks: businessData.deploymentTasks,
         routeExecutions: businessData.routeExecutions,
+        routes: businessData.routes,
+        routePlanningRuns: businessData.routePlanningRuns,
         demandSimulationRuns: businessData.demandSimulationRuns,
         pricingStrategyRuns: businessData.pricingStrategyRuns,
         pricingDecisions: businessData.pricingDecisions,
@@ -966,6 +970,7 @@ function App() {
     businessData.setReadinessTasks = bindSetter("readinessTasks", setReadinessTasks);
     businessData.setDeploymentTasks = bindSetter("deploymentTasks", setDeploymentTasks);
     businessData.setRouteExecutions = bindSetter("routeExecutions", setRouteExecutions);
+    businessData.setRoutePlanningRuns = bindSetter("routePlanningRuns", setRoutePlanningRuns);
     businessData.setDemandSimulationRuns = bindSetter("demandSimulationRuns", setDemandSimulationRuns);
     businessData.setPricingStrategyRuns = bindSetter("pricingStrategyRuns", setPricingStrategyRuns);
     businessData.setPricingDecisions = bindSetter("pricingDecisions", setPricingDecisions);
@@ -977,6 +982,12 @@ function App() {
       businessData.robotaxis = nextRobotaxis;
       refreshContextData();
       setOperationalData((prev) => ({ ...prev, robotaxis: nextRobotaxis }));
+    };
+    businessData.setRoutes = (updater) => {
+      const nextRoutes = typeof updater === "function" ? updater(businessData.routes) : updater;
+      businessData.routes = nextRoutes;
+      refreshContextData();
+      setOperationalData((prev) => ({ ...prev, routes: nextRoutes }));
     };
     refreshContextData();
     return businessData;

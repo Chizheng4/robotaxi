@@ -32,8 +32,12 @@ export function buildServiceOrderSettlementInput({
     };
   }
 
-  const actualDistanceKm = Number(serviceOrder.actual_distance_km ?? trip.distance_traveled_km ?? 0);
-  const actualDurationMin = Number(serviceOrder.actual_duration_min ?? Number.parseInt(trip.time_elapsed, 10) ?? 0);
+  const orderActualDistanceKm = Number(serviceOrder.actual_distance_km);
+  const tripActualDistanceKm = Number(trip.distance_traveled_km);
+  const orderActualDurationMin = Number(serviceOrder.actual_duration_min);
+  const tripActualDurationMin = parseElapsedMinutes(trip.time_elapsed);
+  const actualDistanceKm = orderActualDistanceKm > 0 ? orderActualDistanceKm : tripActualDistanceKm;
+  const actualDurationMin = orderActualDurationMin > 0 ? orderActualDurationMin : tripActualDurationMin;
 
   if (!Number.isFinite(actualDistanceKm) || actualDistanceKm <= 0) {
     return {
@@ -200,4 +204,12 @@ export function createServiceOrderActualSnapshotFromTrip(order, trip, serviceOrd
 
 function roundMoney(value) {
   return Number(Number(value || 0).toFixed(2));
+}
+
+function parseElapsedMinutes(elapsed) {
+  if (Number.isFinite(Number(elapsed))) return Number(elapsed);
+  const parts = String(elapsed || "0").split(":").map((part) => Number.parseInt(part, 10) || 0);
+  if (parts.length >= 3) return parts[0] * 60 + parts[1] + Math.ceil(parts[2] / 60);
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0] || 0;
 }

@@ -51,6 +51,8 @@ node --check src/domain/fieldDictionary.js
 node --check src/domain/fieldDisplayService.js
 node --check src/domain/taskTypes.js
 node --check src/domain/serviceOrderSettlement.js
+node --check src/services/simulationHandlers.js
+node --check src/services/routePlanningService.js
 node --check src/data/simulationRunBusinessScope.js
 node --check src/data/costModelCalculator.js
 node --check src/data/revenueCalculator.js
@@ -59,6 +61,7 @@ node scripts/verify-simulation-continuity.mjs
 node scripts/verify-simulation-audit-display.mjs
 node scripts/verify-business-timing-calculation.mjs
 node scripts/verify-cost-model-calculation.mjs
+node scripts/verify-simulation-strategy-execution.mjs
 node scripts/verify-field-display-contract.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 

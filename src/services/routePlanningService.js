@@ -1,0 +1,598 @@
+import * as taskTypes from "../domain/taskTypes.js";
+import * as tripTypes from "../domain/tripTypes.js";
+
+export function createPriceEstimationRoute({ serviceOrder, data, routeId, routePlanningRunId }) {
+  const originCellId = serviceOrder.customer_origin_cell_id;
+  const pickupCellId = serviceOrder.pickup_cell_id;
+  const targetCellId = serviceOrder.dropoff_cell_id;
+  const pickupPlan = originCellId === pickupCellId
+    ? { road_segment_sequence: [], route_steps: createSingleCellRouteSteps(data, originCellId) }
+    : createBfsRoutePlan(data, originCellId, pickupCellId);
+  const dropoffPlan = createBfsRoutePlan(data, pickupCellId, targetCellId);
+  const routeSteps = mergeRouteStepPlans([pickupPlan.route_steps, dropoffPlan.route_steps], data);
+  const roadSegmentSequence = [
+    ...pickupPlan.road_segment_sequence,
+    ...dropoffPlan.road_segment_sequence,
+  ].filter((segmentId, index, list) => segmentId && list.indexOf(segmentId) === index);
+  const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps?.[0]?.cell_size_m || 50);
+  const valid = routeSteps.length > 0 && routeSteps[0]?.cell_id === originCellId && routeSteps[routeSteps.length - 1]?.cell_id === targetCellId;
+
+  return {
+    route_id: routeId,
+    route_version: 1,
+    route_name: `${serviceOrder.service_order_id} 价格预估路径`,
+    route_usage_type: taskTypes.RouteUsageType.PRICE_ESTIMATION,
+    route_segments: [
+      { segment_type: "CUSTOMER_TO_PICKUP", origin_cell_id: originCellId, target_cell_id: pickupCellId, step_count: Math.max(0, pickupPlan.route_steps.length - 1) },
+      { segment_type: "PICKUP_TO_DROPOFF", origin_cell_id: pickupCellId, target_cell_id: targetCellId, step_count: Math.max(0, dropoffPlan.route_steps.length - 1) },
+    ],
+    map_id: data.maps?.[0]?.map_id || null,
+    start_cell_id: originCellId,
+    end_cell_id: targetCellId,
+    origin_cell_id: originCellId,
+    target_cell_id: targetCellId,
+    task_id: null,
+    service_order_id: serviceOrder.service_order_id,
+    trip_id: null,
+    route_execution_id: null,
+    route_planning_run_id: routePlanningRunId,
+    robotaxi_id: null,
+    route_strategy_id: taskTypes.RoutePlanningStrategy.SERVICE_PRICE_ESTIMATION,
+    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
+    road_segment_sequence: roadSegmentSequence,
+    route_steps: routeSteps,
+    total_step_count: Math.max(0, routeSteps.length - 1),
+    related_service_area_ids: [serviceOrder.pickup_service_area_id, serviceOrder.dropoff_service_area_id].filter(Boolean),
+    total_distance_m: totalDistance,
+    route_status: valid ? "Active" : "Failed",
+    failure_reason: valid ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
+  };
+}
+
+export function planDeploymentRoute({ execution, task, data, routeId, routePlanningRunId }) {
+  const originCellId = execution.current_cell_id || task.origin_cell_id;
+  const targetCellId = execution.planned_target_cell_id || task.planned_target_cell_id || task.target_cell_id;
+  const targetServiceAreaId = execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id;
+  const route = createDeploymentRoute({
+    task,
+    data,
+    routeId,
+    routePlanningRunId,
+    originCellId,
+    targetCellId,
+    targetServiceAreaId,
+    routeExecutionId: execution.route_execution_id,
+    strategyId: taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT,
+  });
+  const routePlanningRun = createRoutePlanningRun({
+    routePlanningRunId,
+    routeStrategyId: route.route_strategy_id,
+    planningAlgorithm: route.planning_algorithm,
+    taskId: task.task_id,
+    routeExecutionId: execution.route_execution_id,
+    robotaxiId: task.robotaxi_id,
+    originCellId,
+    targetCellId,
+    resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
+    planningResult: route.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
+    failureReason: route.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : route.failure_reason,
+    createdAt: new Date().toISOString(),
+  });
+  if (route.route_steps.length === 0) {
+    return {
+      route: null,
+      routePlanningRun,
+      execution: {
+        ...execution,
+        execution_status: taskTypes.RouteExecutionStatus.FAILED,
+        failure_reason: route.failure_reason,
+      },
+      task: {
+        ...task,
+        task_status: taskTypes.DeploymentTaskStatus.FAILED,
+        failure_reason: route.failure_reason,
+      },
+    };
+  }
+  const routeCells = getRouteExecutionCells(route, data.roadSegments, originCellId, targetCellId);
+  return {
+    route,
+    routePlanningRun,
+    execution: {
+      ...execution,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      execution_status: taskTypes.RouteExecutionStatus.MOVING,
+      origin_cell_id: originCellId,
+      target_cell_id: targetCellId,
+      target_service_area_id: targetServiceAreaId,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
+      current_step_index: 0,
+      total_step_count: Math.max(0, routeCells.length - 1),
+      route_cell_ids: routeCells,
+      current_target_service_area_id: targetServiceAreaId,
+      route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
+      distance_traveled_km: 0,
+      distance_remaining_km: route.total_distance_m / 1000,
+      time_elapsed: "0",
+      battery_consumed_percent: 0,
+      started_at: new Date().toISOString(),
+      completed_at: null,
+      failure_reason: null,
+    },
+    task: {
+      ...task,
+      task_status: taskTypes.DeploymentTaskStatus.MOVING,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      started_at: new Date().toISOString(),
+    },
+  };
+}
+
+export function advanceRouteExecution({ execution, task, route, robotaxi }) {
+  if (!execution || !task || !route || execution.execution_status !== taskTypes.RouteExecutionStatus.MOVING) return null;
+  const routeCellIds = execution.route_cell_ids?.length
+    ? execution.route_cell_ids
+    : getRouteExecutionCells(route, [], execution.origin_cell_id, execution.target_cell_id);
+  const totalStepCount = Math.max(0, execution.total_step_count || routeCellIds.length - 1);
+  const nextStepIndex = Math.min(Number(execution.current_step_index || 0) + 1, totalStepCount);
+  const nextCellId = routeCellIds[nextStepIndex] || execution.target_cell_id;
+  const completed = nextStepIndex >= totalStepCount;
+  const distancePerStepKm = totalStepCount > 0 ? route.total_distance_m / 1000 / totalStepCount : 0;
+  const distanceTraveledKm = roundDistance(distancePerStepKm * nextStepIndex);
+  const distanceDeltaKm = roundDistance(Math.max(0, distanceTraveledKm - Number(execution.distance_traveled_km || 0)));
+  const distanceRemainingKm = roundDistance(Math.max(0, route.total_distance_m / 1000 - distanceTraveledKm));
+  const batteryDeltaPercent = robotaxi?.max_range_km
+    ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
+    : 0;
+  const batteryConsumedPercent = Number((Number(execution.battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2));
+  return {
+    execution: {
+      ...execution,
+      execution_status: completed ? taskTypes.RouteExecutionStatus.ARRIVED : taskTypes.RouteExecutionStatus.MOVING,
+      current_cell_id: nextCellId,
+      current_step_index: nextStepIndex,
+      distance_traveled_km: distanceTraveledKm,
+      distance_remaining_km: distanceRemainingKm,
+      time_elapsed: String(nextStepIndex),
+      battery_consumed_percent: batteryConsumedPercent,
+    },
+    task: completed ? { ...task, task_status: taskTypes.DeploymentTaskStatus.ARRIVED } : task,
+    robotaxi: robotaxi ? {
+      ...robotaxi,
+      current_cell_id: nextCellId,
+      current_route_id: execution.route_id,
+      current_task_id: execution.task_id || task.task_id,
+      motion_status: completed ? "STOPPED" : "MOVING",
+      battery_percent: Number(Math.max(0, Number(robotaxi.battery_percent || 0) - batteryDeltaPercent).toFixed(2)),
+      estimated_range_km: Number(Math.max(0, Number(robotaxi.estimated_range_km || 0) - distanceDeltaKm).toFixed(2)),
+    } : null,
+  };
+}
+
+export function confirmRouteExecutionArrival({ execution, task, robotaxi }) {
+  return {
+    execution: {
+      ...execution,
+      execution_status: taskTypes.RouteExecutionStatus.COMPLETED,
+      completed_at: new Date().toISOString(),
+      arrival_execution_result: taskTypes.ArrivalExecutionResult.NORMAL_ARRIVAL,
+      actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id,
+      actual_target_cell_id: execution.current_cell_id,
+    },
+    task: {
+      ...task,
+      task_status: taskTypes.DeploymentTaskStatus.COMPLETED,
+      actual_target_service_area_id: task.target_service_area_id || execution.target_service_area_id,
+      actual_target_cell_id: execution.current_cell_id,
+      arrival_execution_result: taskTypes.ArrivalExecutionResult.NORMAL_ARRIVAL,
+      completed_at: new Date().toISOString(),
+    },
+    robotaxi: robotaxi ? {
+      ...robotaxi,
+      current_cell_id: execution.current_cell_id,
+      current_route_id: null,
+      current_task_id: null,
+      motion_status: "PARKED",
+    } : null,
+  };
+}
+
+export function createTripRouteUpdate({ trip, nextTrip, data, routeId, routePlanningRunId }) {
+  const routeRequest = getTripRouteRequest(trip);
+  if (!routeRequest) return null;
+  const route = createTripRoute({
+    trip,
+    data,
+    routeId,
+    routePlanningRunId,
+    ...routeRequest,
+  });
+  const routePlanningRun = createRoutePlanningRun({
+    routePlanningRunId,
+    routeStrategyId: route.route_strategy_id,
+    planningAlgorithm: route.planning_algorithm,
+    taskId: null,
+    serviceOrderId: trip.service_order_id,
+    tripId: trip.trip_id,
+    routeExecutionId: null,
+    robotaxiId: trip.robotaxi_id,
+    originCellId: route.origin_cell_id,
+    targetCellId: route.target_cell_id,
+    resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
+    planningResult: route.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
+    failureReason: route.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : route.failure_reason,
+    createdAt: new Date().toISOString(),
+  });
+  if (route.route_steps.length === 0) {
+    return {
+      routePlanningRun,
+      failedTrip: {
+        ...trip,
+        trip_status: tripTypes.TripStatus.FAILED,
+        failure_reason: route.failure_reason,
+      },
+    };
+  }
+  return {
+    route,
+    routePlanningRun,
+    nextTrip: {
+      ...nextTrip,
+      route_id: route.route_id,
+      route_planning_run_id: routePlanningRun.route_planning_run_id,
+      route_history: [
+        ...(Array.isArray(trip.route_history) ? trip.route_history : []),
+        createRouteHistoryEntry(route, routeRequest.routeChangeReason, null),
+      ],
+      current_step_index: 0,
+      total_step_count: Math.max(0, route.route_steps.length - 1),
+      distance_remaining_km: route.total_distance_m / 1000,
+    },
+  };
+}
+
+export function createRoutePlanningRun(options) {
+  return taskTypes.createRoutePlanningRun({
+    route_planning_run_id: options.routePlanningRunId,
+    route_strategy_id: options.routeStrategyId,
+    planning_algorithm: options.planningAlgorithm || taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
+    task_id: options.taskId || null,
+    service_order_id: options.serviceOrderId || null,
+    trip_id: options.tripId || null,
+    route_execution_id: options.routeExecutionId || null,
+    robotaxi_id: options.robotaxiId || null,
+    origin_cell_id: options.originCellId || null,
+    target_cell_id: options.targetCellId || null,
+    result_route_id: options.resultRouteId || null,
+    planning_result: options.planningResult,
+    failure_reason: options.failureReason,
+    created_at: options.createdAt || new Date().toISOString(),
+  });
+}
+
+export function getDefaultDeploymentTarget(data) {
+  const serviceArea = data.serviceAreas?.find((area) => area.service_area_id === "SA-006") ||
+    data.serviceAreas?.find((area) => area.vehicle_capabilities?.can_stage || area.vehicle_capabilities?.can_short_wait);
+  if (!serviceArea) return null;
+  return {
+    target_cell_id: getCandidateServiceAreaCellIds(serviceArea)[0],
+    target_service_area_id: serviceArea.service_area_id,
+    target_zone_id: data.zones?.find((zone) => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null,
+  };
+}
+
+export function getRouteExecutionCells(route, roadSegments, originCellId, targetCellId) {
+  const cells = route.route_steps?.map((step) => step.cell_id) || routeCellIds(route, roadSegments);
+  return [...new Set([originCellId, ...cells, targetCellId].filter(Boolean))];
+}
+
+export function createRouteHistoryEntry(route, routeChangeReason, arrivalExecutionResult) {
+  return {
+    route_id: route.route_id,
+    route_strategy_id: route.route_strategy_id,
+    origin_cell_id: route.start_cell_id,
+    target_cell_id: route.end_cell_id,
+    started_at: new Date().toISOString(),
+    ended_at: null,
+    route_change_reason: routeChangeReason,
+    arrival_execution_result: arrivalExecutionResult || null,
+    trigger_type: taskTypes.TriggerType.AUTO,
+  };
+}
+
+function createDeploymentRoute({ task, data, routeId, routePlanningRunId, originCellId, targetCellId, targetServiceAreaId, routeExecutionId, strategyId }) {
+  const routePlan = createBfsRoutePlan(data, originCellId, targetCellId);
+  const routeSteps = routePlan.route_steps;
+  const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps?.[0]?.cell_size_m || 50);
+  return {
+    route_id: routeId,
+    route_version: 1,
+    route_name: `${task.robotaxi_id} 投放到 ${targetServiceAreaId}`,
+    route_usage_type: taskTypes.RouteUsageType.OPERATIONAL_EXECUTION,
+    map_id: data.maps?.[0]?.map_id || null,
+    start_cell_id: originCellId,
+    end_cell_id: targetCellId,
+    origin_cell_id: originCellId,
+    target_cell_id: targetCellId,
+    task_id: task.task_id,
+    route_execution_id: routeExecutionId || null,
+    route_planning_run_id: routePlanningRunId || null,
+    robotaxi_id: task.robotaxi_id,
+    route_strategy_id: strategyId,
+    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
+    road_segment_sequence: routePlan.road_segment_sequence,
+    route_steps: routeSteps,
+    total_step_count: Math.max(0, routeSteps.length - 1),
+    related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
+    total_distance_m: totalDistance,
+    route_status: routeSteps.length > 0 ? "Active" : "Failed",
+    failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
+  };
+}
+
+function createTripRoute({ trip, data, routeId, routePlanningRunId, originCellId, targetCellId, targetServiceAreaId, strategyId }) {
+  const routePlan = createBfsRoutePlan(data, originCellId, targetCellId);
+  const routeSteps = routePlan.route_steps;
+  const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps?.[0]?.cell_size_m || 50);
+  return {
+    route_id: routeId,
+    route_version: 1,
+    route_name: `${trip.robotaxi_id} 履约行驶 ${originCellId} 到 ${targetCellId}`,
+    route_usage_type: getServiceRouteUsageType(strategyId),
+    map_id: data.maps?.[0]?.map_id || null,
+    start_cell_id: originCellId,
+    end_cell_id: targetCellId,
+    origin_cell_id: originCellId,
+    target_cell_id: targetCellId,
+    task_id: null,
+    service_order_id: trip.service_order_id,
+    trip_id: trip.trip_id,
+    route_execution_id: null,
+    route_planning_run_id: routePlanningRunId || null,
+    robotaxi_id: trip.robotaxi_id,
+    route_strategy_id: strategyId,
+    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
+    road_segment_sequence: routePlan.road_segment_sequence,
+    route_steps: routeSteps,
+    total_step_count: Math.max(0, routeSteps.length - 1),
+    related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
+    total_distance_m: totalDistance,
+    route_status: routeSteps.length > 0 ? "Active" : "Failed",
+    failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
+  };
+}
+
+function getTripRouteRequest(trip) {
+  if (["WAITING_ROUTE", "PENDING", "ASSIGNED"].includes(trip.trip_status)) {
+    return {
+      originCellId: trip.current_cell_id,
+      targetCellId: trip.pickup_cell_id,
+      targetServiceAreaId: trip.pickup_service_area_id,
+      strategyId: taskTypes.RoutePlanningStrategy.SERVICE_ORDER_PICKUP,
+      routeChangeReason: taskTypes.RouteChangeReason.SERVICE_ORDER_PICKUP_PLANNING,
+    };
+  }
+  if (["CUSTOMER_ONBOARD", "PASSENGER_ONBOARD"].includes(trip.trip_status)) {
+    return {
+      originCellId: trip.current_cell_id || trip.pickup_cell_id,
+      targetCellId: trip.dropoff_cell_id,
+      targetServiceAreaId: trip.dropoff_service_area_id,
+      strategyId: taskTypes.RoutePlanningStrategy.SERVICE_ORDER_DESTINATION,
+      routeChangeReason: taskTypes.RouteChangeReason.SERVICE_ORDER_DESTINATION_PLANNING,
+    };
+  }
+  return null;
+}
+
+function getServiceRouteUsageType(strategyId) {
+  if (strategyId === taskTypes.RoutePlanningStrategy.SERVICE_ORDER_PICKUP) return taskTypes.RouteUsageType.SERVICE_PICKUP;
+  if (strategyId === taskTypes.RoutePlanningStrategy.SERVICE_ORDER_DESTINATION) return taskTypes.RouteUsageType.SERVICE_DROPOFF;
+  return taskTypes.RouteUsageType.SERVICE_REPLAN;
+}
+
+function createSingleCellRouteSteps(data, cellId) {
+  if (!cellId) return [];
+  return [{
+    step_index: 0,
+    cell_id: cellId,
+    road_segment_id: findRoadSegmentIdByCell(data, cellId),
+    road_node_id: data.roadNodes?.find((node) => node.cell_id === cellId)?.road_node_id || null,
+    direction: "UNKNOWN",
+    distance_km: 0,
+    is_origin_step: true,
+    is_target_step: true,
+  }];
+}
+
+function mergeRouteStepPlans(stepPlans, data) {
+  const mergedCellIds = [];
+  stepPlans.forEach((steps) => {
+    (steps || []).forEach((step) => {
+      if (!step?.cell_id) return;
+      if (mergedCellIds[mergedCellIds.length - 1] !== step.cell_id) mergedCellIds.push(step.cell_id);
+    });
+  });
+  const cellById = new Map((data.cells || []).map((cell) => [cell.cell_id, cell]));
+  return mergedCellIds.map((cellId, index) => {
+    const nextCellId = mergedCellIds[index + 1];
+    return {
+      step_index: index,
+      movement_step_index: index === 0 ? null : index,
+      cell_id: cellId,
+      road_segment_id: findRoadSegmentIdByCell(data, cellId),
+      road_node_id: data.roadNodes?.find((node) => node.cell_id === cellId)?.road_node_id || null,
+      direction: nextCellId ? inferStepDirection(cellById.get(cellId), cellById.get(nextCellId)) : "UNKNOWN",
+      distance_km: index === 0 ? 0 : (data.maps?.[0]?.cell_size_m || 50) / 1000,
+      is_origin_step: index === 0,
+      is_target_step: index === mergedCellIds.length - 1,
+    };
+  });
+}
+
+function createBfsRoutePlan(data, originCellId, targetCellId) {
+  const cellById = new Map((data.cells || []).map((cell) => [cell.cell_id, cell]));
+  const roadNodeByCellId = new Map((data.roadNodes || []).map((node) => [node.cell_id, node]));
+  const graph = buildRoadCellGraph(data.roadSegments || []);
+  const graphCellIds = [...graph.keys()];
+  if (!originCellId || !targetCellId || graphCellIds.length === 0) return { road_segment_sequence: [], route_steps: [] };
+  const originConnector = connectEndpointToGraph(originCellId, graph, cellById);
+  const targetConnector = connectEndpointToGraph(targetCellId, graph, cellById);
+  if (!originConnector || !targetConnector) return { road_segment_sequence: [], route_steps: [] };
+  const graphPath = findBfsCellPath(graph, originConnector.graphCellId, targetConnector.graphCellId);
+  if (graphPath.length === 0) return { road_segment_sequence: [], route_steps: [] };
+  const targetConnectorCells = [...targetConnector.connectorCells].reverse().slice(1);
+  const routeCellIds = [
+    ...originConnector.connectorCells,
+    ...graphPath.slice(1),
+    ...targetConnectorCells,
+  ].filter((cellId, index, list) => cellId && (index === 0 || cellId !== list[index - 1]));
+  const routeSteps = routeCellIds.map((cellId, index) => {
+    const nextCellId = routeCellIds[index + 1];
+    const edge = nextCellId ? graph.get(cellId)?.find((item) => item.to === nextCellId) : null;
+    const previousEdge = index > 0 ? graph.get(routeCellIds[index - 1])?.find((item) => item.to === cellId) : null;
+    const roadNode = roadNodeByCellId.get(cellId);
+    return {
+      step_index: index,
+      cell_id: cellId,
+      road_segment_id: edge?.road_segment_id || previousEdge?.road_segment_id || null,
+      road_node_id: roadNode?.road_node_id || null,
+      direction: nextCellId ? inferStepDirection(cellById.get(cellId), cellById.get(nextCellId)) : "UNKNOWN",
+      distance_km: index === 0 ? 0 : (data.maps?.[0]?.cell_size_m || 50) / 1000,
+      is_origin_step: index === 0,
+      is_target_step: index === routeCellIds.length - 1,
+    };
+  });
+  return {
+    road_segment_sequence: routeSteps
+      .map((step) => step.road_segment_id)
+      .filter((segmentId, index, list) => segmentId && list.indexOf(segmentId) === index),
+    route_steps: routeSteps,
+  };
+}
+
+function buildRoadCellGraph(roadSegments) {
+  const graph = new Map();
+  roadSegments
+    .filter((segment) => segment.segment_status !== "BLOCKED" && segment.segment_status !== "CLOSED" && segment.allowed_direction !== "CLOSED")
+    .forEach((segment) => {
+      const cellSequence = segment.cell_sequence || segment.cell_ids || [];
+      cellSequence.forEach((cellId) => ensureGraphNode(graph, cellId));
+      for (let index = 0; index < cellSequence.length - 1; index += 1) {
+        const from = cellSequence[index];
+        const to = cellSequence[index + 1];
+        if (segment.allowed_direction === "FORWARD" || segment.allowed_direction === "BIDIRECTIONAL") addGraphEdge(graph, from, to, segment.road_segment_id);
+        if (segment.allowed_direction === "BACKWARD" || segment.allowed_direction === "BIDIRECTIONAL") addGraphEdge(graph, to, from, segment.road_segment_id);
+      }
+    });
+  return graph;
+}
+
+function ensureGraphNode(graph, cellId) {
+  if (!graph.has(cellId)) graph.set(cellId, []);
+}
+
+function addGraphEdge(graph, from, to, roadSegmentId) {
+  ensureGraphNode(graph, from);
+  ensureGraphNode(graph, to);
+  if (graph.get(from).some((edge) => edge.to === to && edge.road_segment_id === roadSegmentId)) return;
+  graph.get(from).push({ to, road_segment_id: roadSegmentId });
+}
+
+function connectEndpointToGraph(endpointCellId, graph, cellById) {
+  if (graph.has(endpointCellId)) return { graphCellId: endpointCellId, connectorCells: [endpointCellId] };
+  const endpointCell = cellById.get(endpointCellId);
+  if (!endpointCell) return null;
+  const nearestGraphCellId = [...graph.keys()]
+    .map((cellId) => ({ cellId, distance: manhattanDistance(endpointCell, cellById.get(cellId)) }))
+    .sort((a, b) => a.distance - b.distance)[0]?.cellId;
+  if (!nearestGraphCellId) return null;
+  return {
+    graphCellId: nearestGraphCellId,
+    connectorCells: createManhattanConnector(endpointCell, cellById.get(nearestGraphCellId)),
+  };
+}
+
+function createManhattanConnector(startCell, endCell) {
+  const cells = [];
+  let row = startCell.row;
+  let col = startCell.col;
+  cells.push(cellIdFromCoord(row, col));
+  while (row !== endCell.row) {
+    row += row < endCell.row ? 1 : -1;
+    cells.push(cellIdFromCoord(row, col));
+  }
+  while (col !== endCell.col) {
+    col += col < endCell.col ? 1 : -1;
+    cells.push(cellIdFromCoord(row, col));
+  }
+  return cells;
+}
+
+function findBfsCellPath(graph, originCellId, targetCellId) {
+  const queue = [originCellId];
+  const previous = new Map([[originCellId, null]]);
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === targetCellId) break;
+    (graph.get(current) || []).forEach((edge) => {
+      if (previous.has(edge.to)) return;
+      previous.set(edge.to, current);
+      queue.push(edge.to);
+    });
+  }
+  if (!previous.has(targetCellId)) return [];
+  const path = [];
+  let current = targetCellId;
+  while (current) {
+    path.unshift(current);
+    current = previous.get(current);
+  }
+  return path;
+}
+
+function routeCellIds(route, roadSegments = []) {
+  if (Array.isArray(route.route_steps)) return route.route_steps.map((step) => step.cell_id).filter(Boolean);
+  return (route.road_segment_sequence || [])
+    .flatMap((segmentId) => (roadSegments.find((segment) => segment.road_segment_id === segmentId)?.cell_sequence || []));
+}
+
+function findRoadSegmentIdByCell(data, cellId) {
+  return (data.roadSegments || []).find((segment) => (segment.cell_sequence || segment.cell_ids || []).includes(cellId))?.road_segment_id || null;
+}
+
+function getCandidateServiceAreaCellIds(serviceArea) {
+  if (!serviceArea) return [];
+  return [
+    ...(serviceArea.standby_cell_ids || []),
+    ...(serviceArea.parking_cell_ids || []),
+    ...(serviceArea.temp_stop_cell_ids || []),
+    ...(serviceArea.pickup_cell_ids || []),
+    ...(serviceArea.dropoff_cell_ids || []),
+    ...(serviceArea.cell_ids || serviceArea.covered_cell_ids || []),
+  ].filter((cellId, index, list) => cellId && list.indexOf(cellId) === index);
+}
+
+function manhattanDistance(cellA, cellB) {
+  if (!cellA || !cellB) return Number.POSITIVE_INFINITY;
+  return Math.abs(cellA.row - cellB.row) + Math.abs(cellA.col - cellB.col);
+}
+
+function inferStepDirection(cellA, cellB) {
+  if (!cellA || !cellB) return "UNKNOWN";
+  if (cellA.row > cellB.row) return "NORTH";
+  if (cellA.row < cellB.row) return "SOUTH";
+  if (cellA.col > cellB.col) return "WEST";
+  if (cellA.col < cellB.col) return "EAST";
+  return "UNKNOWN";
+}
+
+function cellIdFromCoord(row, col) {
+  return `C-${String(row).padStart(2, "0")}-${String(col).padStart(2, "0")}`;
+}
+
+function roundDistance(value) {
+  return Number(Number(value || 0).toFixed(2));
+}

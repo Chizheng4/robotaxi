@@ -462,6 +462,7 @@
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |worker_id|作业人员编号|持久化字段|Worker 唯一编号|
+|assigned_worker_id|已分配作业人员|运行态字段|任务当前已分配的 Worker，可为空；历史兼容字段，新逻辑优先使用 worker_id|
 |ops_center_id|运营中心编号|持久化字段|所属 OpsCenter|
 |worker_name|作业人员名称|持久化字段|Worker 名称|
 |worker_role|作业角色|持久化字段|运营中心内部作业角色|
@@ -514,6 +515,7 @@
 |route_step_count|移动步数|聚合展示字段|Route 中实际移动步数，等于 route_steps.length - 1，起点 Step 不计为移动|
 |route_segments|路径分段|持久化字段|用于价格预估等复合路径，表达客户位置到上车位置、上车位置到下车位置等分段|
 |movement_step_index|移动步序|聚合展示字段|前端展示移动步骤时使用的序号，隐藏 route_steps[0] 起点行|
+|route_cell_ids|行驶路径格子序列|运行态字段|运营行驶记录执行 Route 时按顺序经过的 Cell 编号列表|
 |planned_target_zone_id|计划目标运营区域|持久化字段|运营投放任务创建时的原始计划 Zone，可为空，异常重规划不得覆盖|
 |planned_target_service_area_id|计划目标服务区|持久化字段|运营投放任务创建时的原始计划 ServiceArea，异常重规划不得覆盖|
 |planned_target_cell_id|计划目标位置|持久化字段|运营投放任务创建时的原始计划 Cell，异常重规划不得覆盖|

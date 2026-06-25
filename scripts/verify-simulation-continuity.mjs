@@ -165,9 +165,14 @@ let deploymentRobotaxis = [{ robotaxi_id: "RTX-DEPLOY", availability_status: "AV
 handleDeploymentTaskCreate({
   context: auditContext,
   data: {
+    robotaxis: deploymentRobotaxis,
     deploymentTasks,
     routeExecutions,
-    data: { robotaxis: deploymentRobotaxis },
+    data: {
+      robotaxis: deploymentRobotaxis,
+      serviceAreas: [{ service_area_id: "SA-006", standby_cell_ids: ["CELL-2"], vehicle_capabilities: { can_stage: true } }],
+      zones: [{ zone_id: "ZONE-AUDIT", service_area_ids: ["SA-006"] }],
+    },
     setDeploymentTasks: (updater) => { deploymentTasks = updater(deploymentTasks); },
     setRouteExecutions: (updater) => { routeExecutions = updater(routeExecutions); },
     setRobotaxis: (updater) => { deploymentRobotaxis = updater(deploymentRobotaxis); },
