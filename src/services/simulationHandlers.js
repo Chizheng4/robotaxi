@@ -483,30 +483,35 @@ export function handleSettlementExecute({ objectId, data, context }) {
  * 对服务订单执行支付
  */
 export function handlePaymentExecute({ objectId, data, context }) {
-  const { serviceOrders, setServiceOrders, setRobotaxis } = data;
+  const { serviceOrderService: sosService, serviceOrders, trips, robotaxis, setServiceOrders, setTrips, setRobotaxis } = data;
   const order = serviceOrders.find((o) => o.service_order_id === objectId);
   if (!order) return { success: false, message: `未找到服务订单 ${objectId}` };
 
-  setServiceOrders((prev) => prev.map((o) => {
-    if (o.service_order_id !== objectId) return o;
-    return {
-      ...o,
-      order_status: "COMPLETED",
-      payment_status: "PAID",
-      paid_amount: order.final_price || order.estimated_price || 0,
-      payment_completed_at: new Date().toISOString(),
-      simulation_payment_completed_at: context?.tickContext?.current_time || null,
-      ...getSimulationAudit(context, { completed: true }),
-    };
-  }));
-
-  // 释放 Robotaxi
-  if (order.matched_robotaxi_id) {
-    setRobotaxis((prev) => prev.map((r) => {
-      if (r.robotaxi_id !== order.matched_robotaxi_id) return r;
-      return { ...r, current_order_id: null, motion_status: "PARKED", ...getSimulationAudit(context) };
-    }));
+  const completedAt = new Date().toISOString();
+  const result = sosService.payServiceOrder({
+    serviceOrder: order,
+    trips,
+    robotaxis,
+    completedAt,
+    serviceOrderTypes,
+    tripTypes,
+  });
+  if (!result.success) {
+    return { success: false, resultType: "PAYMENT_FAILED", message: `服务订单 ${objectId} 支付失败：${result.failureReason}`, data: { objectType: "serviceOrder", objectId, failureReason: result.failureReason } };
   }
+  setServiceOrders((prev) => prev.map((o) => o.service_order_id === objectId ? {
+    ...result.serviceOrder,
+    simulation_payment_completed_at: context?.tickContext?.current_time || null,
+    ...getSimulationAudit(context, { completed: true }),
+  } : o));
+  setTrips?.((prev) => prev.map((trip) => {
+    const nextTrip = result.trips.find((item) => item.trip_id === trip.trip_id);
+    return nextTrip && nextTrip.service_order_id === objectId ? { ...nextTrip, ...getSimulationAudit(context, { completed: true }) } : trip;
+  }));
+  setRobotaxis((prev) => prev.map((robotaxi) => {
+    const nextRobotaxi = result.robotaxis.find((item) => item.robotaxi_id === robotaxi.robotaxi_id);
+    return nextRobotaxi && robotaxi.current_order_id === objectId ? { ...nextRobotaxi, motion_status: "PARKED", ...getSimulationAudit(context) } : robotaxi;
+  }));
 
   return { success: true, resultType: "PAYMENT_COMPLETED", message: `服务订单 ${objectId} 支付完成`, data: { objectType: "serviceOrder", objectId } };
 }

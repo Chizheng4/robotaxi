@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { executeActions, registerActionHandlers } from "../src/data/simulationExecutionEngine.js";
 import * as serviceOrderService from "../src/services/serviceOrderService.js";
 import * as tripService from "../src/services/tripService.js";
+import * as routePlanningService from "../src/services/routePlanningService.js";
 import {
   handleArrivalConfirm,
   handleDeploymentTaskCreate,
@@ -59,6 +60,24 @@ let plannedPickupTrip = getTrip(trip.trip_id);
 assert.equal(plannedPickupTrip.trip_status, "ON_THE_WAY_PICKUP");
 assert.ok(plannedPickupTrip.route_id);
 assert.ok(businessData.routes.some((route) => route.route_id === plannedPickupTrip.route_id && route.route_usage_type === "SERVICE_PICKUP"));
+const manualPickupRouteUpdate = routePlanningService.createTripRouteUpdate({
+  trip: {
+    ...trip,
+    trip_id: "TRIP-MANUAL-SAME-SERVICE",
+  },
+  nextTrip: {
+    ...trip,
+    trip_id: "TRIP-MANUAL-SAME-SERVICE",
+    trip_status: "ON_THE_WAY_PICKUP",
+    trip_phase: "PICKUP",
+  },
+  data: businessData.data,
+  routeId: "SRT-MANUAL-SAME-SERVICE",
+  routePlanningRunId: "RPR-MANUAL-SAME-SERVICE",
+});
+assert.equal(manualPickupRouteUpdate.route.route_usage_type, "SERVICE_PICKUP");
+assert.equal(manualPickupRouteUpdate.route.route_steps.at(0).cell_id, trip.current_cell_id);
+assert.equal(manualPickupRouteUpdate.route.route_steps.at(-1).cell_id, trip.pickup_cell_id);
 
 while (getTrip(trip.trip_id).trip_status === "ON_THE_WAY_PICKUP") {
   runAction({ actionType: "TRIP_STEP_EXECUTE", objectId: trip.trip_id });
@@ -89,6 +108,7 @@ assert.ok(businessData.pricingDecisions.some((decision) => decision.service_orde
 
 runAction({ actionType: "PAYMENT_EXECUTE", objectId: "SO-VERIFY-001" });
 assert.equal(getOrder().order_status, "COMPLETED");
+assert.equal(getOrder().payment_status, "PAID");
 
 runAction({ actionType: "DEPLOYMENT_TASK_CREATE", objectId: null });
 const deploymentTask = businessData.deploymentTasks[0];

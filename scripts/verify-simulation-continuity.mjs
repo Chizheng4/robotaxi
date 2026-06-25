@@ -6,6 +6,7 @@ import { completeTick, initSimulationRun, resetSimulationCounters, startSimulati
 import { executeTick } from "../src/data/simulationLoop.js";
 import { handleDeploymentTaskCreate, handlePaymentExecute, handleReadinessTaskCreate, handleServiceOrderCreate, handleTripStepExecute } from "../src/services/simulationHandlers.js";
 import { registerActionHandlers } from "../src/data/simulationExecutionEngine.js";
+import * as serviceOrderService from "../src/services/serviceOrderService.js";
 
 const policy = initializeDefaultSimulationPolicy();
 
@@ -202,6 +203,7 @@ assert.equal(createdTrips[0].simulation_created_at, "Day 3 12:34:56");
 
 registerActionHandlers({ PAYMENT_EXECUTE: handlePaymentExecute });
 let drainBusinessData = {
+  serviceOrderService,
   serviceOrders: [{
     service_order_id: "SO-LAST-TICK",
     order_status: "WAITING_PAYMENT",
@@ -217,6 +219,9 @@ let drainBusinessData = {
 };
 drainBusinessData.setServiceOrders = (updater) => {
   drainBusinessData.serviceOrders = updater(drainBusinessData.serviceOrders);
+};
+drainBusinessData.setTrips = (updater) => {
+  drainBusinessData.trips = updater(drainBusinessData.trips);
 };
 drainBusinessData.setRobotaxis = (updater) => {
   drainBusinessData.robotaxis = updater(drainBusinessData.robotaxis);

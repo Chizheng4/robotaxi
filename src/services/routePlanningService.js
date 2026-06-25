@@ -131,6 +131,30 @@ export function planDeploymentRoute({ execution, task, data, routeId, routePlann
   };
 }
 
+export function createDeploymentRouteForOperation({
+  task,
+  data,
+  routeId,
+  routePlanningRunId,
+  routeExecutionId,
+  originCellId,
+  targetCellId,
+  targetServiceAreaId,
+  strategyId,
+}) {
+  return createDeploymentRoute({
+    task,
+    data,
+    routeId,
+    routePlanningRunId,
+    originCellId,
+    targetCellId,
+    targetServiceAreaId,
+    routeExecutionId,
+    strategyId,
+  });
+}
+
 export function advanceRouteExecution({ execution, task, route, robotaxi }) {
   if (!execution || !task || !route || execution.execution_status !== taskTypes.RouteExecutionStatus.MOVING) return null;
   const routeCellIds = execution.route_cell_ids?.length
@@ -254,6 +278,28 @@ export function createTripRouteUpdate({ trip, nextTrip, data, routeId, routePlan
   };
 }
 
+export function createTripRouteForOperation({
+  trip,
+  data,
+  routeId,
+  routePlanningRunId,
+  originCellId,
+  targetCellId,
+  targetServiceAreaId,
+  strategyId,
+}) {
+  return createTripRoute({
+    trip,
+    data,
+    routeId,
+    routePlanningRunId,
+    originCellId,
+    targetCellId,
+    targetServiceAreaId,
+    strategyId,
+  });
+}
+
 export function createRoutePlanningRun(options) {
   return taskTypes.createRoutePlanningRun({
     route_planning_run_id: options.routePlanningRunId,
@@ -290,16 +336,20 @@ export function getRouteExecutionCells(route, roadSegments, originCellId, target
 }
 
 export function createRouteHistoryEntry(route, routeChangeReason, arrivalExecutionResult) {
+  return createRouteHistoryEntryWithOptions(route, routeChangeReason, arrivalExecutionResult);
+}
+
+export function createRouteHistoryEntryWithOptions(route, routeChangeReason, arrivalExecutionResult, options = {}) {
   return {
     route_id: route.route_id,
     route_strategy_id: route.route_strategy_id,
     origin_cell_id: route.start_cell_id,
     target_cell_id: route.end_cell_id,
-    started_at: new Date().toISOString(),
+    started_at: options.createdAt || new Date().toISOString(),
     ended_at: null,
     route_change_reason: routeChangeReason,
     arrival_execution_result: arrivalExecutionResult || null,
-    trigger_type: taskTypes.TriggerType.AUTO,
+    trigger_type: options.triggerType || taskTypes.TriggerType.AUTO,
   };
 }
 

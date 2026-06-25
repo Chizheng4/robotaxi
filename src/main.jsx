@@ -32,6 +32,7 @@ let validateReadinessCheckTasks;
 let validateDeploymentTasks;
 let taskTypes;
 let serviceOrderSettlement;
+let routePlanningService;
 let businessTimingCalculator;
 let costModelCalculator;
 let revenueCalculator;
@@ -2389,40 +2390,27 @@ function App() {
     const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
     if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT) return;
     const completedAt = now();
-    const finalPrice = serviceOrder.final_price || serviceOrder.quoted_price || serviceOrder.estimated_price || 0;
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-      ...order,
-      order_status: serviceOrderTypes.ServiceOrderStatus.COMPLETED,
-      payment_status: serviceOrderTypes.PaymentStatus.PAID,
-      paid_amount: finalPrice,
-      payment_completed_at: completedAt,
-      completed_at: completedAt,
-      final_price: finalPrice,
-      failure_reason: null,
-    } : order));
-    setTrips((items) => items.map((trip) => trip.service_order_id === serviceOrderId ? {
-      ...trip,
-      trip_status: tripTypes.TripStatus.COMPLETED,
-      trip_phase: tripTypes.TripPhase.COMPLETED,
-      completed_at: completedAt,
-    } : trip));
+    const result = serviceOrderService.payServiceOrder({
+      serviceOrder,
+      trips,
+      robotaxis: data.robotaxis,
+      completedAt,
+      serviceOrderTypes,
+      tripTypes,
+    });
+    if (!result.success) return;
+    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? result.serviceOrder : order));
+    setTrips(result.trips);
     setOperationalData((current) => ({
       ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.current_order_id === serviceOrderId ? {
-        ...robotaxi,
-        current_order_id: null,
-        current_route_id: null,
-        availability_status: "AVAILABLE",
-        motion_status: "STOPPED",
-        available_for_dispatch: true,
-      } : robotaxi),
+      robotaxis: result.robotaxis,
     }));
     addServiceOrderEvent({
       service_order_id: serviceOrderId,
       trip_id: serviceOrder.trip_id,
       event_type: taskTypes.TaskEventType.SERVICE_ORDER_PAID,
       event_result: taskTypes.TaskEventResult.SUCCESS,
-      message: `${serviceOrderId} 支付完成，支付金额 ${finalPrice}`,
+      message: `${serviceOrderId} 支付完成，支付金额 ${result.paidAmount}`,
     });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
@@ -4822,6 +4810,7 @@ async function bootstrap() {
 		    costModelCalculatorModule,
 		    revenueCalculatorModule,
 		    simulationRunBusinessScopeModule,
+		    routePlanningServiceModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -4864,6 +4853,7 @@ async function bootstrap() {
 		    import("./data/costModelCalculator.js?v=20260625-v029-1"),
 		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
 		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
+		    import("./services/routePlanningService.js?v=20260625-v029-4"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -4906,6 +4896,7 @@ async function bootstrap() {
 		  costModelCalculator = costModelCalculatorModule;
 		  revenueCalculator = revenueCalculatorModule;
 		  simulationRunBusinessScope = simulationRunBusinessScopeModule;
+		  routePlanningService = routePlanningServiceModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -4954,86 +4945,34 @@ function isDeploymentCandidateRobotaxi(robotaxi, deploymentTasks) {
 }
 
 function getDefaultDeploymentTarget(data) {
-  const serviceArea = data.serviceAreas.find((area) => area.service_area_id === "SA-006") ||
-    data.serviceAreas.find((area) => area.vehicle_capabilities?.can_stage || area.vehicle_capabilities?.can_short_wait);
-  if (!serviceArea) return null;
-  return {
-    target_cell_id: getCandidateServiceAreaCellIds(serviceArea)[0],
-    target_service_area_id: serviceArea.service_area_id,
-    target_zone_id: data.zones.find((zone) => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null,
-  };
+  return routePlanningService.getDefaultDeploymentTarget(data);
 }
 
 function createDeploymentRoute(task, data, options = {}) {
-  const targetServiceAreaId = options.targetServiceAreaId || task.planned_target_service_area_id || task.target_service_area_id;
-  const originCellId = options.originCellId || task.origin_cell_id;
-  const targetCellId = options.targetCellId || task.planned_target_cell_id || task.target_cell_id;
-  const strategyId = options.strategyId || taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT;
-  const planningAlgorithm = taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH;
-  const routePlan = createBfsRoutePlan(data, originCellId, targetCellId);
-  const routeSteps = routePlan.route_steps;
-  const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps[0]?.cell_size_m || 50);
-  return {
-    route_id: nextDeploymentRouteId(),
-    route_version: 1,
-    route_name: `${task.robotaxi_id} 投放到 ${targetServiceAreaId}`,
-    route_usage_type: taskTypes.RouteUsageType.OPERATIONAL_EXECUTION,
-    map_id: data.maps[0].map_id,
-    start_cell_id: originCellId,
-    end_cell_id: targetCellId,
-    origin_cell_id: originCellId,
-    target_cell_id: targetCellId,
-    task_id: task.task_id,
-    route_execution_id: options.routeExecutionId || null,
-    route_planning_run_id: options.routePlanningRunId || null,
-    robotaxi_id: task.robotaxi_id,
-    route_strategy_id: strategyId,
-    planning_algorithm: planningAlgorithm,
-    road_segment_sequence: routePlan.road_segment_sequence,
-    route_steps: routeSteps,
-    total_step_count: Math.max(0, routeSteps.length - 1),
-    related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
-    total_distance_m: totalDistance,
-    route_status: routeSteps.length > 0 ? "Active" : "Failed",
-    failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
-  };
+  return routePlanningService.createDeploymentRouteForOperation({
+    task,
+    data,
+    routeId: nextDeploymentRouteId(),
+    routePlanningRunId: options.routePlanningRunId || null,
+    routeExecutionId: options.routeExecutionId || null,
+    originCellId: options.originCellId || task.origin_cell_id,
+    targetCellId: options.targetCellId || task.planned_target_cell_id || task.target_cell_id,
+    targetServiceAreaId: options.targetServiceAreaId || task.planned_target_service_area_id || task.target_service_area_id,
+    strategyId: options.strategyId || taskTypes.RoutePlanningStrategy.INITIAL_DEPLOYMENT,
+  });
 }
 
 function createTripRoute(trip, data, options = {}) {
-  const originCellId = options.originCellId || trip.current_cell_id;
-  const targetCellId = options.targetCellId;
-  const targetServiceAreaId = options.targetServiceAreaId;
-  const strategyId = options.strategyId;
-  const planningAlgorithm = taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH;
-  const routePlan = createBfsRoutePlan(data, originCellId, targetCellId);
-  const routeSteps = routePlan.route_steps;
-  const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps[0]?.cell_size_m || 50);
-  return {
-    route_id: nextServiceRouteId(),
-    route_version: 1,
-    route_name: `${trip.robotaxi_id} 履约行驶 ${originCellId} 到 ${targetCellId}`,
-    route_usage_type: getServiceRouteUsageType(options.strategyId),
-    map_id: data.maps[0].map_id,
-    start_cell_id: originCellId,
-    end_cell_id: targetCellId,
-    origin_cell_id: originCellId,
-    target_cell_id: targetCellId,
-    task_id: null,
-    service_order_id: trip.service_order_id,
-    trip_id: trip.trip_id,
-    route_execution_id: null,
-    route_planning_run_id: options.routePlanningRunId || null,
-    robotaxi_id: trip.robotaxi_id,
-    route_strategy_id: strategyId,
-    planning_algorithm: planningAlgorithm,
-    road_segment_sequence: routePlan.road_segment_sequence,
-    route_steps: routeSteps,
-    total_step_count: Math.max(0, routeSteps.length - 1),
-    related_service_area_ids: targetServiceAreaId ? [targetServiceAreaId] : [],
-    total_distance_m: totalDistance,
-    route_status: routeSteps.length > 0 ? "Active" : "Failed",
-    failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
-  };
+  return routePlanningService.createTripRouteForOperation({
+    trip,
+    data,
+    routeId: nextServiceRouteId(),
+    routePlanningRunId: options.routePlanningRunId || null,
+    originCellId: options.originCellId || trip.current_cell_id,
+    targetCellId: options.targetCellId,
+    targetServiceAreaId: options.targetServiceAreaId,
+    strategyId: options.strategyId,
+  });
 }
 
 function getServiceRouteUsageType(strategyId) {
@@ -5043,52 +4982,12 @@ function getServiceRouteUsageType(strategyId) {
 }
 
 function createPriceEstimationRoute(serviceOrder, data, routePlanningRunId) {
-  const originCellId = serviceOrder.customer_origin_cell_id;
-  const pickupCellId = serviceOrder.pickup_cell_id;
-  const targetCellId = serviceOrder.dropoff_cell_id;
-  const planningAlgorithm = taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH;
-  const pickupPlan = originCellId === pickupCellId
-    ? { road_segment_sequence: [], route_steps: createSingleCellRouteSteps(data, originCellId) }
-    : createBfsRoutePlan(data, originCellId, pickupCellId);
-  const dropoffPlan = createBfsRoutePlan(data, pickupCellId, targetCellId);
-  const routeSteps = mergeRouteStepPlans([pickupPlan.route_steps, dropoffPlan.route_steps], data);
-  const roadSegmentSequence = [
-    ...pickupPlan.road_segment_sequence,
-    ...dropoffPlan.road_segment_sequence,
-  ].filter((segmentId, index, list) => segmentId && list.indexOf(segmentId) === index);
-  const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps[0]?.cell_size_m || 50);
-  const valid = routeSteps.length > 0 && routeSteps[0]?.cell_id === originCellId && routeSteps[routeSteps.length - 1]?.cell_id === targetCellId;
-
-  return {
-    route_id: nextServiceRouteId(),
-    route_version: 1,
-    route_name: `${serviceOrder.service_order_id} 价格预估路径`,
-    route_usage_type: taskTypes.RouteUsageType.PRICE_ESTIMATION,
-    route_segments: [
-      { segment_type: "CUSTOMER_TO_PICKUP", origin_cell_id: originCellId, target_cell_id: pickupCellId, step_count: Math.max(0, pickupPlan.route_steps.length - 1) },
-      { segment_type: "PICKUP_TO_DROPOFF", origin_cell_id: pickupCellId, target_cell_id: targetCellId, step_count: Math.max(0, dropoffPlan.route_steps.length - 1) },
-    ],
-    map_id: data.maps[0].map_id,
-    start_cell_id: originCellId,
-    end_cell_id: targetCellId,
-    origin_cell_id: originCellId,
-    target_cell_id: targetCellId,
-    task_id: null,
-    service_order_id: serviceOrder.service_order_id,
-    trip_id: null,
-    route_execution_id: null,
-    route_planning_run_id: routePlanningRunId,
-    robotaxi_id: null,
-    route_strategy_id: taskTypes.RoutePlanningStrategy.SERVICE_PRICE_ESTIMATION,
-    planning_algorithm: planningAlgorithm,
-    road_segment_sequence: roadSegmentSequence,
-    route_steps: routeSteps,
-    total_step_count: Math.max(0, routeSteps.length - 1),
-    related_service_area_ids: [serviceOrder.pickup_service_area_id, serviceOrder.dropoff_service_area_id].filter(Boolean),
-    total_distance_m: totalDistance,
-    route_status: valid ? "Active" : "Failed",
-    failure_reason: valid ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
-  };
+  return routePlanningService.createPriceEstimationRoute({
+    serviceOrder,
+    data,
+    routeId: nextServiceRouteId(),
+    routePlanningRunId,
+  });
 }
 
 function createSingleCellRouteSteps(data, cellId) {
@@ -5137,17 +5036,10 @@ function findRoadSegmentIdByCell(data, cellId) {
 }
 
 function createRouteHistoryEntry(route, routeChangeReason, arrivalExecutionResult) {
-  return {
-    route_id: route.route_id,
-    route_strategy_id: route.route_strategy_id,
-    origin_cell_id: route.start_cell_id,
-    target_cell_id: route.end_cell_id,
-    started_at: now(),
-    ended_at: null,
-    route_change_reason: routeChangeReason,
-    arrival_execution_result: arrivalExecutionResult || null,
-    trigger_type: taskTypes.TriggerType.MANUAL,
-  };
+  return routePlanningService.createRouteHistoryEntryWithOptions(route, routeChangeReason, arrivalExecutionResult, {
+    createdAt: now(),
+    triggerType: taskTypes.TriggerType.MANUAL,
+  });
 }
 
 function getAlternativeDeploymentTarget(data, serviceAreaId, excludedCellIds = []) {
@@ -5564,27 +5456,15 @@ function createOrderMatchingStrategyRows(data, orderMatchingRuns) {
 }
 
 function createRoutePlanningRun(options) {
-  return taskTypes.createRoutePlanningRun({
-    route_planning_run_id: options.routePlanningRunId || nextRoutePlanningRunId(),
-    route_strategy_id: options.routeStrategyId,
-    planning_algorithm: options.planningAlgorithm || taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
-    task_id: options.taskId,
-    service_order_id: options.serviceOrderId || null,
-    trip_id: options.tripId || null,
-    route_execution_id: options.routeExecutionId,
-    robotaxi_id: options.robotaxiId,
-    origin_cell_id: options.originCellId,
-    target_cell_id: options.targetCellId,
-    result_route_id: options.resultRouteId,
-    planning_result: options.planningResult,
-    failure_reason: options.failureReason,
-    created_at: now(),
+  return routePlanningService.createRoutePlanningRun({
+    ...options,
+    routePlanningRunId: options.routePlanningRunId || nextRoutePlanningRunId(),
+    createdAt: now(),
   });
 }
 
 function getRouteExecutionCells(route, roadSegments, originCellId, targetCellId) {
-  const cells = route.route_steps?.map((step) => step.cell_id) || routeCellIds(route, roadSegments);
-  return [...new Set([originCellId, ...cells, targetCellId].filter(Boolean))];
+  return routePlanningService.getRouteExecutionCells(route, roadSegments, originCellId, targetCellId);
 }
 
 function enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks) {
@@ -5900,55 +5780,22 @@ function findCurrentTask(taskId, readinessTasks, deploymentTasks) {
 
 
 function createTripRouteUpdate(trip, nextTrip, data) {
-  const routeRequest = getTripRouteRequest(trip);
-  if (!routeRequest) return null;
-  const routePlanningRunId = nextRoutePlanningRunId();
-  const route = createTripRoute(trip, data, {
-    ...routeRequest,
-    routePlanningRunId,
+  const result = routePlanningService.createTripRouteUpdate({
+    trip,
+    nextTrip,
+    data,
+    routeId: nextServiceRouteId(),
+    routePlanningRunId: nextRoutePlanningRunId(),
   });
-  const routePlanningRun = createRoutePlanningRun({
-    routePlanningRunId,
-    routeStrategyId: route.route_strategy_id,
-    planningAlgorithm: route.planning_algorithm,
-    taskId: null,
-    serviceOrderId: trip.service_order_id,
-    tripId: trip.trip_id,
-    routeExecutionId: null,
-    robotaxiId: trip.robotaxi_id,
-    originCellId: route.origin_cell_id,
-    targetCellId: route.target_cell_id,
-    resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
-    planningResult: route.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
-    failureReason: route.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : route.failure_reason,
-  });
-  if (route.route_steps.length === 0) {
-    return {
-      routePlanningRun,
-      failedTrip: {
-        ...trip,
-        trip_status: tripTypes.TripStatus.FAILED,
-        failure_reason: route.failure_reason,
-      },
-    };
+  if (result?.nextTrip?.route_history?.length) {
+    const routeHistory = result.nextTrip.route_history.map((entry, index, list) => index === list.length - 1 ? {
+      ...entry,
+      started_at: now(),
+      trigger_type: taskTypes.TriggerType.MANUAL,
+    } : entry);
+    return { ...result, nextTrip: { ...result.nextTrip, route_history: routeHistory } };
   }
-
-  return {
-    route,
-    routePlanningRun,
-    nextTrip: {
-      ...nextTrip,
-      route_id: route.route_id,
-      route_planning_run_id: routePlanningRun.route_planning_run_id,
-      route_history: [
-        ...(Array.isArray(trip.route_history) ? trip.route_history : []),
-        createRouteHistoryEntry(route, routeRequest.routeChangeReason, null),
-      ],
-      current_step_index: 0,
-      total_step_count: Math.max(0, route.route_steps.length - 1),
-      distance_remaining_km: route.total_distance_m / 1000,
-    },
-  };
+  return result;
 }
 
 function replanTripRoute(trip, options) {

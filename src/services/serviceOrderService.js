@@ -111,3 +111,58 @@ export function executeOrderMatching({
     run: result.run,
   };
 }
+
+// ============================================================================
+// 3. 支付
+// ============================================================================
+
+/**
+ * 执行服务订单模拟支付。
+ *
+ * 这是人工点击“支付”和自动模拟 PAYMENT_EXECUTE 共用的业务闭环。
+ * 服务订单主状态只有待支付 -> 已完成；“已支付”只属于 payment_status。
+ */
+export function payServiceOrder({
+  serviceOrder,
+  trips = [],
+  robotaxis = [],
+  completedAt,
+  serviceOrderTypes,
+  tripTypes,
+}) {
+  if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT) {
+    return { success: false, failureReason: "SERVICE_ORDER_NOT_WAITING_PAYMENT" };
+  }
+  const paidAmount = serviceOrder.final_price || serviceOrder.quoted_price || serviceOrder.estimated_price || 0;
+  const nextServiceOrder = {
+    ...serviceOrder,
+    order_status: serviceOrderTypes.ServiceOrderStatus.COMPLETED,
+    payment_status: serviceOrderTypes.PaymentStatus.PAID,
+    paid_amount: paidAmount,
+    payment_completed_at: completedAt,
+    completed_at: completedAt,
+    final_price: paidAmount,
+    failure_reason: null,
+  };
+  const nextTrips = trips.map((trip) => trip.service_order_id === serviceOrder.service_order_id ? {
+    ...trip,
+    trip_status: tripTypes.TripStatus.COMPLETED,
+    trip_phase: tripTypes.TripPhase.COMPLETED,
+    completed_at: completedAt,
+  } : trip);
+  const nextRobotaxis = robotaxis.map((robotaxi) => robotaxi.current_order_id === serviceOrder.service_order_id ? {
+    ...robotaxi,
+    current_order_id: null,
+    current_route_id: null,
+    availability_status: "AVAILABLE",
+    motion_status: "STOPPED",
+    available_for_dispatch: true,
+  } : robotaxi);
+  return {
+    success: true,
+    serviceOrder: nextServiceOrder,
+    trips: nextTrips,
+    robotaxis: nextRobotaxis,
+    paidAmount,
+  };
+}

@@ -51,6 +51,7 @@ node --check src/domain/fieldDictionary.js
 node --check src/domain/fieldDisplayService.js
 node --check src/domain/taskTypes.js
 node --check src/domain/serviceOrderSettlement.js
+node --check src/services/serviceOrderService.js
 node --check src/services/simulationHandlers.js
 node --check src/services/routePlanningService.js
 node --check src/data/simulationRunBusinessScope.js
