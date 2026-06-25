@@ -46,6 +46,7 @@
 |expected_lifetime_km|预计寿命里程|持久化字段|按公里折旧时使用的寿命里程|
 |depreciation_method|折旧方式|持久化字段|PER_KM、PER_HOUR、PER_DAY|
 |fixed_operating_cost_per_day|每日固定运营成本|持久化字段|固定运营成本预留配置|
+|cost_parameter_rules|成本配置项|持久化字段|成本模型下的逐项可配置参数列表|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 |updated_at|更新时间|持久化字段|真实审计更新时间|
 |activated_at|生效时间|持久化字段|真实审计生效时间|
@@ -97,6 +98,7 @@
 |related_order_id|关联服务订单|持久化字段|关联服务订单编号，可为空|
 |related_trip_id|关联履约行驶记录|持久化字段|关联 Trip 编号，可为空|
 |related_route_execution_id|关联运营行驶记录|持久化字段|关联 RouteExecution 编号，可为空|
+|deployment_task_id|运营投放任务编号|持久化字段|关联运营投放任务编号，可为空|
 |robotaxi_id|Robotaxi 编号|持久化字段|关联车辆，可为空|
 |worker_id|作业人员编号|持久化字段|关联 Worker，可为空|
 |cost_type|成本类型|持久化字段|DISTANCE_COST、ENERGY_COST、LABOR_COST、ASSET_DEPRECIATION_COST、FIXED_OPERATING_COST|
@@ -107,6 +109,10 @@
 |currency_code|币种|持久化字段|成本币种|
 |calculation_formula|计算公式|持久化字段|生成本成本记录的公式|
 |calculation_basis|计算依据|持久化字段|来源字段、路径、时长等结构化依据|
+|route_ids|路径编号列表|持久化字段|计算依据中使用的路径编号集合|
+|distance_source|距离来源|持久化字段|成本计算使用的距离来源字段或对象|
+|operation_seconds|操作耗时（秒）|持久化字段|人力成本计算使用的操作耗时|
+|duration_source|时长来源|持久化字段|操作耗时的来源字段或状态时间线|
 |simulation_cost_occurred_at|模拟成本发生时间|持久化字段|成本发生对应的模拟时间|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 
@@ -194,6 +200,35 @@
 |COST_CALCULATION_FAILED|成本计算失败|成本计算错误|
 |REVENUE_AMOUNT_MISSING|缺少收入金额|收入生成错误|
 |REVENUE_CALCULATION_FAILED|收入生成失败|收入生成错误|
+
+### 1.1.9 工作流状态边枚举中文
+
+|英文值|中文名|用途|
+|---|---|---|
+|READINESS_ASSIGN|准入任务分配状态边|工作流状态边|
+|READINESS_START|准入检查开始状态边|工作流状态边|
+|READINESS_PASS|准入检查通过状态边|工作流状态边|
+|ROUTE_MOVE|运营行驶推进状态边|工作流状态边|
+|ROUTE_ARRIVAL|运营到达确认状态边|工作流状态边|
+|DEPLOYMENT_PLAN|投放路径规划投影状态边|工作流状态边|
+|DEPLOYMENT_MOVE|投放行驶推进投影状态边|工作流状态边|
+|DEPLOYMENT_ARRIVAL|投放到达确认投影状态边|工作流状态边|
+|ORDER_PRICE|订单估价状态边|工作流状态边|
+|ORDER_CALL|订单呼叫 Robotaxi 状态边|工作流状态边|
+|ORDER_MATCH|订单匹配状态边|工作流状态边|
+|ORDER_PICKUP_ARRIVAL|订单接驾到达投影状态边|工作流状态边|
+|ORDER_BOARD|订单客户上车投影状态边|工作流状态边|
+|ORDER_DESTINATION_PLAN|订单送达路径规划投影状态边|工作流状态边|
+|ORDER_DESTINATION_ARRIVAL|订单到达目的地投影状态边|工作流状态边|
+|ORDER_DROPOFF|订单客户下车投影状态边|工作流状态边|
+|ORDER_SETTLE|订单结算状态边|工作流状态边|
+|ORDER_PAY|订单支付状态边|工作流状态边|
+|TRIP_PICKUP_PLAN|履约接驾路径规划状态边|工作流状态边|
+|TRIP_PICKUP_MOVE|履约接驾行驶状态边|工作流状态边|
+|TRIP_BOARD|履约客户上车状态边|工作流状态边|
+|TRIP_DESTINATION_PLAN|履约送达路径规划状态边|工作流状态边|
+|TRIP_DESTINATION_MOVE|履约送达行驶状态边|工作流状态边|
+|TRIP_DROPOFF|履约客户下车状态边|工作流状态边|
 
 ---
 

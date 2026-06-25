@@ -48,6 +48,7 @@ print_step "检查 JavaScript 语法"
 node --check src/main.bundle.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/domain/fieldDictionary.js
+node --check src/domain/fieldDisplayService.js
 node --check src/domain/taskTypes.js
 node --check src/domain/serviceOrderSettlement.js
 node --check src/data/simulationRunBusinessScope.js
@@ -58,6 +59,7 @@ node scripts/verify-simulation-continuity.mjs
 node scripts/verify-simulation-audit-display.mjs
 node scripts/verify-business-timing-calculation.mjs
 node scripts/verify-cost-model-calculation.mjs
+node scripts/verify-field-display-contract.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then
