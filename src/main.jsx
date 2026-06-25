@@ -33,6 +33,7 @@ let validateDeploymentTasks;
 let taskTypes;
 let serviceOrderSettlement;
 let businessTimingCalculator;
+let costModelCalculator;
 let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
@@ -157,6 +158,15 @@ const pageGroups = [
       { key: "places", label: "地点管理" },
       { key: "serviceAreas", label: "服务区管理" },
       { key: "zones", label: "Zone 管理" },
+    ],
+  },
+  {
+    key: "businessAnalysis",
+    label: "经营分析",
+    children: [
+      { key: "costModelProfiles", label: "成本模型配置" },
+      { key: "costCalculationRuns", label: "成本计算记录" },
+      { key: "costRecords", label: "成本记录" },
     ],
   },
   {
@@ -338,10 +348,25 @@ const tableConfig = {
     description: "配置业务状态边的操作时长，用于模拟完成后的状态时间线计算。",
     columns: ["workflow_timing_rule_id", "business_object_type", "from_status", "action_type", "to_status", "transition_mode", "duration_source_type", "duration_mode", "configured_duration_seconds", "seconds_per_cell", "rule_status", "profile_version"],
   },
+  costModelProfiles: {
+    title: "成本模型配置",
+    description: "配置距离、能源、人力和资产折旧成本，用于模拟完成后的运营成本计算。",
+    columns: ["cost_model_profile_id", "profile_name", "profile_version", "profile_status", "currency_code", "distance_cost_per_km", "electricity_price_per_kwh", "energy_consumption_kwh_per_km", "worker_cost_per_hour", "robotaxi_purchase_cost", "robotaxi_residual_value", "expected_lifetime_km", "depreciation_method"],
+  },
+  costCalculationRuns: {
+    title: "成本计算记录",
+    description: "记录每次运营成本计算使用的配置快照、计算状态、生成记录数和总成本。",
+    columns: ["cost_calculation_run_id", "simulation_run_id", "calculation_status", "calculation_progress_percent", "processed_object_count", "generated_cost_record_count", "total_cost_amount", "error_count", "started_at", "completed_at"],
+  },
+  costRecords: {
+    title: "成本记录",
+    description: "统一记录业务对象产生的距离、能源、人力和资产折旧成本明细。",
+    columns: ["cost_record_id", "simulation_run_id", "source_object_type", "source_object_id", "cost_type", "quantity", "quantity_unit", "unit_cost", "cost_amount", "currency_code", "robotaxi_id", "worker_id", "simulation_cost_occurred_at"],
+  },
   simulationRuns: {
     title: "模拟运行管理",
     description: "创建和管理自动运营模拟运行，查看实时进度和结果。",
-    columns: ["simulation_run_id", "simulation_name", "simulation_status", "business_timing_calculation_status", "calculation_progress_percent", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "business_timing_calculation_status", "cost_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
   },
   simulationEvents: {
     title: "模拟事件记录",
@@ -384,6 +409,9 @@ const pageObjectType = {
   validations: "validation",
   simulationPolicies: "simulationPolicy",
   workflowTimingRules: "workflowTimingRule",
+  costModelProfiles: "costModelProfile",
+  costCalculationRuns: "costCalculationRun",
+  costRecords: "costRecord",
   simulationRuns: "simulationRun",
   simulationEvents: "simulationEvent",
 };
@@ -415,6 +443,9 @@ const idFieldByType = {
   pricingStrategyRun: "pricing_strategy_run_id",
   simulationPolicy: "simulation_policy_id",
   workflowTimingRule: "workflow_timing_rule_id",
+  costModelProfile: "cost_model_profile_id",
+  costCalculationRun: "cost_calculation_run_id",
+  costRecord: "cost_record_id",
   simulationRun: "simulation_run_id",
   simulationEvent: "simulation_event_id",
   pricingDecision: "pricing_decision_id",
@@ -457,6 +488,9 @@ const statusFieldByPage = {
   validations: "result",
   simulationPolicies: "policy_status",
   workflowTimingRules: "rule_status",
+  costModelProfiles: "profile_status",
+  costCalculationRuns: "calculation_status",
+  costRecords: "cost_type",
   simulationRuns: "simulation_status",
   simulationEvents: "event_result",
 };
@@ -558,6 +592,9 @@ function App() {
   const [simulationPolicies, setSimulationPolicies] = useState(initialRuntime.simulationPolicies);
   const [workflowTimingProfiles, setWorkflowTimingProfiles] = useState(initialRuntime.workflowTimingProfiles);
   const [businessTimingCalculationRuns, setBusinessTimingCalculationRuns] = useState(initialRuntime.businessTimingCalculationRuns);
+  const [costModelProfiles, setCostModelProfiles] = useState(initialRuntime.costModelProfiles);
+  const [costCalculationRuns, setCostCalculationRuns] = useState(initialRuntime.costCalculationRuns);
+  const [costRecords, setCostRecords] = useState(initialRuntime.costRecords);
   const [simulationRuns, setSimulationRuns] = useState(initialRuntime.simulationRuns);
   const [simulationEvents, setSimulationEvents] = useState(initialRuntime.simulationEvents);
 
@@ -612,6 +649,7 @@ function App() {
   const [timingRuleModalOpen, setTimingRuleModalOpen] = useState(false);
   const [timingRuleValue, setTimingRuleValue] = useState(0);
   const [pendingCalculationRunId, setPendingCalculationRunId] = useState(null);
+  const [pendingCostCalculationRunId, setPendingCostCalculationRunId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -635,6 +673,11 @@ function App() {
         ? snapshot.workflowTimingProfiles.map((profile) => businessTimingCalculator.normalizeWorkflowTimingProfile(profile))
         : [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()]);
       setBusinessTimingCalculationRuns(snapshot.businessTimingCalculationRuns || []);
+      setCostModelProfiles(snapshot.costModelProfiles?.length
+        ? snapshot.costModelProfiles.map((profile) => costModelCalculator.normalizeCostModelProfile(profile))
+        : [costModelCalculator.initializeDefaultCostModelProfile()]);
+      setCostCalculationRuns(snapshot.costCalculationRuns || []);
+      setCostRecords(snapshot.costRecords || []);
       setSimulationRuns(snapshot.simulationRuns || []);
       const restoredPage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
       const restoredSelections = snapshot.pageSelections || {};
@@ -666,12 +709,12 @@ function App() {
     demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
     demandSimulationRuns,
     demandSimulationResults: createDemandSimulationResultRows(demandSimulationRuns),
-    serviceOrders: serviceOrders.map((order) => enrichServiceOrderForDisplay(order, data, trips)),
+    serviceOrders: serviceOrders.map((order) => attachCostRecords(enrichServiceOrderForDisplay(order, data, trips), "serviceOrder", costRecords)),
     opsCenters: data.opsCenters,
     workers: data.workers.map((worker) => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
-    readinessTasks,
-    deploymentTasks: deploymentTasks.map((task) => enrichDeploymentTaskForDisplay(task, data)),
-    routeExecutions: routeExecutions.map((execution) => enrichRouteExecutionForDisplay(execution, data)),
+    readinessTasks: readinessTasks.map((task) => attachCostRecords(task, "readinessTask", costRecords)),
+    deploymentTasks: deploymentTasks.map((task) => attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions)),
+    routeExecutions: routeExecutions.map((execution) => attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords)),
     taskEventLogs,
     routePlanningStrategies: createRoutePlanningStrategyRows(data, routePlanningRuns),
     routePlanningRuns,
@@ -681,7 +724,7 @@ function App() {
     orderMatchingStrategies: createOrderMatchingStrategyRows(data, orderMatchingRuns),
     orderMatchingRuns,
     orderMatchingDecisions: orderMatchingDecisions.map((decision) => enrichOrderMatchingDecisionForDisplay(decision, data)),
-    serviceFulfillmentRecords: trips.map((trip) => enrichTripForDisplay(trip, data)),
+    serviceFulfillmentRecords: trips.map((trip) => attachCostRecords(enrichTripForDisplay(trip, data), "trip", costRecords)),
     robotaxis: data.robotaxis.map((robotaxi) => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
     simulationPolicies,
     workflowTimingRules: (workflowTimingProfiles[0]?.timing_rules || []).map((rule) => ({
@@ -690,10 +733,13 @@ function App() {
       profile_name: workflowTimingProfiles[0]?.profile_name,
       profile_version: workflowTimingProfiles[0]?.profile_version,
     })),
+    costModelProfiles,
+    costCalculationRuns,
+    costRecords,
     simulationRuns,
     simulationEvents,
     validations,
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, simulationRuns, simulationEvents, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, simulationRuns, simulationEvents, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -713,12 +759,12 @@ function App() {
 
     if (selected.type === "deploymentTask") {
       const task = deploymentTasks.find((item) => item.task_id === selected.id);
-      return task ? enrichDeploymentTaskForDisplay(task, data) : null;
+      return task ? attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions) : null;
     }
 
     if (selected.type === "routeExecution") {
       const execution = routeExecutions.find((item) => item.route_execution_id === selected.id);
-      return execution ? enrichRouteExecutionForDisplay(execution, data) : null;
+      return execution ? attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords) : null;
     }
 
     const collections = {
@@ -746,6 +792,9 @@ function App() {
       trip: rowsByPage.serviceFulfillmentRecords,
       simulationPolicy: simulationPolicies,
       workflowTimingRule: rowsByPage.workflowTimingRules,
+      costModelProfile: rowsByPage.costModelProfiles,
+      costCalculationRun: rowsByPage.costCalculationRuns,
+      costRecord: rowsByPage.costRecords,
       simulationRun: simulationRuns,
       simulationEvent: simulationEvents,
       opsCenter: data.opsCenters,
@@ -756,7 +805,7 @@ function App() {
     };
 
     return collections[selected.type]?.find((item) => item[idFieldByType[selected.type]] === selected.id) || null;
-  }, [data, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, validations]);
+  }, [costRecords, data, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, validations]);
 
   const menuItems = pageGroups.map((group) => {
     if (group.key === "console") return { key: "console", label: "运营中控台" };
@@ -802,6 +851,9 @@ function App() {
       simulationPolicies,
       workflowTimingProfiles,
       businessTimingCalculationRuns,
+      costModelProfiles,
+      costCalculationRuns,
+      costRecords,
       simulationRuns,
       simulationEvents,
       activePage,
@@ -811,7 +863,7 @@ function App() {
       pageUiState,
     });
     persistSimulationEvents(simulationEvents);
-  }, [activePage, businessTimingCalculationRuns, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workflowTimingProfiles, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workflowTimingProfiles, workspacePages]);
 
 
 
@@ -1050,6 +1102,117 @@ function App() {
     setPendingCalculationRunId(null);
     runBusinessTimingCalculation(runId, { automatic: false });
   }
+
+  function requestCostCalculation(runId) {
+    const run = simulationRuns.find((item) => item.simulation_run_id === runId);
+    if (!run) return;
+    setPendingCostCalculationRunId(runId);
+  }
+
+  function confirmCostCalculation() {
+    if (!pendingCostCalculationRunId) return;
+    const runId = pendingCostCalculationRunId;
+    setPendingCostCalculationRunId(null);
+    runCostCalculation(runId);
+  }
+
+  function runCostCalculation(runId) {
+    const run = simulationRuns.find((item) => item.simulation_run_id === runId);
+    const profile = costModelProfiles.find((item) => item.profile_status === "ACTIVE");
+    if (!run || !profile || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
+    const calculationRunId = `CCR-${String(costCalculationRuns.length + 1).padStart(4, "0")}`;
+    setSimulationEvents((current) => [simulationEngine.createOperatingCostCalculationEvent({
+      simulationRun: run,
+      eventType: "OPERATING_COST_CALCULATION_STARTED",
+      message: `开始计算 ${run.simulation_run_id} 的运营成本`,
+      calculationRunId,
+      profile,
+    }), ...current]);
+    setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+      ...item,
+      cost_calculation_status: "CALCULATING",
+      cost_calculation_progress_percent: 15,
+      active_cost_calculation_run_id: calculationRunId,
+    } : item));
+    setTimeout(() => {
+      try {
+        const result = costModelCalculator.createCostCalculation({
+          simulationRun: run,
+          profile,
+          calculationRunId,
+          businessData: {
+            ...data,
+            readinessTasks,
+            deploymentTasks,
+            routeExecutions,
+            serviceOrders,
+            trips,
+          },
+        });
+        const calculated = result.businessData;
+        setReadinessTasks((current) => mergeCalculatedObjects(current, calculated.readinessTasks, "task_id"));
+        setDeploymentTasks((current) => mergeCalculatedObjects(current, calculated.deploymentTasks, "task_id"));
+        setRouteExecutions((current) => mergeCalculatedObjects(current, calculated.routeExecutions, "route_execution_id"));
+        setServiceOrders((current) => mergeCalculatedObjects(current, calculated.serviceOrders, "service_order_id"));
+        setTrips((current) => mergeCalculatedObjects(current, calculated.trips, "trip_id"));
+        setCostRecords((current) => [
+          ...result.costRecords,
+          ...current.filter((record) => !(record.simulation_run_id === runId && record.cost_calculation_run_id !== calculationRunId)),
+        ]);
+        setCostCalculationRuns((current) => [result.calculationRun, ...current]);
+        setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+          ...item,
+          cost_calculation_status: result.calculationRun.calculation_status,
+          cost_calculation_progress_percent: 100,
+          active_cost_calculation_run_id: calculationRunId,
+          cost_model_profile_id: profile.cost_model_profile_id,
+          cost_model_profile_version: profile.profile_version,
+          total_cost_amount: result.calculationRun.total_cost_amount,
+          cost_result_summary: {
+            processed_object_count: result.calculationRun.processed_object_count,
+            generated_cost_record_count: result.calculationRun.generated_cost_record_count,
+            total_cost_amount: result.calculationRun.total_cost_amount,
+            error_count: result.calculationRun.error_count,
+          },
+          cost_calculation_errors: result.calculationRun.calculation_errors,
+        } : item));
+        setSimulationEvents((current) => [simulationEngine.createOperatingCostCalculationEvent({
+          simulationRun: run,
+          eventType: "OPERATING_COST_CALCULATION_COMPLETED",
+          message: result.calculationRun.calculation_status === "SUCCEEDED"
+            ? `运营成本计算完成：生成 ${result.calculationRun.generated_cost_record_count} 条成本记录，总成本 ${result.calculationRun.total_cost_amount} ${profile.currency_code}`
+            : `运营成本计算完成，${result.calculationRun.error_count} 项需要检查`,
+          calculationRunId,
+          profile,
+          resultSummary: {
+            calculation_status: result.calculationRun.calculation_status,
+            generated_cost_record_count: result.calculationRun.generated_cost_record_count,
+            total_cost_amount: result.calculationRun.total_cost_amount,
+            error_count: result.calculationRun.error_count,
+            calculation_errors: result.calculationRun.calculation_errors,
+          },
+        }), ...current]);
+        antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营成本计算完成" : "运营成本计算完成，存在待检查项");
+      } catch (error) {
+        setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+          ...item,
+          cost_calculation_status: "FAILED",
+          cost_calculation_progress_percent: 100,
+          cost_calculation_errors: [{ error_type: "COST_CALCULATION_FAILED", error_message: error.message }],
+        } : item));
+        setSimulationEvents((current) => [simulationEngine.createOperatingCostCalculationEvent({
+          simulationRun: run,
+          eventType: "OPERATING_COST_CALCULATION_FAILED",
+          eventResult: "FAILED",
+          message: `运营成本计算失败：${error.message}`,
+          calculationRunId,
+          profile,
+          failureReason: error.message,
+        }), ...current]);
+        antd.message.error(`运营成本计算失败：${error.message}`);
+      }
+    }, 80);
+  }
   return (
     <Layout className="ops-shell">
       <Sider className="ops-sider" width={232} collapsedWidth={60} collapsed={collapsed} trigger={null}>
@@ -1153,7 +1316,10 @@ function App() {
                   workflowTimingProfiles,
                   editWorkflowTimingRule,
                   requestBusinessTimingCalculation,
+                  requestCostCalculation,
                   businessTimingCalculationRuns,
+                  costCalculationRuns,
+                  costRecords,
                   simulationRuns,
                   simulationEvents,
                 }}
@@ -1211,6 +1377,20 @@ function App() {
       >
         <Text>将使用当前生效的工作流时效配置生成新的状态时间线版本。原始模拟时间不会被修改。</Text>
       </Modal>
+      <Modal
+        title={simulationRuns.find((item) => item.simulation_run_id === pendingCostCalculationRunId)?.cost_calculation_status ? "重新计算运营成本" : "计算运营成本"}
+        open={Boolean(pendingCostCalculationRunId)}
+        okText="开始计算"
+        cancelText="取消"
+        width={560}
+        onCancel={() => setPendingCostCalculationRunId(null)}
+        footer={[
+          <Button key="cancel" onClick={() => setPendingCostCalculationRunId(null)}>取消</Button>,
+          <Button key="calculate" type="primary" onClick={confirmCostCalculation}>开始计算</Button>,
+        ]}
+      >
+        <Text>将使用当前生效的成本模型配置生成成本记录，并更新相关业务单据的成本汇总。原始模拟事件、业务状态和真实审计时间不会被修改。</Text>
+      </Modal>
     </Layout>
   );
 
@@ -1267,6 +1447,9 @@ function App() {
     setSimulationPolicies([]);
     setWorkflowTimingProfiles([businessTimingCalculator.initializeDefaultWorkflowTimingProfile()]);
     setBusinessTimingCalculationRuns([]);
+    setCostModelProfiles([costModelCalculator.initializeDefaultCostModelProfile()]);
+    setCostCalculationRuns([]);
+    setCostRecords([]);
     setSimulationRuns([]);
     setSimulationEvents([]);
     setActivePage("console");
@@ -3121,7 +3304,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         key: "actions",
         title: "操作",
         fixed: "right",
-        width: 220,
+        width: 340,
         render: (_, row) => renderActionCell(row, renderSimulationRunActions(row, { ...actions, page, objectType, idField })),
       };
     }
@@ -3306,7 +3489,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "costModelProfile", "costCalculationRun", "costRecord"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -3319,7 +3502,9 @@ function TabbedDetail({ selectedObject, selectedType }) {
       items={tabs.map((tab) => ({
         key: tab.key,
         label: tab.label,
-        children: tab.timeline ? (
+        children: tab.cost ? (
+          <CostDetail selectedObject={selectedObject} />
+        ) : tab.timeline ? (
           <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} />
         ) : (
           <Descriptions
@@ -3368,6 +3553,7 @@ function getDetailTabs(selectedType) {
     return [
       { key: "basic", label: "任务信息", keys: ["task_id", "task_type", "task_status", "task_priority", "trigger_type", "source_type", "robotaxi_id", "worker_id", "check_result", "issue_type"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
+      { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
@@ -3378,6 +3564,7 @@ function getDetailTabs(selectedType) {
       { key: "arrival", label: "到达处理", keys: ["arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "actual_target_cell_id", "actual_target_service_area_id"] },
       { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "target_zone_id"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
+      { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
@@ -3388,6 +3575,7 @@ function getDetailTabs(selectedType) {
       { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "current_cell_id", "current_location_summary", "current_location_detail"] },
       { key: "progress", label: "执行进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
+      { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
@@ -3398,6 +3586,7 @@ function getDetailTabs(selectedType) {
       { key: "pricing", label: "报价结算", keys: ["price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "quote_base_fare", "quote_distance_unit_price", "quote_time_unit_price", "estimated_distance_km", "estimated_duration_min", "estimated_price", "quoted_price", "final_price", "pricing_explanation", "pricing_breakdown_snapshot"] },
       { key: "matching", label: "匹配履约", keys: ["matched_robotaxi_id", "matched_robotaxi_location_summary", "matched_robotaxi_location_detail", "order_matching_decision_id", "trip_id", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "paid_amount"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "confirmed_at", "matched_at", "simulation_matched_at", "completed_at", "simulation_completed_at", "cancelled_at", "payment_completed_at", "simulation_payment_completed_at", "failure_reason"] },
+      { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
@@ -3408,6 +3597,7 @@ function getDetailTabs(selectedType) {
       { key: "progress", label: "履约进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"] },
       { key: "route", label: "路径关联", keys: ["route_id", "route_planning_run_id", "route_summary", "route_detail", "route_history", "route_history_detail"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason", "event_log"] },
+      { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
   }
@@ -3427,6 +3617,7 @@ function getDetailTabs(selectedType) {
       { key: "progress", label: "运行进度", keys: ["current_day", "current_time", "current_clock_time", "current_day_tick", "current_run_tick", "current_global_tick", "trigger_ticks_completed", "drain_ticks", "max_drain_ticks", "current_time_period", "current_period_type"] },
       { key: "scene", label: "当前场景", keys: ["current_supply_scene", "current_demand_scene", "current_scene_summary", "current_tick_event_summary"] },
       { key: "time", label: "状态时间", keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "result_summary"] },
+      { key: "cost", label: "成本", keys: ["cost_calculation_status", "cost_calculation_progress_percent", "active_cost_calculation_run_id", "cost_model_profile_id", "cost_model_profile_version", "total_cost_amount", "cost_result_summary", "cost_calculation_errors"] },
       { key: "policy", label: "策略快照", keys: ["simulation_policy_snapshot"] },
     ];
   }
@@ -3434,6 +3625,28 @@ function getDetailTabs(selectedType) {
     return [
       { key: "basic", label: "事件信息", keys: ["simulation_event_id", "simulation_run_id", "simulation_day", "simulation_time", "day_tick", "global_tick", "event_type", "event_source", "event_result"] },
       { key: "detail", label: "事件详情", keys: ["related_object_type", "related_object_id", "message", "failure_reason", "skip_reason", "event_payload", "created_at"] },
+    ];
+  }
+  if (selectedType === "costModelProfile") {
+    return [
+      { key: "basic", label: "配置信息", keys: ["cost_model_profile_id", "profile_name", "profile_version", "profile_status", "description", "currency_code", "created_at", "updated_at", "activated_at"] },
+      { key: "driving", label: "行驶成本", keys: ["distance_cost_per_km", "electricity_price_per_kwh", "energy_consumption_kwh_per_km"] },
+      { key: "labor", label: "人力成本", keys: ["worker_cost_per_hour", "worker_cost_per_minute"] },
+      { key: "asset", label: "资产折旧", keys: ["robotaxi_purchase_cost", "robotaxi_residual_value", "expected_lifetime_km", "depreciation_method", "fixed_operating_cost_per_day"] },
+    ];
+  }
+  if (selectedType === "costCalculationRun") {
+    return [
+      { key: "basic", label: "计算信息", keys: ["cost_calculation_run_id", "simulation_run_id", "cost_model_profile_id", "cost_model_profile_version", "calculation_status", "calculation_progress_percent", "started_at", "completed_at"] },
+      { key: "result", label: "计算结果", keys: ["processed_object_count", "generated_cost_record_count", "total_cost_amount", "error_count", "calculation_errors"] },
+      { key: "snapshot", label: "配置快照", keys: ["cost_model_profile_snapshot"] },
+    ];
+  }
+  if (selectedType === "costRecord") {
+    return [
+      { key: "basic", label: "成本信息", keys: ["cost_record_id", "simulation_run_id", "cost_calculation_run_id", "cost_model_profile_id", "cost_type", "cost_amount", "currency_code"] },
+      { key: "source", label: "业务归因", keys: ["source_object_type", "source_object_id", "related_order_id", "related_trip_id", "related_route_execution_id", "robotaxi_id", "worker_id", "simulation_cost_occurred_at"] },
+      { key: "calculation", label: "计算依据", keys: ["quantity", "quantity_unit", "unit_cost", "calculation_formula", "calculation_basis", "created_at"] },
     ];
   }
   return [];
@@ -3471,6 +3684,46 @@ function StatusTimeline({ history, statusField }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+function CostDetail({ selectedObject }) {
+  const records = Array.isArray(selectedObject.cost_records) ? selectedObject.cost_records : [];
+  if (!selectedObject.cost_calculation_run_id && records.length === 0) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未计算运营成本" />;
+  }
+  const summaryItems = ["total_cost_amount", "distance_cost_amount", "energy_cost_amount", "labor_cost_amount", "asset_depreciation_cost_amount", "cost_calculated_at", "cost_calculation_run_id"];
+  return (
+    <div className="cost-detail">
+      <Descriptions
+        className="compact-descriptions"
+        column={1}
+        size="small"
+        colon={false}
+        items={summaryItems.map((key) => ({
+          key,
+          label: getFieldLabel(key),
+          children: renderDetailValue(key, selectedObject[key], selectedObject),
+        }))}
+      />
+      <div className="cost-record-table">
+        <Table
+          size="small"
+          rowKey="cost_record_id"
+          columns={["cost_type", "quantity", "quantity_unit", "unit_cost", "cost_amount", "calculation_formula"].map((key) => ({
+            key,
+            title: getFieldLabel(key),
+            dataIndex: key,
+            ellipsis: true,
+            width: getColumnWidth(key),
+            render: (_, row) => renderCellValue(key, row),
+          }))}
+          dataSource={records}
+          pagination={false}
+          scroll={{ x: "max-content", y: 180 }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -3796,10 +4049,14 @@ function renderSimulationRunActions(row, actions) {
   }
   if (["COMPLETED", "STOPPED", "FAILED"].includes(status)) {
     const calculating = row.business_timing_calculation_status === "CALCULATING";
+    const costCalculating = row.cost_calculation_status === "CALCULATING";
     return (
       <RowActionGroup>
         <RowActionButton onClick={() => actions.requestBusinessTimingCalculation(row.simulation_run_id)} disabled={calculating}>
           {calculating ? "计算中" : row.business_timing_calculation_status ? "重算运营模拟时间" : "计算运营模拟时间"}
+        </RowActionButton>
+        <RowActionButton type="default" onClick={() => actions.requestCostCalculation(row.simulation_run_id)} disabled={costCalculating}>
+          {costCalculating ? "成本计算中" : row.cost_calculation_status ? "重新计算运营成本" : "计算运营成本"}
         </RowActionButton>
         {renderViewDetailAction(row, actions)}
       </RowActionGroup>
@@ -4316,6 +4573,7 @@ async function bootstrap() {
 		    simulationWorkflowEngineModule,
 		    simulationExecutionEngineModule,
 		    businessTimingCalculatorModule,
+		    costModelCalculatorModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -4355,6 +4613,7 @@ async function bootstrap() {
 		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"),
 		    import("./data/simulationExecutionEngine.js"),
 		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"),
+		    import("./data/costModelCalculator.js?v=20260625-v029"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -4394,6 +4653,7 @@ async function bootstrap() {
 			  simulationLoop = simulationLoopModule;
 		  simulationActions = simulationActionsModule;
 		  businessTimingCalculator = businessTimingCalculatorModule;
+		  costModelCalculator = costModelCalculatorModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -5084,6 +5344,32 @@ function enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks) {
   };
 }
 
+function attachCostRecords(item, objectType, costRecords = [], routeExecutions = []) {
+  if (!item) return item;
+  let records = [];
+  if (objectType === "serviceOrder") {
+    records = costRecords.filter((record) => record.related_order_id === item.service_order_id);
+  } else if (objectType === "trip") {
+    records = costRecords.filter((record) => record.source_object_type === "trip" && record.source_object_id === item.trip_id);
+  } else if (objectType === "routeExecution") {
+    records = costRecords.filter((record) => record.source_object_type === "routeExecution" && record.source_object_id === item.route_execution_id);
+  } else if (objectType === "readinessTask") {
+    records = costRecords.filter((record) => record.source_object_type === "readinessTask" && record.source_object_id === item.task_id);
+  } else if (objectType === "deploymentTask") {
+    const executionIds = routeExecutions
+      .filter((execution) => execution.task_id === item.task_id)
+      .map((execution) => execution.route_execution_id);
+    records = costRecords.filter((record) =>
+      (record.source_object_type === "deploymentTask" && record.source_object_id === item.task_id) ||
+      executionIds.includes(record.source_object_id)
+    );
+  }
+  return {
+    ...item,
+    cost_records: records,
+  };
+}
+
 function enrichDeploymentTaskForDisplay(task, data) {
   const route = data.routes.find((item) => item.route_id === task.route_id);
   const originLocation = getLocationInfo(task.origin_cell_id, data);
@@ -5765,6 +6051,9 @@ function loadRuntimeSnapshot(initialData) {
     simulationPolicies: [],
     workflowTimingProfiles: [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()],
     businessTimingCalculationRuns: [],
+    costModelProfiles: [costModelCalculator.initializeDefaultCostModelProfile()],
+    costCalculationRuns: [],
+    costRecords: [],
     simulationRuns: [],
     simulationEvents: [],
     activePage: "console",
@@ -5800,6 +6089,11 @@ function loadRuntimeSnapshot(initialData) {
       ? snapshot.workflowTimingProfiles.map((profile) => businessTimingCalculator.normalizeWorkflowTimingProfile(profile))
       : [businessTimingCalculator.initializeDefaultWorkflowTimingProfile()];
     const businessTimingCalculationRuns = Array.isArray(snapshot.businessTimingCalculationRuns) ? snapshot.businessTimingCalculationRuns : [];
+    const costModelProfiles = Array.isArray(snapshot.costModelProfiles) && snapshot.costModelProfiles.length
+      ? snapshot.costModelProfiles.map((profile) => costModelCalculator.normalizeCostModelProfile(profile))
+      : [costModelCalculator.initializeDefaultCostModelProfile()];
+    const costCalculationRuns = Array.isArray(snapshot.costCalculationRuns) ? snapshot.costCalculationRuns : [];
+    const costRecords = Array.isArray(snapshot.costRecords) ? snapshot.costRecords : [];
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
     const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
@@ -5835,6 +6129,9 @@ function loadRuntimeSnapshot(initialData) {
       simulationPolicies,
       workflowTimingProfiles,
       businessTimingCalculationRuns,
+      costModelProfiles,
+      costCalculationRuns,
+      costRecords,
       simulationRuns,
       simulationEvents,
       activePage: restoredActivePage,
@@ -5920,6 +6217,9 @@ function saveRuntimeSnapshot(snapshot) {
     simulationPolicies: snapshot.simulationPolicies || [],
     workflowTimingProfiles: snapshot.workflowTimingProfiles || [],
     businessTimingCalculationRuns: snapshot.businessTimingCalculationRuns || [],
+    costModelProfiles: snapshot.costModelProfiles || [],
+    costCalculationRuns: snapshot.costCalculationRuns || [],
+    costRecords: snapshot.costRecords || [],
     simulationRuns: snapshot.simulationRuns || [],
     simulationEvents: [],
   };
@@ -5935,6 +6235,9 @@ function saveRuntimeSnapshot(snapshot) {
       simulationPolicies: [],
       simulationRuns: [],
       simulationEvents: [],
+      costModelProfiles: [],
+      costCalculationRuns: [],
+      costRecords: [],
     }));
   } catch (error) {
     // Local persistence is a convenience for this prototype; runtime should continue if storage is unavailable.

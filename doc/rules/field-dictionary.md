@@ -24,6 +24,116 @@
 
 ---
 
+## 1.1 Cost Model：运营成本模型
+
+### 1.1.1 CostModelProfile：成本模型配置
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|cost_model_profile_id|成本模型配置编号|持久化字段|成本模型配置唯一编号|
+|profile_name|配置名称|持久化字段|用户可识别的配置名称|
+|profile_version|配置版本|持久化字段|配置版本号|
+|profile_status|配置状态|持久化字段|DRAFT、ACTIVE、ARCHIVED|
+|description|配置说明|持久化字段|配置适用场景说明|
+|currency_code|币种|持久化字段|成本金额币种，默认 CNY|
+|distance_cost_per_km|每公里距离成本|持久化字段|行驶距离对应的可变成本单价|
+|electricity_price_per_kwh|每千瓦时电价|持久化字段|能源成本电价|
+|energy_consumption_kwh_per_km|每公里耗电量|持久化字段|Robotaxi 行驶能耗估算参数|
+|worker_cost_per_hour|作业人员每小时成本|持久化字段|Worker 人力成本小时单价|
+|worker_cost_per_minute|作业人员每分钟成本|持久化字段|Worker 人力成本分钟单价，可由小时成本换算|
+|robotaxi_purchase_cost|Robotaxi 购置成本|持久化字段|车辆购置成本|
+|robotaxi_residual_value|Robotaxi 残值|持久化字段|车辆折旧残值|
+|expected_lifetime_km|预计寿命里程|持久化字段|按公里折旧时使用的寿命里程|
+|depreciation_method|折旧方式|持久化字段|PER_KM、PER_HOUR、PER_DAY|
+|fixed_operating_cost_per_day|每日固定运营成本|持久化字段|固定运营成本预留配置|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+|updated_at|更新时间|持久化字段|真实审计更新时间|
+|activated_at|生效时间|持久化字段|真实审计生效时间|
+
+### 1.1.2 CostCalculationRun：成本计算运行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|cost_calculation_run_id|成本计算运行编号|持久化字段|成本计算批次唯一编号|
+|simulation_run_id|模拟运行编号|持久化字段|来源 SimulationRun|
+|cost_model_profile_id|成本模型配置编号|持久化字段|使用的成本模型配置|
+|cost_model_profile_version|成本模型配置版本|持久化字段|使用的配置版本|
+|cost_model_profile_snapshot|成本模型配置快照|持久化字段|本次计算使用的不可变配置快照|
+|calculation_status|计算状态|运行态字段|QUEUED、CALCULATING、SUCCEEDED、PARTIALLY_SUCCEEDED、FAILED|
+|calculation_progress_percent|计算进度（%）|运行态字段|成本计算进度|
+|processed_object_count|已处理业务对象数|运行态字段|本次计算处理的业务对象数量|
+|generated_cost_record_count|生成成本记录数|运行态字段|本次计算生成的 CostRecord 数量|
+|total_cost_amount|总成本金额|运行态字段|本次计算得到的总成本|
+|error_count|错误数量|运行态字段|本次计算错误数量|
+|calculation_errors|计算错误列表|运行态字段|结构化错误列表|
+|algorithm_version|计算算法版本|持久化字段|成本计算算法版本|
+|started_at|开始时间|持久化字段|真实审计开始时间|
+|completed_at|完成时间|持久化字段|真实审计完成时间|
+
+### 1.1.3 CostRecord：成本记录
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|cost_record_id|成本记录编号|持久化字段|成本明细唯一编号|
+|simulation_run_id|模拟运行编号|持久化字段|来源 SimulationRun|
+|cost_calculation_run_id|成本计算运行编号|持久化字段|来源成本计算批次|
+|cost_model_profile_id|成本模型配置编号|持久化字段|使用的成本模型配置|
+|source_object_type|来源对象类型|持久化字段|readinessTask、deploymentTask、routeExecution、serviceOrder、trip|
+|source_object_id|来源对象编号|持久化字段|来源业务对象主键|
+|related_order_id|关联服务订单|持久化字段|关联服务订单编号，可为空|
+|related_trip_id|关联履约行驶记录|持久化字段|关联 Trip 编号，可为空|
+|related_route_execution_id|关联运营行驶记录|持久化字段|关联 RouteExecution 编号，可为空|
+|robotaxi_id|Robotaxi 编号|持久化字段|关联车辆，可为空|
+|worker_id|作业人员编号|持久化字段|关联 Worker，可为空|
+|cost_type|成本类型|持久化字段|DISTANCE_COST、ENERGY_COST、LABOR_COST、ASSET_DEPRECIATION_COST、FIXED_OPERATING_COST|
+|quantity|成本数量|持久化字段|距离、用电量或工时数量|
+|quantity_unit|数量单位|持久化字段|km、kWh、hour、minute、day|
+|unit_cost|单位成本|持久化字段|对应成本单价|
+|cost_amount|成本金额|持久化字段|本条成本金额|
+|currency_code|币种|持久化字段|成本币种|
+|calculation_formula|计算公式|持久化字段|生成本成本记录的公式|
+|calculation_basis|计算依据|持久化字段|来源字段、路径、时长等结构化依据|
+|simulation_cost_occurred_at|模拟成本发生时间|持久化字段|成本发生对应的模拟时间|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### 1.1.4 业务对象成本汇总字段
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|total_cost_amount|总成本金额|运行态字段|业务对象关联成本总额|
+|distance_cost_amount|距离成本金额|运行态字段|业务对象关联距离成本|
+|energy_cost_amount|能源成本金额|运行态字段|业务对象关联能源成本|
+|labor_cost_amount|人力成本金额|运行态字段|业务对象关联人力成本|
+|asset_depreciation_cost_amount|资产折旧成本金额|运行态字段|业务对象关联资产折旧成本|
+|cost_calculated_at|成本计算时间|运行态字段|最近一次成本计算真实时间|
+|cost_calculation_run_id|成本计算运行编号|运行态字段|最近一次成本计算批次|
+|cost_calculation_status|成本计算状态|运行态字段|SimulationRun 上的成本计算状态|
+|cost_calculation_progress_percent|成本计算进度（%）|运行态字段|SimulationRun 上的成本计算进度|
+|active_cost_calculation_run_id|当前成本计算运行编号|运行态字段|SimulationRun 当前使用的成本计算批次|
+|cost_result_summary|成本结果摘要|运行态字段|SimulationRun 成本计算汇总|
+|cost_calculation_errors|成本计算错误|运行态字段|SimulationRun 成本计算错误|
+
+### 1.1.5 成本枚举中文
+
+|英文值|中文名|用途|
+|---|---|---|
+|DISTANCE_COST|距离成本|成本类型|
+|ENERGY_COST|能源成本|成本类型|
+|LABOR_COST|人力成本|成本类型|
+|ASSET_DEPRECIATION_COST|资产折旧成本|成本类型|
+|FIXED_OPERATING_COST|固定运营成本|成本类型|
+|PER_KM|按公里折旧|折旧方式|
+|PER_HOUR|按小时折旧|折旧方式|
+|PER_DAY|按天折旧|折旧方式|
+|OPERATING_COST_CALCULATION_STARTED|运营成本计算开始|模拟事件类型|
+|OPERATING_COST_CALCULATION_COMPLETED|运营成本计算完成|模拟事件类型|
+|OPERATING_COST_CALCULATION_FAILED|运营成本计算失败|模拟事件类型|
+|COST_DISTANCE_MISSING|缺少成本距离|成本计算错误|
+|COST_DURATION_MISSING|缺少成本时长|成本计算错误|
+|COST_CALCULATION_FAILED|成本计算失败|成本计算错误|
+
+---
+
 ## 2. Map：地图
 
 |属性英文名|中文名|字段性质|含义|

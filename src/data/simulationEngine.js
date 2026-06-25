@@ -67,6 +67,39 @@ export function createOperatingSimulationTimeCalculationEvent({
   });
 }
 
+export function createOperatingCostCalculationEvent({
+  simulationRun,
+  eventType,
+  eventResult = EventResult.SUCCESS,
+  message,
+  calculationRunId,
+  profile,
+  resultSummary = null,
+  failureReason = null,
+}) {
+  return createSimulationEvent({
+    simulationEventId: nextSimulationEventId(),
+    simulationRunId: simulationRun.simulation_run_id,
+    simulationDay: simulationRun.current_day,
+    simulationTime: simulationRun.current_time,
+    dayTick: simulationRun.current_day_tick,
+    globalTick: simulationRun.current_global_tick,
+    eventType,
+    eventSource: EventSource.SIMULATION_SYSTEM,
+    eventResult,
+    relatedObjectType: "simulationRun",
+    relatedObjectId: simulationRun.simulation_run_id,
+    failureReason,
+    message,
+    eventPayload: {
+      cost_calculation_run_id: calculationRunId,
+      cost_model_profile_id: profile?.cost_model_profile_id || null,
+      cost_model_profile_version: profile?.profile_version || null,
+      ...(resultSummary || {}),
+    },
+  });
+}
+
 function nextSimulationRunId() {
   return `SIM-RUN-${String(nextRunIdCounter++).padStart(3, "0")}`;
 }

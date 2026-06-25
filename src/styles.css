@@ -789,6 +789,17 @@ body {
   padding: 4px 0 12px;
 }
 
+.cost-detail {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+.cost-record-table {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+}
+
 .compact-descriptions .ant-descriptions-item {
   padding-bottom: 7px !important;
 }
