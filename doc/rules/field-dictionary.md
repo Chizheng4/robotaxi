@@ -70,7 +70,21 @@
 |started_at|开始时间|持久化字段|真实审计开始时间|
 |completed_at|完成时间|持久化字段|真实审计完成时间|
 
-### 1.1.3 CostRecord：成本记录
+### 1.1.3 CostParameterRule：成本配置项
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|cost_parameter_rule_id|成本配置项编号|持久化字段|成本配置项唯一编号|
+|cost_parameter_key|成本配置键|持久化字段|对应成本模型字段|
+|cost_parameter_name|成本配置名称|持久化字段|用户可读配置项名称|
+|cost_parameter_group|成本配置分组|持久化字段|DISTANCE_COST、ENERGY_COST 等|
+|parameter_unit|参数单位|持久化字段|CURRENCY_PER_KM、CURRENCY_PER_HOUR 等|
+|configured_value|配置值|持久化字段|当前配置值|
+|cost_parameter_status|成本配置状态|持久化字段|ENABLED、RESERVED、DISABLED|
+|participates_in_calculation|参与计算|持久化字段|是否参与当前成本计算|
+|display_order|显示顺序|持久化字段|前端展示顺序|
+
+### 1.1.4 CostRecord：成本记录
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
@@ -96,7 +110,43 @@
 |simulation_cost_occurred_at|模拟成本发生时间|持久化字段|成本发生对应的模拟时间|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 
-### 1.1.4 业务对象成本汇总字段
+### 1.1.5 RevenueRecord：收入记录
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|revenue_record_id|收入记录编号|持久化字段|收入明细唯一编号|
+|simulation_run_id|模拟运行编号|持久化字段|来源 SimulationRun|
+|revenue_calculation_run_id|收入生成运行编号|持久化字段|来源收入生成批次|
+|service_order_id|服务订单编号|持久化字段|来源服务订单|
+|customer_id|客户编号|持久化字段|关联客户，可为空|
+|robotaxi_id|Robotaxi 编号|持久化字段|关联车辆，可为空|
+|revenue_type|收入类型|持久化字段|RECEIVABLE_REVENUE、COLLECTED_REVENUE、UNRECEIVED_REVENUE|
+|revenue_amount|收入金额|持久化字段|本条收入金额|
+|currency_code|币种|持久化字段|收入币种|
+|revenue_basis_field|收入依据字段|持久化字段|生成收入的来源金额字段|
+|simulation_revenue_occurred_at|模拟收入发生时间|持久化字段|收入对应的模拟时间|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### 1.1.6 RevenueCalculationRun：收入生成运行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|revenue_calculation_run_id|收入生成运行编号|持久化字段|收入生成批次唯一编号|
+|simulation_run_id|模拟运行编号|持久化字段|来源 SimulationRun|
+|calculation_status|计算状态|运行态字段|QUEUED、CALCULATING、SUCCEEDED、PARTIALLY_SUCCEEDED、FAILED|
+|calculation_progress_percent|计算进度（%）|运行态字段|收入生成进度|
+|processed_object_count|已处理业务对象数|运行态字段|本次处理服务订单数量|
+|generated_revenue_record_count|生成收入记录数|运行态字段|本次生成 RevenueRecord 数量|
+|total_receivable_revenue_amount|应收收入总额|运行态字段|本次应收收入总额|
+|total_collected_revenue_amount|实收收入总额|运行态字段|本次实收收入总额|
+|total_unreceived_revenue_amount|未收收入总额|运行态字段|本次未收收入总额|
+|error_count|错误数量|运行态字段|本次错误数量|
+|calculation_errors|计算错误列表|运行态字段|结构化错误列表|
+|algorithm_version|计算算法版本|持久化字段|收入生成算法版本|
+|started_at|开始时间|持久化字段|真实审计开始时间|
+|completed_at|完成时间|持久化字段|真实审计完成时间|
+
+### 1.1.7 业务对象成本与收入汇总字段
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
@@ -112,8 +162,16 @@
 |active_cost_calculation_run_id|当前成本计算运行编号|运行态字段|SimulationRun 当前使用的成本计算批次|
 |cost_result_summary|成本结果摘要|运行态字段|SimulationRun 成本计算汇总|
 |cost_calculation_errors|成本计算错误|运行态字段|SimulationRun 成本计算错误|
+|revenue_calculation_status|收入生成状态|运行态字段|SimulationRun 上的收入生成状态|
+|revenue_calculation_progress_percent|收入生成进度（%）|运行态字段|SimulationRun 上的收入生成进度|
+|active_revenue_calculation_run_id|当前收入生成运行编号|运行态字段|SimulationRun 当前使用的收入生成批次|
+|total_receivable_revenue_amount|应收收入总额|运行态字段|SimulationRun 应收收入总额|
+|total_collected_revenue_amount|实收收入总额|运行态字段|SimulationRun 实收收入总额|
+|total_unreceived_revenue_amount|未收收入总额|运行态字段|SimulationRun 未收收入总额|
+|revenue_result_summary|收入结果摘要|运行态字段|SimulationRun 收入生成汇总|
+|revenue_calculation_errors|收入生成错误|运行态字段|SimulationRun 收入生成错误|
 
-### 1.1.5 成本枚举中文
+### 1.1.8 成本与收入枚举中文
 
 |英文值|中文名|用途|
 |---|---|---|
@@ -122,6 +180,9 @@
 |LABOR_COST|人力成本|成本类型|
 |ASSET_DEPRECIATION_COST|资产折旧成本|成本类型|
 |FIXED_OPERATING_COST|固定运营成本|成本类型|
+|RECEIVABLE_REVENUE|应收收入|收入类型|
+|COLLECTED_REVENUE|实收收入|收入类型|
+|UNRECEIVED_REVENUE|未收收入|收入类型|
 |PER_KM|按公里折旧|折旧方式|
 |PER_HOUR|按小时折旧|折旧方式|
 |PER_DAY|按天折旧|折旧方式|
@@ -131,6 +192,8 @@
 |COST_DISTANCE_MISSING|缺少成本距离|成本计算错误|
 |COST_DURATION_MISSING|缺少成本时长|成本计算错误|
 |COST_CALCULATION_FAILED|成本计算失败|成本计算错误|
+|REVENUE_AMOUNT_MISSING|缺少收入金额|收入生成错误|
+|REVENUE_CALCULATION_FAILED|收入生成失败|收入生成错误|
 
 ---
 

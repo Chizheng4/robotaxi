@@ -50,6 +50,9 @@ node --check src/data/deploymentTaskValidation.js
 node --check src/domain/fieldDictionary.js
 node --check src/domain/taskTypes.js
 node --check src/domain/serviceOrderSettlement.js
+node --check src/data/simulationRunBusinessScope.js
+node --check src/data/costModelCalculator.js
+node --check src/data/revenueCalculator.js
 node scripts/verify-service-order-settlement.mjs
 node scripts/verify-simulation-continuity.mjs
 node scripts/verify-simulation-audit-display.mjs

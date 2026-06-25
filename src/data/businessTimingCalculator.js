@@ -87,17 +87,19 @@ export function createBusinessTimingCalculation({
   simulationRun,
   profile,
   businessData,
+  scope = null,
   calculationRunId,
   algorithmVersion = "1.0.0",
 }) {
   const startedAt = new Date().toISOString();
   const errors = [];
   const ruleMap = new Map(profile.timing_rules.map((rule) => [ruleKey(rule.business_object_type, rule.from_status, rule.action_type), rule]));
-  const calculationContext = { calculationRunId, ruleMap, errors, businessData };
+  const runScope = scope || createFallbackScope(simulationRun, businessData);
+  const calculationContext = { calculationRunId, ruleMap, errors, businessData: { ...businessData, ...runScope } };
 
-  const readinessTasks = mapRunObjects(businessData.readinessTasks, simulationRun, (item) => calculateReadinessTimeline(item, calculationContext));
-  const routeResult = calculateDeploymentTimelines(businessData.deploymentTasks, businessData.routeExecutions, simulationRun, calculationContext);
-  const serviceResult = calculateServiceTimelines(businessData.serviceOrders, businessData.trips, simulationRun, calculationContext);
+  const readinessTasks = (runScope.readinessTasks || []).map((item) => calculateReadinessTimeline(item, calculationContext));
+  const routeResult = calculateDeploymentTimelines(runScope.deploymentTasks, runScope.routeExecutions, simulationRun, calculationContext);
+  const serviceResult = calculateServiceTimelines(runScope.serviceOrders, runScope.trips, simulationRun, calculationContext);
   const derived = calculateDerivedRecords(businessData, simulationRun, calculationRunId);
 
   const objectCount = readinessTasks.length + routeResult.deploymentTasks.length + routeResult.routeExecutions.length
@@ -378,6 +380,18 @@ function createRule(definition, index) {
 function mapRunObjects(items = [], simulationRun, mapper = null) {
   const matched = items.filter((item) => item.simulation_run_id === simulationRun.simulation_run_id);
   return mapper ? matched.map(mapper) : matched;
+}
+
+function createFallbackScope(simulationRun, businessData) {
+  const runId = simulationRun.simulation_run_id;
+  const filterByRun = (items = []) => (items || []).filter((item) => item.simulation_run_id === runId);
+  return {
+    serviceOrders: filterByRun(businessData.serviceOrders),
+    trips: filterByRun(businessData.trips),
+    readinessTasks: filterByRun(businessData.readinessTasks),
+    deploymentTasks: filterByRun(businessData.deploymentTasks),
+    routeExecutions: filterByRun(businessData.routeExecutions),
+  };
 }
 
 function movementSteps(item, data) {

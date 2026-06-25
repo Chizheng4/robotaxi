@@ -34,6 +34,8 @@ let taskTypes;
 let serviceOrderSettlement;
 let businessTimingCalculator;
 let costModelCalculator;
+let revenueCalculator;
+let simulationRunBusinessScope;
 let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
@@ -162,11 +164,14 @@ const pageGroups = [
   },
   {
     key: "businessAnalysis",
-    label: "经营分析",
+    label: "经营分析管理",
     children: [
-      { key: "costModelProfiles", label: "成本模型配置" },
-      { key: "costCalculationRuns", label: "成本计算记录" },
+      { key: "revenueRecords", label: "收入记录" },
       { key: "costRecords", label: "成本记录" },
+      { key: "costParameterRules", label: "成本配置" },
+      { key: "revenueCalculationRuns", label: "收入生成记录" },
+      { key: "costCalculationRuns", label: "成本计算记录" },
+      { key: "costModelProfiles", label: "成本模型配置" },
     ],
   },
   {
@@ -180,7 +185,7 @@ const pageGroups = [
   },
 ];
 
-const hiddenWorkspacePages = new Set(["simulationEvents"]);
+const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles"]);
 
 const tableConfig = {
   maps: {
@@ -348,10 +353,15 @@ const tableConfig = {
     description: "配置业务状态边的操作时长，用于模拟完成后的状态时间线计算。",
     columns: ["workflow_timing_rule_id", "business_object_type", "from_status", "action_type", "to_status", "transition_mode", "duration_source_type", "duration_mode", "configured_duration_seconds", "seconds_per_cell", "rule_status", "profile_version"],
   },
+  costParameterRules: {
+    title: "成本配置",
+    description: "逐项配置距离、能源、人力、资产折旧和固定运营成本参数。",
+    columns: ["cost_parameter_rule_id", "cost_parameter_name", "cost_parameter_group", "configured_value", "parameter_unit", "cost_parameter_status", "participates_in_calculation", "profile_version"],
+  },
   costModelProfiles: {
     title: "成本模型配置",
-    description: "配置距离、能源、人力和资产折旧成本，用于模拟完成后的运营成本计算。",
-    columns: ["cost_model_profile_id", "profile_name", "profile_version", "profile_status", "currency_code", "distance_cost_per_km", "electricity_price_per_kwh", "energy_consumption_kwh_per_km", "worker_cost_per_hour", "robotaxi_purchase_cost", "robotaxi_residual_value", "expected_lifetime_km", "depreciation_method"],
+    description: "成本模型配置的版本化汇总，当前隐藏在菜单中。",
+    columns: ["cost_model_profile_id", "profile_name", "profile_version", "profile_status", "currency_code"],
   },
   costCalculationRuns: {
     title: "成本计算记录",
@@ -363,10 +373,20 @@ const tableConfig = {
     description: "统一记录业务对象产生的距离、能源、人力和资产折旧成本明细。",
     columns: ["cost_record_id", "simulation_run_id", "source_object_type", "source_object_id", "cost_type", "quantity", "quantity_unit", "unit_cost", "cost_amount", "currency_code", "robotaxi_id", "worker_id", "simulation_cost_occurred_at"],
   },
+  revenueRecords: {
+    title: "收入记录",
+    description: "从服务订单生成应收、实收和未收收入事实。",
+    columns: ["revenue_record_id", "simulation_run_id", "service_order_id", "revenue_type", "revenue_amount", "currency_code", "revenue_basis_field", "simulation_revenue_occurred_at", "created_at"],
+  },
+  revenueCalculationRuns: {
+    title: "收入生成记录",
+    description: "记录每次收入记录生成的范围、状态、金额和错误。",
+    columns: ["revenue_calculation_run_id", "simulation_run_id", "calculation_status", "calculation_progress_percent", "processed_object_count", "generated_revenue_record_count", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "error_count", "started_at", "completed_at"],
+  },
   simulationRuns: {
     title: "模拟运行管理",
     description: "创建和管理自动运营模拟运行，查看实时进度和结果。",
-    columns: ["simulation_run_id", "simulation_name", "simulation_status", "business_timing_calculation_status", "cost_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "business_timing_calculation_status", "cost_calculation_status", "revenue_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
   },
   simulationEvents: {
     title: "模拟事件记录",
@@ -410,8 +430,11 @@ const pageObjectType = {
   simulationPolicies: "simulationPolicy",
   workflowTimingRules: "workflowTimingRule",
   costModelProfiles: "costModelProfile",
+  costParameterRules: "costParameterRule",
   costCalculationRuns: "costCalculationRun",
   costRecords: "costRecord",
+  revenueRecords: "revenueRecord",
+  revenueCalculationRuns: "revenueCalculationRun",
   simulationRuns: "simulationRun",
   simulationEvents: "simulationEvent",
 };
@@ -444,8 +467,11 @@ const idFieldByType = {
   simulationPolicy: "simulation_policy_id",
   workflowTimingRule: "workflow_timing_rule_id",
   costModelProfile: "cost_model_profile_id",
+  costParameterRule: "cost_parameter_rule_id",
   costCalculationRun: "cost_calculation_run_id",
   costRecord: "cost_record_id",
+  revenueRecord: "revenue_record_id",
+  revenueCalculationRun: "revenue_calculation_run_id",
   simulationRun: "simulation_run_id",
   simulationEvent: "simulation_event_id",
   pricingDecision: "pricing_decision_id",
@@ -489,8 +515,11 @@ const statusFieldByPage = {
   simulationPolicies: "policy_status",
   workflowTimingRules: "rule_status",
   costModelProfiles: "profile_status",
+  costParameterRules: "cost_parameter_status",
   costCalculationRuns: "calculation_status",
   costRecords: "cost_type",
+  revenueRecords: "revenue_type",
+  revenueCalculationRuns: "calculation_status",
   simulationRuns: "simulation_status",
   simulationEvents: "event_result",
 };
@@ -595,6 +624,8 @@ function App() {
   const [costModelProfiles, setCostModelProfiles] = useState(initialRuntime.costModelProfiles);
   const [costCalculationRuns, setCostCalculationRuns] = useState(initialRuntime.costCalculationRuns);
   const [costRecords, setCostRecords] = useState(initialRuntime.costRecords);
+  const [revenueCalculationRuns, setRevenueCalculationRuns] = useState(initialRuntime.revenueCalculationRuns);
+  const [revenueRecords, setRevenueRecords] = useState(initialRuntime.revenueRecords);
   const [simulationRuns, setSimulationRuns] = useState(initialRuntime.simulationRuns);
   const [simulationEvents, setSimulationEvents] = useState(initialRuntime.simulationEvents);
 
@@ -650,6 +681,10 @@ function App() {
   const [timingRuleValue, setTimingRuleValue] = useState(0);
   const [pendingCalculationRunId, setPendingCalculationRunId] = useState(null);
   const [pendingCostCalculationRunId, setPendingCostCalculationRunId] = useState(null);
+  const [pendingRevenueCalculationRunId, setPendingRevenueCalculationRunId] = useState(null);
+  const [pendingCostParameterRule, setPendingCostParameterRule] = useState(null);
+  const [costParameterModalOpen, setCostParameterModalOpen] = useState(false);
+  const [costParameterValue, setCostParameterValue] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -678,6 +713,8 @@ function App() {
         : [costModelCalculator.initializeDefaultCostModelProfile()]);
       setCostCalculationRuns(snapshot.costCalculationRuns || []);
       setCostRecords(snapshot.costRecords || []);
+      setRevenueCalculationRuns(snapshot.revenueCalculationRuns || []);
+      setRevenueRecords(snapshot.revenueRecords || []);
       setSimulationRuns(snapshot.simulationRuns || []);
       const restoredPage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
       const restoredSelections = snapshot.pageSelections || {};
@@ -734,12 +771,21 @@ function App() {
       profile_version: workflowTimingProfiles[0]?.profile_version,
     })),
     costModelProfiles,
+    costParameterRules: (costModelProfiles[0]?.cost_parameter_rules || []).map((rule) => ({
+      ...rule,
+      cost_model_profile_id: costModelProfiles[0]?.cost_model_profile_id,
+      profile_name: costModelProfiles[0]?.profile_name,
+      profile_version: costModelProfiles[0]?.profile_version,
+      currency_code: costModelProfiles[0]?.currency_code,
+    })),
     costCalculationRuns,
     costRecords,
+    revenueCalculationRuns,
+    revenueRecords,
     simulationRuns,
     simulationEvents,
     validations,
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, simulationRuns, simulationEvents, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, simulationRuns, simulationEvents, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -793,8 +839,11 @@ function App() {
       simulationPolicy: simulationPolicies,
       workflowTimingRule: rowsByPage.workflowTimingRules,
       costModelProfile: rowsByPage.costModelProfiles,
+      costParameterRule: rowsByPage.costParameterRules,
       costCalculationRun: rowsByPage.costCalculationRuns,
       costRecord: rowsByPage.costRecords,
+      revenueRecord: rowsByPage.revenueRecords,
+      revenueCalculationRun: rowsByPage.revenueCalculationRuns,
       simulationRun: simulationRuns,
       simulationEvent: simulationEvents,
       opsCenter: data.opsCenters,
@@ -854,6 +903,8 @@ function App() {
       costModelProfiles,
       costCalculationRuns,
       costRecords,
+      revenueCalculationRuns,
+      revenueRecords,
       simulationRuns,
       simulationEvents,
       activePage,
@@ -863,7 +914,7 @@ function App() {
       pageUiState,
     });
     persistSimulationEvents(simulationEvents);
-  }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workflowTimingProfiles, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workflowTimingProfiles, workspacePages]);
 
 
 
@@ -977,6 +1028,7 @@ function App() {
     if (!run || !profile || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
     const calculationRunId = `BTCR-${String(businessTimingCalculationRuns.length + 1).padStart(4, "0")}`;
     const calculationStartedAt = Date.now();
+    const scope = createCurrentBusinessScope(run);
     setSimulationEvents((current) => [simulationEngine.createOperatingSimulationTimeCalculationEvent({
       simulationRun: run,
       eventType: "OPERATING_SIMULATION_TIME_CALCULATION_STARTED",
@@ -996,6 +1048,7 @@ function App() {
           simulationRun: run,
           profile,
           calculationRunId,
+          scope,
           businessData: {
             ...data,
             readinessTasks,
@@ -1121,6 +1174,7 @@ function App() {
     const profile = costModelProfiles.find((item) => item.profile_status === "ACTIVE");
     if (!run || !profile || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
     const calculationRunId = `CCR-${String(costCalculationRuns.length + 1).padStart(4, "0")}`;
+    const scope = createCurrentBusinessScope(run);
     setSimulationEvents((current) => [simulationEngine.createOperatingCostCalculationEvent({
       simulationRun: run,
       eventType: "OPERATING_COST_CALCULATION_STARTED",
@@ -1140,6 +1194,7 @@ function App() {
           simulationRun: run,
           profile,
           calculationRunId,
+          scope,
           businessData: {
             ...data,
             readinessTasks,
@@ -1157,7 +1212,7 @@ function App() {
         setTrips((current) => mergeCalculatedObjects(current, calculated.trips, "trip_id"));
         setCostRecords((current) => [
           ...result.costRecords,
-          ...current.filter((record) => !(record.simulation_run_id === runId && record.cost_calculation_run_id !== calculationRunId)),
+          ...current.filter((record) => record.simulation_run_id !== runId),
         ]);
         setCostCalculationRuns((current) => [result.calculationRun, ...current]);
         setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
@@ -1212,6 +1267,100 @@ function App() {
         antd.message.error(`运营成本计算失败：${error.message}`);
       }
     }, 80);
+  }
+
+  function createCurrentBusinessScope(run) {
+    return simulationRunBusinessScope.createSimulationRunBusinessScope(run, {
+      ...data,
+      readinessTasks,
+      deploymentTasks,
+      routeExecutions,
+      serviceOrders,
+      trips,
+      pricingStrategyRuns,
+      pricingDecisions,
+      orderMatchingRuns,
+      orderMatchingDecisions,
+      routePlanningRuns,
+      demandSimulationRuns,
+    });
+  }
+
+  function requestRevenueCalculation(runId) {
+    const run = simulationRuns.find((item) => item.simulation_run_id === runId);
+    if (!run) return;
+    setPendingRevenueCalculationRunId(runId);
+  }
+
+  function confirmRevenueCalculation() {
+    if (!pendingRevenueCalculationRunId) return;
+    const runId = pendingRevenueCalculationRunId;
+    setPendingRevenueCalculationRunId(null);
+    runRevenueCalculation(runId);
+  }
+
+  function runRevenueCalculation(runId) {
+    const run = simulationRuns.find((item) => item.simulation_run_id === runId);
+    if (!run || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
+    const calculationRunId = `RCR-${String(revenueCalculationRuns.length + 1).padStart(4, "0")}`;
+    const scope = createCurrentBusinessScope(run);
+    setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+      ...item,
+      revenue_calculation_status: "CALCULATING",
+      revenue_calculation_progress_percent: 15,
+      active_revenue_calculation_run_id: calculationRunId,
+    } : item));
+    setTimeout(() => {
+      try {
+        const result = revenueCalculator.createRevenueCalculation({ simulationRun: run, scope, calculationRunId });
+        setRevenueRecords((current) => [
+          ...result.revenueRecords,
+          ...current.filter((record) => record.simulation_run_id !== runId),
+        ]);
+        setRevenueCalculationRuns((current) => [result.calculationRun, ...current]);
+        setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+          ...item,
+          revenue_calculation_status: result.calculationRun.calculation_status,
+          revenue_calculation_progress_percent: 100,
+          active_revenue_calculation_run_id: calculationRunId,
+          total_receivable_revenue_amount: result.calculationRun.total_receivable_revenue_amount,
+          total_collected_revenue_amount: result.calculationRun.total_collected_revenue_amount,
+          total_unreceived_revenue_amount: result.calculationRun.total_unreceived_revenue_amount,
+          revenue_result_summary: {
+            processed_object_count: result.calculationRun.processed_object_count,
+            generated_revenue_record_count: result.calculationRun.generated_revenue_record_count,
+            total_receivable_revenue_amount: result.calculationRun.total_receivable_revenue_amount,
+            total_collected_revenue_amount: result.calculationRun.total_collected_revenue_amount,
+            total_unreceived_revenue_amount: result.calculationRun.total_unreceived_revenue_amount,
+            error_count: result.calculationRun.error_count,
+          },
+          revenue_calculation_errors: result.calculationRun.calculation_errors,
+        } : item));
+        antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "收入记录生成完成" : "收入记录生成完成，存在待检查项");
+      } catch (error) {
+        setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
+          ...item,
+          revenue_calculation_status: "FAILED",
+          revenue_calculation_progress_percent: 100,
+          revenue_calculation_errors: [{ error_type: "REVENUE_CALCULATION_FAILED", error_message: error.message }],
+        } : item));
+        antd.message.error(`收入记录生成失败：${error.message}`);
+      }
+    }, 80);
+  }
+
+  function editCostParameterRule(rule) {
+    setPendingCostParameterRule(rule);
+    setCostParameterValue(rule.configured_value);
+    setCostParameterModalOpen(true);
+  }
+
+  function saveCostParameterRule() {
+    if (!pendingCostParameterRule) return;
+    setCostModelProfiles((profiles) => profiles.map((profile) => profile.profile_status === "ACTIVE"
+      ? costModelCalculator.updateCostParameterRule(profile, pendingCostParameterRule.cost_parameter_key, costParameterValue)
+      : profile));
+    setCostParameterModalOpen(false);
   }
   return (
     <Layout className="ops-shell">
@@ -1317,9 +1466,13 @@ function App() {
                   editWorkflowTimingRule,
                   requestBusinessTimingCalculation,
                   requestCostCalculation,
+                  requestRevenueCalculation,
+                  editCostParameterRule,
                   businessTimingCalculationRuns,
                   costCalculationRuns,
                   costRecords,
+                  revenueCalculationRuns,
+                  revenueRecords,
                   simulationRuns,
                   simulationEvents,
                 }}
@@ -1391,6 +1544,53 @@ function App() {
       >
         <Text>将使用当前生效的成本模型配置生成成本记录，并更新相关业务单据的成本汇总。原始模拟事件、业务状态和真实审计时间不会被修改。</Text>
       </Modal>
+      <Modal
+        title={simulationRuns.find((item) => item.simulation_run_id === pendingRevenueCalculationRunId)?.revenue_calculation_status ? "重新生成收入记录" : "生成收入记录"}
+        open={Boolean(pendingRevenueCalculationRunId)}
+        okText="开始生成"
+        cancelText="取消"
+        width={560}
+        onCancel={() => setPendingRevenueCalculationRunId(null)}
+        footer={[
+          <Button key="cancel" onClick={() => setPendingRevenueCalculationRunId(null)}>取消</Button>,
+          <Button key="calculate" type="primary" onClick={confirmRevenueCalculation}>开始生成</Button>,
+        ]}
+      >
+        <Text>将从当前模拟运行的服务订单生成应收、实收和未收收入记录。重新生成会替换当前有效收入记录，不会重复累加。</Text>
+      </Modal>
+      <Modal
+        title="调整成本配置"
+        open={costParameterModalOpen}
+        okText="保存配置"
+        cancelText="取消"
+        width={520}
+        onCancel={() => setCostParameterModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setCostParameterModalOpen(false)}>取消</Button>,
+          <Button key="save" type="primary" onClick={saveCostParameterRule}>保存配置</Button>,
+        ]}
+      >
+        <div className="timing-rule-editor">
+          <Descriptions size="small" column={1} colon={false}>
+            <Descriptions.Item label="配置项">{pendingCostParameterRule?.cost_parameter_name || "无"}</Descriptions.Item>
+            <Descriptions.Item label="成本分组">{getDisplayValue(pendingCostParameterRule?.cost_parameter_group)}</Descriptions.Item>
+            <Descriptions.Item label="单位">{getDisplayValue(pendingCostParameterRule?.parameter_unit, "parameter_unit")}</Descriptions.Item>
+          </Descriptions>
+          <label>
+            <span>配置值</span>
+            {pendingCostParameterRule?.cost_parameter_key === "depreciation_method" ? (
+              <Select
+                size="small"
+                value={costParameterValue}
+                onChange={setCostParameterValue}
+                options={["PER_KM", "PER_HOUR", "PER_DAY"].map((value) => ({ value, label: getDisplayValue(value, "depreciation_method") }))}
+              />
+            ) : (
+              <Input type="number" min={0} value={costParameterValue} onChange={(event) => setCostParameterValue(event.target.value)} />
+            )}
+          </label>
+        </div>
+      </Modal>
     </Layout>
   );
 
@@ -1450,6 +1650,8 @@ function App() {
     setCostModelProfiles([costModelCalculator.initializeDefaultCostModelProfile()]);
     setCostCalculationRuns([]);
     setCostRecords([]);
+    setRevenueCalculationRuns([]);
+    setRevenueRecords([]);
     setSimulationRuns([]);
     setSimulationEvents([]);
     setActivePage("console");
@@ -2995,6 +3197,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isOrderMatchingRunPage = page === "orderMatchingRuns";
   const isSimulationPolicyPage = page === "simulationPolicies";
   const isWorkflowTimingRulePage = page === "workflowTimingRules";
+  const isCostParameterRulePage = page === "costParameterRules";
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
@@ -3304,7 +3507,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         key: "actions",
         title: "操作",
         fixed: "right",
-        width: 340,
+        width: 470,
         render: (_, row) => renderActionCell(row, renderSimulationRunActions(row, { ...actions, page, objectType, idField })),
       };
     }
@@ -3317,6 +3520,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderActionCell(row, row.duration_source_type === "INHERITED"
           ? renderViewDetailAction(row, { ...actions, page, objectType, idField })
           : <RowActionButton onClick={() => actions.editWorkflowTimingRule(row)}>配置时长</RowActionButton>),
+      };
+    }
+    if (isCostParameterRulePage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 96,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editCostParameterRule(row)}>配置</RowActionButton>),
       };
     }
     return null;
@@ -3489,7 +3701,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "costModelProfile", "costCalculationRun", "costRecord"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -3618,6 +3830,7 @@ function getDetailTabs(selectedType) {
       { key: "scene", label: "当前场景", keys: ["current_supply_scene", "current_demand_scene", "current_scene_summary", "current_tick_event_summary"] },
       { key: "time", label: "状态时间", keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "result_summary"] },
       { key: "cost", label: "成本", keys: ["cost_calculation_status", "cost_calculation_progress_percent", "active_cost_calculation_run_id", "cost_model_profile_id", "cost_model_profile_version", "total_cost_amount", "cost_result_summary", "cost_calculation_errors"] },
+      { key: "revenue", label: "收入", keys: ["revenue_calculation_status", "revenue_calculation_progress_percent", "active_revenue_calculation_run_id", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "revenue_result_summary", "revenue_calculation_errors"] },
       { key: "policy", label: "策略快照", keys: ["simulation_policy_snapshot"] },
     ];
   }
@@ -3635,6 +3848,12 @@ function getDetailTabs(selectedType) {
       { key: "asset", label: "资产折旧", keys: ["robotaxi_purchase_cost", "robotaxi_residual_value", "expected_lifetime_km", "depreciation_method", "fixed_operating_cost_per_day"] },
     ];
   }
+  if (selectedType === "costParameterRule") {
+    return [
+      { key: "basic", label: "配置项", keys: ["cost_parameter_rule_id", "cost_parameter_name", "cost_parameter_key", "cost_parameter_group", "configured_value", "parameter_unit", "cost_parameter_status", "participates_in_calculation", "profile_version"] },
+      { key: "profile", label: "配置版本", keys: ["cost_model_profile_id", "profile_name", "profile_version", "currency_code"] },
+    ];
+  }
   if (selectedType === "costCalculationRun") {
     return [
       { key: "basic", label: "计算信息", keys: ["cost_calculation_run_id", "simulation_run_id", "cost_model_profile_id", "cost_model_profile_version", "calculation_status", "calculation_progress_percent", "started_at", "completed_at"] },
@@ -3647,6 +3866,18 @@ function getDetailTabs(selectedType) {
       { key: "basic", label: "成本信息", keys: ["cost_record_id", "simulation_run_id", "cost_calculation_run_id", "cost_model_profile_id", "cost_type", "cost_amount", "currency_code"] },
       { key: "source", label: "业务归因", keys: ["source_object_type", "source_object_id", "related_order_id", "related_trip_id", "related_route_execution_id", "robotaxi_id", "worker_id", "simulation_cost_occurred_at"] },
       { key: "calculation", label: "计算依据", keys: ["quantity", "quantity_unit", "unit_cost", "calculation_formula", "calculation_basis", "created_at"] },
+    ];
+  }
+  if (selectedType === "revenueRecord") {
+    return [
+      { key: "basic", label: "收入信息", keys: ["revenue_record_id", "simulation_run_id", "revenue_calculation_run_id", "service_order_id", "revenue_type", "revenue_amount", "currency_code"] },
+      { key: "source", label: "业务归因", keys: ["customer_id", "robotaxi_id", "revenue_basis_field", "simulation_revenue_occurred_at", "created_at"] },
+    ];
+  }
+  if (selectedType === "revenueCalculationRun") {
+    return [
+      { key: "basic", label: "生成信息", keys: ["revenue_calculation_run_id", "simulation_run_id", "calculation_status", "calculation_progress_percent", "started_at", "completed_at"] },
+      { key: "result", label: "生成结果", keys: ["processed_object_count", "generated_revenue_record_count", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "error_count", "calculation_errors"] },
     ];
   }
   return [];
@@ -4050,6 +4281,7 @@ function renderSimulationRunActions(row, actions) {
   if (["COMPLETED", "STOPPED", "FAILED"].includes(status)) {
     const calculating = row.business_timing_calculation_status === "CALCULATING";
     const costCalculating = row.cost_calculation_status === "CALCULATING";
+    const revenueCalculating = row.revenue_calculation_status === "CALCULATING";
     return (
       <RowActionGroup>
         <RowActionButton onClick={() => actions.requestBusinessTimingCalculation(row.simulation_run_id)} disabled={calculating}>
@@ -4057,6 +4289,9 @@ function renderSimulationRunActions(row, actions) {
         </RowActionButton>
         <RowActionButton type="default" onClick={() => actions.requestCostCalculation(row.simulation_run_id)} disabled={costCalculating}>
           {costCalculating ? "成本计算中" : row.cost_calculation_status ? "重新计算运营成本" : "计算运营成本"}
+        </RowActionButton>
+        <RowActionButton type="default" onClick={() => actions.requestRevenueCalculation(row.simulation_run_id)} disabled={revenueCalculating}>
+          {revenueCalculating ? "收入生成中" : row.revenue_calculation_status ? "重新生成收入记录" : "生成收入记录"}
         </RowActionButton>
         {renderViewDetailAction(row, actions)}
       </RowActionGroup>
@@ -4574,6 +4809,8 @@ async function bootstrap() {
 		    simulationExecutionEngineModule,
 		    businessTimingCalculatorModule,
 		    costModelCalculatorModule,
+		    revenueCalculatorModule,
+		    simulationRunBusinessScopeModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -4613,7 +4850,9 @@ async function bootstrap() {
 		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"),
 		    import("./data/simulationExecutionEngine.js"),
 		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"),
-		    import("./data/costModelCalculator.js?v=20260625-v029"),
+		    import("./data/costModelCalculator.js?v=20260625-v029-1"),
+		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
+		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -4654,6 +4893,8 @@ async function bootstrap() {
 		  simulationActions = simulationActionsModule;
 		  businessTimingCalculator = businessTimingCalculatorModule;
 		  costModelCalculator = costModelCalculatorModule;
+		  revenueCalculator = revenueCalculatorModule;
+		  simulationRunBusinessScope = simulationRunBusinessScopeModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -6054,6 +6295,8 @@ function loadRuntimeSnapshot(initialData) {
     costModelProfiles: [costModelCalculator.initializeDefaultCostModelProfile()],
     costCalculationRuns: [],
     costRecords: [],
+    revenueCalculationRuns: [],
+    revenueRecords: [],
     simulationRuns: [],
     simulationEvents: [],
     activePage: "console",
@@ -6094,6 +6337,8 @@ function loadRuntimeSnapshot(initialData) {
       : [costModelCalculator.initializeDefaultCostModelProfile()];
     const costCalculationRuns = Array.isArray(snapshot.costCalculationRuns) ? snapshot.costCalculationRuns : [];
     const costRecords = Array.isArray(snapshot.costRecords) ? snapshot.costRecords : [];
+    const revenueCalculationRuns = Array.isArray(snapshot.revenueCalculationRuns) ? snapshot.revenueCalculationRuns : [];
+    const revenueRecords = Array.isArray(snapshot.revenueRecords) ? snapshot.revenueRecords : [];
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
     const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
@@ -6132,6 +6377,8 @@ function loadRuntimeSnapshot(initialData) {
       costModelProfiles,
       costCalculationRuns,
       costRecords,
+      revenueCalculationRuns,
+      revenueRecords,
       simulationRuns,
       simulationEvents,
       activePage: restoredActivePage,
@@ -6220,6 +6467,8 @@ function saveRuntimeSnapshot(snapshot) {
     costModelProfiles: snapshot.costModelProfiles || [],
     costCalculationRuns: snapshot.costCalculationRuns || [],
     costRecords: snapshot.costRecords || [],
+    revenueCalculationRuns: snapshot.revenueCalculationRuns || [],
+    revenueRecords: snapshot.revenueRecords || [],
     simulationRuns: snapshot.simulationRuns || [],
     simulationEvents: [],
   };
@@ -6238,6 +6487,8 @@ function saveRuntimeSnapshot(snapshot) {
       costModelProfiles: [],
       costCalculationRuns: [],
       costRecords: [],
+      revenueCalculationRuns: [],
+      revenueRecords: [],
     }));
   } catch (error) {
     // Local persistence is a convenience for this prototype; runtime should continue if storage is unavailable.

@@ -15,6 +15,14 @@ export const CostCalculationStatus = {
 };
 
 export function initializeDefaultCostModelProfile() {
+  const profile = createBaseCostModelProfile();
+  return normalizeCostModelProfile({
+    ...profile,
+    cost_parameter_rules: createDefaultCostParameterRules(profile),
+  });
+}
+
+function createBaseCostModelProfile() {
   return {
     cost_model_profile_id: "CMP-001",
     profile_name: "标准运营成本模型",
@@ -39,7 +47,7 @@ export function initializeDefaultCostModelProfile() {
 }
 
 export function normalizeCostModelProfile(profile) {
-  const fallback = initializeDefaultCostModelProfile();
+  const fallback = createBaseCostModelProfile();
   if (!profile) return fallback;
   const workerCostPerHour = nonNegative(profile.worker_cost_per_hour, fallback.worker_cost_per_hour);
   return {
@@ -58,13 +66,29 @@ export function normalizeCostModelProfile(profile) {
     expected_lifetime_km: positive(profile.expected_lifetime_km, fallback.expected_lifetime_km),
     depreciation_method: profile.depreciation_method || fallback.depreciation_method,
     fixed_operating_cost_per_day: nonNegative(profile.fixed_operating_cost_per_day, fallback.fixed_operating_cost_per_day),
+    cost_parameter_rules: normalizeCostParameterRules(profile.cost_parameter_rules, { ...fallback, ...profile }),
   };
+}
+
+export function updateCostParameterRule(profile, parameterKey, value) {
+  const normalized = normalizeCostModelProfile(profile);
+  const rules = normalized.cost_parameter_rules.map((rule) => rule.cost_parameter_key === parameterKey
+    ? normalizeParameterRuleValue(rule, value)
+    : rule);
+  return normalizeCostModelProfile({
+    ...normalized,
+    profile_version: Number(normalized.profile_version || 0) + 1,
+    updated_at: new Date().toISOString(),
+    cost_parameter_rules: rules,
+    ...rules.reduce((result, rule) => ({ ...result, [rule.cost_parameter_key]: rule.configured_value }), {}),
+  });
 }
 
 export function createCostCalculation({
   simulationRun,
   profile,
   businessData,
+  scope = null,
   calculationRunId,
   algorithmVersion = "1.0.0",
 }) {
@@ -83,11 +107,13 @@ export function createCostCalculation({
     createdAt: startedAt,
   };
 
-  const routeExecutions = mapRunObjects(businessData.routeExecutions, simulationRun, (item) => calculateRouteExecutionCost(item, context));
-  const trips = mapRunObjects(businessData.trips, simulationRun, (item) => calculateTripCost(item, context));
-  const readinessTasks = mapRunObjects(businessData.readinessTasks, simulationRun, (item) => calculateTaskLaborCost(item, "readinessTask", context));
-  const deploymentTasks = mapRunObjects(businessData.deploymentTasks, simulationRun, (item) => calculateTaskLaborCost(item, "deploymentTask", context));
-  const serviceOrders = mapRunObjects(businessData.serviceOrders, simulationRun, (item) => projectCostSummary(item, recordsForServiceOrder(records, item.service_order_id), calculationRunId, startedAt));
+  const runScope = scope || createFallbackScope(simulationRun, businessData);
+  context.businessData = { ...businessData, ...runScope };
+  const routeExecutions = (runScope.routeExecutions || []).map((item) => calculateRouteExecutionCost(item, context));
+  const trips = (runScope.trips || []).map((item) => calculateTripCost(item, context));
+  const readinessTasks = (runScope.readinessTasks || []).map((item) => calculateTaskLaborCost(item, "readinessTask", context));
+  const deploymentTasks = (runScope.deploymentTasks || []).map((item) => calculateTaskLaborCost(item, "deploymentTask", context));
+  const serviceOrders = (runScope.serviceOrders || []).map((item) => projectCostSummary(item, recordsForServiceOrder(records, item.service_order_id), calculationRunId, startedAt));
   const routeExecutionByTaskId = new Map(routeExecutions.map((item) => [item.task_id, item]));
   const deploymentTasksWithRouteCost = deploymentTasks.map((task) => {
     const execution = routeExecutionByTaskId.get(task.task_id);
@@ -333,12 +359,6 @@ function recordsForServiceOrder(records, serviceOrderId) {
   return records.filter((record) => record.related_order_id === serviceOrderId);
 }
 
-function mapRunObjects(items = [], simulationRun, mapper) {
-  return (items || [])
-    .filter((item) => item.simulation_run_id === simulationRun.simulation_run_id)
-    .map((item) => mapper(item));
-}
-
 function getTripDistanceKm(trip, data) {
   const routeIds = Array.from(new Set((trip.route_history || []).map((item) => item.route_id).filter(Boolean)));
   const routeHistoryDistanceKm = routeIds.reduce((sum, routeId) => sum + routeDistanceKm(findRoute(routeId, data)), 0);
@@ -362,6 +382,64 @@ function getTripDistanceKm(trip, data) {
     };
   }
   return { distanceKm: 0, basis: {} };
+}
+
+function createFallbackScope(simulationRun, businessData) {
+  const runId = simulationRun.simulation_run_id;
+  const filterByRun = (items = []) => (items || []).filter((item) => item.simulation_run_id === runId);
+  return {
+    serviceOrders: filterByRun(businessData.serviceOrders),
+    trips: filterByRun(businessData.trips),
+    readinessTasks: filterByRun(businessData.readinessTasks),
+    deploymentTasks: filterByRun(businessData.deploymentTasks),
+    routeExecutions: filterByRun(businessData.routeExecutions),
+    routes: businessData.routes || [],
+  };
+}
+
+function createDefaultCostParameterRules(profile) {
+  const definitions = [
+    ["CPR-001", "distance_cost_per_km", "每公里距离成本", "DISTANCE_COST", "CURRENCY_PER_KM", true],
+    ["CPR-002", "electricity_price_per_kwh", "每千瓦时电价", "ENERGY_COST", "CURRENCY_PER_KWH", true],
+    ["CPR-003", "energy_consumption_kwh_per_km", "每公里耗电量", "ENERGY_COST", "KWH_PER_KM", true],
+    ["CPR-004", "worker_cost_per_hour", "作业人员每小时成本", "LABOR_COST", "CURRENCY_PER_HOUR", true],
+    ["CPR-005", "robotaxi_purchase_cost", "Robotaxi 购置成本", "ASSET_DEPRECIATION_COST", "CURRENCY", true],
+    ["CPR-006", "robotaxi_residual_value", "Robotaxi 残值", "ASSET_DEPRECIATION_COST", "CURRENCY", true],
+    ["CPR-007", "expected_lifetime_km", "预计寿命里程", "ASSET_DEPRECIATION_COST", "KM", true],
+    ["CPR-008", "depreciation_method", "折旧方式", "ASSET_DEPRECIATION_COST", "ENUM", true],
+    ["CPR-009", "fixed_operating_cost_per_day", "每日固定运营成本", "FIXED_OPERATING_COST", "CURRENCY_PER_DAY", false],
+  ];
+  return definitions.map(([id, key, name, group, unit, enabled], index) => ({
+    cost_parameter_rule_id: id,
+    cost_parameter_key: key,
+    cost_parameter_name: name,
+    cost_parameter_group: group,
+    parameter_unit: unit,
+    configured_value: profile[key],
+    cost_parameter_status: enabled ? "ENABLED" : "RESERVED",
+    participates_in_calculation: enabled,
+    display_order: index + 1,
+  }));
+}
+
+function normalizeCostParameterRules(rules, profile) {
+  const baseRules = createDefaultCostParameterRules(profile);
+  const legacyByKey = new Map((rules || []).map((rule) => [rule.cost_parameter_key, rule]));
+  return baseRules.map((rule) => ({
+    ...rule,
+    ...(legacyByKey.get(rule.cost_parameter_key) || {}),
+    configured_value: legacyByKey.has(rule.cost_parameter_key)
+      ? legacyByKey.get(rule.cost_parameter_key).configured_value
+      : profile[rule.cost_parameter_key],
+  }));
+}
+
+function normalizeParameterRuleValue(rule, value) {
+  if (rule.cost_parameter_key === "depreciation_method") {
+    const nextValue = ["PER_KM", "PER_HOUR", "PER_DAY"].includes(value) ? value : "PER_KM";
+    return { ...rule, configured_value: nextValue };
+  }
+  return { ...rule, configured_value: nonNegative(value, 0) };
 }
 
 function getOperationSeconds(item) {
