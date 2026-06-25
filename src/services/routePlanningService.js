@@ -1,5 +1,6 @@
 import * as taskTypes from "../domain/taskTypes.js";
 import * as tripTypes from "../domain/tripTypes.js";
+import { createRoutePlanningStrategySnapshot } from "../domain/routePlanningStrategies.js";
 
 export function createPriceEstimationRoute({ serviceOrder, data, routeId, routePlanningRunId }) {
   const originCellId = serviceOrder.customer_origin_cell_id;
@@ -301,6 +302,8 @@ export function createTripRouteForOperation({
 }
 
 export function createRoutePlanningRun(options) {
+  const planningResult = options.planningResult;
+  const resultRouteId = options.resultRouteId || null;
   return taskTypes.createRoutePlanningRun({
     route_planning_run_id: options.routePlanningRunId,
     route_strategy_id: options.routeStrategyId,
@@ -312,9 +315,26 @@ export function createRoutePlanningRun(options) {
     robotaxi_id: options.robotaxiId || null,
     origin_cell_id: options.originCellId || null,
     target_cell_id: options.targetCellId || null,
-    result_route_id: options.resultRouteId || null,
-    planning_result: options.planningResult,
+    result_route_id: resultRouteId,
+    planning_result: planningResult,
     failure_reason: options.failureReason,
+    strategy_snapshot: createRoutePlanningStrategySnapshot(options.routeStrategyId),
+    input_snapshot: {
+      route_strategy_id: options.routeStrategyId,
+      planning_algorithm: options.planningAlgorithm || taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
+      task_id: options.taskId || null,
+      service_order_id: options.serviceOrderId || null,
+      trip_id: options.tripId || null,
+      route_execution_id: options.routeExecutionId || null,
+      robotaxi_id: options.robotaxiId || null,
+      origin_cell_id: options.originCellId || null,
+      target_cell_id: options.targetCellId || null,
+    },
+    output_snapshot: {
+      planning_result: planningResult,
+      result_route_id: resultRouteId,
+      failure_reason: options.failureReason,
+    },
     created_at: options.createdAt || new Date().toISOString(),
   });
 }

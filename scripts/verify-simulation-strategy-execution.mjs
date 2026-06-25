@@ -113,7 +113,7 @@ assert.equal(getOrder().payment_status, "PAID");
 runAction({ actionType: "DEPLOYMENT_TASK_CREATE", objectId: null });
 const deploymentTask = businessData.deploymentTasks[0];
 const routeExecution = businessData.routeExecutions[0];
-assert.equal(deploymentTask.task_status, "WAITING_ROUTE");
+assert.equal(deploymentTask.task_status, "WAITING_START");
 assert.equal(routeExecution.execution_status, "WAITING_ROUTE");
 assert.equal(deploymentTask.planned_target_cell_id, "C-00-04");
 
@@ -134,6 +134,31 @@ assert.equal(plannedExecution.current_cell_id, "C-00-04");
 runAction({ actionType: "ARRIVAL_CONFIRM", objectId: routeExecution.route_execution_id });
 assert.equal(getRouteExecution(routeExecution.route_execution_id).execution_status, "COMPLETED");
 assert.equal(getDeploymentTask(deploymentTask.task_id).task_status, "COMPLETED");
+
+const failedDeploymentRoute = routePlanningService.planDeploymentRoute({
+  execution: {
+    ...routeExecution,
+    route_execution_id: "REX-VERIFY-FAILED",
+    execution_status: "WAITING_ROUTE",
+    current_cell_id: "C-00-01",
+    planned_target_cell_id: "C-99-99",
+    target_cell_id: "C-99-99",
+  },
+  task: {
+    ...deploymentTask,
+    task_id: "TASK-DP-VERIFY-FAILED",
+    task_status: "WAITING_START",
+    planned_target_cell_id: "C-99-99",
+    target_cell_id: "C-99-99",
+  },
+  data: businessData.data,
+  routeId: "R-VERIFY-FAILED",
+  routePlanningRunId: "RPR-VERIFY-FAILED",
+});
+assert.equal(failedDeploymentRoute.route, null);
+assert.equal(failedDeploymentRoute.routePlanningRun.planning_result, "FAILED");
+assert.equal(failedDeploymentRoute.execution.execution_status, "FAILED");
+assert.equal(failedDeploymentRoute.task.task_status, "FAILED");
 
 console.log("自动模拟业务策略执行验证通过");
 

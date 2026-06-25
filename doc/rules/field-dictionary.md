@@ -826,6 +826,8 @@
 |---|---|---|---|
 |input_snapshot|输入快照|运行态字段|策略执行输入数据快照|
 |output_snapshot|输出快照|运行态字段|策略执行输出数据快照|
+|strategy_snapshot|策略快照|运行态字段|策略执行时使用的策略定义快照|
+|trigger_object_type|触发对象类型|持久化字段|路径规划策略适用的触发业务对象|
 |candidate_snapshot|候选对象快照|运行态字段|匹配策略候选集合快照|
 |run_result|执行结果|运行态字段|策略执行成功或失败|
 |created_at|创建时间|运行态字段|记录创建时间|

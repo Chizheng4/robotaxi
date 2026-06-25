@@ -60,6 +60,8 @@ let businessTimingCalculator;
 let costModelCalculator;
 let revenueCalculator;
 let simulationRunBusinessScope;
+let statusRegistry;
+let routePlanningStrategies;
 let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
@@ -591,15 +593,10 @@ const cellClass = {
   BLOCKED: "cell-blocked"
 };
 const legendItems = [["cell-empty", "空白网格"], ["cell-road", "道路网格"], ["place-residential-swatch", "住宅地点"], ["place-office-swatch", "办公地点"], ["place-commercial-swatch", "商业地点"], ["place-hospital-swatch", "医院学校"], ["place-metro-station-swatch", "地铁接驳"], ["place-ops-center-swatch", "运营中心地点"], ["service-area-swatch", "服务区域"], ["ops-center-swatch", "运营中心覆盖"], ["route-swatch", "选中路径"], ["road-node-swatch", "道路节点"]];
-const readinessStatusOptions = ["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING", "COMPLETED", "CANCELLED", "FAILED"];
-const deploymentStatusOptions = ["WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "COMPLETED", "CANCELLED", "FAILED"];
-const routeExecutionStatusOptions = ["WAITING_ROUTE", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL", "PAUSED", "COMPLETED", "CANCELLED"];
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
-const tripStatusOptions = ["WAITING_ROUTE", "ON_THE_WAY_PICKUP", "WAITING_CUSTOMER_BOARDING", "CUSTOMER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "COMPLETED", "FAILED", "CANCELLED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
-const serviceOrderStatusOptions = ["WAITING_PRICE_ESTIMATE", "WAITING_ROBOTAXI_CALL", "WAITING_ROBOTAXI_ASSIGNMENT", "ROBOTAXI_ASSIGNMENT_FAILED", "ON_THE_WAY_PICKUP", "WAITING_CUSTOMER_BOARDING", "CUSTOMER_ONBOARD", "ON_THE_WAY_DESTINATION", "ARRIVED_DESTINATION", "SETTLING", "WAITING_PAYMENT", "COMPLETED", "CANCELLED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
 const runtimeStorageKey = "robotaxi.runtime.v019-7-service-route";
 const runtimeStorageKeyPrefix = "robotaxi.runtime.";
@@ -5021,7 +5018,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260624-v028-1-2"), import("./services/simulationActions.js?v=20260620-v027-4"), import("./data/simulationLoop.js?v=20260620-v027-4"), import("./services/simulationHandlers.js?v=20260624-v028-1-5"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260624-v028-1-2"), import("./services/simulationActions.js?v=20260620-v027-4"), import("./data/simulationLoop.js?v=20260620-v027-4"), import("./services/simulationHandlers.js?v=20260624-v028-1-5"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -5063,6 +5060,8 @@ async function bootstrap() {
   revenueCalculator = revenueCalculatorModule;
   simulationRunBusinessScope = simulationRunBusinessScopeModule;
   routePlanningService = routePlanningServiceModule;
+  statusRegistry = statusRegistryModule;
+  routePlanningStrategies = routePlanningStrategiesModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -5387,91 +5386,7 @@ function createRoutePlanningStrategyRows(data, routePlanningRuns) {
     const current = runCountByStrategyId.get(routeStrategyId) || 0;
     runCountByStrategyId.set(routeStrategyId, current + 1);
   });
-  return [{
-    route_strategy_id: "RPS-001",
-    strategy_name: "初始运营投放路径规划策略",
-    strategy_type: "INITIAL_DEPLOYMENT_ROUTE",
-    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
-    trigger_task_status: "WAITING_ROUTE",
-    origin_rule: "使用运营投放任务起点位置",
-    target_rule: "使用任务当前计划目标位置",
-    service_area_scope_rule: "不改变任务目标服务区",
-    route_generation_rule: "基于道路片段有序网格、道路节点连接和 BFS 网格图搜索生成可执行路径步骤",
-    route_update_rule: "创建初始路径，并创建 / 绑定行驶记录",
-    strategy_status: "Active"
-  }, {
-    route_strategy_id: "RPS-002",
-    strategy_name: "异常到达同服务区替代路径规划策略",
-    strategy_type: "ABNORMAL_ARRIVAL_SAME_SERVICE_AREA_REPLAN",
-    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
-    trigger_task_status: "ARRIVAL_ABNORMAL",
-    origin_rule: "使用 Robotaxi 当前异常到达位置",
-    target_rule: "选择同服务区内其他目标位置，并排除当前异常点和当前目标点",
-    service_area_scope_rule: "限制在当前任务目标服务区内",
-    route_generation_rule: "基于当前异常位置、同服务区替代目标和 BFS 网格图搜索重新生成可执行路径步骤",
-    route_update_rule: "更新同一个行驶记录的当前路径，不创建新行驶记录",
-    strategy_status: "Active"
-  }, {
-    route_strategy_id: "RPS-003",
-    strategy_name: "服务订单接驾路径规划策略",
-    strategy_type: "SERVICE_ORDER_PICKUP_ROUTE",
-    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
-    trigger_task_status: "ON_THE_WAY_PICKUP",
-    origin_rule: "使用 Robotaxi 当前所在位置",
-    target_rule: "使用服务订单上车位置",
-    service_area_scope_rule: "目标限制为订单上车服务区",
-    route_generation_rule: "基于 Robotaxi 当前位置、上车位置和 BFS 网格图搜索生成接驾路径步骤",
-    route_update_rule: "创建服务接驾路径，并写入 Trip 当前 Route 与 route_history",
-    strategy_status: "Active"
-  }, {
-    route_strategy_id: "RPS-004",
-    strategy_name: "服务订单载客路径规划策略",
-    strategy_type: "SERVICE_ORDER_DESTINATION_ROUTE",
-    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
-    trigger_task_status: "ON_THE_WAY_DESTINATION",
-    origin_rule: "使用 Robotaxi 当前上车位置",
-    target_rule: "使用服务订单下车位置",
-    service_area_scope_rule: "目标限制为订单下车服务区",
-    route_generation_rule: "基于上车位置、下车位置和 BFS 网格图搜索生成载客路径步骤",
-    route_update_rule: "创建服务载客路径，并写入 Trip 当前 Route 与 route_history",
-    strategy_status: "Active"
-  }, {
-    route_strategy_id: "RPS-005",
-    strategy_name: "服务订单目的地变更重规划策略",
-    strategy_type: "DESTINATION_CHANGE_REPLAN",
-    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
-    trigger_task_status: "ON_THE_WAY_DESTINATION",
-    origin_rule: "使用 Robotaxi 当前所在位置",
-    target_rule: "选择新的下车位置，优先同服务区可下车点",
-    service_area_scope_rule: "优先订单当前下车服务区，必要时扩展到其他服务区",
-    route_generation_rule: "基于当前位置、新目的地和 BFS 网格图搜索生成新的载客路径步骤",
-    route_update_rule: "创建新服务路径，更新 Trip 当前目标位置与 route_history",
-    strategy_status: "Active"
-  }, {
-    route_strategy_id: "RPS-006",
-    strategy_name: "服务路径异常重规划策略",
-    strategy_type: "SERVICE_ROUTE_EXCEPTION_REPLAN",
-    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
-    trigger_task_status: "ON_THE_WAY_DESTINATION",
-    origin_rule: "使用 Robotaxi 当前异常位置",
-    target_rule: "继续使用 Trip 当前下车位置",
-    service_area_scope_rule: "不改变订单当前下车服务区",
-    route_generation_rule: "基于异常位置、当前目的地和 BFS 网格图搜索重新生成服务路径步骤",
-    route_update_rule: "创建新服务路径并追加 Trip route_history",
-    strategy_status: "Active"
-  }, {
-    route_strategy_id: "RPS-007",
-    strategy_name: "服务订单价格预估路径规划策略",
-    strategy_type: "SERVICE_PRICE_ESTIMATION_ROUTE",
-    planning_algorithm: taskTypes.RoutePlanningAlgorithm.BFS_CELL_GRAPH,
-    trigger_task_status: "WAITING_PRICE_ESTIMATE",
-    origin_rule: "使用客户需求位置作为价格预估路径起点",
-    target_rule: "使用服务订单下车位置作为价格预估路径终点",
-    service_area_scope_rule: "覆盖上车服务区和下车服务区",
-    route_generation_rule: "生成一条包含客户位置到上车位置、上车位置到下车位置的价格预估路径",
-    route_update_rule: "只返回价格预估 Route，由服务订单和定价策略使用，不主动改变订单状态",
-    strategy_status: "Active"
-  }].map(strategy => ({
+  return routePlanningStrategies.getRoutePlanningStrategies().map(strategy => ({
     ...strategy,
     strategy_usage_count: Math.max(routeByStrategyId.get(strategy.route_strategy_id) || 0, runCountByStrategyId.get(strategy.route_strategy_id) || 0),
     route_planning_run_count: runCountByStrategyId.get(strategy.route_strategy_id) || 0
@@ -6547,17 +6462,14 @@ function filterRecordRows(rows, columns, statusField, filters) {
   });
 }
 function getOrderedStatusValues(page) {
-  if (page === "readinessTasks") return readinessStatusOptions;
-  if (page === "deploymentTasks") return deploymentStatusOptions;
-  if (page === "routeExecutions") return routeExecutionStatusOptions;
+  const registryOptions = statusRegistry?.getPageStatusOptions?.(page);
+  if (registryOptions?.length) return registryOptions;
   if (page === "routePlanningRuns") return routePlanningResultOptions;
   if (page === "pricingStrategyRuns") return pricingResultOptions;
   if (page === "pricingDecisions") return pricingResultOptions;
   if (page === "orderMatchingRuns") return orderMatchingResultOptions;
   if (page === "orderMatchingDecisions") return orderMatchingResultOptions;
   if (page === "customers") return customerStatusOptions;
-  if (page === "serviceOrders") return serviceOrderStatusOptions;
-  if (page === "serviceFulfillmentRecords") return tripStatusOptions;
   return [];
 }
 function createStatusOptions(rows, statusField, orderedValues = [], statusContext = null) {

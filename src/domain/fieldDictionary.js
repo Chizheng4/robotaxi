@@ -269,6 +269,8 @@ export const fieldDictionary = {
   pricing_stage: "定价阶段",
   input_snapshot: "输入快照",
   output_snapshot: "输出快照",
+  strategy_snapshot: "策略快照",
+  trigger_object_type: "触发对象类型",
   run_result: "执行结果",
   pricing_result: "定价结果",
   distance_fee: "距离费用",

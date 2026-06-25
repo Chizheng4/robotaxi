@@ -285,11 +285,11 @@ export function handleOrderMatchingExecute({ objectId, data, context }) {
     const failureReason = result.failureReason || "未知原因";
     setServiceOrders((prev) => prev.map((o) => {
       if (o.service_order_id !== objectId) return o;
-      return { ...o, order_status: "MATCH_FAILED", ...getSimulationAudit(context) };
+      return { ...o, order_status: "ROBOTAXI_ASSIGNMENT_FAILED", ...getSimulationAudit(context) };
     }));
     return {
       success: false,
-      resultType: "MATCHING_FAILED",
+      resultType: "ROBOTAXI_ASSIGNMENT_FAILED",
       message: `服务订单 ${objectId} 匹配失败：${formatFailureReason(failureReason)}`,
       data: { objectType: "serviceOrder", objectId, failureReason },
     };
@@ -565,7 +565,7 @@ export function handleDeploymentTaskCreate({ data, context }) {
   const dt = {
     task_id: dtId,
     task_type: taskTypes.TaskType.DEPLOYMENT,
-    task_status: taskTypes.DeploymentTaskStatus.WAITING_ROUTE,
+    task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
     task_priority: taskTypes.TaskPriority.LOW,
     trigger_type: taskTypes.TriggerType.AUTO,
     source_type: taskTypes.TaskSourceType.SUPPLY_ADJUSTMENT_PLAN,
@@ -619,7 +619,7 @@ export function handleDeploymentTaskCreate({ data, context }) {
     ...r,
     current_task_id: dtId,
     current_task_type: taskTypes.TaskType.DEPLOYMENT,
-    current_task_status: taskTypes.DeploymentTaskStatus.WAITING_ROUTE,
+    current_task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
     ...getSimulationAudit(context),
   } : r));
   return { success: true, resultType: "DEPLOYMENT_CREATED", message: `投放任务 ${dtId} 已创建，关联 RouteExecution ${reId}`, data: { objectType: "deploymentTask", objectId: dtId, routeExecutionId: reId } };
