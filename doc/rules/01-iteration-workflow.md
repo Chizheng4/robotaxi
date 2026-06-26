@@ -68,6 +68,14 @@ Major 完成时必须：
 3. 在 `VERSION.md` 中记录本次归档；
 4. 再执行提交和 tag。
 
+Major 归档后，`doc/common/current-iteration/major/` 只允许保留：
+
+- `major-current-iteration.md`；
+- 明确标记为当前进行中的大版本计划；
+- 明确标记为后续待执行且尚未获得正式版本编号的方案。
+
+已经写入历史归档目录的完成版本计划不得继续留在 current 目录。
+
 ### 3.3 Minor 归档
 
 Minor 完成时必须：

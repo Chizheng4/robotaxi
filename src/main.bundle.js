@@ -4215,39 +4215,70 @@ function CostDetail({
       description: "\u5C1A\u672A\u8BA1\u7B97\u8FD0\u8425\u6210\u672C"
     });
   }
-  const summaryItems = ["total_cost_amount", "distance_cost_amount", "energy_cost_amount", "labor_cost_amount", "asset_depreciation_cost_amount", "cost_calculated_at", "cost_calculation_run_id"];
+  const summaryItems = ["total_cost_amount", "distance_cost_amount", "energy_cost_amount", "labor_cost_amount", "asset_depreciation_cost_amount"];
+  const metaItems = ["cost_calculated_at", "cost_calculation_run_id"];
+  const groupedRecords = groupCostRecords(records);
   return /*#__PURE__*/React.createElement("div", {
     className: "cost-detail"
-  }, /*#__PURE__*/React.createElement(Descriptions, {
-    className: "compact-descriptions",
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cost-summary-grid"
+  }, summaryItems.map(key => /*#__PURE__*/React.createElement("div", {
+    className: "cost-summary-item",
+    key: key
+  }, /*#__PURE__*/React.createElement("span", null, getFieldLabel(key)), /*#__PURE__*/React.createElement("strong", null, renderDetailValue(key, selectedObject[key], selectedObject))))), /*#__PURE__*/React.createElement(Descriptions, {
+    className: "compact-descriptions cost-meta-descriptions",
     column: 1,
     size: "small",
     colon: false,
-    items: summaryItems.map(key => ({
+    items: metaItems.map(key => ({
       key,
       label: getFieldLabel(key),
       children: renderDetailValue(key, selectedObject[key], selectedObject)
     }))
   }), /*#__PURE__*/React.createElement("div", {
-    className: "cost-record-table"
-  }, /*#__PURE__*/React.createElement(Table, {
-    size: "small",
-    rowKey: "cost_record_id",
-    columns: ["cost_type", "quantity", "quantity_unit", "unit_cost", "cost_amount", "calculation_formula"].map(key => ({
-      key,
-      title: getFieldLabel(key),
-      dataIndex: key,
-      ellipsis: true,
-      width: getColumnWidth(key),
-      render: (_, row) => renderCellValue(key, row)
-    })),
-    dataSource: records,
-    pagination: false,
-    scroll: {
-      x: "max-content",
-      y: 180
-    }
-  })));
+    className: "cost-record-list"
+  }, groupedRecords.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
+    image: Empty.PRESENTED_IMAGE_SIMPLE,
+    description: "\u6682\u65E0\u6210\u672C\u660E\u7EC6"
+  }) : groupedRecords.map(group => /*#__PURE__*/React.createElement("section", {
+    className: "cost-record-group",
+    key: group.cost_type
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cost-record-group-head"
+  }, /*#__PURE__*/React.createElement(StatusValue, {
+    value: group.cost_type,
+    label: getDisplayValue(group.cost_type, "cost_type")
+  }), /*#__PURE__*/React.createElement("strong", null, formatCostAmount(group.totalAmount, group.currencyCode))), group.records.map(record => /*#__PURE__*/React.createElement("div", {
+    className: "cost-record-line",
+    key: record.cost_record_id
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cost-record-line-main"
+  }, /*#__PURE__*/React.createElement("span", null, renderDetailValue("source_object_type", record.source_object_type, record), " \xB7 ", record.source_object_id), /*#__PURE__*/React.createElement("strong", null, formatCostAmount(record.cost_amount, record.currency_code))), /*#__PURE__*/React.createElement("div", {
+    className: "cost-record-line-sub"
+  }, /*#__PURE__*/React.createElement("span", null, getFieldLabel("quantity"), ": ", renderDetailValue("quantity", record.quantity, record), " ", renderDetailValue("quantity_unit", record.quantity_unit, record)), /*#__PURE__*/React.createElement("span", null, getFieldLabel("unit_cost"), ": ", renderDetailValue("unit_cost", record.unit_cost, record))), record.calculation_formula && /*#__PURE__*/React.createElement(Text, {
+    type: "secondary"
+  }, record.calculation_formula)))))));
+}
+function groupCostRecords(records) {
+  const map = new Map();
+  records.forEach(record => {
+    const key = record.cost_type || "UNKNOWN";
+    const group = map.get(key) || {
+      cost_type: key,
+      records: [],
+      totalAmount: 0,
+      currencyCode: record.currency_code || "CNY"
+    };
+    group.records.push(record);
+    group.totalAmount += Number(record.cost_amount || 0);
+    if (record.currency_code) group.currencyCode = record.currency_code;
+    map.set(key, group);
+  });
+  return [...map.values()].sort((a, b) => b.totalAmount - a.totalAmount);
+}
+function formatCostAmount(amount, currencyCode = "CNY") {
+  const value = Number(amount || 0);
+  return `${value.toFixed(2)} ${currencyCode || "CNY"}`;
 }
 function MapCanvas({
   data,

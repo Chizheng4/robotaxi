@@ -3893,39 +3893,75 @@ function CostDetail({ selectedObject }) {
   if (!selectedObject.cost_calculation_run_id && records.length === 0) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未计算运营成本" />;
   }
-  const summaryItems = ["total_cost_amount", "distance_cost_amount", "energy_cost_amount", "labor_cost_amount", "asset_depreciation_cost_amount", "cost_calculated_at", "cost_calculation_run_id"];
+  const summaryItems = ["total_cost_amount", "distance_cost_amount", "energy_cost_amount", "labor_cost_amount", "asset_depreciation_cost_amount"];
+  const metaItems = ["cost_calculated_at", "cost_calculation_run_id"];
+  const groupedRecords = groupCostRecords(records);
   return (
     <div className="cost-detail">
+      <div className="cost-summary-grid">
+        {summaryItems.map((key) => (
+          <div className="cost-summary-item" key={key}>
+            <span>{getFieldLabel(key)}</span>
+            <strong>{renderDetailValue(key, selectedObject[key], selectedObject)}</strong>
+          </div>
+        ))}
+      </div>
       <Descriptions
-        className="compact-descriptions"
+        className="compact-descriptions cost-meta-descriptions"
         column={1}
         size="small"
         colon={false}
-        items={summaryItems.map((key) => ({
+        items={metaItems.map((key) => ({
           key,
           label: getFieldLabel(key),
           children: renderDetailValue(key, selectedObject[key], selectedObject),
         }))}
       />
-      <div className="cost-record-table">
-        <Table
-          size="small"
-          rowKey="cost_record_id"
-          columns={["cost_type", "quantity", "quantity_unit", "unit_cost", "cost_amount", "calculation_formula"].map((key) => ({
-            key,
-            title: getFieldLabel(key),
-            dataIndex: key,
-            ellipsis: true,
-            width: getColumnWidth(key),
-            render: (_, row) => renderCellValue(key, row),
-          }))}
-          dataSource={records}
-          pagination={false}
-          scroll={{ x: "max-content", y: 180 }}
-        />
+      <div className="cost-record-list">
+        {groupedRecords.length === 0 ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无成本明细" />
+        ) : groupedRecords.map((group) => (
+          <section className="cost-record-group" key={group.cost_type}>
+            <div className="cost-record-group-head">
+              <StatusValue value={group.cost_type} label={getDisplayValue(group.cost_type, "cost_type")} />
+              <strong>{formatCostAmount(group.totalAmount, group.currencyCode)}</strong>
+            </div>
+            {group.records.map((record) => (
+              <div className="cost-record-line" key={record.cost_record_id}>
+                <div className="cost-record-line-main">
+                  <span>{renderDetailValue("source_object_type", record.source_object_type, record)} · {record.source_object_id}</span>
+                  <strong>{formatCostAmount(record.cost_amount, record.currency_code)}</strong>
+                </div>
+                <div className="cost-record-line-sub">
+                  <span>{getFieldLabel("quantity")}: {renderDetailValue("quantity", record.quantity, record)} {renderDetailValue("quantity_unit", record.quantity_unit, record)}</span>
+                  <span>{getFieldLabel("unit_cost")}: {renderDetailValue("unit_cost", record.unit_cost, record)}</span>
+                </div>
+                {record.calculation_formula && <Text type="secondary">{record.calculation_formula}</Text>}
+              </div>
+            ))}
+          </section>
+        ))}
       </div>
     </div>
   );
+}
+
+function groupCostRecords(records) {
+  const map = new Map();
+  records.forEach((record) => {
+    const key = record.cost_type || "UNKNOWN";
+    const group = map.get(key) || { cost_type: key, records: [], totalAmount: 0, currencyCode: record.currency_code || "CNY" };
+    group.records.push(record);
+    group.totalAmount += Number(record.cost_amount || 0);
+    if (record.currency_code) group.currencyCode = record.currency_code;
+    map.set(key, group);
+  });
+  return [...map.values()].sort((a, b) => b.totalAmount - a.totalAmount);
+}
+
+function formatCostAmount(amount, currencyCode = "CNY") {
+  const value = Number(amount || 0);
+  return `${value.toFixed(2)} ${currencyCode || "CNY"}`;
 }
 
 function MapCanvas({ data, selected, onSelect }) {

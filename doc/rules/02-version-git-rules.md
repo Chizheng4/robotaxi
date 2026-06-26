@@ -47,6 +47,7 @@
 5. 前端类改动已做核心路径页面模拟。
 6. Major 或 Minor 完成版本已完成对应归档，current 目录没有遗留已完成计划。
 7. `VERSION.md` 已写入本轮版本条目，且条目内容与本次提交一致（每个子版本独立一条，不合并）。
+8. `scripts/verify-current-iteration-archive.mjs` 已通过，防止已归档版本计划继续留在 current 目录。
 
 ## 4. Git 提交
 
