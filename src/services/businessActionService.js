@@ -157,6 +157,7 @@ export function createDeploymentTask({ state, runtime }) {
     route_cell_ids: [],
     current_step_index: 0,
     total_step_count: 0,
+    total_distance_km: 0,
     distance_traveled_km: 0,
     distance_remaining_km: 0,
     time_elapsed: "0",
@@ -522,6 +523,8 @@ function executePriceRoutePlanning({ state, order, runtime }) {
       resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
       planningResult: route.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
       failureReason: route.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : route.failure_reason,
+      routeStepCount: route.route_step_count,
+      totalDistanceKm: route.total_distance_km,
       createdAt: runtime.now(),
     }),
   };
@@ -563,6 +566,9 @@ function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime) 
     order_status: orderStatus,
     actual_distance_km: trip.distance_traveled_km,
     actual_duration_min: parseTimeElapsed(trip.time_elapsed),
+    trip_total_distance_km: trip.total_distance_km,
+    trip_distance_traveled_km: trip.distance_traveled_km,
+    trip_distance_remaining_km: trip.distance_remaining_km,
     ...runtime.audit(),
   }));
 }
@@ -615,6 +621,7 @@ function createTripForOrder(order, appData, runtime) {
     current_cell_id: robotaxi?.current_cell_id || order.pickup_cell_id,
     current_step_index: 0,
     total_step_count: 0,
+    total_distance_km: 0,
     distance_traveled_km: 0,
     distance_remaining_km: order.estimated_distance_km || 0,
     time_elapsed: "0:00",

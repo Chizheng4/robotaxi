@@ -17,3 +17,9 @@
 
 ## 当前输入
 暂无。
+
+## 最近完成
+
+`v031.1 路径事实与行驶距离汇总`
+
+历史方案：`doc/common/iteration-history/minor/v031.1-route-distance-facts-plan.md`

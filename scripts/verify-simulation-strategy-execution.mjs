@@ -60,6 +60,16 @@ let plannedPickupTrip = getTrip(trip.trip_id);
 assert.equal(plannedPickupTrip.trip_status, "ON_THE_WAY_PICKUP");
 assert.ok(plannedPickupTrip.route_id);
 assert.ok(businessData.routes.some((route) => route.route_id === plannedPickupTrip.route_id && route.route_usage_type === "SERVICE_PICKUP"));
+const pickupRoute = businessData.routes.find((route) => route.route_id === plannedPickupTrip.route_id);
+assert.ok(pickupRoute.route_step_count > 0, "接驾路径必须保存移动步数");
+assert.ok(pickupRoute.total_distance_km > 0, "接驾路径必须保存总距离（公里）");
+assert.equal(pickupRoute.route_step_count, Math.max(0, pickupRoute.route_steps.length - 1));
+assert.equal(plannedPickupTrip.total_distance_km, pickupRoute.total_distance_km);
+assert.equal(plannedPickupTrip.distance_traveled_km, 0);
+assert.equal(plannedPickupTrip.distance_remaining_km, pickupRoute.total_distance_km);
+const pickupRouteRun = businessData.routePlanningRuns.find((run) => run.result_route_id === pickupRoute.route_id);
+assert.equal(pickupRouteRun.output_snapshot.route_step_count, pickupRoute.route_step_count);
+assert.equal(pickupRouteRun.output_snapshot.total_distance_km, pickupRoute.total_distance_km);
 const manualPickupRouteUpdate = routePlanningService.createTripRouteUpdate({
   trip: {
     ...trip,
@@ -93,6 +103,12 @@ assert.equal(plannedDestinationTrip.trip_status, "ON_THE_WAY_DESTINATION");
 assert.ok(plannedDestinationTrip.route_id);
 assert.ok(businessData.routes.some((route) => route.route_id === plannedDestinationTrip.route_id && route.route_usage_type === "SERVICE_DROPOFF"));
 assert.ok((plannedDestinationTrip.route_history || []).length >= 2);
+const destinationRoute = businessData.routes.find((route) => route.route_id === plannedDestinationTrip.route_id);
+assert.ok(destinationRoute.route_step_count > 0, "送达路径必须保存移动步数");
+assert.ok(destinationRoute.total_distance_km > 0, "送达路径必须保存总距离（公里）");
+assert.equal(plannedDestinationTrip.total_distance_km, roundDistance(pickupRoute.total_distance_km + destinationRoute.total_distance_km));
+assert.equal(plannedDestinationTrip.distance_traveled_km, pickupRoute.total_distance_km);
+assert.equal(plannedDestinationTrip.distance_remaining_km, destinationRoute.total_distance_km);
 
 while (getTrip(trip.trip_id).trip_status === "ON_THE_WAY_DESTINATION") {
   runAction({ actionType: "TRIP_STEP_EXECUTE", objectId: trip.trip_id });
@@ -100,6 +116,11 @@ while (getTrip(trip.trip_id).trip_status === "ON_THE_WAY_DESTINATION") {
 runAction({ actionType: "PASSENGER_DROPOFF", objectId: trip.trip_id });
 assert.equal(getTrip(trip.trip_id).trip_status, "COMPLETED");
 assert.equal(getOrder().order_status, "SETTLING");
+assert.equal(getTrip(trip.trip_id).distance_traveled_km, getTrip(trip.trip_id).total_distance_km);
+assert.equal(getTrip(trip.trip_id).distance_remaining_km, 0);
+assert.equal(getOrder().trip_total_distance_km, getTrip(trip.trip_id).total_distance_km);
+assert.equal(getOrder().trip_distance_traveled_km, getTrip(trip.trip_id).distance_traveled_km);
+assert.equal(getOrder().trip_distance_remaining_km, 0);
 
 runAction({ actionType: "SETTLEMENT_EXECUTE", objectId: "SO-VERIFY-001" });
 assert.equal(getOrder().order_status, "WAITING_PAYMENT");
@@ -123,6 +144,11 @@ assert.equal(plannedExecution.execution_status, "MOVING");
 assert.ok(plannedExecution.route_id);
 assert.ok(plannedExecution.route_cell_ids.length > 1);
 assert.ok(businessData.routes.some((route) => route.route_id === plannedExecution.route_id && route.route_usage_type === "OPERATIONAL_EXECUTION"));
+const operationalRoute = businessData.routes.find((route) => route.route_id === plannedExecution.route_id);
+assert.equal(operationalRoute.route_step_count, Math.max(0, operationalRoute.route_steps.length - 1));
+assert.equal(plannedExecution.total_distance_km, operationalRoute.total_distance_km);
+assert.equal(plannedExecution.distance_traveled_km, 0);
+assert.equal(plannedExecution.distance_remaining_km, operationalRoute.total_distance_km);
 
 while (getRouteExecution(routeExecution.route_execution_id).execution_status === "MOVING") {
   runAction({ actionType: "ROUTE_EXECUTION_STEP", objectId: routeExecution.route_execution_id });
@@ -130,6 +156,8 @@ while (getRouteExecution(routeExecution.route_execution_id).execution_status ===
 plannedExecution = getRouteExecution(routeExecution.route_execution_id);
 assert.equal(plannedExecution.execution_status, "ARRIVED");
 assert.equal(plannedExecution.current_cell_id, "C-00-04");
+assert.equal(plannedExecution.distance_traveled_km, plannedExecution.total_distance_km);
+assert.equal(plannedExecution.distance_remaining_km, 0);
 
 runAction({ actionType: "ARRIVAL_CONFIRM", objectId: routeExecution.route_execution_id });
 assert.equal(getRouteExecution(routeExecution.route_execution_id).execution_status, "COMPLETED");
@@ -178,6 +206,10 @@ function getTrip(tripId) {
 
 function getRouteExecution(routeExecutionId) {
   return businessData.routeExecutions.find((item) => item.route_execution_id === routeExecutionId);
+}
+
+function roundDistance(value) {
+  return Number(Number(value || 0).toFixed(2));
 }
 
 function getDeploymentTask(taskId) {

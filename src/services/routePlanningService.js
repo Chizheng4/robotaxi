@@ -18,7 +18,7 @@ export function createPriceEstimationRoute({ serviceOrder, data, routeId, routeP
   const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps?.[0]?.cell_size_m || 50);
   const valid = routeSteps.length > 0 && routeSteps[0]?.cell_id === originCellId && routeSteps[routeSteps.length - 1]?.cell_id === targetCellId;
 
-  return {
+  return withRouteFacts({
     route_id: routeId,
     route_version: 1,
     route_name: `${serviceOrder.service_order_id} 价格预估路径`,
@@ -47,7 +47,7 @@ export function createPriceEstimationRoute({ serviceOrder, data, routeId, routeP
     total_distance_m: totalDistance,
     route_status: valid ? "Active" : "Failed",
     failure_reason: valid ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
-  };
+  });
 }
 
 export function planDeploymentRoute({ execution, task, data, routeId, routePlanningRunId }) {
@@ -77,6 +77,8 @@ export function planDeploymentRoute({ execution, task, data, routeId, routePlann
     resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
     planningResult: route.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
     failureReason: route.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : route.failure_reason,
+    routeStepCount: route.route_step_count,
+    totalDistanceKm: route.total_distance_km,
     createdAt: new Date().toISOString(),
   });
   if (route.route_steps.length === 0) {
@@ -96,10 +98,8 @@ export function planDeploymentRoute({ execution, task, data, routeId, routePlann
     };
   }
   const routeCells = getRouteExecutionCells(route, data.roadSegments, originCellId, targetCellId);
-  return {
-    route,
-    routePlanningRun,
-    execution: {
+  const nextExecution = applyTravelMetrics({
+    record: {
       ...execution,
       route_id: route.route_id,
       route_strategy_id: route.route_strategy_id,
@@ -114,14 +114,20 @@ export function planDeploymentRoute({ execution, task, data, routeId, routePlann
       route_cell_ids: routeCells,
       current_target_service_area_id: targetServiceAreaId,
       route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
-      distance_traveled_km: 0,
-      distance_remaining_km: route.total_distance_m / 1000,
       time_elapsed: "0",
       battery_consumed_percent: 0,
       started_at: new Date().toISOString(),
       completed_at: null,
       failure_reason: null,
     },
+    routes: [route],
+    currentRouteId: route.route_id,
+    currentStepIndex: 0,
+  });
+  return {
+    route,
+    routePlanningRun,
+    execution: nextExecution,
     task: {
       ...task,
       task_status: taskTypes.DeploymentTaskStatus.MOVING,
@@ -165,10 +171,20 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
   const nextStepIndex = Math.min(Number(execution.current_step_index || 0) + 1, totalStepCount);
   const nextCellId = routeCellIds[nextStepIndex] || execution.target_cell_id;
   const completed = nextStepIndex >= totalStepCount;
-  const distancePerStepKm = totalStepCount > 0 ? route.total_distance_m / 1000 / totalStepCount : 0;
-  const distanceTraveledKm = roundDistance(distancePerStepKm * nextStepIndex);
-  const distanceDeltaKm = roundDistance(Math.max(0, distanceTraveledKm - Number(execution.distance_traveled_km || 0)));
-  const distanceRemainingKm = roundDistance(Math.max(0, route.total_distance_m / 1000 - distanceTraveledKm));
+  const nextExecution = applyTravelMetrics({
+    record: {
+      ...execution,
+      execution_status: completed ? taskTypes.RouteExecutionStatus.ARRIVED : taskTypes.RouteExecutionStatus.MOVING,
+      current_cell_id: nextCellId,
+      current_step_index: nextStepIndex,
+      total_step_count: totalStepCount,
+      time_elapsed: String(nextStepIndex),
+    },
+    routes: [route],
+    currentRouteId: execution.route_id,
+    currentStepIndex: nextStepIndex,
+  });
+  const distanceDeltaKm = roundDistance(Math.max(0, Number(nextExecution.distance_traveled_km || 0) - Number(execution.distance_traveled_km || 0)));
   const batteryDeltaPercent = robotaxi?.max_range_km
     ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
     : 0;
@@ -176,12 +192,7 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
   return {
     execution: {
       ...execution,
-      execution_status: completed ? taskTypes.RouteExecutionStatus.ARRIVED : taskTypes.RouteExecutionStatus.MOVING,
-      current_cell_id: nextCellId,
-      current_step_index: nextStepIndex,
-      distance_traveled_km: distanceTraveledKm,
-      distance_remaining_km: distanceRemainingKm,
-      time_elapsed: String(nextStepIndex),
+      ...nextExecution,
       battery_consumed_percent: batteryConsumedPercent,
     },
     task: completed ? { ...task, task_status: taskTypes.DeploymentTaskStatus.ARRIVED } : task,
@@ -249,6 +260,8 @@ export function createTripRouteUpdate({ trip, nextTrip, data, routeId, routePlan
     resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
     planningResult: route.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
     failureReason: route.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : route.failure_reason,
+    routeStepCount: route.route_step_count,
+    totalDistanceKm: route.total_distance_km,
     createdAt: new Date().toISOString(),
   });
   if (route.route_steps.length === 0) {
@@ -261,21 +274,27 @@ export function createTripRouteUpdate({ trip, nextTrip, data, routeId, routePlan
       },
     };
   }
+  const routeHistory = [
+    ...(Array.isArray(trip.route_history) ? trip.route_history : []),
+    createRouteHistoryEntry(route, routeRequest.routeChangeReason, null),
+  ];
+  const nextTripWithRoute = {
+    ...nextTrip,
+    route_id: route.route_id,
+    route_planning_run_id: routePlanningRun.route_planning_run_id,
+    route_history: routeHistory,
+    current_step_index: 0,
+    total_step_count: Math.max(0, route.route_steps.length - 1),
+  };
   return {
     route,
     routePlanningRun,
-    nextTrip: {
-      ...nextTrip,
-      route_id: route.route_id,
-      route_planning_run_id: routePlanningRun.route_planning_run_id,
-      route_history: [
-        ...(Array.isArray(trip.route_history) ? trip.route_history : []),
-        createRouteHistoryEntry(route, routeRequest.routeChangeReason, null),
-      ],
-      current_step_index: 0,
-      total_step_count: Math.max(0, route.route_steps.length - 1),
-      distance_remaining_km: route.total_distance_m / 1000,
-    },
+    nextTrip: applyTravelMetrics({
+      record: nextTripWithRoute,
+      routes: [...(data.routes || []), route],
+      currentRouteId: route.route_id,
+      currentStepIndex: 0,
+    }),
   };
 }
 
@@ -333,6 +352,8 @@ export function createRoutePlanningRun(options) {
     output_snapshot: {
       planning_result: planningResult,
       result_route_id: resultRouteId,
+      route_step_count: options.routeStepCount ?? null,
+      total_distance_km: options.totalDistanceKm ?? null,
       failure_reason: options.failureReason,
     },
     created_at: options.createdAt || new Date().toISOString(),
@@ -373,11 +394,59 @@ export function createRouteHistoryEntryWithOptions(route, routeChangeReason, arr
   };
 }
 
+export function withRouteFacts(route) {
+  const routeStepCount = getRouteStepCount(route);
+  const totalDistanceM = Number(route.total_distance_m ?? routeStepCount * 50);
+  return {
+    ...route,
+    route_step_count: routeStepCount,
+    total_step_count: route.total_step_count ?? routeStepCount,
+    total_distance_m: totalDistanceM,
+    total_distance_km: roundDistance(totalDistanceM / 1000),
+  };
+}
+
+export function calculateTravelDistanceMetrics(record, routes = []) {
+  const routeById = new Map((routes || []).map((route) => [route.route_id, withRouteFacts(route)]));
+  const historyRouteIds = Array.from(new Set((record?.route_history || []).map((item) => item.route_id).filter(Boolean)));
+  const routeIds = historyRouteIds.length > 0
+    ? historyRouteIds
+    : [record?.route_id].filter(Boolean);
+  const currentRouteId = record?.route_id || routeIds[routeIds.length - 1] || null;
+  const currentRouteIndex = Math.max(0, routeIds.lastIndexOf(currentRouteId));
+  const totalDistanceKm = routeIds.reduce((sum, routeId) => sum + getRouteDistanceKm(routeById.get(routeId)), 0);
+  const completedDistanceKm = routeIds.slice(0, currentRouteIndex).reduce((sum, routeId) => sum + getRouteDistanceKm(routeById.get(routeId)), 0);
+  const currentRoute = routeById.get(currentRouteId);
+  const currentStepCount = getRouteStepCount(currentRoute);
+  const currentStepIndex = Math.min(Math.max(0, Number(record?.current_step_index || 0)), currentStepCount);
+  const currentDistanceKm = getRouteDistanceKm(currentRoute);
+  const currentTraveledKm = currentStepCount > 0
+    ? roundDistance((currentDistanceKm / currentStepCount) * currentStepIndex)
+    : 0;
+  return {
+    total_distance_km: roundDistance(totalDistanceKm),
+    distance_traveled_km: roundDistance(completedDistanceKm + currentTraveledKm),
+    distance_remaining_km: roundDistance(Math.max(0, currentDistanceKm - currentTraveledKm)),
+  };
+}
+
+export function applyTravelMetrics({ record, routes = [], currentRouteId = null, currentStepIndex = null }) {
+  const nextRecord = {
+    ...record,
+    route_id: currentRouteId || record.route_id,
+    current_step_index: currentStepIndex ?? record.current_step_index ?? 0,
+  };
+  return {
+    ...nextRecord,
+    ...calculateTravelDistanceMetrics(nextRecord, routes),
+  };
+}
+
 function createDeploymentRoute({ task, data, routeId, routePlanningRunId, originCellId, targetCellId, targetServiceAreaId, routeExecutionId, strategyId }) {
   const routePlan = createBfsRoutePlan(data, originCellId, targetCellId);
   const routeSteps = routePlan.route_steps;
   const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps?.[0]?.cell_size_m || 50);
-  return {
+  return withRouteFacts({
     route_id: routeId,
     route_version: 1,
     route_name: `${task.robotaxi_id} 投放到 ${targetServiceAreaId}`,
@@ -400,14 +469,27 @@ function createDeploymentRoute({ task, data, routeId, routePlanningRunId, origin
     total_distance_m: totalDistance,
     route_status: routeSteps.length > 0 ? "Active" : "Failed",
     failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
-  };
+  });
+}
+
+function getRouteStepCount(route) {
+  if (!route) return 0;
+  if (Number.isFinite(Number(route.route_step_count))) return Math.max(0, Number(route.route_step_count));
+  if (Array.isArray(route.route_steps)) return Math.max(0, route.route_steps.length - 1);
+  return Math.max(0, Number(route.total_step_count || 0));
+}
+
+function getRouteDistanceKm(route) {
+  if (!route) return 0;
+  if (Number.isFinite(Number(route.total_distance_km))) return Number(route.total_distance_km);
+  return Number(route.total_distance_m || 0) / 1000;
 }
 
 function createTripRoute({ trip, data, routeId, routePlanningRunId, originCellId, targetCellId, targetServiceAreaId, strategyId }) {
   const routePlan = createBfsRoutePlan(data, originCellId, targetCellId);
   const routeSteps = routePlan.route_steps;
   const totalDistance = Math.max(0, routeSteps.length - 1) * (data.maps?.[0]?.cell_size_m || 50);
-  return {
+  return withRouteFacts({
     route_id: routeId,
     route_version: 1,
     route_name: `${trip.robotaxi_id} 履约行驶 ${originCellId} 到 ${targetCellId}`,
@@ -432,7 +514,7 @@ function createTripRoute({ trip, data, routeId, routePlanningRunId, originCellId
     total_distance_m: totalDistance,
     route_status: routeSteps.length > 0 ? "Active" : "Failed",
     failure_reason: routeSteps.length > 0 ? null : taskTypes.RoutePlanningFailureReason.NO_CONNECTED_ROAD_SEGMENT,
-  };
+  });
 }
 
 function getTripRouteRequest(trip) {

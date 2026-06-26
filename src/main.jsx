@@ -234,7 +234,7 @@ const tableConfig = {
   routes: {
     title: "路径规划结果",
     description: "路径规划结果是路径规划策略执行后生成的 Route，可供运营行驶记录或履约行驶记录引用。",
-    columns: ["route_id", "route_version", "route_usage_type", "route_strategy_id", "route_planning_run_id", "task_id", "service_order_id", "trip_id", "route_execution_id", "robotaxi_id", "origin_cell_id", "target_cell_id", "road_segment_sequence", "route_step_count", "total_distance_m", "route_status", "failure_reason"],
+    columns: ["route_id", "route_version", "route_usage_type", "route_strategy_id", "route_planning_run_id", "task_id", "service_order_id", "trip_id", "route_execution_id", "robotaxi_id", "origin_cell_id", "target_cell_id", "road_segment_sequence", "route_step_count", "total_distance_km", "total_distance_m", "route_status", "failure_reason"],
   },
   customers: {
     title: "客户管理",
@@ -284,7 +284,7 @@ const tableConfig = {
   routeExecutions: {
     title: "运营行驶记录",
     description: "记录 Robotaxi 执行任务时的模拟行驶过程。",
-    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_strategy_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "planned_target_service_area_id", "current_target_service_area_id", "actual_target_service_area_id", "arrival_execution_result", "route_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "created_at", "simulation_created_at"],
+    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_strategy_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "planned_target_service_area_id", "current_target_service_area_id", "actual_target_service_area_id", "arrival_execution_result", "route_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "created_at", "simulation_created_at"],
   },
   taskEventLogs: {
     title: "任务事件日志",
@@ -334,7 +334,7 @@ const tableConfig = {
   serviceFulfillmentRecords: {
     title: "履约行驶记录",
     description: "履约行驶记录用于模拟 Robotaxi 执行客户服务订单的接驾、载客和完成过程。",
-    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "route_id", "created_at", "simulation_created_at"],
+    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "route_id", "created_at", "simulation_created_at"],
   },
   robotaxis: {
     title: "Robotaxi 管理",
@@ -2105,6 +2105,8 @@ function App() {
       resultRouteId: priceRoute.route_steps.length > 0 ? priceRoute.route_id : null,
       planningResult: priceRoute.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
       failureReason: priceRoute.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : priceRoute.failure_reason,
+      routeStepCount: priceRoute.route_step_count,
+      totalDistanceKm: priceRoute.total_distance_km,
     });
     setRoutePlanningRuns((items) => [routePlanningRun, ...items]);
     if (priceRoute.route_steps.length === 0) {
@@ -2420,6 +2422,7 @@ function App() {
       current_cell_id: data.robotaxis.find((robotaxi) => robotaxi.robotaxi_id === robotaxiId)?.current_cell_id || serviceOrder.pickup_cell_id,
       current_step_index: 0,
       total_step_count: 0,
+      total_distance_km: 0,
       distance_traveled_km: 0,
       distance_remaining_km: serviceOrder.estimated_distance_km || 0,
       time_elapsed: "0",
@@ -2597,29 +2600,32 @@ function App() {
         motion_status: "MOVING",
       } : robotaxi),
     }));
-    setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? {
-      ...item,
-      route_id: route.route_id,
-      route_strategy_id: route.route_strategy_id,
-      execution_status: taskTypes.RouteExecutionStatus.MOVING,
-      origin_cell_id: execution.current_cell_id || task.origin_cell_id,
-      target_cell_id: execution.planned_target_cell_id || task.planned_target_cell_id || task.target_cell_id,
-      target_service_area_id: execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id,
-      actual_target_service_area_id: null,
-      actual_target_cell_id: null,
-      current_step_index: 0,
-      total_step_count: Math.max(0, routeCells.length - 1),
-      route_cell_ids: routeCells,
-      current_target_service_area_id: execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id,
-      route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
-      distance_traveled_km: 0,
-      distance_remaining_km: route.total_distance_m / 1000,
-      time_elapsed: "0",
-      battery_consumed_percent: 0,
-      started_at: now(),
-      completed_at: null,
-      failure_reason: null,
-    } : item));
+    setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? routePlanningService.applyTravelMetrics({
+      record: {
+        ...item,
+        route_id: route.route_id,
+        route_strategy_id: route.route_strategy_id,
+        execution_status: taskTypes.RouteExecutionStatus.MOVING,
+        origin_cell_id: execution.current_cell_id || task.origin_cell_id,
+        target_cell_id: execution.planned_target_cell_id || task.planned_target_cell_id || task.target_cell_id,
+        target_service_area_id: execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id,
+        actual_target_service_area_id: null,
+        actual_target_cell_id: null,
+        current_step_index: 0,
+        total_step_count: Math.max(0, routeCells.length - 1),
+        route_cell_ids: routeCells,
+        current_target_service_area_id: execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id,
+        route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
+        time_elapsed: "0",
+        battery_consumed_percent: 0,
+        started_at: now(),
+        completed_at: null,
+        failure_reason: null,
+      },
+      routes: [route, ...data.routes],
+      currentRouteId: route.route_id,
+      currentStepIndex: 0,
+    }) : item));
     setRoutePlanningRuns((items) => [createRoutePlanningRun({
       routePlanningRunId,
       routeStrategyId: route.route_strategy_id,
@@ -2632,6 +2638,8 @@ function App() {
       resultRouteId: route.route_id,
       planningResult: taskTypes.RoutePlanningResult.SUCCESS,
       failureReason: taskTypes.RoutePlanningFailureReason.NONE,
+      routeStepCount: route.route_step_count,
+      totalDistanceKm: route.total_distance_km,
     }), ...items]);
     setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === execution.task_id ? {
       ...item,
@@ -2749,30 +2757,33 @@ function App() {
         motion_status: "MOVING",
       } : robotaxi),
     }));
-    setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? {
-      ...item,
-      route_id: route.route_id,
-      route_strategy_id: route.route_strategy_id,
-      execution_status: taskTypes.RouteExecutionStatus.MOVING,
-      origin_cell_id: currentCellId,
-      target_cell_id: target.target_cell_id,
-      target_service_area_id: target.target_service_area_id,
-      actual_target_service_area_id: null,
-      actual_target_cell_id: null,
-      current_step_index: 0,
-      total_step_count: Math.max(0, routeCells.length - 1),
-      route_cell_ids: routeCells,
-      current_target_service_area_id: target.target_service_area_id,
-      route_history: [
-        ...(item.route_history || []),
-        createRouteHistoryEntry(route, taskTypes.RouteChangeReason.ABNORMAL_ARRIVAL_REPLAN, task.arrival_execution_result),
-      ],
-      distance_traveled_km: 0,
-      distance_remaining_km: route.total_distance_m / 1000,
-      time_elapsed: "0",
-      completed_at: null,
-      failure_reason: null,
-    } : item));
+    setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? routePlanningService.applyTravelMetrics({
+      record: {
+        ...item,
+        route_id: route.route_id,
+        route_strategy_id: route.route_strategy_id,
+        execution_status: taskTypes.RouteExecutionStatus.MOVING,
+        origin_cell_id: currentCellId,
+        target_cell_id: target.target_cell_id,
+        target_service_area_id: target.target_service_area_id,
+        actual_target_service_area_id: null,
+        actual_target_cell_id: null,
+        current_step_index: 0,
+        total_step_count: Math.max(0, routeCells.length - 1),
+        route_cell_ids: routeCells,
+        current_target_service_area_id: target.target_service_area_id,
+        route_history: [
+          ...(item.route_history || []),
+          createRouteHistoryEntry(route, taskTypes.RouteChangeReason.ABNORMAL_ARRIVAL_REPLAN, task.arrival_execution_result),
+        ],
+        time_elapsed: "0",
+        completed_at: null,
+        failure_reason: null,
+      },
+      routes: [route, ...data.routes],
+      currentRouteId: route.route_id,
+      currentStepIndex: 0,
+    }) : item));
     setRoutePlanningRuns((items) => [createRoutePlanningRun({
       routePlanningRunId: route.route_planning_run_id,
       routeStrategyId: route.route_strategy_id,
@@ -2785,6 +2796,8 @@ function App() {
       resultRouteId: route.route_id,
       planningResult: taskTypes.RoutePlanningResult.SUCCESS,
       failureReason: taskTypes.RoutePlanningFailureReason.NONE,
+      routeStepCount: route.route_step_count,
+      totalDistanceKm: route.total_distance_km,
     }), ...items]);
     setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? {
       ...item,
@@ -2856,10 +2869,17 @@ function App() {
     const nextStepIndex = Math.min(execution.current_step_index + 1, execution.total_step_count);
     const nextCellId = execution.route_cell_ids[nextStepIndex] || execution.target_cell_id;
     const completed = nextStepIndex >= execution.total_step_count;
-    const distancePerStepKm = execution.total_step_count > 0 ? route.total_distance_m / 1000 / execution.total_step_count : 0;
-    const distanceTraveledKm = Number((distancePerStepKm * nextStepIndex).toFixed(2));
-    const distanceDeltaKm = Number(Math.max(0, distanceTraveledKm - Number(execution.distance_traveled_km || 0)).toFixed(2));
-    const distanceRemainingKm = Number(Math.max(0, route.total_distance_m / 1000 - distanceTraveledKm).toFixed(2));
+    const nextExecutionMetrics = routePlanningService.applyTravelMetrics({
+      record: {
+        ...execution,
+        current_cell_id: nextCellId,
+        current_step_index: nextStepIndex,
+      },
+      routes: data.routes,
+      currentRouteId: execution.route_id,
+      currentStepIndex: nextStepIndex,
+    });
+    const distanceDeltaKm = Number(Math.max(0, Number(nextExecutionMetrics.distance_traveled_km || 0) - Number(execution.distance_traveled_km || 0)).toFixed(2));
     const robotaxi = data.robotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id);
     const batteryDeltaPercent = robotaxi?.max_range_km
       ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
@@ -2871,8 +2891,9 @@ function App() {
       execution_status: completed ? taskTypes.RouteExecutionStatus.ARRIVED : taskTypes.RouteExecutionStatus.MOVING,
       current_cell_id: nextCellId,
       current_step_index: nextStepIndex,
-      distance_traveled_km: distanceTraveledKm,
-      distance_remaining_km: distanceRemainingKm,
+      total_distance_km: nextExecutionMetrics.total_distance_km,
+      distance_traveled_km: nextExecutionMetrics.distance_traveled_km,
+      distance_remaining_km: nextExecutionMetrics.distance_remaining_km,
       time_elapsed: `${nextStepIndex}`,
       battery_consumed_percent: batteryConsumedPercent,
     } : item));
@@ -3066,6 +3087,7 @@ function App() {
       current_cell_id: task.origin_cell_id,
       current_step_index: 0,
       total_step_count: 0,
+      total_distance_km: 0,
       route_cell_ids: [],
       same_service_area_retry_allowed: true,
       current_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
@@ -3752,10 +3774,10 @@ function getDetailTabs(selectedType) {
   }
   if (selectedType === "routeExecution") {
     return [
-      { key: "basic", label: "执行信息", keys: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "arrival_execution_result"] },
-      { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "current_target_service_area_id", "route_summary", "route_detail", "route_history"] },
-      { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "current_cell_id", "current_location_summary", "current_location_detail"] },
-      { key: "progress", label: "执行进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent"] },
+      { key: "basic", label: "行驶信息", keys: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "arrival_execution_result"] },
+      { key: "location", label: "位置信息", keys: ["origin_cell_id", "origin_location_summary", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "actual_target_cell_id", "actual_target_service_area_id", "current_cell_id", "current_location_summary"] },
+      { key: "progress", label: "行驶进度", keys: ["current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent"] },
+      { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "current_target_service_area_id", "route_summary", "route_history_detail"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
       { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
@@ -3775,9 +3797,9 @@ function getDetailTabs(selectedType) {
   if (selectedType === "trip") {
     return [
       { key: "basic", label: "履约信息", keys: ["trip_id", "trip_status", "trip_phase", "service_order_id", "robotaxi_id"] },
-      { key: "location", label: "服务位置", keys: ["pickup_service_area_id", "pickup_cell_id", "pickup_location_summary", "pickup_location_detail", "dropoff_service_area_id", "dropoff_cell_id", "dropoff_location_summary", "dropoff_location_detail", "current_cell_id", "current_location_summary", "current_location_detail"] },
-      { key: "progress", label: "履约进度", keys: ["current_step_index", "total_step_count", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"] },
-      { key: "route", label: "路径关联", keys: ["route_id", "route_planning_run_id", "route_summary", "route_detail", "route_history", "route_history_detail"] },
+      { key: "location", label: "位置信息", keys: ["pickup_service_area_id", "pickup_cell_id", "pickup_location_summary", "dropoff_service_area_id", "dropoff_cell_id", "dropoff_location_summary", "current_cell_id", "current_location_summary"] },
+      { key: "progress", label: "行驶进度", keys: ["current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"] },
+      { key: "route", label: "路径信息", keys: ["route_id", "route_planning_run_id", "route_summary", "route_history_detail"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason", "event_log"] },
       { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
@@ -5444,17 +5466,22 @@ function enrichRouteExecutionForDisplay(execution, data) {
   const originLocation = getLocationInfo(execution.origin_cell_id, data);
   const targetLocation = getLocationInfo(execution.target_cell_id, data);
   const currentLocation = getLocationInfo(execution.current_cell_id, data);
+  const executionMetrics = getTravelMetrics(execution, data);
   return {
     ...execution,
     route_strategy_id: route?.route_strategy_id || execution.route_strategy_id || null,
     route_summary: summarizeRoute(route),
     route_detail: route ? getRouteDetail(route) : null,
+    route_history_detail: createRouteHistoryDetail(execution, data),
     origin_location_summary: originLocation.summary,
     target_location_summary: targetLocation.summary,
     current_location_summary: currentLocation.summary,
     origin_location_detail: originLocation.detail,
     target_location_detail: targetLocation.detail,
     current_location_detail: currentLocation.detail,
+    total_distance_km: executionMetrics.totalDistanceKm,
+    distance_traveled_km: executionMetrics.distanceTraveledKm,
+    distance_remaining_km: executionMetrics.distanceRemainingKm,
   };
 }
 
@@ -5516,29 +5543,32 @@ function getTripMetrics(trip, data = null) {
       durationMin: null,
     };
   }
-  const distanceTraveledKm = roundDistance(trip.distance_traveled_km || 0);
-  const distanceRemainingKm = roundDistance(trip.distance_remaining_km || 0);
-  const routeHistoryDistanceKm = data ? getTripRouteHistoryDistanceKm(trip, data) : null;
+  const travelMetrics = data ? getTravelMetrics(trip, data) : null;
+  const distanceTraveledKm = travelMetrics?.distanceTraveledKm ?? roundDistance(trip.distance_traveled_km || 0);
+  const distanceRemainingKm = travelMetrics?.distanceRemainingKm ?? roundDistance(trip.distance_remaining_km || 0);
   return {
-    totalDistanceKm: routeHistoryDistanceKm ?? roundDistance(distanceTraveledKm + distanceRemainingKm),
+    totalDistanceKm: travelMetrics?.totalDistanceKm ?? roundDistance(distanceTraveledKm + distanceRemainingKm),
     distanceTraveledKm,
     distanceRemainingKm,
     durationMin: Number.parseInt(trip.time_elapsed, 10) || 0,
   };
 }
 
-function getTripRouteHistoryDistanceKm(trip, data) {
-  const routeIds = Array.from(new Set((trip.route_history || []).map((item) => item.route_id).filter(Boolean)));
-  if (routeIds.length === 0) return null;
-  const routeDistanceKm = routeIds.reduce((sum, routeId) => {
-    const route = data.routes.find((item) => item.route_id === routeId);
-    return sum + Number(route?.total_distance_m || 0) / 1000;
-  }, 0);
-  return routeDistanceKm > 0 ? roundDistance(Math.max(routeDistanceKm, (trip.distance_traveled_km || 0) + (trip.distance_remaining_km || 0))) : null;
+function getTravelMetrics(record, data) {
+  const metrics = routePlanningService.calculateTravelDistanceMetrics(record, data.routes || []);
+  return {
+    totalDistanceKm: metrics.total_distance_km,
+    distanceTraveledKm: metrics.distance_traveled_km,
+    distanceRemainingKm: metrics.distance_remaining_km,
+  };
 }
 
 function createTripRouteHistoryDetail(trip, data) {
-  const history = Array.isArray(trip.route_history) ? trip.route_history : [];
+  return createRouteHistoryDetail(trip, data);
+}
+
+function createRouteHistoryDetail(record, data) {
+  const history = Array.isArray(record.route_history) ? record.route_history : [];
   if (history.length === 0) return [];
   return history.map((item, index) => {
     const route = data.routes.find((routeItem) => routeItem.route_id === item.route_id);
@@ -5549,8 +5579,9 @@ function createTripRouteHistoryDetail(trip, data) {
       route_change_reason: item.route_change_reason,
       origin_cell_id: item.origin_cell_id,
       target_cell_id: item.target_cell_id,
-      total_distance_km: route ? roundDistance(Number(route.total_distance_m || 0) / 1000) : null,
-      is_current_route: item.route_id === trip.route_id,
+      route_step_count: route ? getMovementStepCount(route) : null,
+      total_distance_km: route ? roundDistance(Number(route.total_distance_km ?? Number(route.total_distance_m || 0) / 1000)) : null,
+      is_current_route: item.route_id === record.route_id,
     };
   });
 }
@@ -5682,6 +5713,7 @@ function getRouteDetail(route) {
     route_step_count: getMovementStepCount(route),
     route_steps: route.route_steps,
     related_service_area_ids: route.related_service_area_ids,
+    total_distance_km: roundDistance(Number(route.total_distance_km ?? Number(route.total_distance_m || 0) / 1000)),
     total_distance_m: route.total_distance_m,
     route_status: route.route_status,
     failure_reason: route.failure_reason,
@@ -5764,6 +5796,8 @@ function replanTripRoute(trip, options) {
     resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
     planningResult: route.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
     failureReason: route.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : route.failure_reason,
+    routeStepCount: route.route_step_count,
+    totalDistanceKm: route.total_distance_km,
   });
   if (route.route_steps.length === 0) {
     return {
@@ -5779,20 +5813,24 @@ function replanTripRoute(trip, options) {
   return {
     route,
     routePlanningRun,
-    nextTrip: {
-      ...trip,
-      route_id: route.route_id,
-      route_planning_run_id: routePlanningRun.route_planning_run_id,
-      route_history: routeHistory,
-      dropoff_cell_id: options.routeChangeReason === taskTypes.RouteChangeReason.DESTINATION_CHANGE_REPLAN ? options.targetCellId : trip.dropoff_cell_id,
-      dropoff_service_area_id: options.routeChangeReason === taskTypes.RouteChangeReason.DESTINATION_CHANGE_REPLAN ? options.targetServiceAreaId : trip.dropoff_service_area_id,
-      current_step_index: 0,
-      total_step_count: Math.max(0, route.route_steps.length - 1),
-      distance_remaining_km: route.total_distance_m / 1000,
-      arrival_execution_result: options.exceptionType,
-      exception_type: options.exceptionType,
-      failure_reason: null,
-    },
+    nextTrip: routePlanningService.applyTravelMetrics({
+      record: {
+        ...trip,
+        route_id: route.route_id,
+        route_planning_run_id: routePlanningRun.route_planning_run_id,
+        route_history: routeHistory,
+        dropoff_cell_id: options.routeChangeReason === taskTypes.RouteChangeReason.DESTINATION_CHANGE_REPLAN ? options.targetCellId : trip.dropoff_cell_id,
+        dropoff_service_area_id: options.routeChangeReason === taskTypes.RouteChangeReason.DESTINATION_CHANGE_REPLAN ? options.targetServiceAreaId : trip.dropoff_service_area_id,
+        current_step_index: 0,
+        total_step_count: Math.max(0, route.route_steps.length - 1),
+        arrival_execution_result: options.exceptionType,
+        exception_type: options.exceptionType,
+        failure_reason: null,
+      },
+      routes: [route, ...data.routes],
+      currentRouteId: route.route_id,
+      currentStepIndex: 0,
+    }),
   };
 }
 

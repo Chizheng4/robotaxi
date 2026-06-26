@@ -509,7 +509,7 @@
 |origin_cell_id|起点位置|持久化字段|本次 Route 起点 Cell|
 |route_usage_type|路径用途类型|持久化字段|区分价格预估路径、运营行驶路径、服务接驾路径、服务送达路径、服务重规划路径等 Route 用途|
 |road_segment_sequence|道路片段序列|持久化字段|Route 经过的 RoadSegment 顺序|
-|total_distance_km|路径总距离（公里）|持久化字段|Route 总距离，供价格和运营分析使用|
+|total_distance_km|路径总距离（公里）|持久化字段|Route 总距离，供价格和运营分析使用；在 Trip / RouteExecution 上表示关联所有路径后的行驶总距离|
 |estimated_duration_min|预估时长（分钟）|持久化字段|Route 预估耗时，供价格和运营分析使用|
 |route_steps|路径步骤|持久化字段|Route 中可执行的 Cell Step 序列|
 |route_step_count|移动步数|聚合展示字段|Route 中实际移动步数，等于 route_steps.length - 1，起点 Step 不计为移动|
@@ -646,7 +646,8 @@
 |current_location_detail|当前位置详情|聚合展示字段|当前位置的结构化上下文|
 |current_step_index|当前步序号|运行态字段|当前执行到 Route 的 Step 下标|
 |total_step_count|总移动步数|运行态字段|当前 Route 实际移动步数，等于 route_steps.length - 1|
-|distance_traveled_km|已行驶距离（公里）|运行态字段|履约行驶已行驶距离|
+|total_distance_km|总距离（公里）|运行态字段|履约行驶记录关联所有 Route 的总距离|
+|distance_traveled_km|已行驶距离（公里）|运行态字段|历史已完成 Route 距离 + 当前 Route 已行驶距离|
 |distance_remaining_km|剩余距离（公里）|运行态字段|当前 Route 剩余距离|
 |time_elapsed|已耗时|运行态字段|履约行驶已耗时|
 |trip_status|履约行驶状态|运行态字段|Trip 当前状态|

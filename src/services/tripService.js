@@ -10,6 +10,7 @@
  */
 
 import * as tripTypes from "../domain/tripTypes.js";
+import { calculateTravelDistanceMetrics } from "./routePlanningService.js";
 
 // ============================================================================
 // 1. 行驶步数推进（Movement）
@@ -31,9 +32,10 @@ export function getNextTripMovementState(trip, data) {
   const nextStepIndex = Math.min(currentStepIndex + 1, totalStepCount);
   const nextStep = route.route_steps[nextStepIndex] || route.route_steps[route.route_steps.length - 1];
   const reachedTarget = nextStepIndex >= totalStepCount;
-  const distancePerStepKm = totalStepCount > 0 ? (route.total_distance_m || 0) / 1000 / totalStepCount : 0;
-  const distanceTraveledKm = roundDistance(distancePerStepKm * nextStepIndex);
-  const distanceRemainingKm = roundDistance(Math.max(0, (route.total_distance_m || 0) / 1000 - distanceTraveledKm));
+  const distanceMetrics = calculateTravelDistanceMetrics(
+    { ...trip, current_step_index: nextStepIndex },
+    data.routes || [],
+  );
 
   const nextStatus = reachedTarget
     ? (trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP
@@ -52,8 +54,9 @@ export function getNextTripMovementState(trip, data) {
     current_cell_id: nextStep?.cell_id || trip.current_cell_id,
     current_step_index: nextStepIndex,
     total_step_count: totalStepCount,
-    distance_traveled_km: distanceTraveledKm,
-    distance_remaining_km: distanceRemainingKm,
+    total_distance_km: distanceMetrics.total_distance_km,
+    distance_traveled_km: distanceMetrics.distance_traveled_km,
+    distance_remaining_km: distanceMetrics.distance_remaining_km,
     time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
     arrival_execution_result: reachedTarget && nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION
       ? "NORMAL_ARRIVAL" : trip.arrival_execution_result,
