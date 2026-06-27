@@ -108,7 +108,10 @@ export function createDeploymentTask({ state, runtime }) {
     robotaxi.availability_status === "AVAILABLE" && !robotaxi.current_task_id && !robotaxi.current_order_id
   );
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "投放任务创建失败：无可投放 Robotaxi", "deploymentTask", null, "无可投放 Robotaxi");
-  const target = routePlanningService.getDefaultDeploymentTarget(appData);
+  const target = routePlanningService.getDefaultDeploymentTarget(appData, {
+    originCellId: candidate.current_cell_id,
+    seed: `${candidate.robotaxi_id}-${runtime.now()}`,
+  });
   if (!target?.target_cell_id) return failure("NO_DEPLOYMENT_TARGET", "投放任务创建失败：无可用投放目标", "deploymentTask", null, "无可用投放目标");
 
   const taskId = runtime.nextId("TASK-DP");
@@ -293,8 +296,10 @@ export function executePricing({ state, objectId, runtime }) {
     data: appData,
     routeEstimate: {
       route_id: routePlanning.route.route_id,
-      estimated_distance_km: routePlanning.route.total_distance_m / 1000,
-      estimated_duration_min: Math.max(1, Math.ceil((routePlanning.route.total_distance_m / 1000 / 24) * 60)),
+      estimated_distance_km: routePlanning.route.total_distance_km ?? routePlanning.route.total_distance_m / 1000,
+      estimated_duration_min: routePlanningService.calculateRouteEstimatedDurationMin(routePlanning.route),
+      route_step_count: routePlanning.route.route_step_count,
+      cell_travel_seconds: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS,
     },
     pricingStrategyRunId: runtime.nextId("DPR"),
     pricingDecisionId: runtime.nextId("PD"),
@@ -564,9 +569,8 @@ function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime) 
   return replaceById(serviceOrders, "service_order_id", serviceOrderId, (order) => ({
     ...order,
     order_status: orderStatus,
-    actual_distance_km: trip.distance_traveled_km,
-    actual_duration_min: parseTimeElapsed(trip.time_elapsed),
     trip_total_distance_km: trip.total_distance_km,
+    trip_total_duration_min: parseTimeElapsed(trip.time_elapsed),
     trip_distance_traveled_km: trip.distance_traveled_km,
     trip_distance_remaining_km: trip.distance_remaining_km,
     ...runtime.audit(),
@@ -603,6 +607,8 @@ function createServiceOrderFromDemandRun(demandRun, orderChannel, runtime) {
     estimated_price: null,
     quoted_price: null,
     final_price: null,
+    trip_total_distance_km: null,
+    trip_total_duration_min: null,
     created_at: runtime.now(),
     ...runtime.audit({ created: true }),
   };

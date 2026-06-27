@@ -94,8 +94,8 @@ const syncedOrder = settlement.createServiceOrderActualSnapshotFromTrip(
   tripTypes,
 );
 assert.equal(syncedOrder.order_status, "SETTLING");
-assert.equal(syncedOrder.actual_distance_km, 12.4);
-assert.equal(syncedOrder.actual_duration_min, 31);
+assert.equal(syncedOrder.trip_total_distance_km, 12.4);
+assert.equal(syncedOrder.trip_total_duration_min, 31);
 
 const input = settlement.buildServiceOrderSettlementInput({
   serviceOrder: syncedOrder,
@@ -104,8 +104,8 @@ const input = settlement.buildServiceOrderSettlementInput({
   tripTypes,
 });
 assert.equal(input.failure_reason, null);
-assert.equal(input.settlementOrder.actual_distance_km, 12.4);
-assert.equal(input.settlementOrder.actual_duration_min, 31);
+assert.equal(input.settlementOrder.fulfillment_distance_km, 12.4);
+assert.equal(input.settlementOrder.fulfillment_duration_min, 31);
 
 const strategy = {
   pricing_strategy_id: "DPS-002",
@@ -122,10 +122,10 @@ const result = settlement.runFinalFareCalculation({
   pricingTypes,
 });
 assert.equal(result.run.run_result, "SUCCESS");
-assert.equal(result.run.input_snapshot.actual_distance_source, "TRIP_DISTANCE_TRAVELED");
-assert.equal(result.run.input_snapshot.actual_duration_source, "TRIP_TIME_ELAPSED");
-assert.equal(result.decision.actual_distance_km, 12.4);
-assert.equal(result.decision.actual_duration_min, 31);
+assert.equal(result.run.input_snapshot.fulfillment_distance_source, "TRIP_TOTAL_DISTANCE");
+assert.equal(result.run.input_snapshot.fulfillment_duration_source, "TRIP_TIME_ELAPSED");
+assert.equal(result.decision.fulfillment_distance_km, 12.4);
+assert.equal(result.decision.fulfillment_duration_min, 31);
 assert.equal(result.decision.final_price, 66.4);
 
 const settledOrder = settlement.applyServiceOrderSettlementResult({
@@ -140,8 +140,8 @@ assert.equal(settledOrder.final_pricing_decision_id, "PD-TEST-001");
 assert.equal(settledOrder.final_price, 66.4);
 
 const invalidInput = settlement.buildServiceOrderSettlementInput({
-  serviceOrder: { ...syncedOrder, actual_distance_km: 0 },
-  trip: { ...trip, distance_traveled_km: 0 },
+  serviceOrder: { ...syncedOrder, trip_total_distance_km: 0 },
+  trip: { ...trip, total_distance_km: 0, distance_traveled_km: 0 },
   serviceOrderTypes,
   tripTypes,
 });

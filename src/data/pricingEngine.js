@@ -6,6 +6,8 @@ import {
   createPricingStrategyRun,
 } from "../domain/pricingTypes.js?v=20260611-v019-4-pricing";
 
+const DEFAULT_CELL_TRAVEL_SECONDS = 6;
+
 export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrategyRunId, pricingDecisionId, createdAt, routeEstimate = null }) {
   if (!strategy || strategy.strategy_status !== "ACTIVE") {
     return createFailedResult({ strategy, serviceOrder, pricingStrategyRunId, createdAt, failureReason: PricingFailureReason.PRICING_STRATEGY_NOT_FOUND });
@@ -31,6 +33,8 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
   const quotedPrice = roundMoney(basePrice * dynamicMultiplier);
   const pricingBreakdown = {
     price_estimation_route_id: estimate.route_id || null,
+    route_step_count: estimate.route_step_count ?? null,
+    cell_travel_seconds: estimate.cell_travel_seconds || DEFAULT_CELL_TRAVEL_SECONDS,
     base_fare: strategy.base_fare,
     estimated_distance_km: estimate.estimated_distance_km,
     distance_unit_price: strategy.distance_unit_price,
@@ -40,6 +44,7 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
     time_fee: timeFee,
     base_price: basePrice,
     dynamic_multiplier: dynamicMultiplier,
+    estimated_price: quotedPrice,
     quoted_price: quotedPrice,
   };
   const run = createPricingStrategyRun({
@@ -53,6 +58,8 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
       dropoff_cell_id: serviceOrder.dropoff_cell_id,
       order_channel: serviceOrder.order_channel,
       price_estimation_route_id: estimate.route_id || null,
+      route_step_count: estimate.route_step_count ?? null,
+      cell_travel_seconds: estimate.cell_travel_seconds || DEFAULT_CELL_TRAVEL_SECONDS,
     },
     output_snapshot: pricingBreakdown,
     run_result: PricingResult.SUCCESS,
@@ -73,6 +80,8 @@ export function runPricingEstimate({ strategy, serviceOrder, data, pricingStrate
     estimated_duration_min: estimate.estimated_duration_min,
     actual_distance_km: null,
     actual_duration_min: null,
+    fulfillment_distance_km: null,
+    fulfillment_duration_min: null,
     base_fare: strategy.base_fare,
     distance_unit_price: strategy.distance_unit_price,
     time_unit_price: strategy.time_unit_price,
@@ -127,10 +136,12 @@ function estimateRoute(data, pickupCellId, dropoffCellId) {
   const cellSizeM = data.maps?.[0]?.cell_size_m || 50;
   const stepCount = Math.abs(pickup.row - dropoff.row) + Math.abs(pickup.col - dropoff.col);
   const estimatedDistanceKm = Number(((Math.max(1, stepCount) * cellSizeM) / 1000).toFixed(2));
-  const estimatedDurationMin = Math.max(1, Math.ceil((estimatedDistanceKm / 24) * 60));
+  const estimatedDurationMin = Math.max(1, Math.ceil((Math.max(1, stepCount) * DEFAULT_CELL_TRAVEL_SECONDS) / 60));
   return {
     estimated_distance_km: estimatedDistanceKm,
     estimated_duration_min: estimatedDurationMin,
+    route_step_count: Math.max(1, stepCount),
+    cell_travel_seconds: DEFAULT_CELL_TRAVEL_SECONDS,
   };
 }
 

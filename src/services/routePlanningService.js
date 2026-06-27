@@ -2,6 +2,8 @@ import * as taskTypes from "../domain/taskTypes.js";
 import * as tripTypes from "../domain/tripTypes.js";
 import { createRoutePlanningStrategySnapshot } from "../domain/routePlanningStrategies.js";
 
+export const DEFAULT_CELL_TRAVEL_SECONDS = 6;
+
 export function createPriceEstimationRoute({ serviceOrder, data, routeId, routePlanningRunId }) {
   const originCellId = serviceOrder.customer_origin_cell_id;
   const pickupCellId = serviceOrder.pickup_cell_id;
@@ -178,7 +180,7 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
       current_cell_id: nextCellId,
       current_step_index: nextStepIndex,
       total_step_count: totalStepCount,
-      time_elapsed: String(nextStepIndex),
+      time_elapsed: addElapsedMinutes(execution.time_elapsed, DEFAULT_CELL_TRAVEL_SECONDS / 60),
     },
     routes: [route],
     currentRouteId: execution.route_id,
@@ -360,15 +362,11 @@ export function createRoutePlanningRun(options) {
   });
 }
 
-export function getDefaultDeploymentTarget(data) {
-  const serviceArea = data.serviceAreas?.find((area) => area.service_area_id === "SA-006") ||
-    data.serviceAreas?.find((area) => area.vehicle_capabilities?.can_stage || area.vehicle_capabilities?.can_short_wait);
-  if (!serviceArea) return null;
-  return {
-    target_cell_id: getCandidateServiceAreaCellIds(serviceArea)[0],
-    target_service_area_id: serviceArea.service_area_id,
-    target_zone_id: data.zones?.find((zone) => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null,
-  };
+export function getDefaultDeploymentTarget(data, options = {}) {
+  const originCellId = options.originCellId || null;
+  const candidates = getDeploymentTargetCandidates(data, originCellId);
+  if (candidates.length === 0) return null;
+  return candidates[stableIndex(options.seed || originCellId || candidates.length, candidates.length)];
 }
 
 export function getRouteExecutionCells(route, roadSegments, originCellId, targetCellId) {
@@ -440,6 +438,13 @@ export function applyTravelMetrics({ record, routes = [], currentRouteId = null,
     ...nextRecord,
     ...calculateTravelDistanceMetrics(nextRecord, routes),
   };
+}
+
+export function calculateRouteEstimatedDurationMin(route, options = {}) {
+  const cellTravelSeconds = Number(options.cellTravelSeconds || DEFAULT_CELL_TRAVEL_SECONDS);
+  const routeStepCount = getRouteStepCount(route);
+  const durationSeconds = Math.max(0, routeStepCount) * cellTravelSeconds;
+  return Math.max(1, Math.ceil(durationSeconds / 60));
 }
 
 function createDeploymentRoute({ task, data, routeId, routePlanningRunId, originCellId, targetCellId, targetServiceAreaId, routeExecutionId, strategyId }) {
@@ -725,6 +730,48 @@ function getCandidateServiceAreaCellIds(serviceArea) {
     ...(serviceArea.dropoff_cell_ids || []),
     ...(serviceArea.cell_ids || serviceArea.covered_cell_ids || []),
   ].filter((cellId, index, list) => cellId && list.indexOf(cellId) === index);
+}
+
+function getDeploymentTargetCandidates(data, originCellId) {
+  const zones = data.zones || [];
+  return (data.serviceAreas || []).flatMap((serviceArea) => {
+    const capabilities = serviceArea.vehicle_capabilities || {};
+    if (!capabilities.can_stage && !capabilities.can_short_wait && !capabilities.can_park) return [];
+    const targetZoneId = zones.find((zone) => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null;
+    return getCandidateServiceAreaCellIds(serviceArea)
+      .filter((cellId) => cellId && cellId !== originCellId)
+      .map((cellId) => ({
+        target_cell_id: cellId,
+        target_service_area_id: serviceArea.service_area_id,
+        target_zone_id: targetZoneId,
+      }));
+  });
+}
+
+function stableIndex(seed, length) {
+  if (length <= 0) return 0;
+  const text = String(seed || "");
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash) % length;
+}
+
+function addElapsedMinutes(current, minutes) {
+  return String(roundDuration(parseElapsedMinutes(current) + (minutes || 0)));
+}
+
+function parseElapsedMinutes(value) {
+  if (Number.isFinite(Number(value))) return Number(value);
+  const parts = String(value || "0").split(":").map((part) => Number.parseInt(part, 10) || 0);
+  if (parts.length >= 3) return parts[0] * 60 + parts[1] + Math.ceil(parts[2] / 60);
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0] || 0;
+}
+
+function roundDuration(value) {
+  return Number(Number(value || 0).toFixed(2));
 }
 
 function manhattanDistance(cellA, cellB) {

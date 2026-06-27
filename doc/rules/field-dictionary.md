@@ -595,12 +595,13 @@
 |quote_time_unit_price|报价时间单价|运行态字段|客户看到报价时使用的时间单价快照|
 |estimated_distance_km|预估距离（公里）|运行态字段|订单预估服务距离|
 |estimated_duration_min|预估时长（分钟）|运行态字段|订单预估服务时长|
-|estimated_price|预估价格|运行态字段|系统预估价格|
-|quoted_price|客户报价|运行态字段|客户确认前展示报价|
-|actual_distance_km|实际距离（公里）|运行态字段|服务完成后的实际距离|
-|actual_duration_min|实际时长（分钟）|运行态字段|服务完成后的实际时长|
+|estimated_price|预估价格|运行态字段|系统预估价格，服务订单与预估定价阶段的主展示字段|
+|quoted_price|预估价格（兼容）|兼容字段|历史客户报价字段，新增展示与计算不得优先依赖|
+|actual_distance_km|实际总距离（兼容）|兼容字段|历史实际距离字段，新增结算逻辑不得优先依赖|
+|actual_duration_min|实际总时长（兼容）|兼容字段|历史实际时长字段，新增结算逻辑不得优先依赖|
 |final_price|最终价格|运行态字段|最终结算价格|
 |trip_total_distance_km|履约总距离（公里）|聚合展示字段|关联履约行驶记录的总距离|
+|trip_total_duration_min|履约总时长（分钟）|聚合展示字段|关联履约行驶记录的累计已耗时|
 |trip_distance_traveled_km|履约已行驶距离（公里）|聚合展示字段|关联履约行驶记录的已行驶距离|
 |trip_distance_remaining_km|履约剩余距离（公里）|聚合展示字段|关联履约行驶记录的剩余距离|
 |payment_status|支付状态|运行态字段|订单支付状态|
@@ -649,7 +650,7 @@
 |total_distance_km|总距离（公里）|运行态字段|履约行驶记录关联所有 Route 的总距离|
 |distance_traveled_km|已行驶距离（公里）|运行态字段|历史已完成 Route 距离 + 当前 Route 已行驶距离|
 |distance_remaining_km|剩余距离（公里）|运行态字段|当前 Route 剩余距离|
-|time_elapsed|已耗时|运行态字段|履约行驶已耗时|
+|time_elapsed|已耗时（分钟）|运行态字段|履约行驶累计已耗时，按分钟表达|
 |trip_status|履约行驶状态|运行态字段|Trip 当前状态|
 |trip_phase|履约行驶阶段|运行态字段|路径规划或异常处理时使用的 Trip 阶段表达|
 |arrival_execution_result|到达执行结果|运行态字段|目的地到达后的执行结果，可为空|
@@ -747,6 +748,13 @@
 |service_area_multiplier|区域系数|运行态字段|不同服务区价格系数|
 |channel_multiplier|渠道系数|运行态字段|不同订单渠道价格系数|
 |pricing_stage|定价阶段|运行态字段|预估或最终结算|
+|estimated_distance_km|预估距离（公里）|运行态字段|预估定价阶段使用的路径总距离|
+|estimated_duration_min|预估时长（分钟）|运行态字段|预估定价阶段使用的路径移动步数换算时长|
+|estimated_price|预估价格|运行态字段|预估定价结果|
+|quoted_price|预估价格（兼容）|兼容字段|历史客户报价字段，新增展示与计算不得优先依赖|
+|fulfillment_distance_km|履约距离（公里）|运行态字段|最终结算阶段使用的履约行驶总距离|
+|fulfillment_duration_min|履约时长（分钟）|运行态字段|最终结算阶段使用的履约行驶累计耗时|
+|final_price|最终价格|运行态字段|最终结算价格|
 |input_snapshot|输入快照|运行态字段|本次定价策略执行输入|
 |output_snapshot|输出快照|运行态字段|本次定价策略执行输出|
 |run_result|执行结果|运行态字段|PricingStrategyRun 执行结果|
@@ -1165,7 +1173,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |---|---|---|---|
 |simulation_run_id|模拟运行编号|持久化字段|SimulationRun 唯一编号|
 |simulation_name|模拟运行名称|持久化字段|模拟运行名称|
-|simulation_status|模拟运行状态|运行态字段|当前模拟状态：READY / RUNNING / PAUSED / DRAINING / COMPLETED / STOPPED / FAILED|
+|simulation_status|模拟运行状态|运行态字段|当前模拟状态：READY / RUNNING / PAUSED / DRAINING / COMPLETED / STOPPED / FAILED；DRAINING 表示计划 Tick 已结束但已触发自动化动作仍在收尾执行|
 |simulation_policy_id|模拟策略编号|持久化字段|关联的 SimulationPolicy 编号|
 |simulation_policy_snapshot|模拟策略快照|运行态字段|运行创建时的策略快照|
 |simulation_timeline_id|模拟时间轴编号|持久化字段|串联多次连续 SimulationRun 的时间轴编号|

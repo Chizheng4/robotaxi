@@ -45,6 +45,8 @@ assert.equal(pricedOrder.order_status, "WAITING_ROBOTAXI_CALL");
 assert.ok(pricedOrder.price_estimation_route_id);
 assert.ok(businessData.routes.some((route) => route.route_id === pricedOrder.price_estimation_route_id && route.route_usage_type === "PRICE_ESTIMATION"));
 assert.ok(businessData.routePlanningRuns.some((run) => run.service_order_id === "SO-VERIFY-001" && run.planning_result === "SUCCESS"));
+const priceEstimationRoute = businessData.routes.find((route) => route.route_id === pricedOrder.price_estimation_route_id);
+assert.equal(pricedOrder.estimated_duration_min, Math.max(1, Math.ceil((priceEstimationRoute.route_step_count * 6) / 60)));
 
 runAction({ actionType: "ROBOTAXI_CALL", objectId: "SO-VERIFY-001" });
 runAction({ actionType: "ORDER_MATCHING_EXECUTE", objectId: "SO-VERIFY-001" });
@@ -119,6 +121,7 @@ assert.equal(getOrder().order_status, "SETTLING");
 assert.equal(getTrip(trip.trip_id).distance_traveled_km, getTrip(trip.trip_id).total_distance_km);
 assert.equal(getTrip(trip.trip_id).distance_remaining_km, 0);
 assert.equal(getOrder().trip_total_distance_km, getTrip(trip.trip_id).total_distance_km);
+assert.equal(getOrder().trip_total_duration_min, Number(getTrip(trip.trip_id).time_elapsed));
 assert.equal(getOrder().trip_distance_traveled_km, getTrip(trip.trip_id).distance_traveled_km);
 assert.equal(getOrder().trip_distance_remaining_km, 0);
 
@@ -136,7 +139,8 @@ const deploymentTask = businessData.deploymentTasks[0];
 const routeExecution = businessData.routeExecutions[0];
 assert.equal(deploymentTask.task_status, "WAITING_START");
 assert.equal(routeExecution.execution_status, "WAITING_ROUTE");
-assert.equal(deploymentTask.planned_target_cell_id, "C-00-04");
+assert.ok(["C-00-02", "C-00-04"].includes(deploymentTask.planned_target_cell_id));
+assert.notEqual(deploymentTask.planned_target_cell_id, deploymentTask.origin_cell_id);
 
 runAction({ actionType: "ROUTE_PLAN", objectId: routeExecution.route_execution_id });
 let plannedExecution = getRouteExecution(routeExecution.route_execution_id);
@@ -155,7 +159,7 @@ while (getRouteExecution(routeExecution.route_execution_id).execution_status ===
 }
 plannedExecution = getRouteExecution(routeExecution.route_execution_id);
 assert.equal(plannedExecution.execution_status, "ARRIVED");
-assert.equal(plannedExecution.current_cell_id, "C-00-04");
+assert.equal(plannedExecution.current_cell_id, deploymentTask.planned_target_cell_id);
 assert.equal(plannedExecution.distance_traveled_km, plannedExecution.total_distance_km);
 assert.equal(plannedExecution.distance_remaining_km, 0);
 

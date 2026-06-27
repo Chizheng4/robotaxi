@@ -16,10 +16,9 @@
 5. 归档完成后，必须清空本文件的具体迭代内容，仅保留当前工作台模板。
 
 ## 当前输入
-暂无。
+
+无。
 
 ## 最近完成
 
-`v031.1 路径事实与行驶距离汇总`
-
-历史方案：`doc/common/iteration-history/minor/v031.1-route-distance-facts-plan.md`
+- `v031.2`：定价履约口径与投放目标模型小迭代，已归档到 `doc/common/iteration-history/minor/v031.2-pricing-fulfillment-deployment-plan.md`。

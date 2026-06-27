@@ -24,7 +24,7 @@ export function createRevenueCalculation({
   let sequence = 1;
 
   (scope.serviceOrders || []).forEach((order) => {
-    const receivable = firstPositive(order.final_price, order.quoted_price, order.estimated_price);
+    const receivable = firstPositive(order.final_price, order.estimated_price, order.quoted_price);
     const collected = nonNegative(order.paid_amount, 0);
     if (!receivable && !collected) {
       errors.push(createError("REVENUE_AMOUNT_MISSING", order.service_order_id, "服务订单缺少可生成收入记录的金额"));
@@ -107,8 +107,8 @@ function createError(errorType, serviceOrderId, message) {
 
 function revenueBasisField(order) {
   if (Number(order.final_price || 0) > 0) return "final_price";
-  if (Number(order.quoted_price || 0) > 0) return "quoted_price";
-  return "estimated_price";
+  if (Number(order.estimated_price || 0) > 0) return "estimated_price";
+  return "quoted_price";
 }
 
 function firstPositive(...values) {

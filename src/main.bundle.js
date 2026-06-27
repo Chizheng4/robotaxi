@@ -322,7 +322,7 @@ const tableConfig = {
   serviceOrders: {
     title: "服务订单管理",
     description: "服务订单记录客户发起的出行服务需求，当前支持创建、定价和车辆匹配。",
-    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "customer_origin_cell_id", "pickup_cell_id", "dropoff_cell_id", "price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "quoted_price", "trip_id", "actual_distance_km", "actual_duration_min", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "matched_robotaxi_id", "matched_robotaxi_location_summary", "order_matching_decision_id", "payment_status", "created_at", "simulation_created_at"]
+    columns: ["service_order_id", "order_status", "order_channel", "customer_id", "demand_simulation_result_id", "customer_origin_cell_id", "pickup_cell_id", "dropoff_cell_id", "price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "estimated_distance_km", "estimated_duration_min", "estimated_price", "final_price", "trip_id", "trip_total_distance_km", "trip_total_duration_min", "trip_distance_traveled_km", "trip_distance_remaining_km", "matched_robotaxi_id", "matched_robotaxi_location_summary", "order_matching_decision_id", "payment_status", "created_at", "simulation_created_at"]
   },
   opsCenters: {
     title: "运营中心管理",
@@ -377,7 +377,7 @@ const tableConfig = {
   pricingDecisions: {
     title: "定价结果",
     description: "记录服务订单使用的价格结果。",
-    columns: ["pricing_decision_id", "pricing_result", "pricing_strategy_run_id", "pricing_strategy_id", "service_order_id", "estimated_distance_km", "estimated_duration_min", "base_price", "dynamic_multiplier", "quoted_price", "pricing_stage", "created_at"]
+    columns: ["pricing_decision_id", "pricing_result", "pricing_strategy_run_id", "pricing_strategy_id", "service_order_id", "estimated_distance_km", "estimated_duration_min", "estimated_price", "fulfillment_distance_km", "fulfillment_duration_min", "base_price", "dynamic_multiplier", "final_price", "pricing_stage", "created_at"]
   },
   orderMatchingStrategies: {
     title: "订单匹配策略",
@@ -2034,23 +2034,27 @@ function App() {
   }
   function createDeploymentTasks() {
     const candidates = data.robotaxis.filter(robotaxi => isDeploymentCandidateRobotaxi(robotaxi, deploymentTasks));
-    const target = getDefaultDeploymentTarget(data);
+    const targets = candidates.map(robotaxi => getDefaultDeploymentTarget(data, {
+      originCellId: robotaxi.current_cell_id,
+      seed: `${robotaxi.robotaxi_id}-${Date.now()}`
+    }));
+    const hasTarget = targets.some(target => target?.target_cell_id);
     const triggerLog = createEventLog({
       event_type: taskTypes.TaskEventType.DEPLOYMENT_TRIGGER_STARTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       trigger_type: taskTypes.TriggerType.MANUAL,
       message: "手动触发运营投放任务生成"
     });
-    if (!target || candidates.length === 0) {
+    if (!hasTarget || candidates.length === 0) {
       setTaskEventLogs(logs => [createEventLog({
         event_type: taskTypes.TaskEventType.DEPLOYMENT_FAILED,
         event_result: taskTypes.TaskEventResult.SKIPPED,
         trigger_type: taskTypes.TriggerType.MANUAL,
-        message: target ? "当前没有可运营投放的 Robotaxi" : "当前没有有效投放目标"
+        message: hasTarget ? "当前没有可运营投放的 Robotaxi" : "当前没有有效投放目标"
       }), triggerLog, ...logs]);
       return;
     }
-    const newTasks = candidates.map(robotaxi => createDeploymentTask(robotaxi, target));
+    const newTasks = candidates.map((robotaxi, index) => targets[index]?.target_cell_id ? createDeploymentTask(robotaxi, targets[index]) : null).filter(Boolean);
     const newExecutions = newTasks.map(task => createDeploymentRouteExecution(task));
     setDeploymentTasks(tasks => [...newTasks, ...tasks]);
     setRouteExecutions(items => [...newExecutions, ...items]);
@@ -2121,9 +2125,9 @@ function App() {
       estimated_duration_min: null,
       estimated_price: null,
       quoted_price: null,
-      actual_distance_km: null,
-      actual_duration_min: null,
       final_price: null,
+      trip_total_distance_km: null,
+      trip_total_duration_min: null,
       payment_status: serviceOrderTypes.PaymentStatus.NOT_REQUIRED,
       paid_amount: 0,
       payment_completed_at: null,
@@ -2199,8 +2203,10 @@ function App() {
       data,
       routeEstimate: {
         route_id: priceRoute.route_id,
-        estimated_distance_km: priceRoute.total_distance_m / 1000,
-        estimated_duration_min: Math.max(1, Math.ceil(priceRoute.total_distance_m / 1000 / 24 * 60))
+        estimated_distance_km: priceRoute.total_distance_km ?? priceRoute.total_distance_m / 1000,
+        estimated_duration_min: routePlanningService.calculateRouteEstimatedDurationMin(priceRoute),
+        route_step_count: priceRoute.route_step_count,
+        cell_travel_seconds: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS
       },
       pricingStrategyRunId: nextPricingStrategyRunId(),
       pricingDecisionId: nextPricingDecisionId(),
@@ -2246,7 +2252,7 @@ function App() {
       route_id: priceRoute.route_id,
       event_type: taskTypes.TaskEventType.SERVICE_ORDER_PRICE_ESTIMATED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
-      message: `${serviceOrderId} 价格预估完成，客户报价 ${result.decision.quoted_price}`
+      message: `${serviceOrderId} 价格预估完成，预估价格 ${result.decision.estimated_price}`
     });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
@@ -3982,11 +3988,11 @@ function getDetailTabs(selectedType) {
     }, {
       key: "pricing",
       label: "报价结算",
-      keys: ["price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "quote_base_fare", "quote_distance_unit_price", "quote_time_unit_price", "estimated_distance_km", "estimated_duration_min", "estimated_price", "quoted_price", "final_price", "pricing_explanation", "pricing_breakdown_snapshot"]
+      keys: ["price_estimation_route_id", "estimated_pricing_decision_id", "final_pricing_decision_id", "quote_base_fare", "quote_distance_unit_price", "quote_time_unit_price", "estimated_distance_km", "estimated_duration_min", "estimated_price", "final_price", "pricing_explanation", "pricing_breakdown_snapshot"]
     }, {
       key: "matching",
       label: "匹配履约",
-      keys: ["matched_robotaxi_id", "matched_robotaxi_location_summary", "matched_robotaxi_location_detail", "order_matching_decision_id", "trip_id", "trip_total_distance_km", "trip_distance_traveled_km", "trip_distance_remaining_km", "final_price", "paid_amount"]
+      keys: ["matched_robotaxi_id", "matched_robotaxi_location_summary", "matched_robotaxi_location_detail", "order_matching_decision_id", "trip_id", "trip_total_distance_km", "trip_total_duration_min", "trip_distance_traveled_km", "trip_distance_remaining_km", "paid_amount"]
     }, {
       key: "time",
       label: "时间与来源",
@@ -5150,8 +5156,8 @@ function isCandidateRobotaxi(robotaxi, tasks) {
 function isDeploymentCandidateRobotaxi(robotaxi, deploymentTasks) {
   return robotaxi.availability_status === "AVAILABLE" && !robotaxi.current_order_id && !deploymentTasks.some(task => task.robotaxi_id === robotaxi.robotaxi_id && unfinishedDeploymentStatuses.has(task.task_status));
 }
-function getDefaultDeploymentTarget(data) {
-  return routePlanningService.getDefaultDeploymentTarget(data);
+function getDefaultDeploymentTarget(data, options = {}) {
+  return routePlanningService.getDefaultDeploymentTarget(data, options);
 }
 function createDeploymentRoute(task, data, options = {}) {
   return routePlanningService.createDeploymentRouteForOperation({
@@ -5609,6 +5615,7 @@ function enrichServiceOrderForDisplay(order, data, trips) {
     matched_robotaxi_location_summary: robotaxi ? robotaxiLocation.summary : null,
     matched_robotaxi_location_detail: robotaxi ? robotaxiLocation.detail : null,
     trip_total_distance_km: tripMetrics.totalDistanceKm,
+    trip_total_duration_min: tripMetrics.durationMin,
     trip_distance_traveled_km: tripMetrics.distanceTraveledKm,
     trip_distance_remaining_km: tripMetrics.distanceRemainingKm
   };
@@ -5661,7 +5668,7 @@ function getTripMetrics(trip, data = null) {
     totalDistanceKm: travelMetrics?.totalDistanceKm ?? roundDistance(distanceTraveledKm + distanceRemainingKm),
     distanceTraveledKm,
     distanceRemainingKm,
-    durationMin: Number.parseInt(trip.time_elapsed, 10) || 0
+    durationMin: parseElapsedMinutes(trip.time_elapsed)
   };
 }
 function getTravelMetrics(record, data) {
@@ -5697,8 +5704,10 @@ function mergeServiceOrderTripMetrics(order, trip, data = null) {
   const tripMetrics = getTripMetrics(trip, data);
   return {
     ...order,
-    actual_distance_km: tripMetrics.distanceTraveledKm ?? order.actual_distance_km ?? order.estimated_distance_km,
-    actual_duration_min: tripMetrics.durationMin ?? order.actual_duration_min ?? order.estimated_duration_min
+    trip_total_distance_km: tripMetrics.totalDistanceKm ?? order.trip_total_distance_km,
+    trip_total_duration_min: tripMetrics.durationMin ?? order.trip_total_duration_min,
+    trip_distance_traveled_km: tripMetrics.distanceTraveledKm ?? order.trip_distance_traveled_km,
+    trip_distance_remaining_km: tripMetrics.distanceRemainingKm ?? order.trip_distance_remaining_km
   };
 }
 function enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns) {
@@ -5985,16 +5994,26 @@ function updateServiceOrderForTrip(order, trip) {
     ...order,
     trip_id: trip.trip_id,
     order_status: nextOrderStatus,
-    actual_distance_km: syncedOrder.actual_distance_km,
-    actual_duration_min: syncedOrder.actual_duration_min,
+    trip_total_distance_km: syncedOrder.trip_total_distance_km,
+    trip_total_duration_min: syncedOrder.trip_total_duration_min,
     final_price: order.final_price,
     completed_at: order.completed_at,
     failure_reason: null
   };
 }
 function addElapsedMinutes(value, minutes) {
-  const current = Number.parseInt(value, 10);
-  return String((Number.isFinite(current) ? current : 0) + minutes);
+  const current = parseElapsedMinutes(value);
+  return String(roundDuration((Number.isFinite(current) ? current : 0) + minutes));
+}
+function parseElapsedMinutes(value) {
+  if (Number.isFinite(Number(value))) return Number(value);
+  const parts = String(value || "0").split(":").map(part => Number.parseInt(part, 10) || 0);
+  if (parts.length >= 3) return parts[0] * 60 + parts[1] + Math.ceil(parts[2] / 60);
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0] || 0;
+}
+function roundDuration(value) {
+  return Number(Number(value || 0).toFixed(2));
 }
 function roundDistance(value) {
   return Number(Number(value || 0).toFixed(2));
@@ -6310,7 +6329,7 @@ function normalizeServiceOrders(orders) {
 }
 function deriveServiceOrderStatus(order) {
   if (order.trip_id || order.matched_robotaxi_id) return "ON_THE_WAY_PICKUP";
-  if (order.estimated_pricing_decision_id || order.quoted_price) return "WAITING_ROBOTAXI_CALL";
+  if (order.estimated_pricing_decision_id || order.estimated_price || order.quoted_price) return "WAITING_ROBOTAXI_CALL";
   return "WAITING_PRICE_ESTIMATE";
 }
 function normalizeRouteStrategyReferences(items) {

@@ -10,7 +10,7 @@
  */
 
 import * as tripTypes from "../domain/tripTypes.js";
-import { calculateTravelDistanceMetrics } from "./routePlanningService.js";
+import { DEFAULT_CELL_TRAVEL_SECONDS, calculateTravelDistanceMetrics } from "./routePlanningService.js";
 
 // ============================================================================
 // 1. 行驶步数推进（Movement）
@@ -57,7 +57,7 @@ export function getNextTripMovementState(trip, data) {
     total_distance_km: distanceMetrics.total_distance_km,
     distance_traveled_km: distanceMetrics.distance_traveled_km,
     distance_remaining_km: distanceMetrics.distance_remaining_km,
-    time_elapsed: addElapsedMinutes(trip.time_elapsed, 1),
+    time_elapsed: addElapsedMinutes(trip.time_elapsed, DEFAULT_CELL_TRAVEL_SECONDS / 60),
     arrival_execution_result: reachedTarget && nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION
       ? "NORMAL_ARRIVAL" : trip.arrival_execution_result,
     event_log: [
@@ -213,13 +213,20 @@ function roundDistance(value) {
 }
 
 function addElapsedMinutes(current, minutes) {
-  const parts = (current || "0").split(":");
-  const hours = parseInt(parts[0] || "0", 10);
-  const mins = parseInt(parts[1] || "0", 10);
-  const total = hours * 60 + mins + (minutes || 0);
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return `${h}:${String(m).padStart(2, "0")}`;
+  const total = parseElapsedMinutes(current) + (minutes || 0);
+  return String(roundDuration(total));
+}
+
+function parseElapsedMinutes(value) {
+  if (Number.isFinite(Number(value))) return Number(value);
+  const parts = String(value || "0").split(":").map((part) => Number.parseInt(part, 10) || 0);
+  if (parts.length >= 3) return parts[0] * 60 + parts[1] + Math.ceil(parts[2] / 60);
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0] || 0;
+}
+
+function roundDuration(value) {
+  return Number(Number(value || 0).toFixed(2));
 }
 
 function _now() {

@@ -26,7 +26,7 @@ export function validatePricing(data) {
     rules.push(createRule(`PD-STAGE-${decision.pricing_decision_id}`, "定价决策阶段必须合法", Object.values(PricingStage).includes(decision.pricing_stage), decision.pricing_stage || "无"));
 
     if (decision.pricing_stage === PricingStage.ESTIMATE) {
-      rules.push(createRule(`PD-ESTIMATE-PRICE-${decision.pricing_decision_id}`, "预估定价报价必须有效", Number(decision.quoted_price) > 0, decision.quoted_price ?? "无"));
+      rules.push(createRule(`PD-ESTIMATE-PRICE-${decision.pricing_decision_id}`, "预估价格必须有效", Number(decision.estimated_price ?? decision.quoted_price) > 0, decision.estimated_price ?? decision.quoted_price ?? "无"));
       rules.push(createRule(`PD-ESTIMATE-SO-LINK-${decision.pricing_decision_id}`, "服务订单必须引用成功的预估定价决策", order?.estimated_pricing_decision_id === decision.pricing_decision_id, order?.estimated_pricing_decision_id || "无"));
       rules.push(createOptionalRefRule(`PD-ESTIMATE-ROUTE-${decision.pricing_decision_id}`, "预估定价路径必须存在", decision.price_estimation_route_id, routes));
     }

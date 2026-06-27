@@ -133,7 +133,7 @@ export function payServiceOrder({
   if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT) {
     return { success: false, failureReason: "SERVICE_ORDER_NOT_WAITING_PAYMENT" };
   }
-  const paidAmount = serviceOrder.final_price || serviceOrder.quoted_price || serviceOrder.estimated_price || 0;
+  const paidAmount = serviceOrder.final_price || serviceOrder.estimated_price || serviceOrder.quoted_price || 0;
   const nextServiceOrder = {
     ...serviceOrder,
     order_status: serviceOrderTypes.ServiceOrderStatus.COMPLETED,

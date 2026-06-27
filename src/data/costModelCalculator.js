@@ -375,10 +375,16 @@ function getTripDistanceKm(trip, data) {
     };
   }
   const order = (data.serviceOrders || []).find((item) => item.service_order_id === trip.service_order_id);
+  if (Number(order?.trip_total_distance_km || 0) > 0) {
+    return {
+      distanceKm: roundQuantity(Number(order.trip_total_distance_km)),
+      basis: { service_order_id: order.service_order_id, distance_source: "ServiceOrder.trip_total_distance_km" },
+    };
+  }
   if (Number(order?.actual_distance_km || 0) > 0) {
     return {
       distanceKm: roundQuantity(Number(order.actual_distance_km)),
-      basis: { service_order_id: order.service_order_id, distance_source: "ServiceOrder.actual_distance_km" },
+      basis: { service_order_id: order.service_order_id, distance_source: "ServiceOrder.actual_distance_km_compat" },
     };
   }
   return { distanceKm: 0, basis: {} };

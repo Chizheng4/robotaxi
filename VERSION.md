@@ -1,3 +1,16 @@
+## v031.2
+
+核心：统一预估定价、履约事实和投放目标临时模型，让价格、服务订单和行驶对象继续依赖底层路径与履约事实。
+
+- 预估价格以路径结果为输入，预估时长改为 `route_step_count * 6 秒 / Cell` 换算，保存移动步数和 Cell 时长快照。
+- 服务订单主展示从历史“客户报价 / 实际总距离 / 实际总时长”收口到 `estimated_price / final_price / trip_total_distance_km / trip_total_duration_min`。
+- 最终定价决策新增并使用 `fulfillment_distance_km`、`fulfillment_duration_min` 和 `final_price`，结算继续沿用预估价格快照中的单价与动态系数。
+- Trip 与 RouteExecution 的 `time_elapsed` 统一表达为“已耗时（分钟）”，按 Cell 步进累加。
+- `DRAINING` 前端中文调整为“收尾执行中”，保留其表示计划 Tick 结束后自动化动作仍在完成的语义。
+- 运营投放目标从固定服务区点位改为基于车辆当前位置、服务区可用车辆点位和稳定随机选择的临时模型，避免投放到当前 Cell。
+- 收入、成本和定价校验优先使用新字段，历史 `quoted_price / actual_*` 仅作为兼容兜底。
+- 同步代码版和文档版字段字典；重新生成 `src/main.bundle.js`；提交前检查和本地 HTTP 页面入口验证通过。
+
 ## v031.1
 
 核心：修复路径结果与行驶记录距离事实分叉，让运营行驶记录、履约行驶记录和服务订单都依赖同一套底层路径累计模型。
