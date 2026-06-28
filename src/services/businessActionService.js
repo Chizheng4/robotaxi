@@ -77,6 +77,26 @@ export function startReadinessTask({ state, objectId, runtime }) {
       current_task_status: taskTypes.ReadinessTaskStatus.CHECKING,
       ...runtime.audit(),
     })),
+    timedOperations: [
+      createTimedOperation({
+        timedOperationId: runtime.nextId("TOP"),
+        timeMode: runtime.timeContext?.time_mode || "SIMULATION",
+        operationType: TimedOperationType.WORKER_CHECK,
+        objectType: "readinessTask",
+        objectId,
+        actionType: "READINESS_TASK_PASS",
+        startSeconds: Number(runtime.timeContext?.simulation_seconds) || 0,
+        durationSeconds: getConfiguredDurationSeconds(runtime, "readiness_check_seconds", 30),
+        simulationStartedAt: runtime.simulationTime(),
+        simulationPlannedCompletedAt: null,
+        payload: {
+          worker_id: task.worker_id || task.assigned_worker_id || null,
+          robotaxi_id: task.robotaxi_id,
+          check_policy: "DEFAULT_PASS",
+        },
+      }),
+      ...(state.timedOperations || []),
+    ],
   });
 }
 
@@ -109,8 +129,9 @@ export function createDeploymentTask({ state, runtime }) {
     robotaxi.availability_status === "AVAILABLE" && !robotaxi.current_task_id && !robotaxi.current_order_id
   );
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "投放任务创建失败：无可投放 Robotaxi", "deploymentTask", null, "无可投放 Robotaxi");
-  const target = routePlanningService.getDefaultDeploymentTarget(appData, {
+  const target = routePlanningService.getRebalanceDeploymentTarget(appData, {
     originCellId: candidate.current_cell_id,
+    robotaxiId: candidate.robotaxi_id,
     seed: `${candidate.robotaxi_id}-${runtime.now()}`,
   });
   if (!target?.target_cell_id) return failure("NO_DEPLOYMENT_TARGET", "投放任务创建失败：无可用投放目标", "deploymentTask", null, "无可用投放目标");
@@ -130,6 +151,10 @@ export function createDeploymentTask({ state, runtime }) {
     planned_target_zone_id: target.target_zone_id,
     planned_target_service_area_id: target.target_service_area_id,
     planned_target_cell_id: target.target_cell_id,
+    deployment_target_model: "TEMPORARY_SUPPLY_REBALANCE",
+    rebalance_reason: target.rebalance_reason || null,
+    service_area_vehicle_count: target.service_area_vehicle_count ?? null,
+    estimated_distance_steps: target.estimated_distance_steps ?? null,
     target_zone_id: target.target_zone_id,
     target_service_area_id: target.target_service_area_id,
     target_cell_id: target.target_cell_id,
@@ -156,6 +181,10 @@ export function createDeploymentTask({ state, runtime }) {
     planned_target_zone_id: target.target_zone_id,
     planned_target_service_area_id: target.target_service_area_id,
     planned_target_cell_id: target.target_cell_id,
+    deployment_target_model: "TEMPORARY_SUPPLY_REBALANCE",
+    rebalance_reason: target.rebalance_reason || null,
+    service_area_vehicle_count: target.service_area_vehicle_count ?? null,
+    estimated_distance_steps: target.estimated_distance_steps ?? null,
     route_id: null,
     route_strategy_id: null,
     route_cell_ids: [],
@@ -627,6 +656,14 @@ function createTravelOperation({ runtime, objectType, objectId, actionType, rout
       cell_travel_seconds: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS,
     },
   });
+}
+
+function getConfiguredDurationSeconds(runtime, key, fallbackSeconds) {
+  const executionConfig = runtime.policySnapshot?.execution_time_config || {};
+  const defaultConfig = runtime.policySnapshot?.default_completion_config || {};
+  const value = executionConfig[key] ?? defaultConfig[key] ?? runtime.policySnapshot?.[key];
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : fallbackSeconds;
 }
 
 function planTripRoute({ state, objectId, runtime }) {

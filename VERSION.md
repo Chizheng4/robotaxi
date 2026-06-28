@@ -1,3 +1,16 @@
+## v032.4
+
+核心：让供给侧准入检查进入时间作业驱动，并把投放目标升级为临时供给再平衡模型。
+
+- 运营准入任务进入 `CHECKING` 后创建 `WORKER_CHECK` 时间作业，到期后通过执行引擎触发原 `READINESS_TASK_PASS` 业务动作闭环。
+- 自动工作流不再直接按 tick 把 `CHECKING` 准入任务推进为完成，避免绕过检查耗时。
+- 模拟业务 runtime 接入策略快照，准入检查时长优先读取 `execution_time_config.readiness_check_seconds`，默认 30 秒。
+- 新增 `getRebalanceDeploymentTarget`，按服务区可用车辆密度、预计移动步数和稳定同分兜底选择投放目标。
+- 投放任务保存 `deployment_target_model / rebalance_reason / service_area_vehicle_count / estimated_distance_steps`，详情页增加“再平衡”信息。
+- 字段字典同步新增投放再平衡字段与枚举中文。
+- 新增 `verify-v032-supply-time-and-rebalance.mjs` 并纳入提交前检查，验证准入时间作业和低密度服务区投放选择。
+- 重新生成 `src/main.bundle.js`；提交前检查和本地页面入口验证通过。
+
 ## v032.3
 
 核心：把运营行驶记录和履约行驶记录接入时间驱动主路径，并把路径详情改为面向用户的关联路径摘要。

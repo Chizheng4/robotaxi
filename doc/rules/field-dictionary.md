@@ -527,6 +527,10 @@
 |arrival_behavior|到达驻留要求|持久化字段|Robotaxi 到达后应临停、停车或待命的要求|
 |blocked_handling_policy|遇阻处理策略|持久化字段|计划目标不可用时的处理策略|
 |arrival_execution_result|到达执行结果|运行态字段|Robotaxi 到达目标区域后的反馈结果|
+|deployment_target_model|投放目标模型|运行态字段|运营投放任务选择目标点位时使用的临时或正式模型|
+|rebalance_reason|再平衡原因|运行态字段|投放目标被选中的业务原因|
+|service_area_vehicle_count|服务区可用车辆数|运行态字段|目标服务区当前可用车辆数量快照|
+|estimated_distance_steps|预计移动步数|运行态字段|从当前 Cell 到投放目标 Cell 的预计移动步数|
 |same_service_area_retry_allowed|允许同服务区重试|持久化字段|异常到达时是否允许在同 ServiceArea 内选择替代点位|
 |current_target_service_area_id|当前目标服务区|运行态字段|行驶记录当前 Route 指向的目标 ServiceArea|
 |route_history|路径历史|运行态字段|同一行驶记录中 Route 变化历史|
@@ -1381,6 +1385,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |TRIP_TRAVEL_COMPLETE_FAILED|履约行驶时间到达失败|result_type|
 |ARRIVAL_CONFIRMED|到达已确认|result_type|
 |ARRIVAL_CONFIRM_FAILED|到达确认失败|result_type|
+|TEMPORARY_SUPPLY_REBALANCE|临时供给再平衡|enum_value|
+|LOW_DENSITY_NEARBY_SERVICE_AREA|低密度邻近服务区|enum_value|
 |serviceOrder|服务订单|related_object_type|
 |trip|履约行驶记录|related_object_type|
 |readinessTask|运营准入任务|related_object_type|

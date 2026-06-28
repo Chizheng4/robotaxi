@@ -420,6 +420,26 @@ export function getDefaultDeploymentTarget(data, options = {}) {
   return candidates[stableIndex(options.seed || originCellId || candidates.length, candidates.length)];
 }
 
+export function getRebalanceDeploymentTarget(data, options = {}) {
+  const originCellId = options.originCellId || null;
+  const candidates = getDeploymentTargetCandidates(data, originCellId);
+  if (candidates.length === 0) return null;
+  const serviceAreaVehicleCounts = countAvailableVehiclesByServiceArea(data, options.robotaxiId);
+  const scored = candidates.map((candidate) => {
+    const vehicleCount = serviceAreaVehicleCounts.get(candidate.target_service_area_id) || 0;
+    const distanceSteps = estimateCellDistance(data, originCellId, candidate.target_cell_id);
+    const stableTieBreaker = stableIndex(`${options.seed || ""}-${candidate.target_cell_id}`, 1000) / 1000;
+    return {
+      ...candidate,
+      rebalance_score: Number((vehicleCount * 100 + distanceSteps + stableTieBreaker).toFixed(3)),
+      rebalance_reason: "LOW_DENSITY_NEARBY_SERVICE_AREA",
+      service_area_vehicle_count: vehicleCount,
+      estimated_distance_steps: distanceSteps,
+    };
+  });
+  return scored.sort((left, right) => left.rebalance_score - right.rebalance_score)[0];
+}
+
 export function getRouteExecutionCells(route, roadSegments, originCellId, targetCellId) {
   const cells = route.route_steps?.map((step) => step.cell_id) || routeCellIds(route, roadSegments);
   return [...new Set([originCellId, ...cells, targetCellId].filter(Boolean))];
@@ -797,6 +817,28 @@ function getDeploymentTargetCandidates(data, originCellId) {
         target_zone_id: targetZoneId,
       }));
   });
+}
+
+function countAvailableVehiclesByServiceArea(data, excludedRobotaxiId = null) {
+  const counts = new Map();
+  const serviceAreas = data.serviceAreas || [];
+  for (const robotaxi of data.robotaxis || []) {
+    if (robotaxi.robotaxi_id === excludedRobotaxiId) continue;
+    if (robotaxi.current_order_id || robotaxi.current_task_id) continue;
+    const serviceArea = serviceAreas.find((item) =>
+      getCandidateServiceAreaCellIds(item).includes(robotaxi.current_cell_id)
+    );
+    if (!serviceArea) continue;
+    counts.set(serviceArea.service_area_id, (counts.get(serviceArea.service_area_id) || 0) + 1);
+  }
+  return counts;
+}
+
+function estimateCellDistance(data, originCellId, targetCellId) {
+  if (!originCellId || !targetCellId) return 9999;
+  const plan = createBfsRoutePlan(data, originCellId, targetCellId);
+  if (!plan.route_steps?.length) return 9999;
+  return Math.max(0, plan.route_steps.length - 1);
 }
 
 function stableIndex(seed, length) {

@@ -48,6 +48,7 @@ function createRuntime(context) {
     simulationTime: () => resolveSimulationTimestamp(timeContext),
     randomSeed: () => `${context?.simulationRunId || "SIM"}-${context?.globalTick || 0}-${context?.actionIndex || 0}`,
     audit: (options = {}) => getSimulationAudit(context, options),
+    policySnapshot: context?.policySnapshot || {},
   };
 }
 

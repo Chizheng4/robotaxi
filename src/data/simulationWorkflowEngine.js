@@ -90,6 +90,7 @@ export function queryAllWorkflowRules({
   for (const task of readinessTasks) {
     const rules = queryWorkflowRules("readinessTask", task.task_status, autoConfig, defaultCompletionConfig);
     for (const rule of rules) {
+      if (isTimedOperationManagedAction("readinessTask", rule.actionType)) continue;
       actions.push({ objectType: "readinessTask", objectId: task.task_id, actionType: rule.actionType, fromState: rule.fromState });
     }
   }
@@ -113,6 +114,7 @@ export function queryAllWorkflowRules({
 }
 
 function isTimedOperationManagedAction(objectType, actionType) {
+  if (objectType === "readinessTask") return actionType === "READINESS_TASK_PASS";
   if (objectType === "routeExecution") return actionType === "ROUTE_EXECUTION_STEP";
   if (objectType === "trip") return actionType === "TRIP_STEP_EXECUTE";
   return false;

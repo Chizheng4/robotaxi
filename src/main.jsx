@@ -3793,6 +3793,7 @@ function getDetailTabs(selectedType) {
       { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "route_summary", "route_detail"] },
       { key: "arrival", label: "到达处理", keys: ["arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "actual_target_cell_id", "actual_target_service_area_id"] },
       { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "target_zone_id"] },
+      { key: "rebalance", label: "再平衡", keys: ["deployment_target_model", "rebalance_reason", "service_area_vehicle_count", "estimated_distance_steps"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
       { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
