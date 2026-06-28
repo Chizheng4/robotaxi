@@ -12,6 +12,9 @@ import { formatSimulationTimestamp } from "../domain/simulationTime.js";
 import { resolveWorkflowRuntimeSeconds } from "../data/workflowRuntimeConfig.js";
 
 export function createReadinessTask({ state, runtime }) {
+  if (runtime.timeContext?.time_mode === "SIMULATION" && runtime.timeContext.is_worker_working_time === false) {
+    return success("READINESS_SKIPPED_OUT_OF_WORK_TIME", "未到作业人员工作时间，跳过运营准入任务创建", { objectType: "readinessTask", objectId: null }, {});
+  }
   const appData = dataView(state);
   const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi) =>
     robotaxi.availability_status === "PENDING_INSPECTION" && !robotaxi.current_task_id
@@ -126,6 +129,9 @@ export function passReadinessTask({ state, objectId, runtime }) {
 }
 
 export function createDeploymentTask({ state, runtime }) {
+  if (runtime.timeContext?.time_mode === "SIMULATION" && runtime.timeContext.is_worker_working_time === false) {
+    return success("DEPLOYMENT_SKIPPED_OUT_OF_WORK_TIME", "未到作业人员工作时间，跳过运营投放任务创建", { objectType: "deploymentTask", objectId: null }, {});
+  }
   const appData = dataView(state);
   const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi) =>
     robotaxi.availability_status === "AVAILABLE" && !robotaxi.current_task_id && !robotaxi.current_order_id

@@ -264,7 +264,9 @@ export function createDefaultSimulationPolicy(overrides = {}) {
     demand_generation_config: {
       demand_generation_enabled: true,
       demand_generation_mode: DemandGenerationMode.TICK_ORDER_COUNT_DISTRIBUTION,
+      demand_generation_interval_seconds: 600,
       max_orders_per_tick_global: 10,
+      max_orders_per_generation_global: 10,
     },
     demand_profiles: [],
     supply_trigger_config: {
@@ -272,6 +274,8 @@ export function createDefaultSimulationPolicy(overrides = {}) {
       readiness_trigger_enabled: true,
       deployment_trigger_enabled: true,
       route_execution_trigger_enabled: true,
+      readiness_trigger_interval_seconds: 600,
+      deployment_trigger_interval_seconds: 600,
     },
     service_order_auto_config: {
       auto_pricing_enabled: true,

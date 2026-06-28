@@ -42,6 +42,9 @@ export function createSimulationTimeContext({
       : null,
     simulation_timestamp: tickContext.current_time || null,
     global_tick: Number(tickContext.global_tick ?? globalTick) || 0,
+    current_clock_time: tickContext.current_clock_time || null,
+    is_worker_working_time: tickContext.is_worker_working_time,
+    is_robotaxi_operating_time: tickContext.is_robotaxi_operating_time,
   };
 }
 

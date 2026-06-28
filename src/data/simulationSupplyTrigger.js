@@ -28,7 +28,9 @@ export function runSupplyTrigger({ timeContext, policySnapshot }) {
   }
 
   // 1. 运营准入点火
-  if (config.readiness_trigger_enabled && timeContext.is_worker_working_time) {
+  if (config.readiness_trigger_enabled
+    && timeContext.is_worker_working_time
+    && isTriggerSecond(timeContext.current_simulation_seconds, config.readiness_trigger_interval_seconds ?? 600)) {
     actions.push({ actionType: "READINESS_TASK_CREATE", objectId: null, triggeredBy: "SUPPLY_TRIGGER" });
     readinessTriggered = true;
   } else if (config.readiness_trigger_enabled) {
@@ -36,7 +38,10 @@ export function runSupplyTrigger({ timeContext, policySnapshot }) {
   }
 
   // 2. 运营投放点火
-  if (config.deployment_trigger_enabled && timeContext.is_worker_working_time && timeContext.is_robotaxi_operating_time) {
+  if (config.deployment_trigger_enabled
+    && timeContext.is_worker_working_time
+    && timeContext.is_robotaxi_operating_time
+    && isTriggerSecond(timeContext.current_simulation_seconds, config.deployment_trigger_interval_seconds ?? 600)) {
     actions.push({ actionType: "DEPLOYMENT_TASK_CREATE", objectId: null, triggeredBy: "SUPPLY_TRIGGER" });
     deploymentTriggered = true;
   } else if (config.deployment_trigger_enabled) {
@@ -50,4 +55,10 @@ export function runSupplyTrigger({ timeContext, policySnapshot }) {
     readiness_triggered: readinessTriggered,
     deployment_triggered: deploymentTriggered,
   };
+}
+
+function isTriggerSecond(currentSeconds, intervalSeconds) {
+  const interval = Math.max(1, Math.floor(Number(intervalSeconds) || 600));
+  const seconds = Math.floor(Number(currentSeconds) || 0);
+  return seconds % interval === 0;
 }

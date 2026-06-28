@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v032.8`：业务触发周期与工作时间约束修复小迭代，已归档到 `doc/common/iteration-history/minor/v032.8-trigger-cadence-and-work-hours.md`。
 - `v032.7`：统一工作流时效运行时与高速模拟推进小迭代，已归档到 `doc/common/iteration-history/minor/v032.7-runtime-workflow-speed.md`。
 - `v032.6`：时间世界解释性与未完成版本补完小迭代，已归档到 `doc/common/iteration-history/minor/v032.6-time-world-explainability.md`。
 - `v031.2`：定价履约口径与投放目标模型小迭代，已归档到 `doc/common/iteration-history/minor/v031.2-pricing-fulfillment-deployment-plan.md`。

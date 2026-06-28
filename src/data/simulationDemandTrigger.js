@@ -24,6 +24,9 @@ export function runDemandTrigger({ timeContext, policySnapshot, randomSeed }) {
   if (!dgConfig.demand_generation_enabled) {
     return { order_count: 0, demand_profile_id: null, actions: [] };
   }
+  if (!isTriggerSecond(timeContext.current_simulation_seconds, dgConfig.demand_generation_interval_seconds ?? 600)) {
+    return { order_count: 0, demand_profile_id: timeContext.demand_profile_id || null, actions: [] };
+  }
 
   const demandProfileId = timeContext.demand_profile_id;
   if (!demandProfileId) {
@@ -39,7 +42,7 @@ export function runDemandTrigger({ timeContext, policySnapshot, randomSeed }) {
   }
 
   const orderCount = generateOrderCount(profile, randomSeed);
-  const globalMax = dgConfig.max_orders_per_tick_global || 999;
+  const globalMax = dgConfig.max_orders_per_generation_global ?? dgConfig.max_orders_per_tick_global ?? 999;
   const actualCount = Math.min(orderCount, globalMax);
 
   return {
@@ -49,6 +52,12 @@ export function runDemandTrigger({ timeContext, policySnapshot, randomSeed }) {
       ? [{ action_type: "DEMAND_ORDER_GENERATE", count: actualCount, demand_profile_id: demandProfileId }]
       : [{ action_type: "DEMAND_NO_ORDER", count: 0 }],
   };
+}
+
+function isTriggerSecond(currentSeconds, intervalSeconds) {
+  const interval = Math.max(1, Math.floor(Number(intervalSeconds) || 600));
+  const seconds = Math.floor(Number(currentSeconds) || 0);
+  return seconds % interval === 0;
 }
 
 /**

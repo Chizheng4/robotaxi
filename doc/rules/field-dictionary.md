@@ -1152,13 +1152,17 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |demand_generation_config|需求生成配置|持久化字段|需求生成的全局配置|
 |demand_generation_enabled|需求生成开关|持久化字段|是否启用需求自动生成|
 |demand_generation_mode|需求生成模式|持久化字段|需求订单生成模式|
-|max_orders_per_tick_global|每 Tick 最大订单数|持久化字段|全局每 Tick 最大生成订单数|
+|demand_generation_interval_seconds|需求生成周期（秒）|持久化字段|需求模型按统一模拟秒每隔多少秒触发一次，默认 600 秒|
+|max_orders_per_tick_global|每 Tick 最大订单数|兼容字段|旧版每 Tick 最大生成订单数；新逻辑优先使用每次生成最大订单数|
+|max_orders_per_generation_global|每次生成最大订单数|持久化字段|需求模型每次触发时最多生成的订单数|
 |demand_profiles|需求分布配置|持久化字段|各时段需求分布配置列表|
 |supply_trigger_config|供给侧触发配置|持久化字段|供给侧自动触发开关配置|
 |supply_trigger_enabled|供给侧触发开关|持久化字段|是否启用供给侧自动触发|
 |readiness_trigger_enabled|准入检查触发开关|持久化字段|是否启用准入检查自动触发|
 |deployment_trigger_enabled|投放触发开关|持久化字段|是否启用投放自动触发|
 |route_execution_trigger_enabled|行驶执行触发开关|持久化字段|是否启用行驶执行自动触发|
+|readiness_trigger_interval_seconds|准入触发周期（秒）|持久化字段|准入任务创建触发周期，仍必须满足作业人员工作时间|
+|deployment_trigger_interval_seconds|投放触发周期（秒）|持久化字段|投放任务创建触发周期，仍必须满足作业人员工作时间和 Robotaxi 运营时间|
 |service_order_auto_config|服务订单自动化配置|持久化字段|服务订单各环节自动化开关|
 |auto_pricing_enabled|自动定价开关|持久化字段|是否自动执行定价|
 |auto_customer_confirm_enabled|自动客户确认开关|持久化字段|是否自动确认客户订单|
@@ -1385,6 +1389,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |MATCHING_COMPLETED|匹配完成|result_type|
 |MATCHING_FAILED|匹配失败|result_type|
 |MATCHING_RETRY_SCHEDULED|匹配重试已安排|result_type|
+|READINESS_SKIPPED_OUT_OF_WORK_TIME|非工作时间跳过准入|result_type|
+|DEPLOYMENT_SKIPPED_OUT_OF_WORK_TIME|非工作时间跳过投放|result_type|
 |SERVICE_ORDER_CANCELLED|服务订单已取消|result_type|
 |SERVICE_ORDER_CANCEL_SKIPPED|服务订单取消已跳过|result_type|
 |SERVICE_ORDER_CANCEL_FAILED|服务订单取消失败|result_type|
