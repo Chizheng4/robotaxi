@@ -53,6 +53,7 @@ node --check src/domain/taskTypes.js
 node --check src/domain/statusRegistry.js
 node --check src/domain/routePlanningStrategies.js
 node --check src/domain/serviceOrderSettlement.js
+node --check src/domain/timeContext.js
 node --check src/services/serviceOrderService.js
 node --check src/services/businessActionService.js
 node --check src/services/simulationHandlers.js
@@ -71,6 +72,7 @@ node scripts/verify-route-planning-strategy-registry.mjs
 node scripts/verify-field-display-contract.mjs
 node scripts/verify-current-iteration-archive.mjs
 node scripts/verify-business-action-source-contract.mjs
+node scripts/verify-v032-time-foundation.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

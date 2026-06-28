@@ -9,6 +9,7 @@
 const tickIntervalRef = { current: null };
 // 模块级依赖缓存，避免 React 闭包导致 setInterval 捕获过时的 simulationLoop
 const depsRef = { engine: null, loop: null, getBusinessData: null };
+const BLOCKING_RUN_STATUSES = ["RUNNING", "DRAINING", "PAUSED"];
 
 function debug(msg) {
   if (typeof window !== 'undefined') {
@@ -69,11 +70,6 @@ export function useSimulationActions({
     if (!simulationEngine || !simulationPolicies.length) { debug("createSimulationRun 失败: engine或policies缺失"); return; }
     const policy = simulationPolicies.find((p) => p.policy_status === "ACTIVE");
     if (!policy) { debug("createSimulationRun 失败: 无ACTIVE策略"); return; }
-    const unfinishedRun = simulationRuns.find((run) => ["READY", "RUNNING", "PAUSED", "DRAINING"].includes(run.simulation_status));
-    if (unfinishedRun) {
-      debug("createSimulationRun 失败: 存在未结束运行 " + unfinishedRun.simulation_run_id);
-      return;
-    }
     const previousSimulationRun = simulationRuns.reduce((latest, run) => {
       const runEnd = Number(run.simulation_end_seconds ?? run.current_simulation_seconds) || 0;
       const latestEnd = Number(latest?.simulation_end_seconds ?? latest?.current_simulation_seconds) || -1;
@@ -95,6 +91,11 @@ export function useSimulationActions({
     const run = simulationRuns.find((r) => r.simulation_run_id === runId);
     if (!run) { debug("startSimulationRun 失败: 未找到run " + runId); return; }
     debug("startSimulationRun 找到run | status=" + run.simulation_status + " | expected READY=" + (run.simulation_status === "READY"));
+    const activeRun = simulationRuns.find((item) => item.simulation_run_id !== runId && BLOCKING_RUN_STATUSES.includes(item.simulation_status));
+    if (activeRun) {
+      debug("startSimulationRun 失败: 已有运行中、暂停中或收尾执行中的模拟运行 " + activeRun.simulation_run_id);
+      return;
+    }
     const result = simulationEngine.startSimulationRun(run);
     if (!result) { debug("startSimulationRun 失败: 引擎返回null (status检查不通过或引擎错误)"); return; }
     debug("startSimulationRun 成功: 状态变为 " + result.simulationRun.simulation_status + " | 事件: " + result.event.message);
@@ -129,6 +130,11 @@ export function useSimulationActions({
     if (!simulationEngine) return;
     const run = simulationRuns.find((r) => r.simulation_run_id === runId);
     if (!run) return;
+    const activeRun = simulationRuns.find((item) => item.simulation_run_id !== runId && BLOCKING_RUN_STATUSES.includes(item.simulation_status));
+    if (activeRun) {
+      debug("resumeSimulationRun 失败: 已有运行中、暂停中或收尾执行中的模拟运行 " + activeRun.simulation_run_id);
+      return;
+    }
     const result = simulationEngine.resumeSimulationRun(run);
     if (!result) return;
     setSimulationRuns((prev) => prev.map((r) => r.simulation_run_id === runId ? result.simulationRun : r));

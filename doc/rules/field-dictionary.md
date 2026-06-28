@@ -1173,7 +1173,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |---|---|---|---|
 |simulation_run_id|模拟运行编号|持久化字段|SimulationRun 唯一编号|
 |simulation_name|模拟运行名称|持久化字段|模拟运行名称|
-|simulation_status|模拟运行状态|运行态字段|当前模拟状态：READY / RUNNING / PAUSED / DRAINING / COMPLETED / STOPPED / FAILED；DRAINING 表示计划 Tick 已结束但已触发自动化动作仍在收尾执行|
+|simulation_status|模拟运行状态|运行态字段|当前模拟状态：READY / RUNNING / PAUSED / DRAINING / COMPLETED / STOPPED / FAILED；DRAINING 表示计划 Tick 已结束但已触发自动化动作仍在收尾执行；FAILED 表示运行对象自身异常结束，不等同于普通业务单据失败|
 |simulation_policy_id|模拟策略编号|持久化字段|关联的 SimulationPolicy 编号|
 |simulation_policy_snapshot|模拟策略快照|运行态字段|运行创建时的策略快照|
 |simulation_timeline_id|模拟时间轴编号|持久化字段|串联多次连续 SimulationRun 的时间轴编号|
@@ -1209,9 +1209,29 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |resumed_at|恢复时间|运行态字段|最近一次恢复时间|
 |completed_at|完成时间|运行态字段|模拟完成时间|
 |stopped_at|停止时间|运行态字段|模拟停止时间|
-|failure_reason|失败原因|运行态字段|模拟失败原因|
+|failure_reason|失败原因|运行态字段|模拟运行对象自身异常结束的原因|
+|failure_summary|失败定位摘要|运行态字段|模拟运行异常结束时记录失败来源、动作、对象和当前 Tick|
+|failure_source|失败来源|运行态字段|失败定位摘要中的来源分类|
+|failure_action|失败动作|运行态字段|失败定位摘要中的动作或事件类型|
+|failure_object_type|失败对象类型|运行态字段|失败定位摘要中的对象类型|
+|failure_object_id|失败对象编号|运行态字段|失败定位摘要中的对象编号|
 |result_summary|结果摘要|运行态字段|模拟完成后的结果摘要|
 |created_at|创建时间|运行态字段|记录创建时间|
+
+---
+
+## 24.1 TimeContext：统一时间上下文
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|time_mode|时间模式|运行态字段|REAL_MANUAL / REAL_AUTOMATION / SIMULATION|
+|trigger_source|触发来源|运行态字段|MANUAL / REAL_AUTOMATION / SIMULATION_AUTOMATION|
+|now|当前真实时间|运行态字段|本次业务动作使用的真实时间|
+|simulation_run_id|模拟运行编号|运行态字段|模拟时间模式下的来源运行对象|
+|simulation_timeline_id|模拟时间轴编号|运行态字段|模拟时间模式下的连续时间轴|
+|simulation_seconds|模拟秒|运行态字段|模拟时间轴上的当前绝对秒|
+|simulation_timestamp|模拟时间|运行态字段|统一 Day N HH:MM:SS 展示时间|
+|global_tick|全局 Tick|运行态字段|模拟时间模式下的全局 Tick|
 
 ---
 

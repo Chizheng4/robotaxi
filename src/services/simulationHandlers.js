@@ -10,6 +10,7 @@
  */
 
 import * as businessActionService from "./businessActionService.js";
+import { createSimulationTimeContext, resolveRuntimeNow, resolveSimulationTimestamp } from "../domain/timeContext.js";
 
 let simulationBusinessSequence = 0;
 
@@ -34,10 +35,17 @@ function getSimulationAudit(context, { created = false, completed = false } = {}
 }
 
 function createRuntime(context) {
+  const timeContext = createSimulationTimeContext({
+    simulationRunId: context?.simulationRunId,
+    simulationTimelineId: context?.simulationTimelineId,
+    tickContext: context?.tickContext,
+    globalTick: context?.globalTick,
+  });
   return {
     nextId: (prefix) => nextSimulationBusinessId(prefix, context),
-    now: () => new Date().toISOString(),
-    simulationTime: () => context?.tickContext?.current_time || null,
+    timeContext,
+    now: () => resolveRuntimeNow(timeContext),
+    simulationTime: () => resolveSimulationTimestamp(timeContext),
     randomSeed: () => `${context?.simulationRunId || "SIM"}-${context?.globalTick || 0}-${context?.actionIndex || 0}`,
     audit: (options = {}) => getSimulationAudit(context, options),
   };

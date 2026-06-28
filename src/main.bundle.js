@@ -4085,7 +4085,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "time",
       label: "状态时间",
-      keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "result_summary"]
+      keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "failure_summary", "result_summary"]
     }, {
       key: "cost",
       label: "成本",

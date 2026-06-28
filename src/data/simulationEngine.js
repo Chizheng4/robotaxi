@@ -176,6 +176,8 @@ export function startSimulationRun(simulationRun) {
     ...simulationRun,
     simulation_status: SimulationStatus.RUNNING,
     started_at: new Date().toISOString(),
+    failure_reason: null,
+    failure_summary: null,
   };
 
   const event = createSimulationEvent({
@@ -381,6 +383,13 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
       `模拟运行 ${runId} 已完成`));
   } else if (isDraining && updated.drain_ticks >= updated.max_drain_ticks) {
     const failureReason = `工作流在 ${updated.max_drain_ticks} 个排空 Tick 内未收敛`;
+    const failureSummary = createSimulationRunFailureSummary({
+      failureSource: "DRAIN_TIMEOUT",
+      failureAction: EventType.SIMULATION_DRAIN_FAILED,
+      failureReason,
+      workflowActionCount,
+      simulationRun: updated,
+    });
     updated = {
       ...updated,
       simulation_status: SimulationStatus.FAILED,
@@ -388,16 +397,36 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
       simulation_end_seconds: updated.current_simulation_seconds,
       simulation_end_at: formatSimulationTimestamp(updated.current_simulation_seconds),
       failure_reason: failureReason,
+      failure_summary: failureSummary,
     };
     events.push(makeEvent(runId, updated.current_day, updated.current_time, updated.current_day_tick, updated.current_global_tick,
       EventType.SIMULATION_DRAIN_FAILED, EventSource.SIMULATION_SYSTEM, EventResult.FAILED, failureReason,
-      { failureReason }));
+      { failureReason, payload: failureSummary }));
     events.push(makeEvent(runId, updated.current_day, updated.current_time, updated.current_day_tick, updated.current_global_tick,
       EventType.SIMULATION_RUN_FAILED, EventSource.SIMULATION_SYSTEM, EventResult.FAILED,
-      `模拟运行 ${runId} 排空失败`, { failureReason }));
+      `模拟运行 ${runId} 收尾失败，运行异常结束`, { failureReason, payload: failureSummary }));
   }
 
   return { simulationRun: updated, events };
+}
+
+function createSimulationRunFailureSummary({
+  failureSource,
+  failureAction,
+  failureReason,
+  workflowActionCount,
+  simulationRun,
+}) {
+  return {
+    failure_source: failureSource,
+    failure_action: failureAction,
+    failure_object_type: "simulationRun",
+    failure_object_id: simulationRun.simulation_run_id,
+    failure_reason: failureReason,
+    workflow_action_count: workflowActionCount,
+    current_time: simulationRun.current_time,
+    current_global_tick: simulationRun.current_global_tick,
+  };
 }
 
 function makeEvent(runId, day, time, dayTick, globalTick, eventType, eventSource, eventResult, message, options = {}) {

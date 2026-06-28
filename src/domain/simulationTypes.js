@@ -26,10 +26,10 @@ export const SimulationStatusLabel = {
   [SimulationStatus.READY]: "待启动",
   [SimulationStatus.RUNNING]: "运行中",
   [SimulationStatus.PAUSED]: "暂停中",
-  [SimulationStatus.DRAINING]: "排空中",
+  [SimulationStatus.DRAINING]: "收尾执行中",
   [SimulationStatus.COMPLETED]: "已完成",
   [SimulationStatus.STOPPED]: "已停止",
-  [SimulationStatus.FAILED]: "失败",
+  [SimulationStatus.FAILED]: "运行异常结束",
 };
 
 // ============================================================================
@@ -364,6 +364,7 @@ export function createSimulationRun({
     completed_at: null,
     stopped_at: null,
     failure_reason: null,
+    failure_summary: null,
     result_summary: null,
     created_at: new Date().toISOString(),
   };
