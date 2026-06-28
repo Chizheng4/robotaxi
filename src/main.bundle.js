@@ -4016,7 +4016,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "matching",
       label: "匹配履约",
-      keys: ["matched_robotaxi_id", "matched_robotaxi_location_summary", "matched_robotaxi_location_detail", "order_matching_decision_id", "trip_id", "trip_total_distance_km", "trip_total_duration_min", "trip_distance_traveled_km", "trip_distance_remaining_km", "paid_amount"]
+      keys: ["matched_robotaxi_id", "matched_robotaxi_location_summary", "matched_robotaxi_location_detail", "order_matching_decision_id", "matching_attempt_count", "matching_retry_pending", "next_matching_retry_seconds", "last_matching_failure_reason", "trip_id", "trip_total_distance_km", "trip_total_duration_min", "trip_distance_traveled_km", "trip_distance_remaining_km", "paid_amount"]
     }, {
       key: "time",
       label: "时间与来源",

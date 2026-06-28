@@ -75,6 +75,7 @@ export function queryAllWorkflowRules({
   for (const order of serviceOrders) {
     const rules = queryWorkflowRules("serviceOrder", order.order_status, autoConfig, defaultCompletionConfig);
     for (const rule of rules) {
+      if (isWaitingForTimedRetry(order, rule.actionType)) continue;
       actions.push({ objectType: "serviceOrder", objectId: order.service_order_id, actionType: rule.actionType, fromState: rule.fromState });
     }
   }
@@ -111,6 +112,10 @@ export function queryAllWorkflowRules({
   }
 
   return actions;
+}
+
+function isWaitingForTimedRetry(order, actionType) {
+  return actionType === "ORDER_MATCHING_EXECUTE" && order?.matching_retry_pending === true;
 }
 
 function isTimedOperationManagedAction(objectType, actionType) {

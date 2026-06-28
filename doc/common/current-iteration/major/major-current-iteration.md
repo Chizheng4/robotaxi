@@ -1,19 +1,16 @@
 # 当前大版本迭代
 
-当前大版本：`v032 统一时间世界与时间驱动执行引擎`。
+当前大版本：暂无进行中的大版本。
 
-方案设计：`v032-unified-time-world-design.md`
+最近完成大版本：`v032 统一时间世界与时间驱动执行引擎`。
 
-自动化执行计划：`v032-auto-execution-plan.md`
+最近完成历史方案：
 
-当前执行指针：`v032.5 需求侧等待、匹配重试与订单完成闭环`。
+- `doc/common/iteration-history/major/v032-unified-time-world-design.md`
+- `doc/common/iteration-history/major/v032-auto-execution-plan.md`
 
-最近完成版本：`v031 业务动作同源执行与运营数据可信闭环`
-
-历史方案：`doc/common/iteration-history/major/v031-business-action-source-of-truth-plan.md`
-
-后续待执行方案：`operating-metrics-model-pending-plan.md`
+后续待执行方案：`operating-metrics-model-pending-plan.md`。
 
 经营指标模型继续等待业务状态时间线、路径规划事实和模拟业务闭环稳定后再获得正式版本编号，本入口不得提前驱动指标编码。
 
-`v032` 本轮只建立统一时间世界、时间作业调度、行驶时间驱动、供需自动化闭环和运行失败可定位能力；不提前实现完整经营指标体系。
+`v032` 已完成统一时间世界、时间作业调度、行驶时间驱动、供需自动化闭环和运行失败可定位能力；不包含完整经营指标体系。

@@ -439,11 +439,49 @@ export function executeOrderMatching({ state, objectId, runtime }) {
     createdAt: runtime.now(),
   });
   if (!matchingResult.success) {
-    return failure("ROBOTAXI_ASSIGNMENT_FAILED", `服务订单 ${objectId} 匹配失败`, "serviceOrder", objectId, matchingResult.failureReason, {
+    const attemptCount = Number(order.matching_attempt_count || 0) + 1;
+    const maxRetryCount = getConfiguredDurationSeconds(runtime, "order_matching_max_retry_count", 5);
+    const retrySeconds = getConfiguredDurationSeconds(runtime, "order_matching_retry_seconds", 30);
+    const shouldFailTerminal = attemptCount > maxRetryCount;
+    const retryOperation = shouldFailTerminal ? null : createTimedOperation({
+      timedOperationId: runtime.nextId("TOP"),
+      timeMode: runtime.timeContext?.time_mode || "SIMULATION",
+      operationType: TimedOperationType.ORDER_MATCH_RETRY,
+      objectType: "serviceOrder",
+      objectId,
+      actionType: "ORDER_MATCHING_EXECUTE",
+      startSeconds: Number(runtime.timeContext?.simulation_seconds) || 0,
+      durationSeconds: retrySeconds,
+      simulationStartedAt: runtime.simulationTime(),
+      simulationPlannedCompletedAt: null,
+      payload: {
+        failure_reason: matchingResult.failureReason,
+        matching_attempt_count: attemptCount,
+        retry_policy: "WAIT_AND_RETRY",
+      },
+    });
+    return success(
+      shouldFailTerminal ? "ROBOTAXI_ASSIGNMENT_FAILED" : "MATCHING_RETRY_SCHEDULED",
+      shouldFailTerminal ? `服务订单 ${objectId} 超过最大匹配重试次数` : `服务订单 ${objectId} 暂无可分配 Robotaxi，已安排重试`,
+      { objectType: "serviceOrder", objectId, failureReason: matchingResult.failureReason, retryOperationId: retryOperation?.timed_operation_id || null },
+      {
       orderMatchingRuns: matchingResult.run ? [{ ...matchingResult.run, ...runtime.audit({ created: true }) }, ...(state.orderMatchingRuns || [])] : state.orderMatchingRuns,
       orderMatchingDecisions: matchingResult.decision ? [{ ...matchingResult.decision, ...runtime.audit({ created: true }) }, ...(state.orderMatchingDecisions || [])] : state.orderMatchingDecisions,
-      serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, { ...order, order_status: serviceOrderTypes.ServiceOrderStatus.ROBOTAXI_ASSIGNMENT_FAILED, failure_reason: matchingResult.failureReason, ...runtime.audit() }),
-    });
+        serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
+          ...order,
+          order_status: shouldFailTerminal
+            ? serviceOrderTypes.ServiceOrderStatus.ROBOTAXI_ASSIGNMENT_FAILED
+            : serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT,
+          matching_attempt_count: attemptCount,
+          matching_retry_pending: !shouldFailTerminal,
+          last_matching_failure_reason: matchingResult.failureReason,
+          next_matching_retry_seconds: shouldFailTerminal ? null : ((Number(runtime.timeContext?.simulation_seconds) || 0) + retrySeconds),
+          failure_reason: shouldFailTerminal ? matchingResult.failureReason : null,
+          ...runtime.audit(),
+        }),
+        timedOperations: retryOperation ? [retryOperation, ...(state.timedOperations || [])] : state.timedOperations,
+      },
+    );
   }
   const robotaxiId = matchingResult.decision.selected_robotaxi_id;
   const matchedOrder = { ...order, matched_robotaxi_id: robotaxiId };
@@ -458,6 +496,10 @@ export function executeOrderMatching({ state, objectId, runtime }) {
       matched_robotaxi_id: robotaxiId,
       trip_id: trip.trip_id,
       order_matching_decision_id: matchingResult.decision.order_matching_decision_id,
+      matching_retry_pending: false,
+      next_matching_retry_seconds: null,
+      last_matching_failure_reason: null,
+      matching_attempt_count: Number(order.matching_attempt_count || 0) + 1,
       matched_at: runtime.now(),
       simulation_matched_at: runtime.simulationTime(),
       failure_reason: null,

@@ -618,6 +618,10 @@
 |matched_robotaxi_location_summary|匹配 Robotaxi 位置摘要|聚合展示字段|已匹配 Robotaxi 当前结构化位置摘要|
 |matched_robotaxi_location_detail|匹配 Robotaxi 位置详情|聚合展示字段|已匹配 Robotaxi 当前结构化位置详情|
 |order_matching_decision_id|订单匹配结果编号|运行态字段|关联 OrderMatchingDecision，可为空|
+|matching_attempt_count|匹配尝试次数|运行态字段|服务订单已经执行的 Robotaxi 匹配尝试次数|
+|matching_retry_pending|等待匹配重试|运行态字段|当前订单是否已有等待中的匹配重试时间作业|
+|next_matching_retry_seconds|下次匹配重试秒数|运行态字段|下一次匹配重试在统一模拟时间中的目标秒数|
+|last_matching_failure_reason|最近匹配失败原因|运行态字段|最近一次订单匹配尝试失败原因|
 |trip_id|履约行驶记录编号|运行态字段|关联 Trip，可为空|
 |confirmed_at|客户确认时间|运行态字段|客户确认叫车时间|
 |matched_at|匹配时间|运行态字段|车辆匹配成功时间|
@@ -1361,6 +1365,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |CUSTOMER_CONFIRMED|客户已确认|result_type|
 |MATCHING_COMPLETED|匹配完成|result_type|
 |MATCHING_FAILED|匹配失败|result_type|
+|MATCHING_RETRY_SCHEDULED|匹配重试已安排|result_type|
 |TRIP_CREATED|履约已创建|result_type|
 |TRIP_STEPPED|履约已步进|result_type|
 |TRIP_NO_ACTION|履约无需动作|result_type|

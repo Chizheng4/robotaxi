@@ -1,3 +1,17 @@
+## v032.5
+
+核心：把订单匹配失败从终态失败改为等待重试过程，让需求侧在统一时间世界中形成更真实的等待与再匹配闭环。
+
+- 订单匹配无可用 Robotaxi 时不再立即终态失败，订单保持 `WAITING_ROBOTAXI_ASSIGNMENT`。
+- 匹配失败会记录 `matching_attempt_count / matching_retry_pending / next_matching_retry_seconds / last_matching_failure_reason`。
+- 新增 `ORDER_MATCH_RETRY` 时间作业，到期后通过执行引擎再次触发原 `ORDER_MATCHING_EXECUTE`。
+- WorkflowEngine 对等待重试订单跳过普通 tick 匹配，避免绕过等待时间重复执行。
+- 超过 `execution_time_config.order_matching_max_retry_count` 后才进入 `ROBOTAXI_ASSIGNMENT_FAILED`。
+- 服务订单详情增加匹配重试字段，字段字典同步新增字段和 `MATCHING_RETRY_SCHEDULED` 中文结果。
+- 新增 `verify-v032-demand-matching-retry.mjs` 并纳入提交前检查，验证无车等待、时间作业重试、有车后匹配成功并创建 Trip。
+- `v032` 大版本自动执行计划完成，方案与执行计划归档到历史大版本目录。
+- 重新生成 `src/main.bundle.js`；提交前检查和本地页面入口验证通过。
+
 ## v032.4
 
 核心：让供给侧准入检查进入时间作业驱动，并把投放目标升级为临时供给再平衡模型。
