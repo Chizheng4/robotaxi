@@ -8,6 +8,8 @@
  * 参考文档：doc/08-simulation-system/01-simulation-runtime/05-supply-trigger.md
  */
 
+import { SECONDS_PER_DAY, clockTimeToSeconds } from "../domain/simulationTime.js";
+
 /**
  * 执行供给侧点火判断
  *
@@ -30,7 +32,11 @@ export function runSupplyTrigger({ timeContext, policySnapshot }) {
   // 1. 运营准入点火
   if (config.readiness_trigger_enabled
     && timeContext.is_worker_working_time
-    && isTriggerSecond(timeContext.current_simulation_seconds, config.readiness_trigger_interval_seconds ?? 600)) {
+    && isTriggerSecondFromWindowStart({
+      currentSeconds: timeContext.current_simulation_seconds,
+      intervalSeconds: config.readiness_trigger_interval_seconds ?? 600,
+      startTime: policySnapshot.worker_work_start_time,
+    })) {
     actions.push({ actionType: "READINESS_TASK_CREATE", objectId: null, triggeredBy: "SUPPLY_TRIGGER" });
     readinessTriggered = true;
   } else if (config.readiness_trigger_enabled) {
@@ -41,7 +47,11 @@ export function runSupplyTrigger({ timeContext, policySnapshot }) {
   if (config.deployment_trigger_enabled
     && timeContext.is_worker_working_time
     && timeContext.is_robotaxi_operating_time
-    && isTriggerSecond(timeContext.current_simulation_seconds, config.deployment_trigger_interval_seconds ?? 600)) {
+    && isTriggerSecondFromWindowStart({
+      currentSeconds: timeContext.current_simulation_seconds,
+      intervalSeconds: config.deployment_trigger_interval_seconds ?? 600,
+      startTime: getDeploymentWindowStartTime(policySnapshot),
+    })) {
     actions.push({ actionType: "DEPLOYMENT_TASK_CREATE", objectId: null, triggeredBy: "SUPPLY_TRIGGER" });
     deploymentTriggered = true;
   } else if (config.deployment_trigger_enabled) {
@@ -57,8 +67,19 @@ export function runSupplyTrigger({ timeContext, policySnapshot }) {
   };
 }
 
-function isTriggerSecond(currentSeconds, intervalSeconds) {
+function isTriggerSecondFromWindowStart({ currentSeconds, intervalSeconds, startTime }) {
   const interval = Math.max(1, Math.floor(Number(intervalSeconds) || 600));
-  const seconds = Math.floor(Number(currentSeconds) || 0);
-  return seconds % interval === 0;
+  const secondsOfDay = positiveModulo(Math.floor(Number(currentSeconds) || 0), SECONDS_PER_DAY);
+  const startSeconds = clockTimeToSeconds(startTime || "00:00:00");
+  return secondsOfDay >= startSeconds && (secondsOfDay - startSeconds) % interval === 0;
+}
+
+function getDeploymentWindowStartTime(policySnapshot = {}) {
+  const workerStart = policySnapshot.worker_work_start_time || "00:00:00";
+  const robotaxiStart = policySnapshot.robotaxi_operating_start_time || "00:00:00";
+  return clockTimeToSeconds(workerStart) >= clockTimeToSeconds(robotaxiStart) ? workerStart : robotaxiStart;
+}
+
+function positiveModulo(value, modulo) {
+  return ((value % modulo) + modulo) % modulo;
 }
