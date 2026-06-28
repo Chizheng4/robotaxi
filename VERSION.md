@@ -1,3 +1,17 @@
+## v032.3
+
+核心：把运营行驶记录和履约行驶记录接入时间驱动主路径，并把路径详情改为面向用户的关联路径摘要。
+
+- 路径规划成功后自动创建 `TRAVEL` 时间作业，按 Route 移动步数和默认 Cell 行驶时长计算到达时间。
+- 模拟 Tick 推进时间作业时同步投影行驶进度，更新当前 Cell、当前步数、总距离、已行驶距离、剩余距离和已耗时。
+- 时间作业到期后通过执行引擎调用原业务动作闭环，新增 `ROUTE_EXECUTION_TRAVEL_COMPLETE` 与 `TRIP_TRAVEL_COMPLETE`，不再由模拟侧自创到达逻辑。
+- 运营行驶到达后生成 `ARRIVAL_DETECTION` 时间作业，继续复用原到达确认动作，第一阶段默认正常到达。
+- 自动工作流不再把 `ROUTE_EXECUTION_STEP / TRIP_STEP_EXECUTE` 作为模拟主路径，保留人工调试和手动处理兼容入口。
+- 运营行驶记录和履约行驶记录详情的路径 Tab 改为展示 `关联路径信息`，不再把内部 `route_history_detail` 作为主展示。
+- 字段字典同步新增时间到达动作、执行结果和 `route_links_detail` 展示字段。
+- 新增 `verify-v032-travel-time-driven.mjs` 并纳入提交前检查，验证规划 Route、时间行驶、到达和后续到达识别闭环。
+- 重新生成 `src/main.bundle.js`；提交前检查和本地页面入口验证通过。
+
 ## v032.2
 
 核心：建立 TimedOperation 时间作业基础层，让模拟 tick 能推进时间作业集合，并提供前端基础查看能力。

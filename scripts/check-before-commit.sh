@@ -63,6 +63,8 @@ node --check src/data/simulationRunBusinessScope.js
 node --check src/data/costModelCalculator.js
 node --check src/data/revenueCalculator.js
 node --check src/data/timedOperationScheduler.js
+node --check src/data/simulationLoop.js
+node --check src/data/simulationWorkflowEngine.js
 node scripts/verify-service-order-settlement.mjs
 node scripts/verify-simulation-continuity.mjs
 node scripts/verify-simulation-audit-display.mjs
@@ -76,6 +78,7 @@ node scripts/verify-current-iteration-archive.mjs
 node scripts/verify-business-action-source-contract.mjs
 node scripts/verify-v032-time-foundation.mjs
 node scripts/verify-v032-timed-operation-scheduler.mjs
+node scripts/verify-v032-travel-time-driven.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

@@ -210,6 +210,57 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
   };
 }
 
+export function projectRouteExecutionTravelProgress({ execution, route, elapsedSeconds = 0 }) {
+  if (!execution || !route) return null;
+  const routeCellIds = execution.route_cell_ids?.length
+    ? execution.route_cell_ids
+    : getRouteExecutionCells(route, [], execution.origin_cell_id, execution.target_cell_id);
+  const totalStepCount = Math.max(0, execution.total_step_count || routeCellIds.length - 1);
+  const elapsedStepIndex = Math.floor(Math.max(0, Number(elapsedSeconds) || 0) / DEFAULT_CELL_TRAVEL_SECONDS);
+  const currentStepIndex = Math.min(elapsedStepIndex, totalStepCount);
+  const currentCellId = routeCellIds[currentStepIndex] || execution.current_cell_id || execution.origin_cell_id;
+  return applyTravelMetrics({
+    record: {
+      ...execution,
+      current_cell_id: currentCellId,
+      current_step_index: currentStepIndex,
+      total_step_count: totalStepCount,
+      time_elapsed: String(roundDuration((Number(elapsedSeconds) || 0) / 60)),
+    },
+    routes: [route],
+    currentRouteId: execution.route_id,
+    currentStepIndex,
+  });
+}
+
+export function completeRouteExecutionTravel({ execution, task, route, robotaxi }) {
+  const projected = projectRouteExecutionTravelProgress({
+    execution,
+    route,
+    elapsedSeconds: Math.max(0, Number(route.route_step_count || route.total_step_count || 0) * DEFAULT_CELL_TRAVEL_SECONDS),
+  });
+  const nextExecution = {
+    ...execution,
+    ...projected,
+    execution_status: taskTypes.RouteExecutionStatus.ARRIVED,
+    current_cell_id: execution.target_cell_id || projected?.current_cell_id,
+    current_step_index: projected?.total_step_count ?? execution.total_step_count,
+    distance_traveled_km: projected?.total_distance_km ?? execution.total_distance_km,
+    distance_remaining_km: 0,
+  };
+  return {
+    execution: nextExecution,
+    task: task ? { ...task, task_status: taskTypes.DeploymentTaskStatus.ARRIVED } : task,
+    robotaxi: robotaxi ? {
+      ...robotaxi,
+      current_cell_id: nextExecution.current_cell_id,
+      current_route_id: execution.route_id,
+      current_task_id: execution.task_id || task?.task_id,
+      motion_status: "STOPPED",
+    } : null,
+  };
+}
+
 export function confirmRouteExecutionArrival({ execution, task, robotaxi }) {
   return {
     execution: {

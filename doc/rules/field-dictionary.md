@@ -658,7 +658,8 @@
 |route_id|路径编号|运行态字段|Trip 当前引用 Route，可为空|
 |route_planning_run_id|路径规划执行记录编号|运行态字段|Trip 当前引用路径规划执行记录，可为空|
 |route_history|路径历史|运行态字段|Trip 履约过程中的路径历史，可为空数组|
-|route_history_detail|路径历史详情|聚合展示字段|Trip 当前路径与历史路径的结构化展示|
+|route_history_detail|路径历史详情（兼容）|聚合展示字段|Trip 当前路径与历史路径的结构化展示，前端主展示应优先使用 route_links_detail|
+|route_links_detail|关联路径信息|聚合展示字段|面向用户展示的关联 Route 摘要列表，适用于 Trip 与 RouteExecution 详情|
 |started_at|开始时间|运行态字段|履约行驶开始时间|
 |completed_at|完成时间|运行态字段|履约行驶完成时间|
 |event_log|事件记录|运行态字段|履约行驶事件数组|
@@ -1346,7 +1347,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |READINESS_TASK_PASS|准入检查通过|event_type / action_type|
 |ROUTE_PLAN|规划行驶路径|event_type / action_type|
 |ROUTE_EXECUTION_STEP|推进行驶记录|event_type / action_type|
+|ROUTE_EXECUTION_TRAVEL_COMPLETE|运营行驶时间到达|event_type / action_type|
 |ARRIVAL_CONFIRM|确认到达|event_type / action_type|
+|TRIP_TRAVEL_COMPLETE|履约行驶时间到达|event_type / action_type|
 |ORDER_CREATED|服务订单已创建|result_type|
 |SERVICE_ORDER_CREATE_FAILED|服务订单创建失败|result_type|
 |PRICING_COMPLETED|定价完成|result_type|
@@ -1372,6 +1375,10 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ROUTE_PLAN_FAILED|路径规划失败|result_type|
 |ROUTE_STEPPED|行驶记录已步进|result_type|
 |ROUTE_STEP_FAILED|行驶记录步进失败|result_type|
+|ROUTE_TRAVEL_COMPLETED|运营行驶已按时间到达|result_type|
+|ROUTE_TRAVEL_COMPLETE_FAILED|运营行驶时间到达失败|result_type|
+|TRIP_TRAVEL_COMPLETED|履约行驶已按时间到达|result_type|
+|TRIP_TRAVEL_COMPLETE_FAILED|履约行驶时间到达失败|result_type|
 |ARRIVAL_CONFIRMED|到达已确认|result_type|
 |ARRIVAL_CONFIRM_FAILED|到达确认失败|result_type|
 |serviceOrder|服务订单|related_object_type|

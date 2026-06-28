@@ -82,6 +82,7 @@ export function queryAllWorkflowRules({
   for (const trip of trips) {
     const rules = queryWorkflowRules("trip", trip.trip_status, autoConfig, defaultCompletionConfig);
     for (const rule of rules) {
+      if (isTimedOperationManagedAction("trip", rule.actionType)) continue;
       actions.push({ objectType: "trip", objectId: trip.trip_id, actionType: rule.actionType, fromState: rule.fromState });
     }
   }
@@ -103,9 +104,16 @@ export function queryAllWorkflowRules({
   for (const exec of routeExecutions) {
     const rules = queryWorkflowRules("routeExecution", exec.execution_status, autoConfig, defaultCompletionConfig);
     for (const rule of rules) {
+      if (isTimedOperationManagedAction("routeExecution", rule.actionType)) continue;
       actions.push({ objectType: "routeExecution", objectId: exec.route_execution_id, actionType: rule.actionType, fromState: rule.fromState });
     }
   }
 
   return actions;
+}
+
+function isTimedOperationManagedAction(objectType, actionType) {
+  if (objectType === "routeExecution") return actionType === "ROUTE_EXECUTION_STEP";
+  if (objectType === "trip") return actionType === "TRIP_STEP_EXECUTE";
+  return false;
 }

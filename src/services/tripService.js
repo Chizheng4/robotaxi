@@ -75,6 +75,67 @@ export function getNextTripMovementState(trip, data) {
   };
 }
 
+export function projectTripTravelProgress(trip, data, elapsedSeconds = 0) {
+  const route = data.routes?.find((item) => item.route_id === trip.route_id);
+  if (!route || !Array.isArray(route.route_steps) || route.route_steps.length === 0) return null;
+  const totalStepCount = getMovementStepCount(route);
+  const elapsedStepIndex = Math.floor(Math.max(0, Number(elapsedSeconds) || 0) / DEFAULT_CELL_TRAVEL_SECONDS);
+  const currentStepIndex = Math.min(elapsedStepIndex, totalStepCount);
+  const currentStep = route.route_steps[currentStepIndex] || route.route_steps[route.route_steps.length - 1];
+  const distanceMetrics = calculateTravelDistanceMetrics(
+    { ...trip, current_step_index: currentStepIndex },
+    data.routes || [],
+  );
+  return {
+    ...trip,
+    current_cell_id: currentStep?.cell_id || trip.current_cell_id,
+    current_step_index: currentStepIndex,
+    total_step_count: totalStepCount,
+    total_distance_km: distanceMetrics.total_distance_km,
+    distance_traveled_km: distanceMetrics.distance_traveled_km,
+    distance_remaining_km: distanceMetrics.distance_remaining_km,
+    time_elapsed: String(roundDuration((Number(elapsedSeconds) || 0) / 60)),
+  };
+}
+
+export function completeTripTravel(trip, data) {
+  const route = data.routes?.find((item) => item.route_id === trip.route_id);
+  if (!route) return null;
+  const totalStepCount = getMovementStepCount(route);
+  const projected = projectTripTravelProgress(trip, data, totalStepCount * DEFAULT_CELL_TRAVEL_SECONDS);
+  if (!projected) return null;
+  const nextStatus = trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP
+    ? tripTypes.TripStatus.WAITING_CUSTOMER_BOARDING
+    : tripTypes.TripStatus.ARRIVED_DESTINATION;
+  return {
+    ...projected,
+    trip_status: nextStatus,
+    trip_phase: nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION
+      ? tripTypes.TripPhase.DESTINATION
+      : tripTypes.TripPhase.PICKUP,
+    current_cell_id: nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION
+      ? trip.dropoff_cell_id
+      : trip.pickup_cell_id,
+    current_step_index: totalStepCount,
+    distance_traveled_km: projected.total_distance_km,
+    distance_remaining_km: 0,
+    arrival_execution_result: nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION
+      ? "NORMAL_ARRIVAL"
+      : trip.arrival_execution_result,
+    event_log: [
+      ...(Array.isArray(trip.event_log) ? trip.event_log : []),
+      {
+        event_time: _now(),
+        previous_status: trip.trip_status,
+        next_status: nextStatus,
+        event_type: "TRAVEL_TIME_COMPLETED",
+        event_result: "SUCCESS",
+        route_id: route.route_id,
+      },
+    ],
+  };
+}
+
 // ============================================================================
 // 2. 状态跳转（State Transition）
 // ============================================================================

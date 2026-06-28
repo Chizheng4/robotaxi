@@ -3803,7 +3803,7 @@ function getDetailTabs(selectedType) {
       { key: "basic", label: "行驶信息", keys: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "arrival_execution_result"] },
       { key: "location", label: "位置信息", keys: ["origin_cell_id", "origin_location_summary", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "actual_target_cell_id", "actual_target_service_area_id", "current_cell_id", "current_location_summary"] },
       { key: "progress", label: "行驶进度", keys: ["current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent"] },
-      { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "current_target_service_area_id", "route_summary", "route_history_detail"] },
+      { key: "route", label: "路径信息", keys: ["route_id", "route_strategy_id", "current_target_service_area_id", "route_summary", "route_links_detail"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
       { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
@@ -3825,7 +3825,7 @@ function getDetailTabs(selectedType) {
       { key: "basic", label: "履约信息", keys: ["trip_id", "trip_status", "trip_phase", "service_order_id", "robotaxi_id"] },
       { key: "location", label: "位置信息", keys: ["pickup_service_area_id", "pickup_cell_id", "pickup_location_summary", "dropoff_service_area_id", "dropoff_cell_id", "dropoff_location_summary", "current_cell_id", "current_location_summary"] },
       { key: "progress", label: "行驶进度", keys: ["current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"] },
-      { key: "route", label: "路径信息", keys: ["route_id", "route_planning_run_id", "route_summary", "route_history_detail"] },
+      { key: "route", label: "路径信息", keys: ["route_id", "route_planning_run_id", "route_summary", "route_links_detail"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason", "event_log"] },
       { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
@@ -4978,7 +4978,9 @@ async function bootstrap() {
       DEPLOYMENT_TASK_CREATE: simulationHandlersModule.handleDeploymentTaskCreate,
       ROUTE_PLAN: simulationHandlersModule.handleRoutePlan,
       ROUTE_EXECUTION_STEP: simulationHandlersModule.handleRouteExecutionStep,
+      ROUTE_EXECUTION_TRAVEL_COMPLETE: simulationHandlersModule.handleRouteExecutionTravelComplete,
       ARRIVAL_CONFIRM: simulationHandlersModule.handleArrivalConfirm,
+      TRIP_TRAVEL_COMPLETE: simulationHandlersModule.handleTripTravelComplete,
     });
   }
 
@@ -5499,6 +5501,7 @@ function enrichRouteExecutionForDisplay(execution, data) {
     route_summary: summarizeRoute(route),
     route_detail: route ? getRouteDetail(route) : null,
     route_history_detail: createRouteHistoryDetail(execution, data),
+    route_links_detail: createRouteLinksDetail(execution, data),
     origin_location_summary: originLocation.summary,
     target_location_summary: targetLocation.summary,
     current_location_summary: currentLocation.summary,
@@ -5555,6 +5558,7 @@ function enrichTripForDisplay(trip, data) {
     route_summary: summarizeRoute(route),
     route_detail: route ? getRouteDetail(route) : null,
     route_history_detail: routeHistoryDetail,
+    route_links_detail: createRouteLinksDetail(trip, data),
     total_distance_km: tripMetrics.totalDistanceKm,
     distance_traveled_km: tripMetrics.distanceTraveledKm,
     distance_remaining_km: tripMetrics.distanceRemainingKm,
@@ -5608,6 +5612,41 @@ function createRouteHistoryDetail(record, data) {
       target_cell_id: item.target_cell_id,
       route_step_count: route ? getMovementStepCount(route) : null,
       total_distance_km: route ? roundDistance(Number(route.total_distance_km ?? Number(route.total_distance_m || 0) / 1000)) : null,
+      is_current_route: item.route_id === record.route_id,
+    };
+  });
+}
+
+function createRouteLinksDetail(record, data) {
+  const routeRefs = [];
+  const history = Array.isArray(record.route_history) ? record.route_history : [];
+  history.forEach((item) => {
+    if (item?.route_id && !routeRefs.some((routeRef) => routeRef.route_id === item.route_id)) {
+      routeRefs.push(item);
+    }
+  });
+  if (record.route_id && !routeRefs.some((routeRef) => routeRef.route_id === record.route_id)) {
+    routeRefs.push({
+      route_id: record.route_id,
+      route_strategy_id: record.route_strategy_id,
+      origin_cell_id: record.origin_cell_id || record.pickup_cell_id,
+      target_cell_id: record.target_cell_id || record.dropoff_cell_id,
+      route_change_reason: "CURRENT_ROUTE",
+    });
+  }
+  return routeRefs.map((item, index) => {
+    const route = data.routes.find((routeItem) => routeItem.route_id === item.route_id);
+    return {
+      index: index + 1,
+      route_id: item.route_id,
+      route_usage_type: route?.route_usage_type || item.route_usage_type || null,
+      route_status: route?.route_status || null,
+      route_strategy_id: route?.route_strategy_id || item.route_strategy_id || null,
+      origin_cell_id: route?.origin_cell_id || route?.start_cell_id || item.origin_cell_id || null,
+      target_cell_id: route?.target_cell_id || route?.end_cell_id || item.target_cell_id || null,
+      route_step_count: route ? getMovementStepCount(route) : item.route_step_count || null,
+      total_distance_km: route ? roundDistance(Number(route.total_distance_km ?? Number(route.total_distance_m || 0) / 1000)) : null,
+      route_change_reason: item.route_change_reason || null,
       is_current_route: item.route_id === record.route_id,
     };
   });

@@ -128,6 +128,10 @@ export function handleTripStepExecute({ objectId, data, context }) {
   return runBusinessAction((params) => businessActionService.advanceTrip({ ...params, objectId }), data, context);
 }
 
+export function handleTripTravelComplete({ objectId, data, context }) {
+  return runBusinessAction((params) => businessActionService.completeTripTravel({ ...params, objectId }), data, context);
+}
+
 export function handleSettlementExecute({ objectId, data, context }) {
   return runBusinessAction((params) => businessActionService.settleServiceOrder({ ...params, objectId }), data, context);
 }
@@ -163,6 +167,10 @@ export function handleRoutePlan({ objectId, data, context }) {
 
 export function handleRouteExecutionStep({ objectId, data, context }) {
   return runBusinessAction((params) => businessActionService.advanceRouteExecution({ ...params, objectId }), data, context);
+}
+
+export function handleRouteExecutionTravelComplete({ objectId, data, context }) {
+  return runBusinessAction((params) => businessActionService.completeRouteExecutionTravel({ ...params, objectId }), data, context);
 }
 
 export function handleArrivalConfirm({ objectId, data, context }) {

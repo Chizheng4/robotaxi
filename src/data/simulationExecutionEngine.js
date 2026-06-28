@@ -27,6 +27,7 @@ const actionHandlers = {
   // ---- 供给侧：DeploymentTask/RouteExecution ----
   ROUTE_PLAN: null,               // P3: planRouteExecutionRoute
   ROUTE_EXECUTION_STEP: null,     // P3: advanceRouteExecution
+  ROUTE_EXECUTION_TRAVEL_COMPLETE: null, // P3: time-driven travel completion
   ARRIVAL_CONFIRM: null,          // P3: submitNormalArrival
 
   // ---- 需求侧 ----
@@ -41,6 +42,7 @@ const actionHandlers = {
 
   // ---- 履约侧 ----
   TRIP_STEP_EXECUTE: null,        // P0: advanceTrip (需要注入)
+  TRIP_TRAVEL_COMPLETE: null,     // P0: time-driven trip travel completion
 };
 
 /**

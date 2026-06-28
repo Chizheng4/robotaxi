@@ -7,6 +7,7 @@ import * as serviceOrderSettlement from "../domain/serviceOrderSettlement.js";
 import * as routePlanningService from "./routePlanningService.js";
 import * as serviceOrderService from "./serviceOrderService.js";
 import * as tripService from "./tripService.js";
+import { TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
 
 export function createReadinessTask({ state, runtime }) {
   const appData = dataView(state);
@@ -203,6 +204,16 @@ export function executeRoutePlanning({ state, objectType, objectId, runtime }) {
   };
   if (plan.route) {
     updates.routes = [plan.route, ...(state.routes || [])];
+    updates.timedOperations = [
+      createTravelOperation({
+        runtime,
+        objectType: "routeExecution",
+        objectId: execution.route_execution_id,
+        actionType: "ROUTE_EXECUTION_TRAVEL_COMPLETE",
+        route: plan.route,
+      }),
+      ...(state.timedOperations || []),
+    ];
     updates.robotaxis = replaceById(state.robotaxis || [], "robotaxi_id", execution.robotaxi_id, (robotaxi) => ({
       ...robotaxi,
       current_route_id: plan.route.route_id,
@@ -232,6 +243,38 @@ export function advanceRouteExecution({ state, objectId, runtime }) {
     routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, { ...step.execution, ...runtime.audit() }),
     deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, { ...step.task, ...runtime.audit() }),
     robotaxis: step.robotaxi ? replaceById(state.robotaxis || [], "robotaxi_id", robotaxi.robotaxi_id, { ...step.robotaxi, ...runtime.audit() }) : state.robotaxis,
+  });
+}
+
+export function completeRouteExecutionTravel({ state, objectId, runtime }) {
+  const appData = dataView(state);
+  const execution = (state.routeExecutions || []).find((item) => item.route_execution_id === objectId || item.deployment_task_id === objectId);
+  if (!execution) return failure("ROUTE_TRAVEL_COMPLETE_FAILED", `未找到行驶执行 ${objectId}`, "routeExecution", objectId, "未找到行驶执行");
+  const task = (state.deploymentTasks || []).find((item) => item.task_id === execution.deployment_task_id || item.task_id === execution.task_id);
+  const route = appData.routes?.find((item) => item.route_id === execution.route_id);
+  const robotaxi = (state.robotaxis || appData.robotaxis || []).find((item) => item.robotaxi_id === execution.robotaxi_id);
+  if (!task || !route) return failure("ROUTE_TRAVEL_COMPLETE_FAILED", `行驶执行 ${execution.route_execution_id} 缺少任务或路径`, "routeExecution", execution.route_execution_id, "缺少任务或路径");
+  const completed = routePlanningService.completeRouteExecutionTravel({ execution, task, route, robotaxi });
+  return success("ROUTE_TRAVEL_COMPLETED", `行驶执行 ${execution.route_execution_id} 已按时间到达目标`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task.task_id }, {
+    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, { ...completed.execution, ...runtime.audit() }),
+    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, { ...completed.task, ...runtime.audit() }),
+    robotaxis: completed.robotaxi ? replaceById(state.robotaxis || [], "robotaxi_id", robotaxi.robotaxi_id, { ...completed.robotaxi, ...runtime.audit() }) : state.robotaxis,
+    timedOperations: [
+      createTimedOperation({
+        timedOperationId: runtime.nextId("TOP"),
+        timeMode: runtime.timeContext?.time_mode || "SIMULATION",
+        operationType: TimedOperationType.ARRIVAL_DETECTION,
+        objectType: "routeExecution",
+        objectId: execution.route_execution_id,
+        actionType: "ARRIVAL_CONFIRM",
+        startSeconds: Number(runtime.timeContext?.simulation_seconds) || 0,
+        durationSeconds: 3,
+        simulationStartedAt: runtime.simulationTime(),
+        simulationPlannedCompletedAt: null,
+        payload: { route_id: route.route_id, arrival_detection_policy: "DEFAULT_NORMAL" },
+      }),
+      ...(state.timedOperations || []),
+    ],
   });
 }
 
@@ -445,6 +488,16 @@ export function advanceTrip({ state, objectId, runtime }) {
   if (routeUpdate?.route) {
     extraUpdates.routes = [routeUpdate.route, ...(state.routes || [])];
     extraUpdates.routePlanningRuns = [{ ...routeUpdate.routePlanningRun, ...runtime.audit({ created: true }) }, ...(state.routePlanningRuns || [])];
+    extraUpdates.timedOperations = [
+      createTravelOperation({
+        runtime,
+        objectType: "trip",
+        objectId: trip.trip_id,
+        actionType: "TRIP_TRAVEL_COMPLETE",
+        route: routeUpdate.route,
+      }),
+      ...(state.timedOperations || []),
+    ];
   }
   return tripUpdateResult({
     state,
@@ -454,6 +507,24 @@ export function advanceTrip({ state, objectId, runtime }) {
     resultType: "TRIP_ADVANCED",
     message: `履约行驶 ${trip.trip_id} 推进至 ${nextTrip.trip_status}`,
     extraUpdates,
+  });
+}
+
+export function completeTripTravel({ state, objectId, runtime }) {
+  const appData = dataView(state);
+  const trip = (state.trips || []).find((item) => item.trip_id === objectId);
+  if (!trip) return failure("TRIP_TRAVEL_COMPLETE_FAILED", `未找到履约行驶 ${objectId}`, "trip", objectId, "未找到履约行驶");
+  const order = (state.serviceOrders || []).find((item) => item.service_order_id === trip.service_order_id);
+  if (!order) return failure("TRIP_TRAVEL_COMPLETE_FAILED", `履约行驶 ${objectId} 缺少服务订单`, "trip", objectId, "缺少服务订单");
+  const completedTrip = tripService.completeTripTravel(trip, appData);
+  if (!completedTrip) return failure("TRIP_TRAVEL_COMPLETE_FAILED", `履约行驶 ${objectId} 无法按时间完成行驶`, "trip", objectId, "缺少路径或当前状态不可完成");
+  return tripUpdateResult({
+    state,
+    order,
+    trip: { ...completedTrip, ...runtime.audit() },
+    runtime,
+    resultType: "TRIP_TRAVEL_COMPLETED",
+    message: `履约行驶 ${trip.trip_id} 已按时间到达`,
   });
 }
 
@@ -533,6 +604,29 @@ function executePriceRoutePlanning({ state, order, runtime }) {
       createdAt: runtime.now(),
     }),
   };
+}
+
+function createTravelOperation({ runtime, objectType, objectId, actionType, route }) {
+  const startSeconds = Number(runtime.timeContext?.simulation_seconds) || 0;
+  const durationSeconds = Math.max(1, (Number(route.route_step_count) || 0) * routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS);
+  return createTimedOperation({
+    timedOperationId: runtime.nextId("TOP"),
+    timeMode: runtime.timeContext?.time_mode || "SIMULATION",
+    operationType: TimedOperationType.TRAVEL,
+    objectType,
+    objectId,
+    actionType,
+    startSeconds,
+    durationSeconds,
+    simulationStartedAt: runtime.simulationTime(),
+    simulationPlannedCompletedAt: null,
+    payload: {
+      route_id: route.route_id,
+      route_step_count: route.route_step_count,
+      total_distance_km: route.total_distance_km,
+      cell_travel_seconds: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS,
+    },
+  });
 }
 
 function planTripRoute({ state, objectId, runtime }) {

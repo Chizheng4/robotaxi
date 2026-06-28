@@ -14,6 +14,8 @@ import { runDemandTrigger } from "./simulationDemandTrigger.js";
 import { queryAllWorkflowRules } from "./simulationWorkflowEngine.js";
 import { executeActions } from "./simulationExecutionEngine.js";
 import { advanceTimedOperations } from "./timedOperationScheduler.js";
+import * as routePlanningService from "../services/routePlanningService.js";
+import * as tripService from "../services/tripService.js";
 
 /**
  * 执行一个 SimulationTick
@@ -64,6 +66,12 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   if (businessData?.setTimedOperations) {
     businessData.setTimedOperations(timedOperationResult.timedOperations);
   }
+  if (businessData) {
+    applyTravelProgressFromTimedOperations({
+      timedOperations: timedOperationResult.timedOperations,
+      businessData,
+    });
+  }
 
   // 6. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
   const demandActions = [];
@@ -93,11 +101,23 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     });
   }
 
-  // 9. 使用本 Tick 内已被 handler 同步写入的业务上下文，再查询工作流。
+  // 9. 执行已经到期的时间作业，让 Route/Trip 的到达继续复用原业务闭环。
+  const timedOperationActions = buildTimedOperationActions(timedOperationResult.dueOperations);
+  let timedOperationExecutionResults = [];
+  if (businessData && timedOperationActions.length > 0) {
+    timedOperationExecutionResults = executeActions(timedOperationActions, businessData, {
+      simulationRunId: simulationRun.simulation_run_id,
+      globalTick: simulationRun.current_global_tick,
+      tickContext,
+      policySnapshot,
+    });
+  }
+
+  // 10. 使用本 Tick 内已被 handler 同步写入的业务上下文，再查询工作流。
   // React state 异步刷新，不能依赖立即重新读取组件闭包。
   const refreshedBusinessData = businessData || (refreshBusinessData ? refreshBusinessData() : null);
 
-  // 10. 查询工作流引擎：获取所有待执行的业务动作（含刚创建的订单的后续动作）
+  // 11. 查询工作流引擎：获取所有待执行的业务动作（含刚创建的订单的后续动作）
   const autoConfig = policySnapshot.service_order_auto_config || {};
   const defaultConfig = policySnapshot.default_completion_config || {};
   let workflowActions = [];
@@ -113,7 +133,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     });
   }
 
-  // 11. 通过执行引擎分发动作
+  // 12. 通过执行引擎分发动作
   let executionResults = [];
   if (refreshedBusinessData && workflowActions.length > 0) {
     executionResults = executeActions(workflowActions, refreshedBusinessData, {
@@ -125,9 +145,9 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   }
 
   // 合并所有执行结果
-  const allResults = [...preExecutionResults, ...executionResults];
+  const allResults = [...preExecutionResults, ...timedOperationExecutionResults, ...executionResults];
 
-  // 12. 汇总当前 Tick 摘要
+  // 13. 汇总当前 Tick 摘要
   const tickEventSummary = buildTickEventSummary(supplyResult, demandResult, allResults, timedOperationResult.summary);
 
   return {
@@ -141,6 +161,70 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     phase: isDraining ? SimulationStatus.DRAINING : SimulationStatus.RUNNING,
     workflowActionCount: workflowActions.length,
   };
+}
+
+function buildTimedOperationActions(dueOperations = []) {
+  return dueOperations
+    .filter((operation) => operation?.action_type && operation.object_type && operation.object_id)
+    .map((operation) => ({
+      objectType: operation.object_type,
+      objectId: operation.object_id,
+      actionType: operation.action_type,
+      fromState: operation.operation_status,
+      triggeredBy: "TIMED_OPERATION",
+      timedOperationId: operation.timed_operation_id,
+    }));
+}
+
+function applyTravelProgressFromTimedOperations({ timedOperations = [], businessData }) {
+  const travelOperations = timedOperations.filter((operation) =>
+    operation?.operation_type === "TRAVEL" &&
+    ["RUNNING", "COMPLETED"].includes(operation.operation_status)
+  );
+  if (travelOperations.length === 0) return;
+
+  const routes = businessData.routes || businessData.data?.routes || [];
+  let nextRouteExecutions = businessData.routeExecutions || [];
+  let routeExecutionChanged = false;
+  let nextTrips = businessData.trips || [];
+  let tripChanged = false;
+
+  for (const operation of travelOperations) {
+    const routeId = operation.operation_payload?.route_id;
+    const route = routes.find((item) => item.route_id === routeId);
+    if (!route) continue;
+
+    if (operation.object_type === "routeExecution") {
+      nextRouteExecutions = nextRouteExecutions.map((execution) => {
+        if (execution.route_execution_id !== operation.object_id) return execution;
+        const projected = routePlanningService.projectRouteExecutionTravelProgress({
+          execution,
+          route,
+          elapsedSeconds: operation.elapsed_seconds,
+        });
+        if (!projected) return execution;
+        routeExecutionChanged = true;
+        return projected;
+      });
+    }
+
+    if (operation.object_type === "trip") {
+      nextTrips = nextTrips.map((trip) => {
+        if (trip.trip_id !== operation.object_id) return trip;
+        const projected = tripService.projectTripTravelProgress(trip, { ...businessData, routes }, operation.elapsed_seconds);
+        if (!projected) return trip;
+        tripChanged = true;
+        return projected;
+      });
+    }
+  }
+
+  if (routeExecutionChanged && typeof businessData.setRouteExecutions === "function") {
+    businessData.setRouteExecutions(() => nextRouteExecutions);
+  }
+  if (tripChanged && typeof businessData.setTrips === "function") {
+    businessData.setTrips(() => nextTrips);
+  }
 }
 
 /**
