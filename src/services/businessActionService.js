@@ -7,8 +7,9 @@ import * as serviceOrderSettlement from "../domain/serviceOrderSettlement.js";
 import * as routePlanningService from "./routePlanningService.js";
 import * as serviceOrderService from "./serviceOrderService.js";
 import * as tripService from "./tripService.js";
-import { TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
+import { TimedOperationStatus, TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
 import { formatSimulationTimestamp } from "../domain/simulationTime.js";
+import { resolveWorkflowRuntimeSeconds } from "../data/workflowRuntimeConfig.js";
 
 export function createReadinessTask({ state, runtime }) {
   const appData = dataView(state);
@@ -420,14 +421,35 @@ export function executePricing({ state, objectId, runtime }) {
 export function callRobotaxi({ state, objectId, runtime }) {
   const order = (state.serviceOrders || []).find((item) => item.service_order_id === objectId);
   if (!order) return failure("ROBOTAXI_CALL_FAILED", `未找到服务订单 ${objectId}`, "serviceOrder", objectId, "未找到服务订单");
+  const waitSeconds = getConfiguredDurationSeconds(runtime, "order_assignment_wait_seconds", 60);
   return success("CUSTOMER_CONFIRMED", `服务订单 ${objectId} 客户已确认`, { objectType: "serviceOrder", objectId }, {
     serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
       ...order,
       order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT,
       confirmed_at: runtime.now(),
+      assignment_wait_timeout_seconds: waitSeconds,
       failure_reason: null,
       ...runtime.audit(),
     }),
+    timedOperations: [
+      createTimedOperation({
+        timedOperationId: runtime.nextId("TOP"),
+        timeMode: runtime.timeContext?.time_mode || "SIMULATION",
+        operationType: TimedOperationType.ORDER_ASSIGNMENT_TIMEOUT,
+        objectType: "serviceOrder",
+        objectId,
+        actionType: "SERVICE_ORDER_CANCEL",
+        startSeconds: Number(runtime.timeContext?.simulation_seconds) || 0,
+        durationSeconds: waitSeconds,
+        simulationStartedAt: runtime.simulationTime(),
+        simulationPlannedCompletedAt: getPlannedSimulationTimestamp(runtime, waitSeconds),
+        payload: {
+          cancellation_reason: "ROBOTAXI_ASSIGNMENT_TIMEOUT",
+          wait_seconds: waitSeconds,
+        },
+      }),
+      ...(state.timedOperations || []),
+    ],
   });
 }
 
@@ -447,10 +469,8 @@ export function executeOrderMatching({ state, objectId, runtime }) {
   });
   if (!matchingResult.success) {
     const attemptCount = Number(order.matching_attempt_count || 0) + 1;
-    const maxRetryCount = getConfiguredDurationSeconds(runtime, "order_matching_max_retry_count", 5);
     const retrySeconds = getConfiguredDurationSeconds(runtime, "order_matching_retry_seconds", 30);
-    const shouldFailTerminal = attemptCount > maxRetryCount;
-    const retryOperation = shouldFailTerminal ? null : createTimedOperation({
+    const retryOperation = createTimedOperation({
       timedOperationId: runtime.nextId("TOP"),
       timeMode: runtime.timeContext?.time_mode || "SIMULATION",
       operationType: TimedOperationType.ORDER_MATCH_RETRY,
@@ -468,25 +488,23 @@ export function executeOrderMatching({ state, objectId, runtime }) {
       },
     });
     return success(
-      shouldFailTerminal ? "ROBOTAXI_ASSIGNMENT_FAILED" : "MATCHING_RETRY_SCHEDULED",
-      shouldFailTerminal ? `服务订单 ${objectId} 超过最大匹配重试次数` : `服务订单 ${objectId} 暂无可分配 Robotaxi，已安排重试`,
+      "MATCHING_RETRY_SCHEDULED",
+      `服务订单 ${objectId} 暂无可分配 Robotaxi，已安排重试`,
       { objectType: "serviceOrder", objectId, failureReason: matchingResult.failureReason, retryOperationId: retryOperation?.timed_operation_id || null },
       {
-      orderMatchingRuns: matchingResult.run ? [{ ...matchingResult.run, ...runtime.audit({ created: true }) }, ...(state.orderMatchingRuns || [])] : state.orderMatchingRuns,
-      orderMatchingDecisions: matchingResult.decision ? [{ ...matchingResult.decision, ...runtime.audit({ created: true }) }, ...(state.orderMatchingDecisions || [])] : state.orderMatchingDecisions,
+        orderMatchingRuns: matchingResult.run ? [{ ...matchingResult.run, ...runtime.audit({ created: true }) }, ...(state.orderMatchingRuns || [])] : state.orderMatchingRuns,
+        orderMatchingDecisions: matchingResult.decision ? [{ ...matchingResult.decision, ...runtime.audit({ created: true }) }, ...(state.orderMatchingDecisions || [])] : state.orderMatchingDecisions,
         serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
           ...order,
-          order_status: shouldFailTerminal
-            ? serviceOrderTypes.ServiceOrderStatus.ROBOTAXI_ASSIGNMENT_FAILED
-            : serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT,
+          order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT,
           matching_attempt_count: attemptCount,
-          matching_retry_pending: !shouldFailTerminal,
+          matching_retry_pending: true,
           last_matching_failure_reason: matchingResult.failureReason,
-          next_matching_retry_seconds: shouldFailTerminal ? null : ((Number(runtime.timeContext?.simulation_seconds) || 0) + retrySeconds),
-          failure_reason: shouldFailTerminal ? matchingResult.failureReason : null,
+          next_matching_retry_seconds: ((Number(runtime.timeContext?.simulation_seconds) || 0) + retrySeconds),
+          failure_reason: null,
           ...runtime.audit(),
         }),
-        timedOperations: retryOperation ? [retryOperation, ...(state.timedOperations || [])] : state.timedOperations,
+        timedOperations: [retryOperation, ...(state.timedOperations || [])],
       },
     );
   }
@@ -519,6 +537,44 @@ export function executeOrderMatching({ state, objectId, runtime }) {
       available_for_dispatch: false,
       ...runtime.audit(),
     })),
+    timedOperations: cancelPendingTimedOperations(state.timedOperations || [], (operation) =>
+      operation.object_type === "serviceOrder"
+      && operation.object_id === objectId
+      && ["SERVICE_ORDER_CANCEL", "ORDER_MATCHING_EXECUTE"].includes(operation.action_type)
+    ),
+  });
+}
+
+export function cancelServiceOrder({ state, objectId, runtime }) {
+  const order = (state.serviceOrders || []).find((item) => item.service_order_id === objectId);
+  if (!order) return failure("SERVICE_ORDER_CANCEL_FAILED", `未找到服务订单 ${objectId}`, "serviceOrder", objectId, "未找到服务订单");
+  if (order.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT) {
+    return success("SERVICE_ORDER_CANCEL_SKIPPED", `服务订单 ${objectId} 已不处于待分配状态，取消作业已跳过`, { objectType: "serviceOrder", objectId }, {
+      timedOperations: cancelPendingTimedOperations(state.timedOperations || [], (operation) =>
+        operation.object_type === "serviceOrder"
+        && operation.object_id === objectId
+        && operation.action_type === "SERVICE_ORDER_CANCEL"
+      ),
+    });
+  }
+  const reason = runtime.context?.action?.operation_payload?.cancellation_reason || "ROBOTAXI_ASSIGNMENT_TIMEOUT";
+  return success("SERVICE_ORDER_CANCELLED", `服务订单 ${objectId} 分配等待超时，已取消`, { objectType: "serviceOrder", objectId, cancellationReason: reason }, {
+    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
+      ...order,
+      order_status: serviceOrderTypes.ServiceOrderStatus.CANCELLED,
+      matching_retry_pending: false,
+      next_matching_retry_seconds: null,
+      cancellation_reason: reason,
+      cancelled_at: runtime.now(),
+      simulation_cancelled_at: runtime.simulationTime(),
+      failure_reason: null,
+      ...runtime.audit({ completed: true }),
+    }),
+    timedOperations: cancelPendingTimedOperations(state.timedOperations || [], (operation) =>
+      operation.object_type === "serviceOrder"
+      && operation.object_id === objectId
+      && ["SERVICE_ORDER_CANCEL", "ORDER_MATCHING_EXECUTE"].includes(operation.action_type)
+    ),
   });
 }
 
@@ -717,11 +773,30 @@ function getPlannedSimulationTimestamp(runtime, durationSeconds) {
 }
 
 function getConfiguredDurationSeconds(runtime, key, fallbackSeconds) {
+  const workflowSeconds = resolveWorkflowRuntimeSeconds({
+    workflowTimingProfile: runtime.workflowTimingProfile,
+    key,
+    fallbackSeconds: null,
+  });
+  if (Number.isFinite(workflowSeconds) && workflowSeconds >= 0) return workflowSeconds;
   const executionConfig = runtime.policySnapshot?.execution_time_config || {};
   const defaultConfig = runtime.policySnapshot?.default_completion_config || {};
   const value = executionConfig[key] ?? defaultConfig[key] ?? runtime.policySnapshot?.[key];
   const seconds = Number(value);
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : fallbackSeconds;
+}
+
+function cancelPendingTimedOperations(timedOperations = [], predicate) {
+  return (timedOperations || []).map((operation) => {
+    if (!predicate(operation)) return operation;
+    if (![TimedOperationStatus.PENDING, TimedOperationStatus.RUNNING].includes(operation.operation_status)) return operation;
+    return {
+      ...operation,
+      operation_status: TimedOperationStatus.CANCELLED,
+      remaining_seconds: 0,
+      failure_reason: "业务单已进入其他生命周期状态",
+    };
+  });
 }
 
 function planTripRoute({ state, objectId, runtime }) {

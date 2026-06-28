@@ -36,7 +36,7 @@ export function runSupplyTrigger({ timeContext, policySnapshot }) {
   }
 
   // 2. 运营投放点火
-  if (config.deployment_trigger_enabled && timeContext.is_robotaxi_operating_time) {
+  if (config.deployment_trigger_enabled && timeContext.is_worker_working_time && timeContext.is_robotaxi_operating_time) {
     actions.push({ actionType: "DEPLOYMENT_TASK_CREATE", objectId: null, triggeredBy: "SUPPLY_TRIGGER" });
     deploymentTriggered = true;
   } else if (config.deployment_trigger_enabled) {

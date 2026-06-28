@@ -14,6 +14,7 @@ import { runDemandTrigger } from "./simulationDemandTrigger.js";
 import { queryAllWorkflowRules } from "./simulationWorkflowEngine.js";
 import { executeActions } from "./simulationExecutionEngine.js";
 import { advanceTimedOperations } from "./timedOperationScheduler.js";
+import { getActiveWorkflowTimingProfile } from "./workflowRuntimeConfig.js";
 import * as routePlanningService from "../services/routePlanningService.js";
 import * as tripService from "../services/tripService.js";
 
@@ -72,6 +73,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
       businessData,
     });
   }
+  const workflowTimingProfile = getActiveWorkflowTimingProfile(businessData?.workflowTimingProfiles || []);
 
   // 6. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
   const demandActions = [];
@@ -98,6 +100,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
       globalTick: simulationRun.current_global_tick,
       tickContext,
       policySnapshot,
+      workflowTimingProfile,
     });
   }
 
@@ -110,6 +113,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
       globalTick: simulationRun.current_global_tick,
       tickContext,
       policySnapshot,
+      workflowTimingProfile,
     });
   }
 
@@ -141,6 +145,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
       globalTick: simulationRun.current_global_tick,
       tickContext,
       policySnapshot,
+      workflowTimingProfile,
     });
   }
 
@@ -173,6 +178,7 @@ function buildTimedOperationActions(dueOperations = []) {
       fromState: operation.operation_status,
       triggeredBy: "TIMED_OPERATION",
       timedOperationId: operation.timed_operation_id,
+      operation_payload: operation.operation_payload,
     }));
 }
 

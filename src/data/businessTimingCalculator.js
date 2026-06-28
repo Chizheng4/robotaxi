@@ -18,7 +18,7 @@ export function initializeDefaultWorkflowTimingProfile() {
     profile_name: "标准运营工作流时效",
     profile_version: 1,
     profile_status: "ACTIVE",
-    description: "用于模拟完成后计算业务状态时间线，不控制 Tick 执行速度。",
+    description: "用于运行时自动化动作耗时配置，并可用于历史状态时间线校验与修复。",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     timing_rules: getTimingTransitions().map((definition, index) => createRule(definition, index)),

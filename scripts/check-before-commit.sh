@@ -82,6 +82,7 @@ node scripts/verify-v032-travel-time-driven.mjs
 node scripts/verify-v032-supply-time-and-rebalance.mjs
 node scripts/verify-v032-demand-matching-retry.mjs
 node scripts/verify-v032-6-time-explainability.mjs
+node scripts/verify-v032-7-runtime-workflow-speed.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

@@ -248,6 +248,12 @@ export function createDefaultSimulationPolicy(overrides = {}) {
     tick_seconds: 1,
     simulation_days: 1,
     run_speed_level: RunSpeedLevel.FAST,
+    simulation_speed_config: {
+      real_cycle_interval_ms: 50,
+      ticks_per_real_cycle: 300,
+    },
+    real_cycle_interval_ms: 50,
+    ticks_per_real_cycle: 300,
     random_seed: 20260101,
     worker_work_start_time: "08:00",
     worker_work_end_time: "20:00",

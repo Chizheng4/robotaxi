@@ -37,6 +37,7 @@ const actionHandlers = {
   PRICING_EXECUTE: null,          // P0: executePricing (需要注入)
   ROBOTAXI_CALL: null,            // P1: callRobotaxiForServiceOrder
   ORDER_MATCHING_EXECUTE: null,   // P0: executeOrderMatching (需要注入)
+  SERVICE_ORDER_CANCEL: null,     // P1: cancelServiceOrder
   SETTLEMENT_EXECUTE: null,       // P1: settleServiceOrder
   PAYMENT_EXECUTE: null,          // P1: payServiceOrder
 

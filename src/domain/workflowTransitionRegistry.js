@@ -29,7 +29,7 @@ export const normalWorkflowTransitions = [
 
   transition("ORDER_PRICE", "serviceOrder", "WAITING_PRICE_ESTIMATE", "PRICING_EXECUTE", "WAITING_ROBOTAXI_CALL", D, "order-price", F, 2, "auto_pricing_enabled"),
   transition("ORDER_CALL", "serviceOrder", "WAITING_ROBOTAXI_CALL", "ROBOTAXI_CALL", "WAITING_ROBOTAXI_ASSIGNMENT", D, "order-call", F, 2),
-  transition("ORDER_MATCH", "serviceOrder", "WAITING_ROBOTAXI_ASSIGNMENT", "ORDER_MATCHING_EXECUTE", "ON_THE_WAY_PICKUP", D, "order-match", F, 4, "auto_order_matching_enabled"),
+  transition("ORDER_MATCH", "serviceOrder", "WAITING_ROBOTAXI_ASSIGNMENT", "ORDER_MATCHING_EXECUTE", "ON_THE_WAY_PICKUP", D, "order-match", F, 60, "auto_order_matching_enabled"),
   projection("ORDER_PICKUP_ARRIVAL", "serviceOrder", "ON_THE_WAY_PICKUP", "TRIP_STEP_EXECUTE", "WAITING_CUSTOMER_BOARDING", "trip-pickup-move", C, 4, "trip", "ON_THE_WAY_PICKUP", "TRIP_PICKUP_MOVE"),
   projection("ORDER_BOARD", "serviceOrder", "WAITING_CUSTOMER_BOARDING", "PASSENGER_BOARD", "CUSTOMER_ONBOARD", "trip-board", F, 45, "trip", "WAITING_CUSTOMER_BOARDING", "TRIP_BOARD"),
   projection("ORDER_DESTINATION_PLAN", "serviceOrder", "CUSTOMER_ONBOARD", "ROUTE_PLAN", "ON_THE_WAY_DESTINATION", "trip-destination-plan", F, 8, "trip", "CUSTOMER_ONBOARD", "TRIP_DESTINATION_PLAN"),

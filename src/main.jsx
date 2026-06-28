@@ -350,7 +350,7 @@ const tableConfig = {
   simulationPolicies: {
     title: "模拟规则配置",
     description: "配置模拟运行的规则参数，包括 Tick 粒度、时间段、需求分布和自动化开关。",
-    columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_seconds", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"],
+    columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_seconds", "simulation_days", "run_speed_level", "ticks_per_real_cycle", "real_cycle_interval_ms", "random_seed"],
   },
   workflowTimingRules: {
     title: "工作流时效配置",
@@ -926,6 +926,7 @@ function App() {
       orderMatchingDecisions,
       taskEventLogs,
       timedOperations,
+      workflowTimingProfiles,
     };
     const refreshContextData = () => {
       businessData.data = {
@@ -945,6 +946,7 @@ function App() {
         orderMatchingDecisions: businessData.orderMatchingDecisions,
         taskEventLogs: businessData.taskEventLogs,
         timedOperations: businessData.timedOperations,
+        workflowTimingProfiles: businessData.workflowTimingProfiles,
       };
     };
     const bindSetter = (key, setter) => (updater) => {
@@ -1009,12 +1011,6 @@ function App() {
   useEffect(() => {
     return () => { if (simActionsRef.current) simActionsRef.current.cleanup(); };
   }, []);
-
-  useEffect(() => {
-    if (!runtimeHydrated || !businessTimingCalculator || workflowTimingProfiles.length === 0) return;
-    const completedRun = simulationRuns.find((run) => run.simulation_status === "COMPLETED" && !run.business_timing_calculation_status);
-    if (completedRun) runBusinessTimingCalculation(completedRun.simulation_run_id, { automatic: true });
-  }, [runtimeHydrated, simulationRuns, workflowTimingProfiles]);
 
   function requestBusinessTimingCalculation(runId) {
     const run = simulationRuns.find((item) => item.simulation_run_id === runId);
@@ -3834,7 +3830,7 @@ function getDetailTabs(selectedType) {
   }
   if (selectedType === "simulationPolicy") {
     return [
-      { key: "basic", label: "策略信息", keys: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "tick_seconds", "simulation_days", "run_speed_level", "random_seed", "max_drain_ticks"] },
+      { key: "basic", label: "策略信息", keys: ["simulation_policy_id", "policy_name", "policy_status", "tick_seconds", "tick_minutes", "simulation_days", "run_speed_level", "simulation_speed_config", "random_seed", "max_drain_ticks"] },
       { key: "time", label: "时间配置", keys: ["worker_work_start_time", "worker_work_end_time", "robotaxi_operating_start_time", "robotaxi_operating_end_time", "time_period_configs", "time_window_configs"] },
       { key: "demand", label: "需求配置", keys: ["demand_generation_config", "demand_generation_enabled", "demand_generation_mode", "max_orders_per_tick_global", "demand_profiles"] },
       { key: "supply", label: "供给侧配置", keys: ["supply_trigger_config", "supply_trigger_enabled", "readiness_trigger_enabled", "deployment_trigger_enabled", "route_execution_trigger_enabled"] },
@@ -5018,6 +5014,7 @@ async function bootstrap() {
       PRICING_EXECUTE: simulationHandlersModule.handlePricingExecute,
       ROBOTAXI_CALL: simulationHandlersModule.handleRobotaxiCall,
       ORDER_MATCHING_EXECUTE: simulationHandlersModule.handleOrderMatchingExecute,
+      SERVICE_ORDER_CANCEL: simulationHandlersModule.handleServiceOrderCancel,
       TRIP_STEP_EXECUTE: simulationHandlersModule.handleTripStepExecute,
       PASSENGER_BOARD: simulationHandlersModule.handleTripStepExecute,
       PASSENGER_DROPOFF: simulationHandlersModule.handleTripStepExecute,

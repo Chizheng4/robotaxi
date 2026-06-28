@@ -49,6 +49,8 @@ function createRuntime(context) {
     randomSeed: () => `${context?.simulationRunId || "SIM"}-${context?.globalTick || 0}-${context?.actionIndex || 0}`,
     audit: (options = {}) => getSimulationAudit(context, options),
     policySnapshot: context?.policySnapshot || {},
+    workflowTimingProfile: context?.workflowTimingProfile || null,
+    context: context || {},
   };
 }
 
@@ -71,6 +73,7 @@ function createState(data) {
     orderMatchingDecisions: data.orderMatchingDecisions || [],
     taskEventLogs: data.taskEventLogs || [],
     timedOperations: data.timedOperations || [],
+    workflowTimingProfiles: data.workflowTimingProfiles || [],
   };
 }
 
@@ -123,6 +126,10 @@ export function handleRobotaxiCall({ objectId, data, context }) {
 
 export function handleOrderMatchingExecute({ objectId, data, context }) {
   return runBusinessAction((params) => businessActionService.executeOrderMatching({ ...params, objectId }), data, context);
+}
+
+export function handleServiceOrderCancel({ objectId, data, context }) {
+  return runBusinessAction((params) => businessActionService.cancelServiceOrder({ ...params, objectId }), data, context);
 }
 
 export function handleTripStepExecute({ objectId, data, context }) {

@@ -622,10 +622,13 @@
 |matching_retry_pending|等待匹配重试|运行态字段|当前订单是否已有等待中的匹配重试时间作业|
 |next_matching_retry_seconds|下次匹配重试秒数|运行态字段|下一次匹配重试在统一模拟时间中的目标秒数|
 |last_matching_failure_reason|最近匹配失败原因|运行态字段|最近一次订单匹配尝试失败原因|
+|assignment_wait_timeout_seconds|分配等待超时（秒）|运行态字段|服务订单等待 Robotaxi 分配的最长模拟秒数|
+|cancellation_reason|取消原因|运行态字段|订单取消原因|
 |trip_id|履约行驶记录编号|运行态字段|关联 Trip，可为空|
 |confirmed_at|客户确认时间|运行态字段|客户确认叫车时间|
 |matched_at|匹配时间|运行态字段|车辆匹配成功时间|
 |cancelled_at|取消时间|运行态字段|订单取消时间，可为空|
+|simulation_cancelled_at|取消时间（模拟）|模拟时间字段|订单按模拟世界时间取消的时间|
 
 说明：
 
@@ -1134,6 +1137,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |policy_status|策略状态|运行态字段|策略当前状态：DRAFT / ACTIVE / DISABLED / ARCHIVED|
 |tick_minutes|Tick 时长（分钟，兼容）|持久化字段|兼容展示字段；统一时间推进以 tick_seconds 为准|
 |tick_seconds|Tick 时长（秒）|持久化字段|每次 Tick 推进的统一模拟秒数，是模拟世界时间主配置|
+|simulation_speed_config|模拟推进速度配置|持久化字段|控制真实执行周期和每周期批量推进的 Tick 数，不改变模拟世界 Tick 秒数|
+|real_cycle_interval_ms|真实执行周期（毫秒）|持久化字段|前端执行一次模拟推进批次的真实时间间隔|
+|ticks_per_real_cycle|每周期推进 Tick 数|持久化字段|每个真实执行周期批量推进的模拟 Tick 数|
 |simulation_days|模拟天数|持久化字段|一次模拟运行的总天数|
 |run_speed_level|运行速度等级|持久化字段|模拟运行速度：SLOW / NORMAL / FAST / ULTRA_FAST|
 |random_seed|随机种子|持久化字段|随机数种子|
@@ -1260,7 +1266,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |---|---|---|---|
 |timed_operation_id|时间作业编号|运行态字段|TimedOperation 唯一编号|
 |time_mode|时间模式|运行态字段|REAL_MANUAL / REAL_AUTOMATION / SIMULATION|
-|operation_type|作业类型|运行态字段|TRAVEL / ARRIVAL_DETECTION / WORKER_CHECK / ORDER_MATCH_RETRY / GENERIC_ACTION|
+|operation_type|作业类型|运行态字段|TRAVEL / ARRIVAL_DETECTION / WORKER_CHECK / ORDER_MATCH_RETRY / ORDER_ASSIGNMENT_TIMEOUT / GENERIC_ACTION|
 |operation_status|作业状态|运行态字段|PENDING / RUNNING / COMPLETED / FAILED / CANCELLED|
 |object_type|业务单类型|运行态字段|时间作业关联的业务单或业务对象类型|
 |object_id|业务单编号|运行态字段|时间作业关联的业务单或业务对象编号|
@@ -1349,6 +1355,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |PRICING_EXECUTE|执行定价|event_type / action_type|
 |ROBOTAXI_CALL|客户确认叫车|event_type / action_type|
 |ORDER_MATCHING_EXECUTE|执行订单匹配|event_type / action_type|
+|SERVICE_ORDER_CANCEL|取消服务订单|event_type / action_type|
 |TRIP_STEP_EXECUTE|推进履约行驶|event_type / action_type|
 |SETTLEMENT_EXECUTE|执行结算|event_type / action_type|
 |PAYMENT_EXECUTE|执行支付|event_type / action_type|
@@ -1368,6 +1375,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ROUTE_EXECUTION_TRAVEL_COMPLETE|运营行驶时间到达|event_type / action_type|
 |ARRIVAL_CONFIRM|确认到达|event_type / action_type|
 |TRIP_TRAVEL_COMPLETE|履约行驶时间到达|event_type / action_type|
+|ORDER_ASSIGNMENT_TIMEOUT|订单分配等待超时|operation_type|
+|ROBOTAXI_ASSIGNMENT_TIMEOUT|Robotaxi 分配等待超时|reason_type|
 |ORDER_CREATED|服务订单已创建|result_type|
 |SERVICE_ORDER_CREATE_FAILED|服务订单创建失败|result_type|
 |PRICING_COMPLETED|定价完成|result_type|
@@ -1376,6 +1385,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |MATCHING_COMPLETED|匹配完成|result_type|
 |MATCHING_FAILED|匹配失败|result_type|
 |MATCHING_RETRY_SCHEDULED|匹配重试已安排|result_type|
+|SERVICE_ORDER_CANCELLED|服务订单已取消|result_type|
+|SERVICE_ORDER_CANCEL_SKIPPED|服务订单取消已跳过|result_type|
+|SERVICE_ORDER_CANCEL_FAILED|服务订单取消失败|result_type|
 |TRIP_CREATED|履约已创建|result_type|
 |TRIP_STEPPED|履约已步进|result_type|
 |TRIP_NO_ACTION|履约无需动作|result_type|

@@ -18,11 +18,11 @@ function debug(msg) {
   }
 }
 
-function startTickInterval(runId, tickHandler) {
+function startTickInterval(runId, tickHandler, intervalMs = 50) {
   if (tickIntervalRef.current) {
     clearInterval(tickIntervalRef.current);
   }
-  tickIntervalRef.current = setInterval(() => tickHandler(runId), 500);
+  tickIntervalRef.current = setInterval(() => tickHandler(runId), normalizeRealCycleIntervalMs(intervalMs));
   return tickIntervalRef.current;
 }
 
@@ -101,7 +101,7 @@ export function useSimulationActions({
     debug("startSimulationRun 成功: 状态变为 " + result.simulationRun.simulation_status + " | 事件: " + result.event.message);
     setSimulationRuns((prev) => prev.map((r) => r.simulation_run_id === runId ? result.simulationRun : r));
     setSimulationEvents((prev) => [result.event, ...prev]);
-    const intervalId = startTickInterval(runId, executeTickForRun);
+    const intervalId = startTickInterval(runId, executeTickForRun, getRealCycleIntervalMs(result.simulationRun));
     debug("startSimulationRun: setInterval已设置, id=" + intervalId + ", tick循环启动");
     // 2秒后检测定时器是否还在运行
     setTimeout(() => {
@@ -112,7 +112,7 @@ export function useSimulationActions({
   function restoreActiveSimulationRun() {
     if (tickIntervalRef.current) return;
     const activeRun = simulationRuns.find((run) => ["RUNNING", "DRAINING"].includes(run.simulation_status));
-    if (activeRun) startTickInterval(activeRun.simulation_run_id, executeTickForRun);
+    if (activeRun) startTickInterval(activeRun.simulation_run_id, executeTickForRun, getRealCycleIntervalMs(activeRun));
   }
 
   function pauseSimulationRun(runId) {
@@ -139,7 +139,7 @@ export function useSimulationActions({
     if (!result) return;
     setSimulationRuns((prev) => prev.map((r) => r.simulation_run_id === runId ? result.simulationRun : r));
     if (result.event) setSimulationEvents((prev) => [result.event, ...prev]);
-    startTickInterval(runId, executeTickForRun);
+    startTickInterval(runId, executeTickForRun, getRealCycleIntervalMs(result.simulationRun));
   }
 
   function stopSimulationRun(runId) {
@@ -167,28 +167,40 @@ export function useSimulationActions({
         stopTickInterval();
         return prev;
       }
-      debug("Tick #" + (run.current_global_tick+1) + " | time=" + run.current_time);
+      let nextRun = run;
+      const batchEvents = [];
+      const ticksPerCycle = getTicksPerRealCycle(run);
       const businessData = getBD ? getBD() : null;
-      const tickResult = loop.executeTick({
-        simulationRun: run,
-        policySnapshot: run.simulation_policy_snapshot,
-        randomSeed: run.simulation_policy_snapshot?.random_seed,
-        businessData,
-        refreshBusinessData: getBD || null,
-      });
-      if (!tickResult) { debug("Tick: executeTick返回null"); return prev; }
-      const result = engine.completeTick(
-        run,
-        tickResult.tickContext,
-        tickResult.supplyResult,
-        tickResult.demandResult,
-        tickResult.executionResults,
-        tickResult.tickEventSummary,
-        { phase: tickResult.phase, workflowActionCount: tickResult.workflowActionCount }
-      );
-      debug("Tick完成: " + result.events.length + "条事件 | 新状态=" + result.simulationRun.simulation_status);
-      setSimulationEvents((evts) => [...result.events, ...evts]);
-      return prev.map((r) => r.simulation_run_id === runId ? result.simulationRun : r);
+      for (let i = 0; i < ticksPerCycle; i++) {
+        if (!["RUNNING", "DRAINING"].includes(nextRun.simulation_status)) break;
+        debug("Tick #" + (nextRun.current_global_tick+1) + " | time=" + nextRun.current_time);
+        const tickResult = loop.executeTick({
+          simulationRun: nextRun,
+          policySnapshot: nextRun.simulation_policy_snapshot,
+          randomSeed: nextRun.simulation_policy_snapshot?.random_seed,
+          businessData,
+          refreshBusinessData: () => businessData,
+        });
+        if (!tickResult) { debug("Tick: executeTick返回null"); break; }
+        const result = engine.completeTick(
+          nextRun,
+          tickResult.tickContext,
+          tickResult.supplyResult,
+          tickResult.demandResult,
+          tickResult.executionResults,
+          tickResult.tickEventSummary,
+          { phase: tickResult.phase, workflowActionCount: tickResult.workflowActionCount }
+        );
+        batchEvents.push(...result.events);
+        nextRun = result.simulationRun;
+        if (!["RUNNING", "DRAINING"].includes(nextRun.simulation_status)) {
+          stopTickInterval();
+          break;
+        }
+      }
+      debug("Tick批次完成: " + batchEvents.length + "条事件 | 新状态=" + nextRun.simulation_status);
+      if (batchEvents.length) setSimulationEvents((evts) => [...batchEvents, ...evts]);
+      return prev.map((r) => r.simulation_run_id === runId ? nextRun : r);
     });
   }
 
@@ -206,4 +218,22 @@ export function useSimulationActions({
     stopSimulationRun,
     cleanup,
   };
+}
+
+function getSimulationSpeedConfig(run) {
+  return run?.simulation_policy_snapshot?.simulation_speed_config || {};
+}
+
+function getTicksPerRealCycle(run) {
+  const value = Number(getSimulationSpeedConfig(run).ticks_per_real_cycle ?? run?.simulation_policy_snapshot?.ticks_per_real_cycle);
+  return Number.isFinite(value) && value > 0 ? Math.min(Math.floor(value), 1000) : 300;
+}
+
+function getRealCycleIntervalMs(run) {
+  return normalizeRealCycleIntervalMs(getSimulationSpeedConfig(run).real_cycle_interval_ms ?? run?.simulation_policy_snapshot?.real_cycle_interval_ms);
+}
+
+function normalizeRealCycleIntervalMs(value) {
+  const ms = Number(value);
+  return Number.isFinite(ms) && ms >= 16 ? Math.min(Math.floor(ms), 1000) : 50;
 }
