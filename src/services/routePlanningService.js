@@ -210,13 +210,14 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
   };
 }
 
-export function projectRouteExecutionTravelProgress({ execution, route, elapsedSeconds = 0 }) {
+export function projectRouteExecutionTravelProgress({ execution, route, elapsedSeconds = 0, cellTravelSeconds = DEFAULT_CELL_TRAVEL_SECONDS }) {
   if (!execution || !route) return null;
   const routeCellIds = execution.route_cell_ids?.length
     ? execution.route_cell_ids
     : getRouteExecutionCells(route, [], execution.origin_cell_id, execution.target_cell_id);
   const totalStepCount = Math.max(0, execution.total_step_count || routeCellIds.length - 1);
-  const elapsedStepIndex = Math.floor(Math.max(0, Number(elapsedSeconds) || 0) / DEFAULT_CELL_TRAVEL_SECONDS);
+  const secondsPerCell = Math.max(1, Number(cellTravelSeconds) || DEFAULT_CELL_TRAVEL_SECONDS);
+  const elapsedStepIndex = Math.floor(Math.max(0, Number(elapsedSeconds) || 0) / secondsPerCell);
   const currentStepIndex = Math.min(elapsedStepIndex, totalStepCount);
   const currentCellId = routeCellIds[currentStepIndex] || execution.current_cell_id || execution.origin_cell_id;
   return applyTravelMetrics({
@@ -233,11 +234,13 @@ export function projectRouteExecutionTravelProgress({ execution, route, elapsedS
   });
 }
 
-export function completeRouteExecutionTravel({ execution, task, route, robotaxi }) {
+export function completeRouteExecutionTravel({ execution, task, route, robotaxi, cellTravelSeconds = DEFAULT_CELL_TRAVEL_SECONDS }) {
+  const secondsPerCell = Math.max(1, Number(cellTravelSeconds) || DEFAULT_CELL_TRAVEL_SECONDS);
   const projected = projectRouteExecutionTravelProgress({
     execution,
     route,
-    elapsedSeconds: Math.max(0, Number(route.route_step_count || route.total_step_count || 0) * DEFAULT_CELL_TRAVEL_SECONDS),
+    elapsedSeconds: Math.max(0, Number(route.route_step_count || route.total_step_count || 0) * secondsPerCell),
+    cellTravelSeconds: secondsPerCell,
   });
   const nextExecution = {
     ...execution,

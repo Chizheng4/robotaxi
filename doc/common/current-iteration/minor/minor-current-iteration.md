@@ -21,4 +21,5 @@
 
 ## 最近完成
 
+- `v032.6`：时间世界解释性与未完成版本补完小迭代，已归档到 `doc/common/iteration-history/minor/v032.6-time-world-explainability.md`。
 - `v031.2`：定价履约口径与投放目标模型小迭代，已归档到 `doc/common/iteration-history/minor/v031.2-pricing-fulfillment-deployment-plan.md`。

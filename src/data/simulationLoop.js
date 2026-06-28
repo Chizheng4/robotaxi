@@ -201,6 +201,7 @@ function applyTravelProgressFromTimedOperations({ timedOperations = [], business
           execution,
           route,
           elapsedSeconds: operation.elapsed_seconds,
+          cellTravelSeconds: operation.operation_payload?.cell_travel_seconds,
         });
         if (!projected) return execution;
         routeExecutionChanged = true;
@@ -211,7 +212,12 @@ function applyTravelProgressFromTimedOperations({ timedOperations = [], business
     if (operation.object_type === "trip") {
       nextTrips = nextTrips.map((trip) => {
         if (trip.trip_id !== operation.object_id) return trip;
-        const projected = tripService.projectTripTravelProgress(trip, { ...businessData, routes }, operation.elapsed_seconds);
+        const projected = tripService.projectTripTravelProgress(
+          trip,
+          { ...businessData, routes },
+          operation.elapsed_seconds,
+          { cellTravelSeconds: operation.operation_payload?.cell_travel_seconds },
+        );
         if (!projected) return trip;
         tripChanged = true;
         return projected;

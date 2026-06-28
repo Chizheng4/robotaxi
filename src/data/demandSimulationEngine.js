@@ -32,6 +32,7 @@ export function runDemandSimulation({ strategy, data, orderChannel, runId, rando
 
   return createDemandSimulationRun({
     demand_simulation_run_id: runId,
+    demand_simulation_result_id: createDemandSimulationResultId(runId),
     demand_simulation_strategy_id: strategy.demand_simulation_strategy_id,
     strategy_name: strategy.strategy_name,
     simulation_algorithm: strategy.simulation_algorithm,
@@ -51,6 +52,7 @@ export function runDemandSimulation({ strategy, data, orderChannel, runId, rando
 function createFailedRun({ strategy, orderChannel, runId, randomSeed, createdAt, customerId = null, locationType = null, failureReason, ...context }) {
   return createDemandSimulationRun({
     demand_simulation_run_id: runId,
+    demand_simulation_result_id: createDemandSimulationResultId(runId),
     demand_simulation_strategy_id: strategy.demand_simulation_strategy_id,
     strategy_name: strategy.strategy_name,
     simulation_algorithm: strategy.simulation_algorithm,
@@ -69,6 +71,11 @@ function createFailedRun({ strategy, orderChannel, runId, randomSeed, createdAt,
     failure_reason: failureReason,
     created_at: createdAt,
   });
+}
+
+function createDemandSimulationResultId(runId) {
+  const serial = String(runId || "").match(/\d+$/)?.[0] || "000";
+  return `DSR-RESULT-${serial}`;
 }
 
 function pickWeightedLocationType(weights = {}, random) {

@@ -1047,6 +1047,49 @@ body {
   color: #2563eb;
 }
 
+.route-link-summary-list {
+  display: grid;
+  gap: 8px;
+}
+
+.route-link-summary {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.route-link-summary:last-child {
+  border-bottom: 0;
+}
+
+.route-link-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--font-xs);
+  color: var(--text);
+}
+
+.route-link-summary-head strong {
+  font-weight: 600;
+}
+
+.route-link-summary-head span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.route-link-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  line-height: 1.45;
+}
+
 /* v026: calm, focused operations workspace */
 .ops-shell {
   color: var(--text);

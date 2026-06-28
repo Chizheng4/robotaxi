@@ -350,7 +350,7 @@ const tableConfig = {
   simulationPolicies: {
     title: "模拟规则配置",
     description: "配置模拟运行的规则参数，包括 Tick 粒度、时间段、需求分布和自动化开关。",
-    columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"],
+    columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_seconds", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"],
   },
   workflowTimingRules: {
     title: "工作流时效配置",
@@ -400,7 +400,7 @@ const tableConfig = {
   timedOperations: {
     title: "时间作业",
     description: "统一展示随时间推进的自动化作业，供真实自动化和模拟自动化复用。",
-    columns: ["timed_operation_id", "operation_status", "operation_type", "time_mode", "object_type", "object_id", "action_type", "duration_seconds", "elapsed_seconds", "remaining_seconds", "progress_percent", "simulation_started_at", "simulation_planned_completed_at", "simulation_completed_at", "created_at"],
+    columns: ["timed_operation_id", "operation_status", "operation_type", "time_mode", "object_type", "object_id", "action_type", "start_seconds", "planned_completed_seconds", "duration_seconds", "elapsed_seconds", "remaining_seconds", "progress_percent", "simulation_started_at", "simulation_planned_completed_at", "simulation_completed_at", "created_at"],
   },
 };
 
@@ -3719,7 +3719,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -3844,7 +3844,7 @@ function getDetailTabs(selectedType) {
   }
   if (selectedType === "simulationRun") {
     return [
-      { key: "basic", label: "运行信息", keys: ["simulation_run_id", "simulation_name", "simulation_status", "simulation_policy_id", "simulation_timeline_id", "previous_simulation_run_id", "total_days", "tick_minutes", "tick_seconds", "total_ticks", "simulation_start_at", "planned_simulation_end_at", "simulation_end_at", "created_at"] },
+      { key: "basic", label: "运行信息", keys: ["simulation_run_id", "simulation_name", "simulation_status", "simulation_policy_id", "simulation_timeline_id", "previous_simulation_run_id", "total_days", "tick_seconds", "tick_minutes", "total_ticks", "simulation_start_at", "planned_simulation_end_at", "simulation_end_at", "simulation_time_world_summary", "created_at"] },
       { key: "progress", label: "运行进度", keys: ["current_day", "current_time", "current_clock_time", "current_day_tick", "current_run_tick", "current_global_tick", "trigger_ticks_completed", "drain_ticks", "max_drain_ticks", "current_time_period", "current_period_type"] },
       { key: "scene", label: "当前场景", keys: ["current_supply_scene", "current_demand_scene", "current_scene_summary", "current_tick_event_summary"] },
       { key: "time", label: "状态时间", keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "failure_summary", "result_summary"] },
@@ -3857,6 +3857,13 @@ function getDetailTabs(selectedType) {
     return [
       { key: "basic", label: "事件信息", keys: ["simulation_event_id", "simulation_run_id", "simulation_day", "simulation_time", "day_tick", "global_tick", "event_type", "event_source", "event_result"] },
       { key: "detail", label: "事件详情", keys: ["related_object_type", "related_object_id", "message", "failure_reason", "skip_reason", "event_payload", "created_at"] },
+    ];
+  }
+  if (selectedType === "timedOperation") {
+    return [
+      { key: "basic", label: "作业信息", keys: ["timed_operation_id", "operation_status", "operation_type", "time_mode", "object_type", "object_id", "action_type"] },
+      { key: "time", label: "时间计算", keys: ["start_seconds", "planned_completed_seconds", "duration_seconds", "elapsed_seconds", "remaining_seconds", "progress_percent", "simulation_started_at", "simulation_planned_completed_at", "simulation_completed_at"] },
+      { key: "payload", label: "计算依据", keys: ["operation_payload", "failure_reason", "created_at"] },
     ];
   }
   if (selectedType === "costModelProfile") {
@@ -4469,6 +4476,12 @@ function renderDetailValue(key, value, row = null) {
   if (key === "route_steps" && Array.isArray(value)) {
     return <RouteStepsDetail routeSteps={value} />;
   }
+  if (key === "route_links_detail" && Array.isArray(value)) {
+    return <RouteLinksDetail routes={value} />;
+  }
+  if (key === "simulation_time_world_summary") {
+    return <SimulationTimeWorldSummary row={row} />;
+  }
   if ((Array.isArray(value) || (value && typeof value === "object"))) {
     return <StructuredDetailValue value={value} fieldKey={key} />;
   }
@@ -4529,6 +4542,44 @@ function RouteStepsDetail({ routeSteps }) {
           ))}
         </div>
       </details>
+    </div>
+  );
+}
+
+function RouteLinksDetail({ routes }) {
+  if (!routes || routes.length === 0) return <Text className="detail-value">无关联路径</Text>;
+  return (
+    <div className="route-link-summary-list">
+      {routes.map((route, index) => (
+        <div className="route-link-summary" key={`${route.route_id}-${index}`}>
+          <div className="route-link-summary-head">
+            <strong>{route.is_current_route ? "当前路径" : `关联路径 ${index + 1}`}</strong>
+            <span>{formatDetailValue(route.route_id, "route_id")}</span>
+          </div>
+          <div className="route-link-summary-grid">
+            <span>起点: {formatDetailValue(route.origin_cell_id, "origin_cell_id")}</span>
+            <span>终点: {formatDetailValue(route.target_cell_id, "target_cell_id")}</span>
+            <span>移动步数: {formatDetailValue(route.route_step_count, "route_step_count")}</span>
+            <span>总距离: {formatDetailValue(route.total_distance_km, "total_distance_km")} km</span>
+            <span>策略: {formatDetailValue(route.route_strategy_id, "route_strategy_id")}</span>
+            <span>状态: {getDisplayValue(route.route_status) || "无"}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SimulationTimeWorldSummary({ row }) {
+  if (!row) return <Text className="detail-value">无</Text>;
+  const tickSeconds = Number(row.tick_seconds || 0);
+  const currentSeconds = Number(row.current_simulation_seconds ?? row.simulation_start_seconds ?? 0);
+  return (
+    <div className="compact-location-detail">
+      <span>统一时间源: 模拟绝对秒 {formatDetailValue(currentSeconds, "current_simulation_seconds")}</span>
+      <span>当前显示时间: {formatDetailValue(row.current_time, "current_time")}</span>
+      <span>Tick 推进: 每次 {formatDetailValue(tickSeconds, "tick_seconds")} 秒</span>
+      <span>计划范围: {formatDetailValue(row.simulation_start_at, "simulation_start_at")} → {formatDetailValue(row.planned_simulation_end_at, "planned_simulation_end_at")}</span>
     </div>
   );
 }

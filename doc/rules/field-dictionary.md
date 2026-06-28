@@ -1132,8 +1132,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |simulation_policy_id|模拟策略编号|持久化字段|SimulationPolicy 唯一编号|
 |policy_name|策略名称|持久化字段|模拟策略名称|
 |policy_status|策略状态|运行态字段|策略当前状态：DRAFT / ACTIVE / DISABLED / ARCHIVED|
-|tick_minutes|Tick 时长（分钟）|持久化字段|每次 Tick 模拟的分钟数|
-|tick_seconds|Tick 时长（秒）|持久化字段|统一时间计算使用的 Tick 秒数，兼容 tick_minutes 换算|
+|tick_minutes|Tick 时长（分钟，兼容）|持久化字段|兼容展示字段；统一时间推进以 tick_seconds 为准|
+|tick_seconds|Tick 时长（秒）|持久化字段|每次 Tick 推进的统一模拟秒数，是模拟世界时间主配置|
 |simulation_days|模拟天数|持久化字段|一次模拟运行的总天数|
 |run_speed_level|运行速度等级|持久化字段|模拟运行速度：SLOW / NORMAL / FAST / ULTRA_FAST|
 |random_seed|随机种子|持久化字段|随机数种子|
@@ -1160,7 +1160,16 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |auto_trip_creation_enabled|自动履约创建开关|持久化字段|是否自动创建履约行驶记录|
 |auto_trip_progress_enabled|自动履约推进开关|持久化字段|是否自动推进履约行驶|
 |auto_payment_enabled|自动支付开关|持久化字段|是否自动完成支付|
-|execution_time_config|执行耗时配置|持久化字段|各环节的执行耗时配置|
+|execution_time_config|执行耗时配置|持久化字段|模拟运行时自动化动作的耗时配置，不等同于模拟结束后的工作流时效计算配置|
+|readiness_check_seconds|准入检查耗时（秒）|配置字段|Worker 执行准入检查的模拟耗时|
+|cell_travel_seconds|单 Cell 行驶耗时（秒）|配置字段|Robotaxi 沿 Route 移动一个 Cell 的模拟耗时|
+|arrival_detection_seconds|到达识别耗时（秒）|配置字段|Robotaxi 到达后识别正常或异常到达的模拟耗时|
+|order_matching_retry_seconds|订单匹配重试等待（秒）|配置字段|订单一次匹配无车后等待下一次匹配的模拟耗时|
+|order_matching_max_retry_count|订单匹配最大重试次数|配置字段|订单超过该次数后才进入终态分配失败|
+|passenger_boarding_seconds|乘客上车耗时（秒）|配置字段|乘客上车动作模拟耗时|
+|passenger_dropoff_seconds|乘客下车耗时（秒）|配置字段|乘客下车动作模拟耗时|
+|settlement_seconds|结算耗时（秒）|配置字段|服务订单结算动作模拟耗时|
+|payment_seconds|支付耗时（秒）|配置字段|服务订单支付动作模拟耗时|
 |worker_readiness_check_ticks|准入检查耗时（Tick）|持久化字段|准入检查需要多少个 Tick 完成|
 |passenger_boarding_ticks|乘客上车耗时（Tick）|持久化字段|乘客上车需要多少个 Tick|
 |dropoff_and_payment_ticks|下车与支付耗时（Tick）|持久化字段|下车和支付需要多少个 Tick|
@@ -1188,7 +1197,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |simulation_timeline_id|模拟时间轴编号|持久化字段|串联多次连续 SimulationRun 的时间轴编号|
 |previous_simulation_run_id|上一模拟运行编号|持久化字段|同一时间轴内上一运行编号|
 |total_days|模拟总天数|持久化字段|模拟总天数|
-|tick_minutes|Tick 时长（分钟）|持久化字段|每次 Tick 的模拟分钟数|
+|tick_minutes|Tick 时长（分钟，兼容）|持久化字段|兼容展示字段；运行推进以 tick_seconds 为准|
 |tick_seconds|Tick 时长（秒）|持久化字段|每次 Tick 的统一模拟秒数，是时间推进计算值|
 |total_ticks|总 Tick 数|持久化字段|模拟运行总 Tick 数|
 |simulation_start_seconds|模拟开始绝对秒|持久化字段|运行在时间轴上的开始绝对秒|
@@ -1196,6 +1205,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |simulation_end_seconds|实际结束绝对秒|运行态字段|包含排空阶段的实际结束绝对秒|
 |simulation_start_at|模拟开始时间|持久化字段|统一 Day N HH:MM:SS 格式的开始时间|
 |planned_simulation_end_at|计划模拟结束时间|持久化字段|统一 Day N HH:MM:SS 格式的计划结束时间|
+|simulation_time_world_summary|统一模拟时间说明|聚合展示字段|前端解释统一模拟秒、当前显示时间、Tick 秒数和计划时间范围|
 |simulation_end_at|实际模拟结束时间|运行态字段|统一 Day N HH:MM:SS 格式的实际结束时间|
 |current_simulation_seconds|当前模拟绝对秒|运行态字段|当前时间轴绝对模拟秒，是运行时钟唯一计算源|
 |current_day|当前模拟天数|运行态字段|当前模拟进行到第几天|
@@ -1252,8 +1262,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |time_mode|时间模式|运行态字段|REAL_MANUAL / REAL_AUTOMATION / SIMULATION|
 |operation_type|作业类型|运行态字段|TRAVEL / ARRIVAL_DETECTION / WORKER_CHECK / ORDER_MATCH_RETRY / GENERIC_ACTION|
 |operation_status|作业状态|运行态字段|PENDING / RUNNING / COMPLETED / FAILED / CANCELLED|
-|object_type|关联对象类型|运行态字段|作业关联的业务对象类型|
-|object_id|关联对象编号|运行态字段|作业关联的业务对象编号|
+|object_type|业务单类型|运行态字段|时间作业关联的业务单或业务对象类型|
+|object_id|业务单编号|运行态字段|时间作业关联的业务单或业务对象编号|
 |action_type|触发动作|运行态字段|作业到期后应调用的业务动作，可为空|
 |started_at|开始时间|运行态字段|真实时间模式下作业开始时间|
 |planned_completed_at|计划完成时间|运行态字段|真实时间模式下计划完成时间|

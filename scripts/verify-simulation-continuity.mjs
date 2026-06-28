@@ -49,7 +49,7 @@ assert.equal(second.current_global_tick, 150);
 const oneTickRun = initSimulationRun({
   simulationName: "单 Tick 时间验证",
   simulationPolicy: policy,
-  totalDays: 1 / 144,
+  totalDays: 1 / 86400,
 }).simulationRun;
 const running = startSimulationRun(oneTickRun).simulationRun;
 const context = computeTimeContext({
@@ -94,7 +94,7 @@ const drained = completeTick(
   { phase: drainTick.phase, workflowActionCount: drainTick.workflowActionCount },
 );
 assert.equal(drained.simulationRun.simulation_status, "COMPLETED");
-assert.equal(drained.simulationRun.simulation_end_at, "Day 1 00:20:00");
+assert.equal(drained.simulationRun.simulation_end_at, "Day 1 00:00:02");
 assert.equal(drained.simulationRun.drain_ticks, 1);
 
 const stalled = completeTick(

@@ -415,7 +415,7 @@ const tableConfig = {
   simulationPolicies: {
     title: "模拟规则配置",
     description: "配置模拟运行的规则参数，包括 Tick 粒度、时间段、需求分布和自动化开关。",
-    columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"]
+    columns: ["simulation_policy_id", "policy_name", "policy_status", "tick_seconds", "tick_minutes", "simulation_days", "run_speed_level", "random_seed"]
   },
   workflowTimingRules: {
     title: "工作流时效配置",
@@ -465,7 +465,7 @@ const tableConfig = {
   timedOperations: {
     title: "时间作业",
     description: "统一展示随时间推进的自动化作业，供真实自动化和模拟自动化复用。",
-    columns: ["timed_operation_id", "operation_status", "operation_type", "time_mode", "object_type", "object_id", "action_type", "duration_seconds", "elapsed_seconds", "remaining_seconds", "progress_percent", "simulation_started_at", "simulation_planned_completed_at", "simulation_completed_at", "created_at"]
+    columns: ["timed_operation_id", "operation_status", "operation_type", "time_mode", "object_type", "object_id", "action_type", "start_seconds", "planned_completed_seconds", "duration_seconds", "elapsed_seconds", "remaining_seconds", "progress_percent", "simulation_started_at", "simulation_planned_completed_at", "simulation_completed_at", "created_at"]
   }
 };
 const pageObjectType = {
@@ -3819,7 +3819,7 @@ function DetailPanel({
   }));
 }
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 function TabbedDetail({
   selectedObject,
@@ -4097,7 +4097,7 @@ function getDetailTabs(selectedType) {
     return [{
       key: "basic",
       label: "运行信息",
-      keys: ["simulation_run_id", "simulation_name", "simulation_status", "simulation_policy_id", "simulation_timeline_id", "previous_simulation_run_id", "total_days", "tick_minutes", "tick_seconds", "total_ticks", "simulation_start_at", "planned_simulation_end_at", "simulation_end_at", "created_at"]
+      keys: ["simulation_run_id", "simulation_name", "simulation_status", "simulation_policy_id", "simulation_timeline_id", "previous_simulation_run_id", "total_days", "tick_seconds", "tick_minutes", "total_ticks", "simulation_start_at", "planned_simulation_end_at", "simulation_end_at", "simulation_time_world_summary", "created_at"]
     }, {
       key: "progress",
       label: "运行进度",
@@ -4133,6 +4133,21 @@ function getDetailTabs(selectedType) {
       key: "detail",
       label: "事件详情",
       keys: ["related_object_type", "related_object_id", "message", "failure_reason", "skip_reason", "event_payload", "created_at"]
+    }];
+  }
+  if (selectedType === "timedOperation") {
+    return [{
+      key: "basic",
+      label: "作业信息",
+      keys: ["timed_operation_id", "operation_status", "operation_type", "time_mode", "object_type", "object_id", "action_type"]
+    }, {
+      key: "time",
+      label: "时间计算",
+      keys: ["start_seconds", "planned_completed_seconds", "duration_seconds", "elapsed_seconds", "remaining_seconds", "progress_percent", "simulation_started_at", "simulation_planned_completed_at", "simulation_completed_at"]
+    }, {
+      key: "payload",
+      label: "计算依据",
+      keys: ["operation_payload", "failure_reason", "created_at"]
     }];
   }
   if (selectedType === "costModelProfile") {
@@ -4845,6 +4860,16 @@ function renderDetailValue(key, value, row = null) {
       routeSteps: value
     });
   }
+  if (key === "route_links_detail" && Array.isArray(value)) {
+    return /*#__PURE__*/React.createElement(RouteLinksDetail, {
+      routes: value
+    });
+  }
+  if (key === "simulation_time_world_summary") {
+    return /*#__PURE__*/React.createElement(SimulationTimeWorldSummary, {
+      row: row
+    });
+  }
   if (Array.isArray(value) || value && typeof value === "object") {
     return /*#__PURE__*/React.createElement(StructuredDetailValue, {
       value: value,
@@ -4889,6 +4914,35 @@ function RouteStepsDetail({
   }, movementSteps.map((step, index) => /*#__PURE__*/React.createElement("div", {
     key: `${step.step_index}-${step.cell_id}`
   }, index + 1, " \u2192 ", step.cell_id, " \u2192 ", step.road_segment_id || "无道路片段", " \u2192 ", getDisplayValue(step.direction) || "未知方向", " \u2192 ", step.distance_km ?? 0, " km")))));
+}
+function RouteLinksDetail({
+  routes
+}) {
+  if (!routes || routes.length === 0) return /*#__PURE__*/React.createElement(Text, {
+    className: "detail-value"
+  }, "\u65E0\u5173\u8054\u8DEF\u5F84");
+  return /*#__PURE__*/React.createElement("div", {
+    className: "route-link-summary-list"
+  }, routes.map((route, index) => /*#__PURE__*/React.createElement("div", {
+    className: "route-link-summary",
+    key: `${route.route_id}-${index}`
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "route-link-summary-head"
+  }, /*#__PURE__*/React.createElement("strong", null, route.is_current_route ? "当前路径" : `关联路径 ${index + 1}`), /*#__PURE__*/React.createElement("span", null, formatDetailValue(route.route_id, "route_id"))), /*#__PURE__*/React.createElement("div", {
+    className: "route-link-summary-grid"
+  }, /*#__PURE__*/React.createElement("span", null, "\u8D77\u70B9: ", formatDetailValue(route.origin_cell_id, "origin_cell_id")), /*#__PURE__*/React.createElement("span", null, "\u7EC8\u70B9: ", formatDetailValue(route.target_cell_id, "target_cell_id")), /*#__PURE__*/React.createElement("span", null, "\u79FB\u52A8\u6B65\u6570: ", formatDetailValue(route.route_step_count, "route_step_count")), /*#__PURE__*/React.createElement("span", null, "\u603B\u8DDD\u79BB: ", formatDetailValue(route.total_distance_km, "total_distance_km"), " km"), /*#__PURE__*/React.createElement("span", null, "\u7B56\u7565: ", formatDetailValue(route.route_strategy_id, "route_strategy_id")), /*#__PURE__*/React.createElement("span", null, "\u72B6\u6001: ", getDisplayValue(route.route_status) || "无")))));
+}
+function SimulationTimeWorldSummary({
+  row
+}) {
+  if (!row) return /*#__PURE__*/React.createElement(Text, {
+    className: "detail-value"
+  }, "\u65E0");
+  const tickSeconds = Number(row.tick_seconds || 0);
+  const currentSeconds = Number(row.current_simulation_seconds ?? row.simulation_start_seconds ?? 0);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "compact-location-detail"
+  }, /*#__PURE__*/React.createElement("span", null, "\u7EDF\u4E00\u65F6\u95F4\u6E90: \u6A21\u62DF\u7EDD\u5BF9\u79D2 ", formatDetailValue(currentSeconds, "current_simulation_seconds")), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u663E\u793A\u65F6\u95F4: ", formatDetailValue(row.current_time, "current_time")), /*#__PURE__*/React.createElement("span", null, "Tick \u63A8\u8FDB: \u6BCF\u6B21 ", formatDetailValue(tickSeconds, "tick_seconds"), " \u79D2"), /*#__PURE__*/React.createElement("span", null, "\u8BA1\u5212\u8303\u56F4: ", formatDetailValue(row.simulation_start_at, "simulation_start_at"), " \u2192 ", formatDetailValue(row.planned_simulation_end_at, "planned_simulation_end_at")));
 }
 function StructuredDetailValue({
   value,

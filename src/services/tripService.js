@@ -75,11 +75,12 @@ export function getNextTripMovementState(trip, data) {
   };
 }
 
-export function projectTripTravelProgress(trip, data, elapsedSeconds = 0) {
+export function projectTripTravelProgress(trip, data, elapsedSeconds = 0, options = {}) {
   const route = data.routes?.find((item) => item.route_id === trip.route_id);
   if (!route || !Array.isArray(route.route_steps) || route.route_steps.length === 0) return null;
   const totalStepCount = getMovementStepCount(route);
-  const elapsedStepIndex = Math.floor(Math.max(0, Number(elapsedSeconds) || 0) / DEFAULT_CELL_TRAVEL_SECONDS);
+  const secondsPerCell = Math.max(1, Number(options.cellTravelSeconds) || DEFAULT_CELL_TRAVEL_SECONDS);
+  const elapsedStepIndex = Math.floor(Math.max(0, Number(elapsedSeconds) || 0) / secondsPerCell);
   const currentStepIndex = Math.min(elapsedStepIndex, totalStepCount);
   const currentStep = route.route_steps[currentStepIndex] || route.route_steps[route.route_steps.length - 1];
   const distanceMetrics = calculateTravelDistanceMetrics(
@@ -98,11 +99,12 @@ export function projectTripTravelProgress(trip, data, elapsedSeconds = 0) {
   };
 }
 
-export function completeTripTravel(trip, data) {
+export function completeTripTravel(trip, data, options = {}) {
   const route = data.routes?.find((item) => item.route_id === trip.route_id);
   if (!route) return null;
   const totalStepCount = getMovementStepCount(route);
-  const projected = projectTripTravelProgress(trip, data, totalStepCount * DEFAULT_CELL_TRAVEL_SECONDS);
+  const secondsPerCell = Math.max(1, Number(options.cellTravelSeconds) || DEFAULT_CELL_TRAVEL_SECONDS);
+  const projected = projectTripTravelProgress(trip, data, totalStepCount * secondsPerCell, { cellTravelSeconds: secondsPerCell });
   if (!projected) return null;
   const nextStatus = trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP
     ? tripTypes.TripStatus.WAITING_CUSTOMER_BOARDING

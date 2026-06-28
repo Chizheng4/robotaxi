@@ -8,6 +8,7 @@ import * as routePlanningService from "./routePlanningService.js";
 import * as serviceOrderService from "./serviceOrderService.js";
 import * as tripService from "./tripService.js";
 import { TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
+import { formatSimulationTimestamp } from "../domain/simulationTime.js";
 
 export function createReadinessTask({ state, runtime }) {
   const appData = dataView(state);
@@ -88,7 +89,7 @@ export function startReadinessTask({ state, objectId, runtime }) {
         startSeconds: Number(runtime.timeContext?.simulation_seconds) || 0,
         durationSeconds: getConfiguredDurationSeconds(runtime, "readiness_check_seconds", 30),
         simulationStartedAt: runtime.simulationTime(),
-        simulationPlannedCompletedAt: null,
+        simulationPlannedCompletedAt: getPlannedSimulationTimestamp(runtime, getConfiguredDurationSeconds(runtime, "readiness_check_seconds", 30)),
         payload: {
           worker_id: task.worker_id || task.assigned_worker_id || null,
           robotaxi_id: task.robotaxi_id,
@@ -283,7 +284,13 @@ export function completeRouteExecutionTravel({ state, objectId, runtime }) {
   const route = appData.routes?.find((item) => item.route_id === execution.route_id);
   const robotaxi = (state.robotaxis || appData.robotaxis || []).find((item) => item.robotaxi_id === execution.robotaxi_id);
   if (!task || !route) return failure("ROUTE_TRAVEL_COMPLETE_FAILED", `行驶执行 ${execution.route_execution_id} 缺少任务或路径`, "routeExecution", execution.route_execution_id, "缺少任务或路径");
-  const completed = routePlanningService.completeRouteExecutionTravel({ execution, task, route, robotaxi });
+  const completed = routePlanningService.completeRouteExecutionTravel({
+    execution,
+    task,
+    route,
+    robotaxi,
+    cellTravelSeconds: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS),
+  });
   return success("ROUTE_TRAVEL_COMPLETED", `行驶执行 ${execution.route_execution_id} 已按时间到达目标`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task.task_id }, {
     routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, { ...completed.execution, ...runtime.audit() }),
     deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, { ...completed.task, ...runtime.audit() }),
@@ -297,9 +304,9 @@ export function completeRouteExecutionTravel({ state, objectId, runtime }) {
         objectId: execution.route_execution_id,
         actionType: "ARRIVAL_CONFIRM",
         startSeconds: Number(runtime.timeContext?.simulation_seconds) || 0,
-        durationSeconds: 3,
+        durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3),
         simulationStartedAt: runtime.simulationTime(),
-        simulationPlannedCompletedAt: null,
+        simulationPlannedCompletedAt: getPlannedSimulationTimestamp(runtime, getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3)),
         payload: { route_id: route.route_id, arrival_detection_policy: "DEFAULT_NORMAL" },
       }),
       ...(state.timedOperations || []),
@@ -453,7 +460,7 @@ export function executeOrderMatching({ state, objectId, runtime }) {
       startSeconds: Number(runtime.timeContext?.simulation_seconds) || 0,
       durationSeconds: retrySeconds,
       simulationStartedAt: runtime.simulationTime(),
-      simulationPlannedCompletedAt: null,
+      simulationPlannedCompletedAt: getPlannedSimulationTimestamp(runtime, retrySeconds),
       payload: {
         failure_reason: matchingResult.failureReason,
         matching_attempt_count: attemptCount,
@@ -587,7 +594,9 @@ export function completeTripTravel({ state, objectId, runtime }) {
   if (!trip) return failure("TRIP_TRAVEL_COMPLETE_FAILED", `未找到履约行驶 ${objectId}`, "trip", objectId, "未找到履约行驶");
   const order = (state.serviceOrders || []).find((item) => item.service_order_id === trip.service_order_id);
   if (!order) return failure("TRIP_TRAVEL_COMPLETE_FAILED", `履约行驶 ${objectId} 缺少服务订单`, "trip", objectId, "缺少服务订单");
-  const completedTrip = tripService.completeTripTravel(trip, appData);
+  const completedTrip = tripService.completeTripTravel(trip, appData, {
+    cellTravelSeconds: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS),
+  });
   if (!completedTrip) return failure("TRIP_TRAVEL_COMPLETE_FAILED", `履约行驶 ${objectId} 无法按时间完成行驶`, "trip", objectId, "缺少路径或当前状态不可完成");
   return tripUpdateResult({
     state,
@@ -679,7 +688,8 @@ function executePriceRoutePlanning({ state, order, runtime }) {
 
 function createTravelOperation({ runtime, objectType, objectId, actionType, route }) {
   const startSeconds = Number(runtime.timeContext?.simulation_seconds) || 0;
-  const durationSeconds = Math.max(1, (Number(route.route_step_count) || 0) * routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS);
+  const cellTravelSeconds = getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS);
+  const durationSeconds = Math.max(1, (Number(route.route_step_count) || 0) * cellTravelSeconds);
   return createTimedOperation({
     timedOperationId: runtime.nextId("TOP"),
     timeMode: runtime.timeContext?.time_mode || "SIMULATION",
@@ -690,14 +700,20 @@ function createTravelOperation({ runtime, objectType, objectId, actionType, rout
     startSeconds,
     durationSeconds,
     simulationStartedAt: runtime.simulationTime(),
-    simulationPlannedCompletedAt: null,
+    simulationPlannedCompletedAt: getPlannedSimulationTimestamp(runtime, durationSeconds),
     payload: {
       route_id: route.route_id,
       route_step_count: route.route_step_count,
       total_distance_km: route.total_distance_km,
-      cell_travel_seconds: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS,
+      cell_travel_seconds: cellTravelSeconds,
     },
   });
+}
+
+function getPlannedSimulationTimestamp(runtime, durationSeconds) {
+  const startSeconds = Number(runtime.timeContext?.simulation_seconds);
+  if (!Number.isFinite(startSeconds)) return null;
+  return formatSimulationTimestamp(startSeconds + Math.max(0, Number(durationSeconds) || 0));
 }
 
 function getConfiguredDurationSeconds(runtime, key, fallbackSeconds) {
