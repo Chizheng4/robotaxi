@@ -111,6 +111,14 @@ export const statusRegistry = {
     },
     legacy: { compat: [] },
   },
+  timedOperation: {
+    statusField: "operation_status",
+    current: {
+      normal: ["PENDING", "RUNNING", "COMPLETED"],
+      exception: ["FAILED", "CANCELLED"],
+    },
+    legacy: { compat: [] },
+  },
 };
 
 export const pageStatusRegistryMap = {
@@ -123,6 +131,7 @@ export const pageStatusRegistryMap = {
   workflowTimingRules: "workflowTimingRule",
   costCalculationRuns: "costCalculationRun",
   revenueCalculationRuns: "revenueCalculationRun",
+  timedOperations: "timedOperation",
 };
 
 export function getStatusField(objectType) {

@@ -250,6 +250,9 @@ const pageGroups = [{
   }, {
     key: "simulationRuns",
     label: "模拟运行管理"
+  }, {
+    key: "timedOperations",
+    label: "时间作业"
   }]
 }];
 const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles"]);
@@ -458,6 +461,11 @@ const tableConfig = {
     title: "模拟事件记录",
     description: "查看所有模拟运行产生的事件记录，包括触发、执行和结果。",
     columns: ["simulation_event_id", "simulation_run_id", "event_type", "event_source", "event_result", "message", "simulation_time", "global_tick"]
+  },
+  timedOperations: {
+    title: "时间作业",
+    description: "统一展示随时间推进的自动化作业，供真实自动化和模拟自动化复用。",
+    columns: ["timed_operation_id", "operation_status", "operation_type", "time_mode", "object_type", "object_id", "action_type", "duration_seconds", "elapsed_seconds", "remaining_seconds", "progress_percent", "simulation_started_at", "simulation_planned_completed_at", "simulation_completed_at", "created_at"]
   }
 };
 const pageObjectType = {
@@ -501,7 +509,8 @@ const pageObjectType = {
   revenueRecords: "revenueRecord",
   revenueCalculationRuns: "revenueCalculationRun",
   simulationRuns: "simulationRun",
-  simulationEvents: "simulationEvent"
+  simulationEvents: "simulationEvent",
+  timedOperations: "timedOperation"
 };
 const idFieldByType = {
   map: "map_id",
@@ -538,6 +547,7 @@ const idFieldByType = {
   revenueCalculationRun: "revenue_calculation_run_id",
   simulationRun: "simulation_run_id",
   simulationEvent: "simulation_event_id",
+  timedOperation: "timed_operation_id",
   pricingDecision: "pricing_decision_id",
   orderMatchingStrategy: "order_matching_strategy_id",
   orderMatchingRun: "order_matching_run_id",
@@ -584,7 +594,8 @@ const statusFieldByPage = {
   revenueRecords: "revenue_type",
   revenueCalculationRuns: "calculation_status",
   simulationRuns: "simulation_status",
-  simulationEvents: "event_result"
+  simulationEvents: "event_result",
+  timedOperations: "operation_status"
 };
 const cellClass = {
   EMPTY: "cell-empty",
@@ -647,6 +658,7 @@ function App() {
   const [revenueRecords, setRevenueRecords] = useState(initialRuntime.revenueRecords);
   const [simulationRuns, setSimulationRuns] = useState(initialRuntime.simulationRuns);
   const [simulationEvents, setSimulationEvents] = useState(initialRuntime.simulationEvents);
+  const [timedOperations, setTimedOperations] = useState(initialRuntime.timedOperations);
   useEffect(() => {
     let cancelled = false;
     loadPersistedSimulationEvents().then(events => {
@@ -718,6 +730,7 @@ function App() {
       setRevenueCalculationRuns(snapshot.revenueCalculationRuns || []);
       setRevenueRecords(snapshot.revenueRecords || []);
       setSimulationRuns(snapshot.simulationRuns || []);
+      setTimedOperations(snapshot.timedOperations || []);
       const restoredPage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
       const restoredSelections = snapshot.pageSelections || {};
       setActivePage(restoredPage);
@@ -790,8 +803,9 @@ function App() {
     revenueRecords,
     simulationRuns,
     simulationEvents,
+    timedOperations,
     validations
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, simulationRuns, simulationEvents, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, simulationRuns, simulationEvents, timedOperations, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -846,6 +860,7 @@ function App() {
       revenueCalculationRun: rowsByPage.revenueCalculationRuns,
       simulationRun: simulationRuns,
       simulationEvent: simulationEvents,
+      timedOperation: timedOperations,
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: readinessTasks,
@@ -853,7 +868,7 @@ function App() {
       validation: validations
     };
     return collections[selected.type]?.find(item => item[idFieldByType[selected.type]] === selected.id) || null;
-  }, [costRecords, data, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, validations]);
+  }, [costRecords, data, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, timedOperations, validations]);
   const menuItems = pageGroups.map(group => {
     if (group.key === "console") return {
       key: "console",
@@ -908,6 +923,7 @@ function App() {
       revenueRecords,
       simulationRuns,
       simulationEvents,
+      timedOperations,
       activePage,
       workspacePages,
       detailCollapsedByPage,
@@ -915,7 +931,7 @@ function App() {
       pageUiState
     });
     persistSimulationEvents(simulationEvents);
-  }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, trips, workflowTimingProfiles, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
 
   // ===== Simulation 控制 =====
   const getBusinessData = () => {
@@ -939,7 +955,8 @@ function App() {
       pricingDecisions,
       orderMatchingRuns,
       orderMatchingDecisions,
-      taskEventLogs
+      taskEventLogs,
+      timedOperations
     };
     const refreshContextData = () => {
       businessData.data = {
@@ -957,7 +974,8 @@ function App() {
         pricingDecisions: businessData.pricingDecisions,
         orderMatchingRuns: businessData.orderMatchingRuns,
         orderMatchingDecisions: businessData.orderMatchingDecisions,
-        taskEventLogs: businessData.taskEventLogs
+        taskEventLogs: businessData.taskEventLogs,
+        timedOperations: businessData.timedOperations
       };
     };
     const bindSetter = (key, setter) => updater => {
@@ -978,6 +996,7 @@ function App() {
     businessData.setOrderMatchingRuns = bindSetter("orderMatchingRuns", setOrderMatchingRuns);
     businessData.setOrderMatchingDecisions = bindSetter("orderMatchingDecisions", setOrderMatchingDecisions);
     businessData.setTaskEventLogs = bindSetter("taskEventLogs", setTaskEventLogs);
+    businessData.setTimedOperations = bindSetter("timedOperations", setTimedOperations);
     businessData.setRobotaxis = updater => {
       const nextRobotaxis = typeof updater === "function" ? updater(businessData.robotaxis) : updater;
       businessData.robotaxis = nextRobotaxis;
@@ -1497,7 +1516,8 @@ function App() {
       revenueCalculationRuns,
       revenueRecords,
       simulationRuns,
-      simulationEvents
+      simulationEvents,
+      timedOperations
     }
   })), /*#__PURE__*/React.createElement("aside", {
     className: "detail-rail"
@@ -6204,6 +6224,7 @@ function loadRuntimeSnapshot(initialData) {
     revenueRecords: [],
     simulationRuns: [],
     simulationEvents: [],
+    timedOperations: [],
     activePage: "console",
     workspacePages: ["console"],
     detailCollapsedByPage: {},
@@ -6247,6 +6268,7 @@ function loadRuntimeSnapshot(initialData) {
     const revenueRecords = Array.isArray(snapshot.revenueRecords) ? snapshot.revenueRecords : [];
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
     const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
+    const timedOperations = Array.isArray(snapshot.timedOperations) ? snapshot.timedOperations : [];
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
@@ -6287,6 +6309,7 @@ function loadRuntimeSnapshot(initialData) {
       revenueRecords,
       simulationRuns,
       simulationEvents,
+      timedOperations,
       activePage: restoredActivePage,
       workspacePages: normalizeWorkspacePages(snapshot.workspacePages, restoredActivePage),
       detailCollapsedByPage: snapshot.detailCollapsedByPage || {},
@@ -6367,7 +6390,8 @@ function saveRuntimeSnapshot(snapshot) {
     revenueCalculationRuns: snapshot.revenueCalculationRuns || [],
     revenueRecords: snapshot.revenueRecords || [],
     simulationRuns: snapshot.simulationRuns || [],
-    simulationEvents: []
+    simulationEvents: [],
+    timedOperations: snapshot.timedOperations || []
   };
   persistRuntimeSnapshot(storedSnapshot);
   try {
@@ -6381,6 +6405,7 @@ function saveRuntimeSnapshot(snapshot) {
       simulationPolicies: [],
       simulationRuns: [],
       simulationEvents: [],
+      timedOperations: [],
       costModelProfiles: [],
       costCalculationRuns: [],
       costRecords: [],

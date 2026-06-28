@@ -69,6 +69,7 @@ function createState(data) {
     orderMatchingRuns: data.orderMatchingRuns || [],
     orderMatchingDecisions: data.orderMatchingDecisions || [],
     taskEventLogs: data.taskEventLogs || [],
+    timedOperations: data.timedOperations || [],
   };
 }
 
@@ -89,6 +90,7 @@ function applyBusinessResult(result, data) {
     orderMatchingRuns: data.setOrderMatchingRuns,
     orderMatchingDecisions: data.setOrderMatchingDecisions,
     taskEventLogs: data.setTaskEventLogs,
+    timedOperations: data.setTimedOperations,
   };
   Object.entries(updates).forEach(([key, value]) => {
     if (typeof setters[key] === "function") setters[key](() => value);

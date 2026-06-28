@@ -13,6 +13,7 @@ import { runSupplyTrigger } from "./simulationSupplyTrigger.js";
 import { runDemandTrigger } from "./simulationDemandTrigger.js";
 import { queryAllWorkflowRules } from "./simulationWorkflowEngine.js";
 import { executeActions } from "./simulationExecutionEngine.js";
+import { advanceTimedOperations } from "./timedOperationScheduler.js";
 
 /**
  * 执行一个 SimulationTick
@@ -56,6 +57,15 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     : runDemandTrigger({ timeContext: tickContext, policySnapshot, randomSeed: tickRandomSeed });
 
   // 5. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
+  const timedOperationResult = advanceTimedOperations({
+    timedOperations: businessData?.timedOperations || [],
+    timeContext: tickContext,
+  });
+  if (businessData?.setTimedOperations) {
+    businessData.setTimedOperations(timedOperationResult.timedOperations);
+  }
+
+  // 6. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
   const demandActions = [];
   if (!isDraining && businessData && demandResult.order_count > 0) {
     for (let i = 0; i < demandResult.order_count; i++) {
@@ -68,10 +78,10 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     }
   }
 
-  // 5. 供给侧点火动作
+  // 7. 供给侧点火动作
   const supplyActions = !isDraining && supplyResult?.actions ? supplyResult.actions : [];
 
-  // 6. 先执行触发层动作（创建准入/投放任务 + 创建订单）
+  // 8. 先执行触发层动作（创建准入/投放任务 + 创建订单）
   const preActions = [...supplyActions, ...demandActions];
   let preExecutionResults = [];
   if (businessData && preActions.length > 0) {
@@ -83,11 +93,11 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     });
   }
 
-  // 7. 使用本 Tick 内已被 handler 同步写入的业务上下文，再查询工作流。
+  // 9. 使用本 Tick 内已被 handler 同步写入的业务上下文，再查询工作流。
   // React state 异步刷新，不能依赖立即重新读取组件闭包。
   const refreshedBusinessData = businessData || (refreshBusinessData ? refreshBusinessData() : null);
 
-  // 7. 查询工作流引擎：获取所有待执行的业务动作（含刚创建的订单的后续动作）
+  // 10. 查询工作流引擎：获取所有待执行的业务动作（含刚创建的订单的后续动作）
   const autoConfig = policySnapshot.service_order_auto_config || {};
   const defaultConfig = policySnapshot.default_completion_config || {};
   let workflowActions = [];
@@ -103,7 +113,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     });
   }
 
-  // 8. 通过执行引擎分发动作
+  // 11. 通过执行引擎分发动作
   let executionResults = [];
   if (refreshedBusinessData && workflowActions.length > 0) {
     executionResults = executeActions(workflowActions, refreshedBusinessData, {
@@ -117,8 +127,8 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   // 合并所有执行结果
   const allResults = [...preExecutionResults, ...executionResults];
 
-  // 9. 汇总当前 Tick 摘要
-  const tickEventSummary = buildTickEventSummary(supplyResult, demandResult, allResults);
+  // 12. 汇总当前 Tick 摘要
+  const tickEventSummary = buildTickEventSummary(supplyResult, demandResult, allResults, timedOperationResult.summary);
 
   return {
     tickContext,
@@ -126,6 +136,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     demandResult,
     workflowActions,
     executionResults: allResults,
+    timedOperationResult,
     tickEventSummary,
     phase: isDraining ? SimulationStatus.DRAINING : SimulationStatus.RUNNING,
     workflowActionCount: workflowActions.length,
@@ -148,7 +159,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
  *  11. 判断是否到达 total_ticks
  */
 
-function buildTickEventSummary(supplyResult, demandResult, executionResults = []) {
+function buildTickEventSummary(supplyResult, demandResult, executionResults = [], timedOperationSummary = null) {
   const succeeded = executionResults.filter((r) => r.success).length;
   const failed = executionResults.filter((r) => !r.success).length;
   return {
@@ -162,6 +173,7 @@ function buildTickEventSummary(supplyResult, demandResult, executionResults = []
     completed_trips: 0,
     completed_route_executions: 0,
     no_action_events: supplyResult.no_action_count || 0,
+    timed_operation_summary: timedOperationSummary,
   };
 }
 

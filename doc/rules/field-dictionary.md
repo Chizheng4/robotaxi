@@ -1235,6 +1235,43 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 
 ---
 
+## 24.2 TimedOperation：时间作业
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|timed_operation_id|时间作业编号|运行态字段|TimedOperation 唯一编号|
+|time_mode|时间模式|运行态字段|REAL_MANUAL / REAL_AUTOMATION / SIMULATION|
+|operation_type|作业类型|运行态字段|TRAVEL / ARRIVAL_DETECTION / WORKER_CHECK / ORDER_MATCH_RETRY / GENERIC_ACTION|
+|operation_status|作业状态|运行态字段|PENDING / RUNNING / COMPLETED / FAILED / CANCELLED|
+|object_type|关联对象类型|运行态字段|作业关联的业务对象类型|
+|object_id|关联对象编号|运行态字段|作业关联的业务对象编号|
+|action_type|触发动作|运行态字段|作业到期后应调用的业务动作，可为空|
+|started_at|开始时间|运行态字段|真实时间模式下作业开始时间|
+|planned_completed_at|计划完成时间|运行态字段|真实时间模式下计划完成时间|
+|completed_at|完成时间|运行态字段|真实完成时间|
+|simulation_started_at|模拟开始时间|运行态字段|模拟时间模式下作业开始时间|
+|simulation_planned_completed_at|模拟计划完成时间|运行态字段|模拟时间模式下计划完成时间|
+|simulation_completed_at|模拟完成时间|运行态字段|模拟完成时间|
+|start_seconds|开始秒|运行态字段|作业在统一时间轴上的开始秒|
+|planned_completed_seconds|计划完成秒|运行态字段|作业在统一时间轴上的计划完成秒|
+|duration_seconds|计划耗时（秒）|运行态字段|作业计划持续时间|
+|elapsed_seconds|已耗时（秒）|运行态字段|随统一时间推进计算的已耗时|
+|remaining_seconds|剩余耗时（秒）|运行态字段|随统一时间推进计算的剩余耗时|
+|progress_percent|进度（%）|运行态字段|随统一时间推进计算的完成进度|
+|failure_reason|失败原因|运行态字段|作业失败原因|
+|operation_payload|作业负载|运行态字段|作业执行所需的结构化上下文|
+|timed_operation_summary|时间作业摘要|运行态字段|当前 Tick 的时间作业推进摘要|
+|total_timed_operations|时间作业总数|运行态字段|当前时间作业总数|
+|due_timed_operations|到期作业数|运行态字段|本次时间推进到期的作业数量|
+|pending_timed_operations|等待作业数|运行态字段|仍在等待开始的作业数量|
+|running_timed_operations|执行中作业数|运行态字段|正在随时间执行的作业数量|
+|completed_timed_operations|已完成作业数|运行态字段|已完成的作业数量|
+|failed_timed_operations|失败作业数|运行态字段|失败的作业数量|
+|cancelled_timed_operations|已取消作业数|运行态字段|已取消的作业数量|
+|created_at|创建时间|运行态字段|记录创建时间|
+
+---
+
 ## 25. SimulationEvent：模拟事件记录
 
 |属性英文名|中文名|字段性质|含义|
