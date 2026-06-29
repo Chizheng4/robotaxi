@@ -72,13 +72,25 @@ export function resolveWorkflowRuntimeSeconds({ workflowTimingProfile, key, fall
 }
 
 export function resolveTimingRuleSeconds({ workflowTimingProfile, objectType, fromState, actionType, fallbackSeconds }) {
+  return resolveTimingRuleDuration({ workflowTimingProfile, objectType, fromState, actionType, fallbackSeconds }).durationSeconds;
+}
+
+export function resolveTimingRuleDuration({ workflowTimingProfile, objectType, fromState, actionType, fallbackSeconds, movementStepCount = null }) {
   const rule = findTimingRule(workflowTimingProfile, { objectType, fromState, actionType });
-  if (!rule) return fallbackSeconds;
+  if (!rule) return { durationSeconds: fallbackSeconds, rule: null, secondsPerCell: null };
   const value = rule.duration_mode === TimingDurationMode.PER_CELL_DURATION
     ? rule.seconds_per_cell
     : rule.configured_duration_seconds;
   const seconds = Number(value);
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds : fallbackSeconds;
+  const normalizedSeconds = Number.isFinite(seconds) && seconds >= 0 ? seconds : fallbackSeconds;
+  const durationSeconds = rule.duration_mode === TimingDurationMode.PER_CELL_DURATION
+    ? Math.max(0, Number(movementStepCount) || 0) * Math.max(0, Number(normalizedSeconds) || 0)
+    : normalizedSeconds;
+  return {
+    durationSeconds,
+    rule,
+    secondsPerCell: rule.duration_mode === TimingDurationMode.PER_CELL_DURATION ? normalizedSeconds : null,
+  };
 }
 
 function findTimingRule(workflowTimingProfile, { objectType, fromState, actionType }) {

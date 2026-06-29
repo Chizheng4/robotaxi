@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v033.3`：工作流时效与业务生命周期时间线小迭代，已归档到 `doc/common/iteration-history/minor/v033.3-workflow-timing-lifecycle-contract.md`。
 - `v033.2`：业务生命周期时间线与自动财务计算小迭代，已归档到 `doc/common/iteration-history/minor/v033.2-business-lifecycle-timeline-and-auto-finance.md`。
 - `v033.1`：时间作业诊断与清理小迭代，已归档到 `doc/common/iteration-history/minor/v033.1-timed-operation-diagnostics.md`。
 - `v032.9`：供给触发周期对齐运营配置时间小迭代，已归档到 `doc/common/iteration-history/minor/v032.9-supply-trigger-window-cadence.md`。

@@ -15,6 +15,7 @@ import {
 registerActionHandlers({
   DEPLOYMENT_TASK_CREATE: handleDeploymentTaskCreate,
   ROUTE_PLAN: handleRoutePlan,
+  ROUTE_EXECUTION_STEP: handleRouteExecutionTravelComplete,
   ROUTE_EXECUTION_TRAVEL_COMPLETE: handleRouteExecutionTravelComplete,
   ARRIVAL_CONFIRM: handleArrivalConfirm,
   TRIP_STEP_EXECUTE: handleTripStepExecute,
@@ -31,7 +32,7 @@ runAction({ actionType: "ROUTE_PLAN", objectId: routeExecutionId }, context);
 const routeTravelOperation = businessData.timedOperations.find((operation) =>
   operation.object_type === "routeExecution" &&
   operation.object_id === routeExecutionId &&
-  operation.action_type === "ROUTE_EXECUTION_TRAVEL_COMPLETE"
+  operation.action_type === "ROUTE_EXECUTION_STEP"
 );
 assert.ok(routeTravelOperation, "运营行驶路径规划后必须生成行驶时间作业");
 assert.ok(routeTravelOperation.duration_seconds > 0);

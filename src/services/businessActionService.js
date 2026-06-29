@@ -9,7 +9,7 @@ import * as serviceOrderService from "./serviceOrderService.js";
 import * as tripService from "./tripService.js";
 import { TimedOperationStatus, TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
 import { formatSimulationTimestamp } from "../domain/simulationTime.js";
-import { resolveWorkflowRuntimeSeconds } from "../data/workflowRuntimeConfig.js";
+import { resolveTimingRuleDuration, resolveWorkflowRuntimeSeconds } from "../data/workflowRuntimeConfig.js";
 
 export function createReadinessTask({ state, runtime }) {
   if (runtime.timeContext?.time_mode === "SIMULATION" && runtime.timeContext.is_worker_working_time === false) {
@@ -246,7 +246,7 @@ export function executeRoutePlanning({ state, objectType, objectId, runtime }) {
         runtime,
         objectType: "routeExecution",
         objectId: execution.route_execution_id,
-        actionType: "ROUTE_EXECUTION_TRAVEL_COMPLETE",
+        actionType: "ROUTE_EXECUTION_STEP",
         route: plan.route,
       }),
       ...(state.timedOperations || []),
@@ -299,8 +299,8 @@ export function completeRouteExecutionTravel({ state, objectId, runtime }) {
     cellTravelSeconds: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS),
   });
   return success("ROUTE_TRAVEL_COMPLETED", `行驶执行 ${execution.route_execution_id} 已按时间到达目标`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task.task_id }, {
-    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, withLifecycleStatus({ ...completed.execution, ...runtime.audit() }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: execution.execution_status, toStatus: completed.execution.execution_status, actionType: "ROUTE_EXECUTION_TRAVEL_COMPLETE", resultType: "ROUTE_TRAVEL_COMPLETED", durationSeconds: getRouteTravelDurationSeconds(route, runtime), movementStepCount: route.route_step_count, secondsPerCell: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS) })),
-    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, withLifecycleStatus({ ...completed.task, ...runtime.audit() }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: task.task_status, toStatus: completed.task.task_status, actionType: "ROUTE_EXECUTION_TRAVEL_COMPLETE", resultType: "ROUTE_TRAVEL_COMPLETED", durationSeconds: getRouteTravelDurationSeconds(route, runtime), movementStepCount: route.route_step_count, secondsPerCell: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS) })),
+    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, withLifecycleStatus({ ...completed.execution, ...runtime.audit() }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: execution.execution_status, toStatus: completed.execution.execution_status, actionType: "ROUTE_EXECUTION_STEP", resultType: "ROUTE_TRAVEL_COMPLETED", durationSeconds: getRouteTravelDurationSeconds(route, runtime), movementStepCount: route.route_step_count, secondsPerCell: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS) })),
+    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, withLifecycleStatus({ ...completed.task, ...runtime.audit() }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: task.task_status, toStatus: completed.task.task_status, actionType: "ROUTE_EXECUTION_STEP", resultType: "ROUTE_TRAVEL_COMPLETED", durationSeconds: getRouteTravelDurationSeconds(route, runtime), movementStepCount: route.route_step_count, secondsPerCell: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS) })),
     robotaxis: completed.robotaxi ? replaceById(state.robotaxis || [], "robotaxi_id", robotaxi.robotaxi_id, { ...completed.robotaxi, ...runtime.audit() }) : state.robotaxis,
     timedOperations: [
       createTimedOperation({
@@ -835,7 +835,11 @@ function planTripRoute({ state, objectId, runtime }) {
 
 function tripUpdateResult({ state, order, trip, runtime, resultType, message, extraUpdates = {}, successValue = true }) {
   const previousTrip = (state.trips || []).find((item) => item.trip_id === trip.trip_id);
-  const actionType = getTripLifecycleActionType(resultType);
+  const actionType = getTripLifecycleActionType(resultType, previousTrip?.trip_status);
+  const movementStepCount = resultType === "TRIP_TRAVEL_COMPLETED" ? trip.total_step_count : null;
+  const tripSecondsPerCell = resultType === "TRIP_TRAVEL_COMPLETED"
+    ? getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS)
+    : null;
   const nextTrip = withLifecycleStatus(trip, {
     runtime,
     objectType: "trip",
@@ -845,8 +849,8 @@ function tripUpdateResult({ state, order, trip, runtime, resultType, message, ex
     actionType,
     resultType,
     durationSeconds: getTripLifecycleDurationSeconds(resultType, trip, runtime),
-    movementStepCount: trip.route_id ? trip.total_step_count : null,
-    secondsPerCell: resultType === "TRIP_TRAVEL_COMPLETED" ? getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS) : null,
+    movementStepCount,
+    secondsPerCell: tripSecondsPerCell,
   });
   return {
     success: successValue,
@@ -855,7 +859,7 @@ function tripUpdateResult({ state, order, trip, runtime, resultType, message, ex
     data: { objectType: "trip", objectId: trip.trip_id, serviceOrderId: order.service_order_id },
     updates: {
       trips: replaceById(state.trips || [], "trip_id", trip.trip_id, nextTrip),
-      serviceOrders: syncServiceOrderFromTrip(state.serviceOrders || [], order.service_order_id, nextTrip, runtime, { actionType, resultType }),
+      serviceOrders: syncServiceOrderFromTrip(state.serviceOrders || [], order.service_order_id, nextTrip, runtime, { actionType, resultType, movementStepCount, secondsPerCell: tripSecondsPerCell }),
       robotaxis: updateRobotaxiFromTrip(state.robotaxis || [], nextTrip, runtime),
       ...extraUpdates,
     },
@@ -882,7 +886,17 @@ function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime, 
     trip_distance_traveled_km: trip.distance_traveled_km,
     trip_distance_remaining_km: trip.distance_remaining_km,
     ...runtime.audit(),
-  }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: orderStatus, actionType: lifecycle.actionType || "TRIP_STATUS_PROJECT", resultType: lifecycle.resultType || "TRIP_STATUS_PROJECTED" }));
+  }, {
+    runtime,
+    objectType: "serviceOrder",
+    statusField: "order_status",
+    fromStatus: order.order_status,
+    toStatus: orderStatus,
+    actionType: lifecycle.actionType || "TRIP_STATUS_PROJECT",
+    resultType: lifecycle.resultType || "TRIP_STATUS_PROJECTED",
+    movementStepCount: lifecycle.movementStepCount ?? null,
+    secondsPerCell: lifecycle.secondsPerCell ?? null,
+  }));
 }
 
 function updateRobotaxiFromTrip(robotaxis, trip, runtime) {
@@ -986,7 +1000,9 @@ function withLifecycleStatus(item, {
   const nextStatus = toStatus !== undefined ? toStatus : item[statusField] || null;
   const history = Array.isArray(item.simulation_status_transition_history) ? item.simulation_status_transition_history : [];
   if (history.length > 0 && previousStatus === nextStatus) return item;
-  const changedAt = runtime?.simulationTime?.() || item.simulation_updated_at || item.simulation_created_at || runtime?.now?.() || new Date().toISOString();
+  const timing = resolveLifecycleTiming({ runtime, objectType, previousStatus, actionType, durationSeconds, movementStepCount, secondsPerCell });
+  const changedAt = timing.changedAt || runtime?.simulationTime?.() || item.simulation_updated_at || item.simulation_created_at || runtime?.now?.() || new Date().toISOString();
+  const startedAt = timing.startedAt || changedAt;
   const transition = {
     status_transition_id: runtime?.nextId ? runtime.nextId("ST") : `ST-${String(history.length + 1).padStart(4, "0")}`,
     transition_sequence: history.length + 1,
@@ -995,14 +1011,14 @@ function withLifecycleStatus(item, {
     action_type: actionType,
     result_type: resultType || null,
     to_status: nextStatus,
-    simulation_action_started_at: changedAt,
-    calculated_simulation_action_started_at: changedAt,
-    configured_duration_seconds: Math.max(0, Number(durationSeconds) || 0),
+    simulation_action_started_at: startedAt,
+    calculated_simulation_action_started_at: startedAt,
+    configured_duration_seconds: timing.durationSeconds,
     movement_step_count: movementStepCount,
-    seconds_per_cell: secondsPerCell,
+    seconds_per_cell: timing.secondsPerCell ?? secondsPerCell,
     simulation_status_changed_at: changedAt,
     calculated_simulation_status_changed_at: changedAt,
-    workflow_timing_rule_id: null,
+    workflow_timing_rule_id: timing.workflowTimingRuleId,
     source_transition_id: sourceTransitionId,
     business_timing_calculation_run_id: null,
   };
@@ -1012,16 +1028,44 @@ function withLifecycleStatus(item, {
   };
 }
 
+function resolveLifecycleTiming({ runtime, objectType, previousStatus, actionType, durationSeconds, movementStepCount, secondsPerCell }) {
+  const configured = resolveTimingRuleDuration({
+    workflowTimingProfile: runtime?.workflowTimingProfile,
+    objectType,
+    fromState: previousStatus,
+    actionType,
+    fallbackSeconds: durationSeconds,
+    movementStepCount,
+  });
+  const normalizedDuration = Math.max(0, Number(configured.durationSeconds) || 0);
+  const currentSeconds = Number(runtime?.timeContext?.simulation_seconds);
+  const changedAt = runtime?.simulationTime?.() || null;
+  const startedAt = Number.isFinite(currentSeconds)
+    ? formatSimulationTimestamp(Math.max(0, currentSeconds - normalizedDuration))
+    : changedAt;
+  return {
+    durationSeconds: normalizedDuration,
+    secondsPerCell: configured.secondsPerCell ?? secondsPerCell ?? null,
+    workflowTimingRuleId: configured.rule?.workflow_timing_rule_id || null,
+    startedAt,
+    changedAt,
+  };
+}
+
 function getRouteTravelDurationSeconds(route, runtime) {
   const cellSeconds = getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS);
   return Math.max(1, (Number(route?.route_step_count) || 0) * cellSeconds);
 }
 
-function getTripLifecycleActionType(resultType) {
-  if (resultType === "TRIP_TRAVEL_COMPLETED") return "TRIP_TRAVEL_COMPLETE";
-  if (resultType === "TRIP_ADVANCED") return "TRIP_STEP_EXECUTE";
+function getTripLifecycleActionType(resultType, previousStatus) {
+  if (resultType === "TRIP_TRAVEL_COMPLETED") return "TRIP_STEP_EXECUTE";
   if (resultType === "TRIP_CREATED") return "TRIP_CREATE";
   if (resultType === "ROUTE_PLAN_FAILED") return "ROUTE_PLAN";
+  if (resultType === "TRIP_ADVANCED") {
+    if (previousStatus === tripTypes.TripStatus.WAITING_ROUTE || previousStatus === tripTypes.TripStatus.CUSTOMER_ONBOARD) return "ROUTE_PLAN";
+    if (previousStatus === tripTypes.TripStatus.WAITING_CUSTOMER_BOARDING) return "PASSENGER_BOARD";
+    if (previousStatus === tripTypes.TripStatus.ARRIVED_DESTINATION) return "PASSENGER_DROPOFF";
+  }
   return "TRIP_STEP_EXECUTE";
 }
 
