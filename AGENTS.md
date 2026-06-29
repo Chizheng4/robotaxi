@@ -20,6 +20,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 4. `doc/rules/05-codex-execution-rules.md` — 执行、验证与禁止行为
 5. `doc/rules/field-dictionary.md` — 字段字典（文档）
 6. `src/domain/fieldDictionary.js` — 字段字典（前端代码，含 fieldDictionary 和 valueDictionary）
+7. 如涉及模拟运行、时间作业、自动工作流、业务单据生命周期或高速执行，还必须读取 `doc/rules/07-simulation-runtime-architecture-rules.md`
 
 #### B. 业务对象 / 字段 / 状态 / 枚举修改
 
@@ -123,4 +124,5 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 | `doc/rules/04-frontend-ux-rules.md`               | 前端体验、设计系统与标准化规则 |
 | `doc/rules/05-codex-execution-rules.md`           | 执行要求、验证与暂停条件  |
 | `doc/rules/06-document-driven-iteration-rules.md` | 文档差异驱动迭代协议    |
+| `doc/rules/07-simulation-runtime-architecture-rules.md` | 模拟运行架构、性能和扩展接入规则 |
 | `doc/rules/field-dictionary.md`                   | 统一字段字典正文      |

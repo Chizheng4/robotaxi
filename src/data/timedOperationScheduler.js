@@ -6,9 +6,11 @@ export function advanceTimedOperations({
 }) {
   const currentSeconds = Number(timeContext.current_simulation_seconds ?? timeContext.simulation_seconds ?? 0);
   const dueOperations = [];
+  let changed = false;
   const nextTimedOperations = timedOperations.map((operation) => {
     const next = advanceTimedOperation(operation, currentSeconds, timeContext);
     if (isNewlyCompleted(operation, next)) dueOperations.push(next);
+    if (next !== operation) changed = true;
     return next;
   });
 
@@ -16,6 +18,7 @@ export function advanceTimedOperations({
     timedOperations: nextTimedOperations,
     dueOperations,
     summary: summarizeTimedOperations(nextTimedOperations, dueOperations),
+    changed,
   };
 }
 
@@ -28,6 +31,14 @@ export function advanceTimedOperation(operation, currentSeconds, timeContext = {
     ? Math.min(100, Number(((elapsedSeconds / durationSeconds) * 100).toFixed(2)))
     : 100;
   const completed = durationSeconds === 0 || elapsedSeconds >= durationSeconds;
+  if (
+    operation.operation_status === (completed ? TimedOperationStatus.COMPLETED : TimedOperationStatus.RUNNING)
+    && operation.elapsed_seconds === Number(elapsedSeconds.toFixed(2))
+    && operation.remaining_seconds === Number(Math.max(0, durationSeconds - elapsedSeconds).toFixed(2))
+    && operation.progress_percent === progressPercent
+  ) {
+    return operation;
+  }
   return {
     ...operation,
     operation_status: completed ? TimedOperationStatus.COMPLETED : TimedOperationStatus.RUNNING,

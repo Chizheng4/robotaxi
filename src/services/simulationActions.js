@@ -11,10 +11,16 @@ const tickIntervalRef = { current: null };
 const depsRef = { engine: null, loop: null, getBusinessData: null };
 const BLOCKING_RUN_STATUSES = ["RUNNING", "DRAINING", "PAUSED"];
 
-function debug(msg) {
+function debug(msg, run = null) {
   if (typeof window !== 'undefined') {
+    const config = getSimulationPerformanceConfig(run);
+    if (!config.debug_log_enabled && !window.__simDebugEnabled) return;
     if (!window.__simDebug) window.__simDebug = [];
     window.__simDebug.push(new Date().toLocaleTimeString() + " " + msg);
+    const limit = Math.max(50, Number(config.debug_log_limit) || 500);
+    if (window.__simDebug.length > limit) {
+      window.__simDebug.splice(0, window.__simDebug.length - limit);
+    }
   }
 }
 
@@ -173,7 +179,7 @@ export function useSimulationActions({
       const businessData = getBD ? getBD() : null;
       for (let i = 0; i < ticksPerCycle; i++) {
         if (!["RUNNING", "DRAINING"].includes(nextRun.simulation_status)) break;
-        debug("Tick #" + (nextRun.current_global_tick+1) + " | time=" + nextRun.current_time);
+        debug("Tick #" + (nextRun.current_global_tick+1) + " | time=" + nextRun.current_time, nextRun);
         const tickResult = loop.executeTick({
           simulationRun: nextRun,
           policySnapshot: nextRun.simulation_policy_snapshot,
@@ -189,7 +195,11 @@ export function useSimulationActions({
           tickResult.demandResult,
           tickResult.executionResults,
           tickResult.tickEventSummary,
-          { phase: tickResult.phase, workflowActionCount: tickResult.workflowActionCount }
+          {
+            phase: tickResult.phase,
+            workflowActionCount: tickResult.workflowActionCount,
+            performanceConfig: getSimulationPerformanceConfig(nextRun),
+          }
         );
         batchEvents.push(...result.events);
         nextRun = result.simulationRun;
@@ -198,8 +208,11 @@ export function useSimulationActions({
           break;
         }
       }
-      debug("Tick批次完成: " + batchEvents.length + "条事件 | 新状态=" + nextRun.simulation_status);
-      if (batchEvents.length) setSimulationEvents((evts) => [...batchEvents, ...evts]);
+      debug("Tick批次完成: " + batchEvents.length + "条事件 | 新状态=" + nextRun.simulation_status, nextRun);
+      if (batchEvents.length) {
+        const maxEvents = getMaxEventsInMemory(nextRun);
+        setSimulationEvents((evts) => trimSimulationEvents([...batchEvents, ...evts], maxEvents));
+      }
       return prev.map((r) => r.simulation_run_id === runId ? nextRun : r);
     });
   }
@@ -224,6 +237,10 @@ function getSimulationSpeedConfig(run) {
   return run?.simulation_policy_snapshot?.simulation_speed_config || {};
 }
 
+function getSimulationPerformanceConfig(run) {
+  return run?.simulation_policy_snapshot?.simulation_performance_config || {};
+}
+
 function getTicksPerRealCycle(run) {
   const value = Number(getSimulationSpeedConfig(run).ticks_per_real_cycle ?? run?.simulation_policy_snapshot?.ticks_per_real_cycle);
   return Number.isFinite(value) && value > 0 ? Math.min(Math.floor(value), 1000) : 300;
@@ -236,4 +253,13 @@ function getRealCycleIntervalMs(run) {
 function normalizeRealCycleIntervalMs(value) {
   const ms = Number(value);
   return Number.isFinite(ms) && ms >= 16 ? Math.min(Math.floor(ms), 1000) : 50;
+}
+
+function getMaxEventsInMemory(run) {
+  const value = Number(getSimulationPerformanceConfig(run).max_events_in_memory);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 2000;
+}
+
+function trimSimulationEvents(events, maxEvents) {
+  return events.length > maxEvents ? events.slice(0, maxEvents) : events;
 }

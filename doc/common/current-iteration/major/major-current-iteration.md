@@ -2,12 +2,13 @@
 
 当前大版本：暂无进行中的大版本。
 
-最近完成大版本：`v032 统一时间世界与时间驱动执行引擎`。
+最近完成大版本：`v033.0 高性能模拟运行内核与扩展规范`。
 
 最近完成历史方案：
 
 - `doc/common/iteration-history/major/v032-unified-time-world-design.md`
 - `doc/common/iteration-history/major/v032-auto-execution-plan.md`
+- `doc/common/iteration-history/major/v033.0-high-performance-simulation-runtime.md`
 
 后续待执行方案：`operating-metrics-model-pending-plan.md`。
 

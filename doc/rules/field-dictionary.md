@@ -1138,6 +1138,14 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |tick_minutes|Tick 时长（分钟，兼容）|持久化字段|兼容展示字段；统一时间推进以 tick_seconds 为准|
 |tick_seconds|Tick 时长（秒）|持久化字段|每次 Tick 推进的统一模拟秒数，是模拟世界时间主配置|
 |simulation_speed_config|模拟推进速度配置|持久化字段|控制真实执行周期和每周期批量推进的 Tick 数，不改变模拟世界 Tick 秒数|
+|simulation_performance_config|模拟性能配置|持久化字段|控制事件记录、检查点、界面快照、持久化防抖和调试日志上限|
+|event_recording_mode|事件记录模式|持久化字段|BUSINESS_AND_CHECKPOINT / VERBOSE_TICK|
+|checkpoint_interval_seconds|检查点周期（秒）|持久化字段|空 Tick 聚合检查点事件的模拟秒周期|
+|ui_snapshot_interval_seconds|界面快照周期（秒）|持久化字段|行驶进度等高频展示快照的最小更新周期|
+|max_events_in_memory|内存事件上限|持久化字段|前端内存中保留的模拟事件上限|
+|persistence_debounce_ms|持久化防抖（毫秒）|持久化字段|运行态快照写入 IndexedDB 的防抖时间|
+|debug_log_enabled|调试日志开关|持久化字段|是否写入 window.__simDebug 调试日志|
+|debug_log_limit|调试日志上限|持久化字段|调试日志最多保留条数|
 |real_cycle_interval_ms|真实执行周期（毫秒）|持久化字段|前端执行一次模拟推进批次的真实时间间隔|
 |ticks_per_real_cycle|每周期推进 Tick 数|持久化字段|每个真实执行周期批量推进的模拟 Tick 数|
 |simulation_days|模拟天数|持久化字段|一次模拟运行的总天数|
@@ -1381,6 +1389,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |TRIP_TRAVEL_COMPLETE|履约行驶时间到达|event_type / action_type|
 |ORDER_ASSIGNMENT_TIMEOUT|订单分配等待超时|operation_type|
 |ROBOTAXI_ASSIGNMENT_TIMEOUT|Robotaxi 分配等待超时|reason_type|
+|BUSINESS_AND_CHECKPOINT|业务事件与检查点|event_recording_mode|
+|VERBOSE_TICK|详细 Tick 事件|event_recording_mode|
 |ORDER_CREATED|服务订单已创建|result_type|
 |SERVICE_ORDER_CREATE_FAILED|服务订单创建失败|result_type|
 |PRICING_COMPLETED|定价完成|result_type|

@@ -267,6 +267,9 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   const phase = lifecycle.phase || simulationRun.simulation_status || SimulationStatus.RUNNING;
   const isDraining = phase === SimulationStatus.DRAINING;
   const workflowActionCount = Number(lifecycle.workflowActionCount) || 0;
+  const performanceConfig = lifecycle.performanceConfig || {};
+  const verboseTickEvents = performanceConfig.event_recording_mode === "VERBOSE_TICK";
+  const checkpointIntervalSeconds = Math.max(1, Number(performanceConfig.checkpoint_interval_seconds) || 600);
   // 更新场景
   let updated = updateSimulationRunScene(simulationRun, tickContext, supplyResult, demandResult);
 
@@ -278,8 +281,10 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   const runId = updated.simulation_run_id;
 
   // === Phase 1: TICK_STARTED ===
-  events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_STARTED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
-    `Tick #${tick} 开始 | ${time} | ${isDraining ? "工作流排空" : `时段 ${tickContext?.period_type || tickContext?.time_period || "N/A"}`}`));
+  if (verboseTickEvents) {
+    events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_STARTED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
+      `Tick #${tick} 开始 | ${time} | ${isDraining ? "工作流排空" : `时段 ${tickContext?.period_type || tickContext?.time_period || "N/A"}`}`));
+  }
 
   // === Phase 2: SUPPLY_TRIGGER ===
   if (!isDraining && supplyResult) {
@@ -287,18 +292,22 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
     const noAction = supplyResult.no_action_count || 0;
     const readinessMsg = supplyResult.readiness_triggered ? '准入检查已触发' : '准入检查跳过';
     const deploymentMsg = supplyResult.deployment_triggered ? '投放已触发' : '投放跳过';
-    events.push(makeEvent(runId, day, time, dayT, tick, EventType.SUPPLY_TRIGGER_COMPLETED, EventSource.SUPPLY_TRIGGER,
-      triggered > 0 ? EventResult.SUCCESS : EventResult.NO_ACTION,
-      `供给侧触发：${readinessMsg}、${deploymentMsg} | 触发 ${triggered} 无动作 ${noAction}`));
+    if (verboseTickEvents || triggered > 0) {
+      events.push(makeEvent(runId, day, time, dayT, tick, EventType.SUPPLY_TRIGGER_COMPLETED, EventSource.SUPPLY_TRIGGER,
+        triggered > 0 ? EventResult.SUCCESS : EventResult.NO_ACTION,
+        `供给侧触发：${readinessMsg}、${deploymentMsg} | 触发 ${triggered} 无动作 ${noAction}`));
+    }
   }
 
   // === Phase 3: DEMAND_TRIGGER ===
   if (!isDraining && demandResult) {
     const count = demandResult.order_count || 0;
     const profileName = demandResult.demand_profile_id ? String(demandResult.demand_profile_id).replace(/^DP-/, '') : '无';
-    events.push(makeEvent(runId, day, time, dayT, tick, EventType.DEMAND_TRIGGER_COMPLETED, EventSource.DEMAND_TRIGGER,
-      count > 0 ? EventResult.SUCCESS : EventResult.NO_ACTION,
-      `需求侧触发：${count > 0 ? `生成 ${count} 个订单请求` : '当前时段无需求'}（配置 ${profileName}）`));
+    if (verboseTickEvents || count > 0) {
+      events.push(makeEvent(runId, day, time, dayT, tick, EventType.DEMAND_TRIGGER_COMPLETED, EventSource.DEMAND_TRIGGER,
+        count > 0 ? EventResult.SUCCESS : EventResult.NO_ACTION,
+        `需求侧触发：${count > 0 ? `生成 ${count} 个订单请求` : '当前时段无需求'}（配置 ${profileName}）`));
+    }
   }
 
   // === Phase 4: WORKFLOW + EXECUTION ===
@@ -344,8 +353,10 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   const succeeded = execResults.filter((r) => r.success).length;
   const failed = execResults.filter((r) => !r.success).length;
   updated = { ...updated, current_tick_event_summary: tickEventSummary || null };
-  events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
-    `Tick #${tick} 完成 | 创建 ${created} 订单 | 执行 ${execResults.length} 动作（成功 ${succeeded} / 失败 ${failed}）`));
+  if (verboseTickEvents || execResults.length > 0 || isCheckpointTick(tickContext, checkpointIntervalSeconds)) {
+    events.push(makeEvent(runId, day, time, dayT, tick, EventType.SIMULATION_TICK_COMPLETED, EventSource.SIMULATION_SYSTEM, EventResult.SUCCESS,
+      `Tick #${tick} 完成 | 创建 ${created} 订单 | 执行 ${execResults.length} 动作（成功 ${succeeded} / 失败 ${failed}）`));
+  }
 
   // 所有事件使用本 Tick 实际发生时刻，记录完成后再推进运行游标。
   updated = advanceTick(updated, { tickSeconds: tickContext?.tick_seconds, phase });
@@ -408,6 +419,11 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   }
 
   return { simulationRun: updated, events };
+}
+
+function isCheckpointTick(tickContext = {}, intervalSeconds) {
+  const seconds = Number(tickContext.current_simulation_seconds ?? tickContext.simulation_seconds ?? 0);
+  return Number.isFinite(seconds) && seconds % intervalSeconds === 0;
 }
 
 function createSimulationRunFailureSummary({

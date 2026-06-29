@@ -1,3 +1,17 @@
+## v033.0
+
+核心：建立高性能模拟运行内核与扩展规范，先解决高速运行卡顿的第一层根因。
+
+- 新增 `doc/rules/07-simulation-runtime-architecture-rules.md`，规定模拟运行定位、业务闭环唯一来源、时间语义、事件驱动优先、前端展示态与运行态分离、新业务接入合同和性能验收。
+- 更新 `AGENTS.md` 与 `doc/iteration-rules.md`，模拟运行、时间作业、自动工作流、业务生命周期和高速执行相关迭代必须读取新规则。
+- 新增 `simulation_performance_config`，统一配置事件记录模式、检查点周期、界面快照周期、内存事件上限、持久化防抖和调试日志上限。
+- 高速模拟默认使用 `BUSINESS_AND_CHECKPOINT` 事件模式，空 Tick 不再记录 Tick 开始/结束、供给无动作和需求无订单事件，只保留业务事件与检查点。
+- 调试日志默认关闭并限制保留数量，避免 `window.__simDebug` 随 Tick 无限增长。
+- 时间作业推进增加 `changed` 标识，终态或无变化作业不再触发无意义 state 写入。
+- 行驶进度展示按 `ui_snapshot_interval_seconds` 节流，时间作业到期时仍强制更新并继续调用原业务动作闭环。
+- 前端运行态持久化增加防抖，降低高速模拟时 IndexedDB / localStorage 写入压力。
+- 新增 `verify-v033-performance-runtime-contract.mjs` 并纳入提交前检查。
+
 ## v032.9
 
 核心：让运营准入和运营投放的触发周期对齐运营配置时间窗口，而不是按全天 0 点取模。

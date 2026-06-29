@@ -899,38 +899,42 @@ function App() {
   const detailCollapsed = Boolean(detailCollapsedByPage[activePage]);
   useEffect(() => {
     if (!runtimeHydrated) return;
-    saveRuntimeSnapshot({
-      operationalData,
-      readinessTasks,
-      deploymentTasks,
-      routeExecutions,
-      routePlanningRuns,
-      demandSimulationRuns,
-      serviceOrders,
-      pricingStrategyRuns,
-      pricingDecisions,
-      orderMatchingRuns,
-      orderMatchingDecisions,
-      trips,
-      taskEventLogs,
-      simulationPolicies,
-      workflowTimingProfiles,
-      businessTimingCalculationRuns,
-      costModelProfiles,
-      costCalculationRuns,
-      costRecords,
-      revenueCalculationRuns,
-      revenueRecords,
-      simulationRuns,
-      simulationEvents,
-      timedOperations,
-      activePage,
-      workspacePages,
-      detailCollapsedByPage,
-      pageSelections,
-      pageUiState
-    });
-    persistSimulationEvents(simulationEvents);
+    const debounceMs = getRuntimePersistenceDebounceMs(simulationPolicies);
+    const timerId = window.setTimeout(() => {
+      saveRuntimeSnapshot({
+        operationalData,
+        readinessTasks,
+        deploymentTasks,
+        routeExecutions,
+        routePlanningRuns,
+        demandSimulationRuns,
+        serviceOrders,
+        pricingStrategyRuns,
+        pricingDecisions,
+        orderMatchingRuns,
+        orderMatchingDecisions,
+        trips,
+        taskEventLogs,
+        simulationPolicies,
+        workflowTimingProfiles,
+        businessTimingCalculationRuns,
+        costModelProfiles,
+        costCalculationRuns,
+        costRecords,
+        revenueCalculationRuns,
+        revenueRecords,
+        simulationRuns,
+        simulationEvents,
+        timedOperations,
+        activePage,
+        workspacePages,
+        detailCollapsedByPage,
+        pageSelections,
+        pageUiState
+      });
+      persistSimulationEvents(simulationEvents);
+    }, debounceMs);
+    return () => window.clearTimeout(timerId);
   }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
 
   // ===== Simulation 控制 =====
@@ -4065,7 +4069,7 @@ function getDetailTabs(selectedType) {
     return [{
       key: "basic",
       label: "策略信息",
-      keys: ["simulation_policy_id", "policy_name", "policy_status", "tick_seconds", "tick_minutes", "simulation_days", "run_speed_level", "simulation_speed_config", "random_seed", "max_drain_ticks"]
+      keys: ["simulation_policy_id", "policy_name", "policy_status", "tick_seconds", "tick_minutes", "simulation_days", "run_speed_level", "simulation_speed_config", "simulation_performance_config", "random_seed", "max_drain_ticks"]
     }, {
       key: "time",
       label: "时间配置",
@@ -6507,6 +6511,11 @@ function saveRuntimeSnapshot(snapshot) {
   } catch (error) {
     // Local persistence is a convenience for this prototype; runtime should continue if storage is unavailable.
   }
+}
+function getRuntimePersistenceDebounceMs(simulationPolicies = []) {
+  const activePolicy = (simulationPolicies || []).find(item => item.policy_status === "ACTIVE") || simulationPolicies?.[0] || null;
+  const value = Number(activePolicy?.simulation_performance_config?.persistence_debounce_ms);
+  return Number.isFinite(value) && value >= 0 ? Math.min(Math.floor(value), 5000) : 800;
 }
 async function loadPersistedRuntimeSnapshot() {
   if (typeof indexedDB === "undefined") return null;

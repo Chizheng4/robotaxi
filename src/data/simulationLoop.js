@@ -64,13 +64,17 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     timedOperations: businessData?.timedOperations || [],
     timeContext: tickContext,
   });
-  if (businessData?.setTimedOperations) {
+  const performanceConfig = policySnapshot?.simulation_performance_config || {};
+  if (businessData?.setTimedOperations && timedOperationResult.changed) {
     businessData.setTimedOperations(timedOperationResult.timedOperations);
   }
   if (businessData) {
     applyTravelProgressFromTimedOperations({
       timedOperations: timedOperationResult.timedOperations,
       businessData,
+      tickContext,
+      performanceConfig,
+      force: timedOperationResult.dueOperations.length > 0,
     });
   }
   const workflowTimingProfile = getActiveWorkflowTimingProfile(businessData?.workflowTimingProfiles || []);
@@ -182,7 +186,8 @@ function buildTimedOperationActions(dueOperations = []) {
     }));
 }
 
-function applyTravelProgressFromTimedOperations({ timedOperations = [], businessData }) {
+function applyTravelProgressFromTimedOperations({ timedOperations = [], businessData, tickContext = {}, performanceConfig = {}, force = false }) {
+  if (!force && !isUiSnapshotTick(tickContext, performanceConfig)) return;
   const travelOperations = timedOperations.filter((operation) =>
     operation?.operation_type === "TRAVEL" &&
     ["RUNNING", "COMPLETED"].includes(operation.operation_status)
@@ -237,6 +242,12 @@ function applyTravelProgressFromTimedOperations({ timedOperations = [], business
   if (tripChanged && typeof businessData.setTrips === "function") {
     businessData.setTrips(() => nextTrips);
   }
+}
+
+function isUiSnapshotTick(tickContext = {}, performanceConfig = {}) {
+  const interval = Math.max(1, Number(performanceConfig.ui_snapshot_interval_seconds) || 30);
+  const seconds = Number(tickContext.current_simulation_seconds ?? tickContext.simulation_seconds ?? 0);
+  return Number.isFinite(seconds) && seconds % interval === 0;
 }
 
 /**
