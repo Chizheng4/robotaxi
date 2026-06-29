@@ -1449,6 +1449,107 @@ body {
   height: 28px;
 }
 
+.metric-experience-panel {
+  display: grid;
+  flex: none;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.metric-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.metric-panel-header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.metric-panel-header .ant-typography {
+  margin: 0;
+  font-size: var(--font-sm);
+}
+
+.metric-panel-header .ant-typography-secondary,
+.metric-panel-header > span {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.metric-card-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+.metric-summary-card {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 82px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: #fbfcfe;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.metric-summary-card:hover {
+  border-color: #c6d5f4;
+  background: #f8fbff;
+}
+
+.metric-summary-card span {
+  overflow: hidden;
+  color: #59616c;
+  font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-summary-card strong {
+  color: #20252c;
+  font-size: var(--font-lg);
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-summary-card small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-empty-summary {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: #fbfcfe;
+  font-size: var(--font-xs);
+}
+
+.metric-panel-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
 .record-page-new .ant-table {
   color: #252a31;
   font-weight: 400;
@@ -1837,5 +1938,9 @@ body {
 
   .filter-field.keyword-field {
     min-width: 250px;
+  }
+
+  .metric-card-grid {
+    grid-template-columns: repeat(3, minmax(128px, 1fr));
   }
 }

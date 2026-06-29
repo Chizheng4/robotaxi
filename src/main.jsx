@@ -171,6 +171,10 @@ const pageGroups = [
     key: "businessAnalysis",
     label: "经营分析管理",
     children: [
+      { key: "operatingMetricsOverview", label: "经营指标总览" },
+      { key: "financialMetrics", label: "财务指标" },
+      { key: "serviceMetrics", label: "服务指标" },
+      { key: "processDiagnostics", label: "过程诊断" },
       { key: "metricDefinitions", label: "指标定义" },
       { key: "metricObservations", label: "指标观测" },
       { key: "metricCalculationRuns", label: "指标计算记录" },
@@ -392,6 +396,26 @@ const tableConfig = {
     description: "记录每次收入记录生成的范围、状态、金额和错误。",
     columns: ["revenue_calculation_run_id", "simulation_run_id", "calculation_status", "calculation_progress_percent", "processed_object_count", "generated_revenue_record_count", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "error_count", "started_at", "completed_at"],
   },
+  operatingMetricsOverview: {
+    title: "经营指标总览",
+    description: "汇总模拟运行的核心收入、成本、利润、履约和效率指标。",
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"],
+  },
+  financialMetrics: {
+    title: "财务指标",
+    description: "展示收入、成本、利润、利润率和单均经营结果。",
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"],
+  },
+  serviceMetrics: {
+    title: "服务指标",
+    description: "展示订单创建、完成、取消和履约相关服务结果。",
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"],
+  },
+  processDiagnostics: {
+    title: "过程诊断",
+    description: "查看匹配、路径规划、履约、供给任务和数据质量的过程指标。",
+    columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "simulation_run_id"],
+  },
   metricDefinitions: {
     title: "指标定义",
     description: "指标定义明确经营指标的口径、公式、来源字段、窗口和质量规则。",
@@ -464,6 +488,10 @@ const pageObjectType = {
   costRecords: "costRecord",
   revenueRecords: "revenueRecord",
   revenueCalculationRuns: "revenueCalculationRun",
+  operatingMetricsOverview: "metricObservation",
+  financialMetrics: "metricObservation",
+  serviceMetrics: "metricObservation",
+  processDiagnostics: "metricObservation",
   metricDefinitions: "metricDefinition",
   metricCalculationRuns: "metricCalculationRun",
   metricObservations: "metricObservation",
@@ -557,6 +585,10 @@ const statusFieldByPage = {
   costRecords: "cost_type",
   revenueRecords: "revenue_type",
   revenueCalculationRuns: "calculation_status",
+  operatingMetricsOverview: "quality_status",
+  financialMetrics: "quality_status",
+  serviceMetrics: "quality_status",
+  processDiagnostics: "quality_status",
   metricDefinitions: "metric_status",
   metricCalculationRuns: "calculation_status",
   metricObservations: "quality_status",
@@ -600,6 +632,10 @@ const runtimeSnapshotDbName = "robotaxi.runtime.snapshot.v027";
 const runtimeSnapshotStoreName = "runtimeSnapshots";
 const persistedSimulationEventIds = new Set();
 const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null, objectType: null };
+const overviewMetricIds = ["OUTCOME-FIN-002", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-SERVICE-003", "OUTCOME-EFF-002"];
+const financialMetricIds = ["OUTCOME-FIN-001", "OUTCOME-FIN-002", "OUTCOME-FIN-003", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-FIN-006", "OUTCOME-EFF-001", "OUTCOME-EFF-002"];
+const serviceMetricIds = ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "OUTCOME-SERVICE-004", "PROCESS-TRIP-001"];
+const diagnosticMetricIds = ["PROCESS-MATCH-001", "PROCESS-ROUTE-001", "PROCESS-TRIP-001", "PROCESS-SUPPLY-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "QUALITY-DATA-001"];
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
   "RPS-ABNORMAL-SAME-SA": "RPS-002",
@@ -681,6 +717,7 @@ function App() {
     ...validateReadinessCheckTasks(data),
     ...validateDeploymentTasks(data),
   ], [data, initialValidations]);
+  const metricDisplayRows = useMemo(() => createMetricDisplayRows(metricObservations, metricDefinitions, simulationRuns), [metricDefinitions, metricObservations, simulationRuns]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
@@ -802,14 +839,18 @@ function App() {
     costRecords,
     revenueCalculationRuns,
     revenueRecords,
+    operatingMetricsOverview: filterMetricRowsForPage(metricDisplayRows, "operatingMetricsOverview"),
+    financialMetrics: filterMetricRowsForPage(metricDisplayRows, "financialMetrics"),
+    serviceMetrics: filterMetricRowsForPage(metricDisplayRows, "serviceMetrics"),
+    processDiagnostics: filterMetricRowsForPage(metricDisplayRows, "processDiagnostics"),
     metricDefinitions,
     metricCalculationRuns,
-    metricObservations,
+    metricObservations: metricDisplayRows,
     simulationRuns,
     simulationEvents,
     timedOperations,
     validations,
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDefinitions, metricCalculationRuns, metricObservations, simulationRuns, simulationEvents, timedOperations, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, simulationRuns, simulationEvents, timedOperations, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -3359,6 +3400,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
+  const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
   const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
@@ -3531,6 +3573,14 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <Button size="small" onClick={actions.clearEndedTimedOperations}>清空已结束作业</Button>
           <Button size="small" danger onClick={actions.requestClearAllTimedOperations}>清空全部作业</Button>
         </div>
+      )}
+      {isMetricAnalysisPage && (
+        <MetricExperiencePanel
+          page={page}
+          rows={displayRows}
+          allRows={rows}
+          onSelect={(row) => onSelect(objectType, row[idField])}
+        />
       )}
       <div className="record-table-section" ref={tableSectionRef}>
         <Table
@@ -4439,6 +4489,43 @@ function RowActionGroup({ children }) {
   return <Space size={4} className="row-action-group">{children}</Space>;
 }
 
+function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
+  const latestRows = createLatestMetricRows(rows);
+  const overviewRows = page === "operatingMetricsOverview"
+    ? overviewMetricIds.map((id) => latestRows.find((row) => row.metric_definition_id === id)).filter(Boolean)
+    : latestRows.slice(0, 6);
+  const warningRows = allRows.filter((row) => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
+  const latestRunId = latestRows[0]?.simulation_run_id || allRows[0]?.simulation_run_id || "无";
+  return (
+    <div className="metric-experience-panel">
+      <div className="metric-panel-header">
+        <div>
+          <Text strong>{tableConfig[page]?.title || "经营指标"}</Text>
+          <Text type="secondary">{tableConfig[page]?.description || "基于模拟业务事实生成的经营指标。"}</Text>
+        </div>
+        <span>最新模拟运行：{latestRunId}</span>
+      </div>
+      <div className="metric-card-grid">
+        {overviewRows.length > 0 ? overviewRows.map((row) => (
+          <button key={row.metric_observation_id} className="metric-summary-card" onClick={() => onSelect(row)}>
+            <span>{row.metric_name_cn}</span>
+            <strong>{formatMetricDisplayValue(row)}</strong>
+            <small>{row.quality_status === "PASS" ? "数据通过" : row.quality_reason || "存在质量提示"}</small>
+          </button>
+        )) : (
+          <div className="metric-empty-summary">暂无指标结果，完成一次模拟并生成成本、收入后会自动计算。</div>
+        )}
+      </div>
+      <div className="metric-panel-footer">
+        <span>指标数 {allRows.length}</span>
+        <span>当前筛选 {rows.length}</span>
+        <span>质量提示 {warningRows.length}</span>
+        {warningRows[0] && <span>{warningRows[0].metric_name_cn}：{warningRows[0].quality_reason}</span>}
+      </div>
+    </div>
+  );
+}
+
 function renderViewDetailAction(row, actions) {
   return (
     <RowActionButton
@@ -4994,6 +5081,13 @@ function isStatusField(key) {
     "payment_status",
     "simulation_status",
     "business_timing_calculation_status",
+    "calculation_status",
+    "metric_status",
+    "data_readiness",
+    "quality_status",
+    "metric_calculation_status",
+    "cost_calculation_status",
+    "revenue_calculation_status",
     "policy_status",
     "profile_status",
     "rule_status",
@@ -5149,7 +5243,7 @@ async function bootstrap() {
 		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"),
 		    import("./data/costModelCalculator.js?v=20260625-v029-1"),
 		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
-		    import("./data/metricCalculator.js?v=20260629-v034-1"),
+		    import("./data/metricCalculator.js?v=20260629-v034-5"),
 		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
 		    import("./services/routePlanningService.js?v=20260625-v029-4"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
@@ -6831,6 +6925,68 @@ function filterRecordRows(rows, columns, statusField, filters) {
     const objectTypeMatched = !filters.objectType || row.object_type === filters.objectType;
     return keywordMatched && statusMatched && triggerMatched && objectTypeMatched;
   });
+}
+
+function createMetricDisplayRows(metricObservations = [], metricDefinitions = [], simulationRuns = []) {
+  const definitionById = new Map((metricDefinitions || []).map((definition) => [definition.metric_definition_id, definition]));
+  const runById = new Map((simulationRuns || []).map((run) => [run.simulation_run_id, run]));
+  return (metricObservations || []).map((observation) => {
+    const definition = definitionById.get(observation.metric_definition_id) || {};
+    const run = runById.get(observation.simulation_run_id) || {};
+    return {
+      ...definition,
+      ...observation,
+      metric_name_cn: definition.metric_name_cn || observation.metric_definition_id,
+      metric_name_en: definition.metric_name_en || observation.metric_definition_id,
+      metric_domain: definition.metric_domain || "QUALITY",
+      metric_layer: definition.metric_layer || "QUALITY",
+      calculation_formula: definition.calculation_formula || "无",
+      business_definition: definition.business_definition || "无",
+      display_unit: definition.display_unit || observation.metric_unit,
+      simulation_name: run.simulation_name,
+      completed_time: run.completed_time,
+      completed_at: run.completed_at,
+    };
+  }).sort((a, b) => {
+    const runOrder = String(b.simulation_run_id || "").localeCompare(String(a.simulation_run_id || ""));
+    if (runOrder !== 0) return runOrder;
+    return String(a.metric_definition_id || "").localeCompare(String(b.metric_definition_id || ""));
+  });
+}
+
+function filterMetricRowsForPage(metricRows = [], page) {
+  if (page === "operatingMetricsOverview") return pickLatestMetricRows(metricRows, overviewMetricIds);
+  if (page === "financialMetrics") return pickLatestMetricRows(metricRows, financialMetricIds);
+  if (page === "serviceMetrics") return pickLatestMetricRows(metricRows, serviceMetricIds);
+  if (page === "processDiagnostics") return pickLatestMetricRows(metricRows, diagnosticMetricIds);
+  return metricRows;
+}
+
+function pickLatestMetricRows(metricRows = [], metricIds = []) {
+  const latestByMetricId = new Map();
+  metricRows.forEach((row) => {
+    if (!metricIds.includes(row.metric_definition_id)) return;
+    if (!latestByMetricId.has(row.metric_definition_id)) latestByMetricId.set(row.metric_definition_id, row);
+  });
+  return metricIds.map((id) => latestByMetricId.get(id)).filter(Boolean);
+}
+
+function createLatestMetricRows(rows = []) {
+  const latestByMetricId = new Map();
+  rows.forEach((row) => {
+    if (!latestByMetricId.has(row.metric_definition_id)) latestByMetricId.set(row.metric_definition_id, row);
+  });
+  return [...latestByMetricId.values()];
+}
+
+function formatMetricDisplayValue(row) {
+  if (!row || row.metric_value === null || row.metric_value === undefined) return "无数据";
+  const value = Number(row.metric_value);
+  if (row.metric_unit === "currency") return `¥${value.toFixed(2)}`;
+  if (row.metric_unit === "percent") return `${(value * 100).toFixed(1)}%`;
+  if (row.metric_unit === "km") return `${value.toFixed(2)} km`;
+  if (row.metric_unit === "second") return `${Math.round(value)} 秒`;
+  return Number.isFinite(value) ? String(value) : String(row.metric_value);
 }
 
 function getOrderedStatusValues(page) {

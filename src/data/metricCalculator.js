@@ -1,4 +1,5 @@
 export const MetricLayer = {
+  PROCESS: "PROCESS",
   OUTCOME: "OUTCOME",
   QUALITY: "QUALITY",
 };
@@ -6,6 +7,10 @@ export const MetricLayer = {
 export const MetricDomain = {
   FINANCE: "FINANCE",
   SERVICE: "SERVICE",
+  EFFICIENCY: "EFFICIENCY",
+  MATCHING: "MATCHING",
+  ROUTING: "ROUTING",
+  SUPPLY: "SUPPLY",
   QUALITY: "QUALITY",
 };
 
@@ -27,6 +32,8 @@ export const MetricUnit = {
   CURRENCY: "currency",
   PERCENT: "percent",
   COUNT: "count",
+  SECOND: "second",
+  KM: "km",
 };
 
 export const defaultMetricDefinitions = [
@@ -42,6 +49,12 @@ export const defaultMetricDefinitions = [
   definition("OUTCOME-SERVICE-004", "订单取消率", "Order Cancellation Rate", MetricDomain.SERVICE, "Cancelled Orders / Created Orders", ["ServiceOrder"], ["order_status"], MetricUnit.PERCENT, false),
   definition("OUTCOME-EFF-001", "单均收入", "Revenue per Completed Order", MetricDomain.FINANCE, "Collected Revenue / Completed Orders", ["RevenueRecord", "ServiceOrder"], ["revenue_amount", "order_status"], MetricUnit.CURRENCY, true),
   definition("OUTCOME-EFF-002", "单均成本", "Cost per Completed Order", MetricDomain.FINANCE, "Total Operating Cost / Completed Orders", ["CostRecord", "ServiceOrder"], ["cost_amount", "order_status"], MetricUnit.CURRENCY, false),
+  definition("PROCESS-MATCH-001", "Robotaxi 分配成功率", "Robotaxi Assignment Success Rate", MetricDomain.MATCHING, "Assigned Orders / Created Orders", ["ServiceOrder", "OrderMatchingDecision"], ["order_status", "selected_robotaxi_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
+  definition("PROCESS-ROUTE-001", "路径规划成功率", "Route Planning Success Rate", MetricDomain.ROUTING, "Successful RoutePlanningRun / RoutePlanningRun", ["RoutePlanningRun"], ["planning_result", "result_route_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
+  definition("PROCESS-TRIP-001", "履约完成率", "Trip Completion Rate", MetricDomain.SERVICE, "Completed Trips / Trips", ["Trip"], ["trip_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
+  definition("PROCESS-SUPPLY-001", "供给任务完成率", "Supply Task Completion Rate", MetricDomain.SUPPLY, "Completed Supply Tasks / Supply Tasks", ["ReadinessTask", "DeploymentTask", "RouteExecution"], ["task_status", "execution_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
+  definition("PROCESS-EFF-001", "平均履约距离", "Average Fulfillment Distance", MetricDomain.EFFICIENCY, "sum(Trip.total_distance_km) / Completed Trips", ["Trip"], ["total_distance_km", "trip_status"], MetricUnit.KM, false, MetricLayer.PROCESS),
+  definition("PROCESS-EFF-002", "平均履约耗时", "Average Fulfillment Duration", MetricDomain.EFFICIENCY, "sum(Trip.time_elapsed) / Completed Trips", ["Trip"], ["time_elapsed", "trip_status"], MetricUnit.SECOND, false, MetricLayer.PROCESS),
   definition("QUALITY-DATA-001", "关键数据完整率", "Critical Data Completeness Rate", MetricDomain.QUALITY, "complete critical inputs / required critical inputs", ["SimulationRun", "RevenueRecord", "CostRecord", "ServiceOrder"], ["cost_calculation_status", "revenue_calculation_status", "simulation_created_at"], MetricUnit.PERCENT, true, MetricLayer.QUALITY),
 ];
 
@@ -133,6 +146,12 @@ function calculateObservation(metricDefinition, context, sequence) {
     "OUTCOME-SERVICE-004": () => ratio(cancelledOrders(context).length, serviceOrders(context).length),
     "OUTCOME-EFF-001": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE"), completedOrders(context).length),
     "OUTCOME-EFF-002": () => ratio(sumCost(context.costRecords), completedOrders(context).length),
+    "PROCESS-MATCH-001": () => ratio(assignedOrders(context).length, serviceOrders(context).length),
+    "PROCESS-ROUTE-001": () => ratio(successfulRoutePlanningRuns(context).length, routePlanningRuns(context).length),
+    "PROCESS-TRIP-001": () => ratio(completedTrips(context).length, trips(context).length),
+    "PROCESS-SUPPLY-001": () => ratio(completedSupplyObjects(context).length, supplyObjects(context).length),
+    "PROCESS-EFF-001": () => ratio(sumTripDistance(completedTrips(context)), completedTrips(context).length),
+    "PROCESS-EFF-002": () => ratio(sumTripDurationSeconds(completedTrips(context)), completedTrips(context).length),
     "QUALITY-DATA-001": () => calculateCriticalDataCompleteness(context),
   };
   const rawValue = calculators[metricDefinition.metric_definition_id]?.();
@@ -257,6 +276,68 @@ function cancelledOrders(context) {
   return serviceOrders(context).filter((order) => order.order_status === "CANCELLED");
 }
 
+function assignedOrders(context) {
+  const assignedOrderIds = new Set((context.scope?.orderMatchingDecisions || [])
+    .filter((decision) => Boolean(decision.selected_robotaxi_id))
+    .map((decision) => decision.service_order_id)
+    .filter(Boolean));
+  return serviceOrders(context).filter((order) => Boolean(order.matched_robotaxi_id || order.robotaxi_id || order.trip_id || assignedOrderIds.has(order.service_order_id)));
+}
+
+function routePlanningRuns(context) {
+  return context.scope?.routePlanningRuns || [];
+}
+
+function successfulRoutePlanningRuns(context) {
+  return routePlanningRuns(context).filter((run) => run.planning_result === "SUCCESS" || Boolean(run.result_route_id));
+}
+
+function trips(context) {
+  return context.scope?.trips || [];
+}
+
+function completedTrips(context) {
+  return trips(context).filter((trip) => trip.trip_status === "COMPLETED");
+}
+
+function supplyObjects(context) {
+  return [
+    ...(context.scope?.readinessTasks || []),
+    ...(context.scope?.deploymentTasks || []),
+    ...(context.scope?.routeExecutions || []),
+  ];
+}
+
+function completedSupplyObjects(context) {
+  return supplyObjects(context).filter((item) => (
+    ["COMPLETED", "PASSED", "ARRIVED"].includes(item.task_status)
+    || ["COMPLETED", "ARRIVED"].includes(item.execution_status)
+  ));
+}
+
+function sumTripDistance(records = []) {
+  return Number(records.reduce((sum, trip) => sum + Number(trip.total_distance_km || trip.trip_total_distance_km || 0), 0).toFixed(2));
+}
+
+function sumTripDurationSeconds(records = []) {
+  return Number(records.reduce((sum, trip) => sum + normalizeDurationSeconds(trip.time_elapsed ?? trip.trip_total_duration_min ?? trip.estimated_duration_min), 0).toFixed(2));
+}
+
+function normalizeDurationSeconds(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  if (typeof value === "string") {
+    const text = value.trim();
+    const hourMinuteSecond = text.match(/^(\d+):(\d+):(\d+)$/);
+    if (hourMinuteSecond) {
+      return Number(hourMinuteSecond[1]) * 3600 + Number(hourMinuteSecond[2]) * 60 + Number(hourMinuteSecond[3]);
+    }
+    const minuteMatch = text.match(/^([\d.]+)\s*min/);
+    if (minuteMatch) return Number(minuteMatch[1]) * 60;
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
 function calculateCriticalDataCompleteness(context) {
   const checks = [
     Boolean(context.simulationRun.simulation_run_id),
@@ -286,6 +367,12 @@ function sourceRecordCount(metricDefinition, context) {
     if (objectType === "RevenueRecord") return count + context.revenueRecords.length;
     if (objectType === "CostRecord") return count + context.costRecords.length;
     if (objectType === "ServiceOrder") return count + serviceOrders(context).length;
+    if (objectType === "OrderMatchingDecision") return count + (context.scope?.orderMatchingDecisions?.length || 0);
+    if (objectType === "RoutePlanningRun") return count + routePlanningRuns(context).length;
+    if (objectType === "Trip") return count + trips(context).length;
+    if (objectType === "ReadinessTask") return count + (context.scope?.readinessTasks?.length || 0);
+    if (objectType === "DeploymentTask") return count + (context.scope?.deploymentTasks?.length || 0);
+    if (objectType === "RouteExecution") return count + (context.scope?.routeExecutions?.length || 0);
     return count;
   }, 0);
 }
@@ -300,6 +387,24 @@ function sourceObjectRefs(metricDefinition, context) {
   }
   if ((metricDefinition.source_objects || []).includes("ServiceOrder")) {
     refs.push(...serviceOrders(context).slice(0, 20).map((order) => ({ object_type: "serviceOrder", object_id: order.service_order_id })));
+  }
+  if ((metricDefinition.source_objects || []).includes("OrderMatchingDecision")) {
+    refs.push(...(context.scope?.orderMatchingDecisions || []).slice(0, 20).map((decision) => ({ object_type: "orderMatchingDecision", object_id: decision.order_matching_decision_id })));
+  }
+  if ((metricDefinition.source_objects || []).includes("RoutePlanningRun")) {
+    refs.push(...routePlanningRuns(context).slice(0, 20).map((run) => ({ object_type: "routePlanningRun", object_id: run.route_planning_run_id })));
+  }
+  if ((metricDefinition.source_objects || []).includes("Trip")) {
+    refs.push(...trips(context).slice(0, 20).map((trip) => ({ object_type: "trip", object_id: trip.trip_id })));
+  }
+  if ((metricDefinition.source_objects || []).includes("ReadinessTask")) {
+    refs.push(...(context.scope?.readinessTasks || []).slice(0, 20).map((task) => ({ object_type: "readinessTask", object_id: task.task_id })));
+  }
+  if ((metricDefinition.source_objects || []).includes("DeploymentTask")) {
+    refs.push(...(context.scope?.deploymentTasks || []).slice(0, 20).map((task) => ({ object_type: "deploymentTask", object_id: task.task_id })));
+  }
+  if ((metricDefinition.source_objects || []).includes("RouteExecution")) {
+    refs.push(...(context.scope?.routeExecutions || []).slice(0, 20).map((execution) => ({ object_type: "routeExecution", object_id: execution.route_execution_id })));
   }
   return refs;
 }

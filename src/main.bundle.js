@@ -222,6 +222,18 @@ const pageGroups = [{
   key: "businessAnalysis",
   label: "经营分析管理",
   children: [{
+    key: "operatingMetricsOverview",
+    label: "经营指标总览"
+  }, {
+    key: "financialMetrics",
+    label: "财务指标"
+  }, {
+    key: "serviceMetrics",
+    label: "服务指标"
+  }, {
+    key: "processDiagnostics",
+    label: "过程诊断"
+  }, {
     key: "metricDefinitions",
     label: "指标定义"
   }, {
@@ -463,6 +475,26 @@ const tableConfig = {
     description: "记录每次收入记录生成的范围、状态、金额和错误。",
     columns: ["revenue_calculation_run_id", "simulation_run_id", "calculation_status", "calculation_progress_percent", "processed_object_count", "generated_revenue_record_count", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "error_count", "started_at", "completed_at"]
   },
+  operatingMetricsOverview: {
+    title: "经营指标总览",
+    description: "汇总模拟运行的核心收入、成本、利润、履约和效率指标。",
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"]
+  },
+  financialMetrics: {
+    title: "财务指标",
+    description: "展示收入、成本、利润、利润率和单均经营结果。",
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"]
+  },
+  serviceMetrics: {
+    title: "服务指标",
+    description: "展示订单创建、完成、取消和履约相关服务结果。",
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"]
+  },
+  processDiagnostics: {
+    title: "过程诊断",
+    description: "查看匹配、路径规划、履约、供给任务和数据质量的过程指标。",
+    columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "simulation_run_id"]
+  },
   metricDefinitions: {
     title: "指标定义",
     description: "指标定义明确经营指标的口径、公式、来源字段、窗口和质量规则。",
@@ -534,6 +566,10 @@ const pageObjectType = {
   costRecords: "costRecord",
   revenueRecords: "revenueRecord",
   revenueCalculationRuns: "revenueCalculationRun",
+  operatingMetricsOverview: "metricObservation",
+  financialMetrics: "metricObservation",
+  serviceMetrics: "metricObservation",
+  processDiagnostics: "metricObservation",
   metricDefinitions: "metricDefinition",
   metricCalculationRuns: "metricCalculationRun",
   metricObservations: "metricObservation",
@@ -625,6 +661,10 @@ const statusFieldByPage = {
   costRecords: "cost_type",
   revenueRecords: "revenue_type",
   revenueCalculationRuns: "calculation_status",
+  operatingMetricsOverview: "quality_status",
+  financialMetrics: "quality_status",
+  serviceMetrics: "quality_status",
+  processDiagnostics: "quality_status",
   metricDefinitions: "metric_status",
   metricCalculationRuns: "calculation_status",
   metricObservations: "quality_status",
@@ -657,6 +697,10 @@ const defaultPageFilters = {
   triggerType: null,
   objectType: null
 };
+const overviewMetricIds = ["OUTCOME-FIN-002", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-SERVICE-003", "OUTCOME-EFF-002"];
+const financialMetricIds = ["OUTCOME-FIN-001", "OUTCOME-FIN-002", "OUTCOME-FIN-003", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-FIN-006", "OUTCOME-EFF-001", "OUTCOME-EFF-002"];
+const serviceMetricIds = ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "OUTCOME-SERVICE-004", "PROCESS-TRIP-001"];
+const diagnosticMetricIds = ["PROCESS-MATCH-001", "PROCESS-ROUTE-001", "PROCESS-TRIP-001", "PROCESS-SUPPLY-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "QUALITY-DATA-001"];
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
   "RPS-ABNORMAL-SAME-SA": "RPS-002"
@@ -725,6 +769,7 @@ function App() {
     taskEventLogs
   }), [demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips]);
   const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateServiceOrders(data), ...validatePricing(data), ...validateOrderMatching(data), ...validateTrips(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
+  const metricDisplayRows = useMemo(() => createMetricDisplayRows(metricObservations, metricDefinitions, simulationRuns), [metricDefinitions, metricObservations, simulationRuns]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
@@ -845,14 +890,18 @@ function App() {
     costRecords,
     revenueCalculationRuns,
     revenueRecords,
+    operatingMetricsOverview: filterMetricRowsForPage(metricDisplayRows, "operatingMetricsOverview"),
+    financialMetrics: filterMetricRowsForPage(metricDisplayRows, "financialMetrics"),
+    serviceMetrics: filterMetricRowsForPage(metricDisplayRows, "serviceMetrics"),
+    processDiagnostics: filterMetricRowsForPage(metricDisplayRows, "processDiagnostics"),
     metricDefinitions,
     metricCalculationRuns,
-    metricObservations,
+    metricObservations: metricDisplayRows,
     simulationRuns,
     simulationEvents,
     timedOperations,
     validations
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDefinitions, metricCalculationRuns, metricObservations, simulationRuns, simulationEvents, timedOperations, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, simulationRuns, simulationEvents, timedOperations, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -3392,6 +3441,7 @@ function RecordTable({
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
+  const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
   const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
@@ -3573,7 +3623,12 @@ function RecordTable({
     size: "small",
     danger: true,
     onClick: actions.requestClearAllTimedOperations
-  }, "\u6E05\u7A7A\u5168\u90E8\u4F5C\u4E1A")), /*#__PURE__*/React.createElement("div", {
+  }, "\u6E05\u7A7A\u5168\u90E8\u4F5C\u4E1A")), isMetricAnalysisPage && /*#__PURE__*/React.createElement(MetricExperiencePanel, {
+    page: page,
+    rows: displayRows,
+    allRows: rows,
+    onSelect: row => onSelect(objectType, row[idField])
+  }), /*#__PURE__*/React.createElement("div", {
     className: "record-table-section",
     ref: tableSectionRef
   }, /*#__PURE__*/React.createElement(Table, {
@@ -4809,6 +4864,36 @@ function RowActionGroup({
     className: "row-action-group"
   }, children);
 }
+function MetricExperiencePanel({
+  page,
+  rows = [],
+  allRows = [],
+  onSelect
+}) {
+  const latestRows = createLatestMetricRows(rows);
+  const overviewRows = page === "operatingMetricsOverview" ? overviewMetricIds.map(id => latestRows.find(row => row.metric_definition_id === id)).filter(Boolean) : latestRows.slice(0, 6);
+  const warningRows = allRows.filter(row => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
+  const latestRunId = latestRows[0]?.simulation_run_id || allRows[0]?.simulation_run_id || "无";
+  return /*#__PURE__*/React.createElement("div", {
+    className: "metric-experience-panel"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "metric-panel-header"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Text, {
+    strong: true
+  }, tableConfig[page]?.title || "经营指标"), /*#__PURE__*/React.createElement(Text, {
+    type: "secondary"
+  }, tableConfig[page]?.description || "基于模拟业务事实生成的经营指标。")), /*#__PURE__*/React.createElement("span", null, "\u6700\u65B0\u6A21\u62DF\u8FD0\u884C\uFF1A", latestRunId)), /*#__PURE__*/React.createElement("div", {
+    className: "metric-card-grid"
+  }, overviewRows.length > 0 ? overviewRows.map(row => /*#__PURE__*/React.createElement("button", {
+    key: row.metric_observation_id,
+    className: "metric-summary-card",
+    onClick: () => onSelect(row)
+  }, /*#__PURE__*/React.createElement("span", null, row.metric_name_cn), /*#__PURE__*/React.createElement("strong", null, formatMetricDisplayValue(row)), /*#__PURE__*/React.createElement("small", null, row.quality_status === "PASS" ? "数据通过" : row.quality_reason || "存在质量提示"))) : /*#__PURE__*/React.createElement("div", {
+    className: "metric-empty-summary"
+  }, "\u6682\u65E0\u6307\u6807\u7ED3\u679C\uFF0C\u5B8C\u6210\u4E00\u6B21\u6A21\u62DF\u5E76\u751F\u6210\u6210\u672C\u3001\u6536\u5165\u540E\u4F1A\u81EA\u52A8\u8BA1\u7B97\u3002")), /*#__PURE__*/React.createElement("div", {
+    className: "metric-panel-footer"
+  }, /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u6570 ", allRows.length), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7B5B\u9009 ", rows.length), /*#__PURE__*/React.createElement("span", null, "\u8D28\u91CF\u63D0\u793A ", warningRows.length), warningRows[0] && /*#__PURE__*/React.createElement("span", null, warningRows[0].metric_name_cn, "\uFF1A", warningRows[0].quality_reason)));
+}
 function renderViewDetailAction(row, actions) {
   return /*#__PURE__*/React.createElement(RowActionButton, {
     type: "default",
@@ -5318,7 +5403,7 @@ function summarizeRecord(record) {
   return Object.entries(record).slice(0, 3).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`).join("，");
 }
 function isStatusField(key) {
-  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "trip_status", "payment_status", "simulation_status", "business_timing_calculation_status", "policy_status", "profile_status", "rule_status", "event_result", "event_source"].includes(key);
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "trip_status", "payment_status", "simulation_status", "business_timing_calculation_status", "calculation_status", "metric_status", "data_readiness", "quality_status", "metric_calculation_status", "cost_calculation_status", "revenue_calculation_status", "policy_status", "profile_status", "rule_status", "event_result", "event_source"].includes(key);
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";
@@ -5372,7 +5457,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260624-v028-1-2"), import("./services/simulationActions.js?v=20260620-v027-4"), import("./data/simulationLoop.js?v=20260620-v027-4"), import("./services/simulationHandlers.js?v=20260624-v028-1-5"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-1"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260629-v033-1")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260624-v028-1-2"), import("./services/simulationActions.js?v=20260620-v027-4"), import("./data/simulationLoop.js?v=20260620-v027-4"), import("./services/simulationHandlers.js?v=20260624-v028-1-5"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-5"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260629-v033-1")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -6909,6 +6994,63 @@ function filterRecordRows(rows, columns, statusField, filters) {
     const objectTypeMatched = !filters.objectType || row.object_type === filters.objectType;
     return keywordMatched && statusMatched && triggerMatched && objectTypeMatched;
   });
+}
+function createMetricDisplayRows(metricObservations = [], metricDefinitions = [], simulationRuns = []) {
+  const definitionById = new Map((metricDefinitions || []).map(definition => [definition.metric_definition_id, definition]));
+  const runById = new Map((simulationRuns || []).map(run => [run.simulation_run_id, run]));
+  return (metricObservations || []).map(observation => {
+    const definition = definitionById.get(observation.metric_definition_id) || {};
+    const run = runById.get(observation.simulation_run_id) || {};
+    return {
+      ...definition,
+      ...observation,
+      metric_name_cn: definition.metric_name_cn || observation.metric_definition_id,
+      metric_name_en: definition.metric_name_en || observation.metric_definition_id,
+      metric_domain: definition.metric_domain || "QUALITY",
+      metric_layer: definition.metric_layer || "QUALITY",
+      calculation_formula: definition.calculation_formula || "无",
+      business_definition: definition.business_definition || "无",
+      display_unit: definition.display_unit || observation.metric_unit,
+      simulation_name: run.simulation_name,
+      completed_time: run.completed_time,
+      completed_at: run.completed_at
+    };
+  }).sort((a, b) => {
+    const runOrder = String(b.simulation_run_id || "").localeCompare(String(a.simulation_run_id || ""));
+    if (runOrder !== 0) return runOrder;
+    return String(a.metric_definition_id || "").localeCompare(String(b.metric_definition_id || ""));
+  });
+}
+function filterMetricRowsForPage(metricRows = [], page) {
+  if (page === "operatingMetricsOverview") return pickLatestMetricRows(metricRows, overviewMetricIds);
+  if (page === "financialMetrics") return pickLatestMetricRows(metricRows, financialMetricIds);
+  if (page === "serviceMetrics") return pickLatestMetricRows(metricRows, serviceMetricIds);
+  if (page === "processDiagnostics") return pickLatestMetricRows(metricRows, diagnosticMetricIds);
+  return metricRows;
+}
+function pickLatestMetricRows(metricRows = [], metricIds = []) {
+  const latestByMetricId = new Map();
+  metricRows.forEach(row => {
+    if (!metricIds.includes(row.metric_definition_id)) return;
+    if (!latestByMetricId.has(row.metric_definition_id)) latestByMetricId.set(row.metric_definition_id, row);
+  });
+  return metricIds.map(id => latestByMetricId.get(id)).filter(Boolean);
+}
+function createLatestMetricRows(rows = []) {
+  const latestByMetricId = new Map();
+  rows.forEach(row => {
+    if (!latestByMetricId.has(row.metric_definition_id)) latestByMetricId.set(row.metric_definition_id, row);
+  });
+  return [...latestByMetricId.values()];
+}
+function formatMetricDisplayValue(row) {
+  if (!row || row.metric_value === null || row.metric_value === undefined) return "无数据";
+  const value = Number(row.metric_value);
+  if (row.metric_unit === "currency") return `¥${value.toFixed(2)}`;
+  if (row.metric_unit === "percent") return `${(value * 100).toFixed(1)}%`;
+  if (row.metric_unit === "km") return `${value.toFixed(2)} km`;
+  if (row.metric_unit === "second") return `${Math.round(value)} 秒`;
+  return Number.isFinite(value) ? String(value) : String(row.metric_value);
 }
 function getOrderedStatusValues(page) {
   const registryOptions = statusRegistry?.getPageStatusOptions?.(page);
