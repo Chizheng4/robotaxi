@@ -39,6 +39,7 @@ let revenueCalculator;
 let simulationRunBusinessScope;
 let statusRegistry;
 let routePlanningStrategies;
+let timedOperationDiagnostics;
 let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
@@ -570,7 +571,7 @@ const simulationEventStoreName = "simulationEvents";
 const runtimeSnapshotDbName = "robotaxi.runtime.snapshot.v027";
 const runtimeSnapshotStoreName = "runtimeSnapshots";
 const persistedSimulationEventIds = new Set();
-const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null };
+const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null, objectType: null };
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
   "RPS-ABNORMAL-SAME-SA": "RPS-002",
@@ -1468,6 +1469,8 @@ function App() {
                   requestCostCalculation,
                   requestRevenueCalculation,
                   editCostParameterRule,
+                  clearEndedTimedOperations,
+                  requestClearAllTimedOperations,
                   businessTimingCalculationRuns,
                   costCalculationRuns,
                   costRecords,
@@ -1655,6 +1658,7 @@ function App() {
     setRevenueRecords([]);
     setSimulationRuns([]);
     setSimulationEvents([]);
+    setTimedOperations([]);
     setActivePage("console");
     setOpenMenuKeys([]);
     setSelected(nextSelection);
@@ -1676,6 +1680,26 @@ function App() {
   function clearSimulationEvents() {
     setSimulationEvents([]);
     clearPersistedSimulationEvents();
+  }
+
+  function clearEndedTimedOperations() {
+    setTimedOperations((current) => timedOperationDiagnostics.clearEndedTimedOperations(current));
+  }
+
+  function requestClearAllTimedOperations() {
+    const activeRun = timedOperationDiagnostics.getActiveSimulationRunForTimedOperationClear(simulationRuns);
+    if (activeRun) {
+      antd.message.warning(`模拟运行 ${activeRun.simulation_run_id} 仍在${getDisplayValue(activeRun.simulation_status, "simulation_status")}，暂不能清空全部时间作业`);
+      return;
+    }
+    Modal.confirm({
+      title: "清空全部时间作业",
+      content: "这会删除当前所有时间作业诊断数据。建议只在模拟运行结束并确认无需继续排查后执行。",
+      okText: "清空",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: () => setTimedOperations([]),
+    });
   }
 
   function selectForPage(page, type, id) {
@@ -3218,6 +3242,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isCostParameterRulePage = page === "costParameterRules";
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
+  const isTimedOperationPage = page === "timedOperations";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
   const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
@@ -3242,6 +3267,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const orderedStatusValues = getOrderedStatusValues(page);
   const statusContext = page === "deploymentTasks" ? "deployment" : page === "routeExecutions" ? "routeExecution" : null;
   const statusOptions = useMemo(() => createStatusOptions(rows, statusField, orderedStatusValues, statusContext), [orderedStatusValues, rows, statusContext, statusField]);
+  const timedOperationObjectTypeOptions = useMemo(() => (
+    isTimedOperationPage ? timedOperationDiagnostics.getTimedOperationObjectTypeOptions(rows) : []
+  ), [isTimedOperationPage, rows]);
   const columns = config.columns.map((key) => ({
     key,
     title: getFieldLabel(key),
@@ -3339,6 +3367,21 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
             />
           </div>
         )}
+        {isTimedOperationPage && (
+          <div className="filter-field">
+            <span>业务单类型</span>
+            <Select
+              size="small"
+              placeholder="全部类型"
+              allowClear
+              getPopupContainer={() => document.body}
+              listHeight={240}
+              value={filters.objectType}
+              onChange={(value) => updateFilters({ ...filters, objectType: value || null })}
+              options={timedOperationObjectTypeOptions.map((value) => ({ value, label: getDisplayValue(value, "object_type") }))}
+            />
+          </div>
+        )}
         <Button size="small" type="primary" aria-label="查询" onClick={() => applyFilters(filters)}>查询</Button>
         <Button size="small" aria-label="重置" onClick={resetFilters}>重置</Button>
       </div>
@@ -3365,6 +3408,12 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         <div className="list-action-bar">
           <Button size="small" type="primary" onClick={() => actions.simActions?.createSimulationRun()}>创建模拟运行</Button>
           <Button size="small" onClick={actions.clearSimulationEvents}>清空模拟事件</Button>
+        </div>
+      )}
+      {isTimedOperationPage && (
+        <div className="list-action-bar">
+          <Button size="small" onClick={actions.clearEndedTimedOperations}>清空已结束作业</Button>
+          <Button size="small" danger onClick={actions.requestClearAllTimedOperations}>清空全部作业</Button>
         </div>
       )}
       <div className="record-table-section" ref={tableSectionRef}>
@@ -3588,7 +3637,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   }
 
   function resetFilters() {
-    const resetValue = { keyword: "", statusValue: null, triggerType: null };
+    const resetValue = { ...defaultPageFilters };
     onUiStateChange(createNextPageUiState(uiState, { filters: resetValue, appliedFilters: resetValue, pagination: { current: 1 } }));
   }
 
@@ -4920,6 +4969,7 @@ async function bootstrap() {
 		    routePlanningServiceModule,
 		    statusRegistryModule,
 		    routePlanningStrategiesModule,
+		    timedOperationDiagnosticsModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -4965,6 +5015,7 @@ async function bootstrap() {
 		    import("./services/routePlanningService.js?v=20260625-v029-4"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
 		    import("./domain/routePlanningStrategies.js?v=20260625-v030-3"),
+		    import("./data/timedOperationDiagnostics.js?v=20260629-v033-1"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -5010,6 +5061,7 @@ async function bootstrap() {
 		  routePlanningService = routePlanningServiceModule;
 		  statusRegistry = statusRegistryModule;
 		  routePlanningStrategies = routePlanningStrategiesModule;
+		  timedOperationDiagnostics = timedOperationDiagnosticsModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -6619,7 +6671,8 @@ function filterRecordRows(rows, columns, statusField, filters) {
     const keywordMatched = !keyword || columns.some((key) => String(row[key] || "").toLowerCase().includes(keyword));
     const statusMatched = !statusField || !filters.statusValue || row[statusField] === filters.statusValue;
     const triggerMatched = !filters.triggerType || row.trigger_type === filters.triggerType;
-    return keywordMatched && statusMatched && triggerMatched;
+    const objectTypeMatched = !filters.objectType || row.object_type === filters.objectType;
+    return keywordMatched && statusMatched && triggerMatched && objectTypeMatched;
   });
 }
 

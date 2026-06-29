@@ -62,6 +62,7 @@ let revenueCalculator;
 let simulationRunBusinessScope;
 let statusRegistry;
 let routePlanningStrategies;
+let timedOperationDiagnostics;
 let taskSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
@@ -619,7 +620,8 @@ const persistedSimulationEventIds = new Set();
 const defaultPageFilters = {
   keyword: "",
   statusValue: null,
-  triggerType: null
+  triggerType: null,
+  objectType: null
 };
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
@@ -1509,6 +1511,8 @@ function App() {
       requestCostCalculation,
       requestRevenueCalculation,
       editCostParameterRule,
+      clearEndedTimedOperations,
+      requestClearAllTimedOperations,
       businessTimingCalculationRuns,
       costCalculationRuns,
       costRecords,
@@ -1710,6 +1714,7 @@ function App() {
     setRevenueRecords([]);
     setSimulationRuns([]);
     setSimulationEvents([]);
+    setTimedOperations([]);
     setActivePage("console");
     setOpenMenuKeys([]);
     setSelected(nextSelection);
@@ -1732,6 +1737,26 @@ function App() {
   function clearSimulationEvents() {
     setSimulationEvents([]);
     clearPersistedSimulationEvents();
+  }
+  function clearEndedTimedOperations() {
+    setTimedOperations(current => timedOperationDiagnostics.clearEndedTimedOperations(current));
+  }
+  function requestClearAllTimedOperations() {
+    const activeRun = timedOperationDiagnostics.getActiveSimulationRunForTimedOperationClear(simulationRuns);
+    if (activeRun) {
+      antd.message.warning(`模拟运行 ${activeRun.simulation_run_id} 仍在${getDisplayValue(activeRun.simulation_status, "simulation_status")}，暂不能清空全部时间作业`);
+      return;
+    }
+    Modal.confirm({
+      title: "清空全部时间作业",
+      content: "这会删除当前所有时间作业诊断数据。建议只在模拟运行结束并确认无需继续排查后执行。",
+      okText: "清空",
+      cancelText: "取消",
+      okButtonProps: {
+        danger: true
+      },
+      onOk: () => setTimedOperations([])
+    });
   }
   function selectForPage(page, type, id) {
     const nextSelection = {
@@ -3245,6 +3270,7 @@ function RecordTable({
   const isCostParameterRulePage = page === "costParameterRules";
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
+  const isTimedOperationPage = page === "timedOperations";
   const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
   const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
@@ -3269,6 +3295,7 @@ function RecordTable({
   const orderedStatusValues = getOrderedStatusValues(page);
   const statusContext = page === "deploymentTasks" ? "deployment" : page === "routeExecutions" ? "routeExecution" : null;
   const statusOptions = useMemo(() => createStatusOptions(rows, statusField, orderedStatusValues, statusContext), [orderedStatusValues, rows, statusContext, statusField]);
+  const timedOperationObjectTypeOptions = useMemo(() => isTimedOperationPage ? timedOperationDiagnostics.getTimedOperationObjectTypeOptions(rows) : [], [isTimedOperationPage, rows]);
   const columns = config.columns.map(key => ({
     key,
     title: getFieldLabel(key),
@@ -3357,6 +3384,23 @@ function RecordTable({
       value,
       label: getDisplayValue(value)
     }))
+  })), isTimedOperationPage && /*#__PURE__*/React.createElement("div", {
+    className: "filter-field"
+  }, /*#__PURE__*/React.createElement("span", null, "\u4E1A\u52A1\u5355\u7C7B\u578B"), /*#__PURE__*/React.createElement(Select, {
+    size: "small",
+    placeholder: "\u5168\u90E8\u7C7B\u578B",
+    allowClear: true,
+    getPopupContainer: () => document.body,
+    listHeight: 240,
+    value: filters.objectType,
+    onChange: value => updateFilters({
+      ...filters,
+      objectType: value || null
+    }),
+    options: timedOperationObjectTypeOptions.map(value => ({
+      value,
+      label: getDisplayValue(value, "object_type")
+    }))
   })), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     type: "primary",
@@ -3399,7 +3443,16 @@ function RecordTable({
   }, "\u521B\u5EFA\u6A21\u62DF\u8FD0\u884C"), /*#__PURE__*/React.createElement(Button, {
     size: "small",
     onClick: actions.clearSimulationEvents
-  }, "\u6E05\u7A7A\u6A21\u62DF\u4E8B\u4EF6")), /*#__PURE__*/React.createElement("div", {
+  }, "\u6E05\u7A7A\u6A21\u62DF\u4E8B\u4EF6")), isTimedOperationPage && /*#__PURE__*/React.createElement("div", {
+    className: "list-action-bar"
+  }, /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    onClick: actions.clearEndedTimedOperations
+  }, "\u6E05\u7A7A\u5DF2\u7ED3\u675F\u4F5C\u4E1A"), /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    danger: true,
+    onClick: actions.requestClearAllTimedOperations
+  }, "\u6E05\u7A7A\u5168\u90E8\u4F5C\u4E1A")), /*#__PURE__*/React.createElement("div", {
     className: "record-table-section",
     ref: tableSectionRef
   }, /*#__PURE__*/React.createElement(Table, {
@@ -3680,9 +3733,7 @@ function RecordTable({
   }
   function resetFilters() {
     const resetValue = {
-      keyword: "",
-      statusValue: null,
-      triggerType: null
+      ...defaultPageFilters
     };
     onUiStateChange(createNextPageUiState(uiState, {
       filters: resetValue,
@@ -5154,7 +5205,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260624-v028-1-2"), import("./services/simulationActions.js?v=20260620-v027-4"), import("./data/simulationLoop.js?v=20260620-v027-4"), import("./services/simulationHandlers.js?v=20260624-v028-1-5"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260624-v028-1-2"), import("./services/simulationActions.js?v=20260620-v027-4"), import("./data/simulationLoop.js?v=20260620-v027-4"), import("./services/simulationHandlers.js?v=20260624-v028-1-5"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260629-v033-1")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -5198,6 +5249,7 @@ async function bootstrap() {
   routePlanningService = routePlanningServiceModule;
   statusRegistry = statusRegistryModule;
   routePlanningStrategies = routePlanningStrategiesModule;
+  timedOperationDiagnostics = timedOperationDiagnosticsModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -6671,7 +6723,8 @@ function filterRecordRows(rows, columns, statusField, filters) {
     const keywordMatched = !keyword || columns.some(key => String(row[key] || "").toLowerCase().includes(keyword));
     const statusMatched = !statusField || !filters.statusValue || row[statusField] === filters.statusValue;
     const triggerMatched = !filters.triggerType || row.trigger_type === filters.triggerType;
-    return keywordMatched && statusMatched && triggerMatched;
+    const objectTypeMatched = !filters.objectType || row.object_type === filters.objectType;
+    return keywordMatched && statusMatched && triggerMatched && objectTypeMatched;
   });
 }
 function getOrderedStatusValues(page) {

@@ -1430,11 +1430,11 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ARRIVAL_CONFIRM_FAILED|到达确认失败|result_type|
 |TEMPORARY_SUPPLY_REBALANCE|临时供给再平衡|enum_value|
 |LOW_DENSITY_NEARBY_SERVICE_AREA|低密度邻近服务区|enum_value|
-|serviceOrder|服务订单|related_object_type|
-|trip|履约行驶记录|related_object_type|
-|readinessTask|运营准入任务|related_object_type|
-|deploymentTask|运营投放任务|related_object_type|
-|routeExecution|行驶记录|related_object_type|
+|serviceOrder|服务订单|object_type / source_object_type / related_object_type|
+|trip|履约行驶记录|object_type / source_object_type / related_object_type|
+|readinessTask|运营准入任务|object_type / source_object_type / related_object_type|
+|deploymentTask|运营投放任务|object_type / source_object_type / related_object_type|
+|routeExecution|运营行驶记录|object_type / source_object_type / related_object_type|
 |demandSimulationRun|需求模拟执行|related_object_type|
 
 ---

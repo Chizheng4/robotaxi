@@ -1425,6 +1425,13 @@ export const fieldValueDictionary = {
     serviceOrder: "服务订单",
     trip: "履约行驶记录",
   },
+  object_type: {
+    readinessTask: "运营准入任务",
+    deploymentTask: "运营投放任务",
+    routeExecution: "运营行驶记录",
+    serviceOrder: "服务订单",
+    trip: "履约行驶记录",
+  },
   trigger_type: { MANUAL: "手动触发" },
   record_source: { MANUAL: "人工操作" },
   order_status: {
