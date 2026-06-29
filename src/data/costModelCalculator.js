@@ -239,7 +239,7 @@ function calculateTaskLaborCost(task, objectType, context) {
     formula: "operation_hours × worker_cost_per_hour",
     basis: {
       operation_seconds: seconds,
-      duration_source: task.simulation_status_transition_history?.length ? "simulation_status_transition_history" : "calculated_simulation_*",
+      duration_source: task.simulation_status_transition_history?.length ? "simulation_status_transition_history" : "simulation_*",
     },
     simulationCostOccurredAt: task.calculated_simulation_completed_at || task.simulation_completed_at || task.simulation_created_at || null,
   }));
@@ -451,14 +451,14 @@ function normalizeParameterRuleValue(rule, value) {
 function getOperationSeconds(item) {
   const history = Array.isArray(item.simulation_status_transition_history) ? item.simulation_status_transition_history : [];
   if (history.length > 1) {
-    const first = parseSimulationTimestamp(history[0].calculated_simulation_status_changed_at);
-    const last = parseSimulationTimestamp(history[history.length - 1].calculated_simulation_status_changed_at);
+    const first = parseSimulationTimestamp(history[0].simulation_status_changed_at || history[0].calculated_simulation_status_changed_at);
+    const last = parseSimulationTimestamp(history[history.length - 1].simulation_status_changed_at || history[history.length - 1].calculated_simulation_status_changed_at);
     if (last > first) return last - first;
     const durationSum = history.reduce((sum, entry) => sum + Number(entry.configured_duration_seconds || 0), 0);
     if (durationSum > 0) return durationSum;
   }
-  const start = parseSimulationTimestamp(item.calculated_simulation_created_at || item.simulation_created_at);
-  const end = parseSimulationTimestamp(item.calculated_simulation_completed_at || item.simulation_completed_at);
+  const start = parseSimulationTimestamp(item.simulation_created_at || item.calculated_simulation_created_at);
+  const end = parseSimulationTimestamp(item.simulation_completed_at || item.calculated_simulation_completed_at);
   if (end > start) return end - start;
   return 0;
 }

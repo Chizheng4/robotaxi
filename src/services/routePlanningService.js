@@ -443,6 +443,30 @@ export function getRebalanceDeploymentTarget(data, options = {}) {
   return scored.sort((left, right) => left.rebalance_score - right.rebalance_score)[0];
 }
 
+export function getRandomDeploymentTarget(data, options = {}) {
+  const originCellId = options.originCellId || null;
+  const candidates = getDeploymentTargetCandidates(data, originCellId);
+  if (candidates.length === 0) return null;
+  const byServiceArea = candidates.reduce((map, candidate) => {
+    const list = map.get(candidate.target_service_area_id) || [];
+    list.push(candidate);
+    map.set(candidate.target_service_area_id, list);
+    return map;
+  }, new Map());
+  const serviceAreaIds = [...byServiceArea.keys()].sort();
+  const selectedServiceAreaId = serviceAreaIds[stableIndex(`${options.seed || ""}-service-area`, serviceAreaIds.length)];
+  const serviceAreaCandidates = byServiceArea.get(selectedServiceAreaId) || [];
+  const selected = serviceAreaCandidates[stableIndex(`${options.seed || ""}-${selectedServiceAreaId}-cell`, serviceAreaCandidates.length)];
+  const distanceSteps = estimateCellDistance(data, originCellId, selected?.target_cell_id);
+  return selected ? {
+    ...selected,
+    deployment_target_model: "TEMPORARY_RANDOM_SERVICE_AREA",
+    rebalance_reason: "RANDOM_SERVICE_AREA_DISPATCH",
+    service_area_vehicle_count: countAvailableVehiclesByServiceArea(data, options.robotaxiId).get(selected.target_service_area_id) || 0,
+    estimated_distance_steps: distanceSteps,
+  } : null;
+}
+
 export function getRouteExecutionCells(route, roadSegments, originCellId, targetCellId) {
   const cells = route.route_steps?.map((step) => step.cell_id) || routeCellIds(route, roadSegments);
   return [...new Set([originCellId, ...cells, targetCellId].filter(Boolean))];

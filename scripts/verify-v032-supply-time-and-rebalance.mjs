@@ -48,11 +48,11 @@ assert.equal(getRobotaxi("RT-READINESS-001").availability_status, "AVAILABLE");
 runAction({ actionType: "DEPLOYMENT_TASK_CREATE", objectId: null }, createContext(18));
 const deploymentTask = businessData.deploymentTasks[0];
 assert.notEqual(deploymentTask.planned_target_cell_id, deploymentTask.origin_cell_id);
-assert.equal(deploymentTask.planned_target_service_area_id, "SA-LOW");
-assert.equal(deploymentTask.deployment_target_model, "TEMPORARY_SUPPLY_REBALANCE");
-assert.equal(deploymentTask.rebalance_reason, "LOW_DENSITY_NEARBY_SERVICE_AREA");
+assert.ok(["SA-HIGH", "SA-LOW"].includes(deploymentTask.planned_target_service_area_id));
+assert.equal(deploymentTask.deployment_target_model, "TEMPORARY_RANDOM_SERVICE_AREA");
+assert.equal(deploymentTask.rebalance_reason, "RANDOM_SERVICE_AREA_DISPATCH");
 
-console.log("v032.4 供给侧时间作业与投放再平衡验证通过");
+console.log("v032.4 供给侧时间作业与随机服务区投放验证通过");
 
 function runAction(action, runContext) {
   const [result] = executeActions([action], businessData, runContext);

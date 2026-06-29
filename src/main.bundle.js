@@ -420,7 +420,7 @@ const tableConfig = {
   },
   workflowTimingRules: {
     title: "工作流时效配置",
-    description: "配置业务状态边的操作时长，用于模拟完成后的状态时间线计算。",
+    description: "配置业务动作的运行时耗时，用于时间作业和业务生命周期推进。",
     columns: ["workflow_timing_rule_id", "business_object_type", "from_status", "action_type", "to_status", "transition_mode", "duration_source_type", "duration_mode", "configured_duration_seconds", "seconds_per_cell", "rule_status", "profile_version"]
   },
   costParameterRules: {
@@ -456,7 +456,7 @@ const tableConfig = {
   simulationRuns: {
     title: "模拟运行管理",
     description: "创建和管理自动运营模拟运行，查看实时进度和结果。",
-    columns: ["simulation_run_id", "simulation_name", "simulation_status", "business_timing_calculation_status", "cost_calculation_status", "revenue_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"]
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "cost_calculation_status", "revenue_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"]
   },
   simulationEvents: {
     title: "模拟事件记录",
@@ -706,6 +706,7 @@ function App() {
   const [pendingCostParameterRule, setPendingCostParameterRule] = useState(null);
   const [costParameterModalOpen, setCostParameterModalOpen] = useState(false);
   const [costParameterValue, setCostParameterValue] = useState("");
+  const autoFinanceCalculationRunIdsRef = useRef(new Set());
   useEffect(() => {
     let cancelled = false;
     loadPersistedRuntimeSnapshot().then(snapshot => {
@@ -1052,6 +1053,19 @@ function App() {
       if (simActionsRef.current) simActionsRef.current.cleanup();
     };
   }, []);
+  useEffect(() => {
+    simulationRuns.filter(run => run.simulation_status === "COMPLETED").filter(run => !autoFinanceCalculationRunIdsRef.current.has(run.simulation_run_id)).filter(run => run.cost_calculation_status !== "CALCULATING" && run.revenue_calculation_status !== "CALCULATING").forEach(run => {
+      autoFinanceCalculationRunIdsRef.current.add(run.simulation_run_id);
+      window.setTimeout(() => {
+        runCostCalculation(run.simulation_run_id, {
+          automatic: true
+        });
+        runRevenueCalculation(run.simulation_run_id, {
+          automatic: true
+        });
+      }, 0);
+    });
+  }, [simulationRuns]);
   function requestBusinessTimingCalculation(runId) {
     const run = simulationRuns.find(item => item.simulation_run_id === runId);
     if (!run) return;
@@ -1203,7 +1217,9 @@ function App() {
     setPendingCostCalculationRunId(null);
     runCostCalculation(runId);
   }
-  function runCostCalculation(runId) {
+  function runCostCalculation(runId, {
+    automatic = false
+  } = {}) {
     const run = simulationRuns.find(item => item.simulation_run_id === runId);
     const profile = costModelProfiles.find(item => item.profile_status === "ACTIVE");
     if (!run || !profile || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
@@ -1276,7 +1292,7 @@ function App() {
             calculation_errors: result.calculationRun.calculation_errors
           }
         }), ...current]);
-        antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营成本计算完成" : "运营成本计算完成，存在待检查项");
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营成本计算完成" : "运营成本计算完成，存在待检查项");
       } catch (error) {
         setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
           ...item,
@@ -1296,7 +1312,7 @@ function App() {
           profile,
           failureReason: error.message
         }), ...current]);
-        antd.message.error(`运营成本计算失败：${error.message}`);
+        if (!automatic) antd.message.error(`运营成本计算失败：${error.message}`);
       }
     }, 80);
   }
@@ -1327,7 +1343,9 @@ function App() {
     setPendingRevenueCalculationRunId(null);
     runRevenueCalculation(runId);
   }
-  function runRevenueCalculation(runId) {
+  function runRevenueCalculation(runId, {
+    automatic = false
+  } = {}) {
     const run = simulationRuns.find(item => item.simulation_run_id === runId);
     if (!run || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
     const calculationRunId = `RCR-${String(revenueCalculationRuns.length + 1).padStart(4, "0")}`;
@@ -1365,7 +1383,7 @@ function App() {
           },
           revenue_calculation_errors: result.calculationRun.calculation_errors
         } : item));
-        antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "收入记录生成完成" : "收入记录生成完成，存在待检查项");
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "收入记录生成完成" : "收入记录生成完成，存在待检查项");
       } catch (error) {
         setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
           ...item,
@@ -1376,7 +1394,7 @@ function App() {
             error_message: error.message
           }]
         } : item));
-        antd.message.error(`收入记录生成失败：${error.message}`);
+        if (!automatic) antd.message.error(`收入记录生成失败：${error.message}`);
       }
     }, 80);
   }
@@ -1507,7 +1525,6 @@ function App() {
       simulationPolicies,
       workflowTimingProfiles,
       editWorkflowTimingRule,
-      requestBusinessTimingCalculation,
       requestCostCalculation,
       requestRevenueCalculation,
       editCostParameterRule,
@@ -1566,21 +1583,6 @@ function App() {
     value: timingRuleValue,
     onChange: event => setTimingRuleValue(event.target.value)
   })))), /*#__PURE__*/React.createElement(Modal, {
-    title: simulationRuns.find(item => item.simulation_run_id === pendingCalculationRunId)?.business_timing_calculation_status ? "重算运营模拟时间" : "计算运营模拟时间",
-    open: Boolean(pendingCalculationRunId),
-    okText: "\u5F00\u59CB\u8BA1\u7B97",
-    cancelText: "\u53D6\u6D88",
-    width: 520,
-    onCancel: () => setPendingCalculationRunId(null),
-    footer: [/*#__PURE__*/React.createElement(Button, {
-      key: "cancel",
-      onClick: () => setPendingCalculationRunId(null)
-    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement(Button, {
-      key: "calculate",
-      type: "primary",
-      onClick: confirmBusinessTimingCalculation
-    }, "\u5F00\u59CB\u8BA1\u7B97")]
-  }, /*#__PURE__*/React.createElement(Text, null, "\u5C06\u4F7F\u7528\u5F53\u524D\u751F\u6548\u7684\u5DE5\u4F5C\u6D41\u65F6\u6548\u914D\u7F6E\u751F\u6210\u65B0\u7684\u72B6\u6001\u65F6\u95F4\u7EBF\u7248\u672C\u3002\u539F\u59CB\u6A21\u62DF\u65F6\u95F4\u4E0D\u4F1A\u88AB\u4FEE\u6539\u3002")), /*#__PURE__*/React.createElement(Modal, {
     title: simulationRuns.find(item => item.simulation_run_id === pendingCostCalculationRunId)?.cost_calculation_status ? "重新计算运营成本" : "计算运营成本",
     open: Boolean(pendingCostCalculationRunId),
     okText: "\u5F00\u59CB\u8BA1\u7B97",
@@ -4300,7 +4302,7 @@ function StatusTimeline({
   if (!Array.isArray(history) || history.length === 0) {
     return /*#__PURE__*/React.createElement(Empty, {
       image: Empty.PRESENTED_IMAGE_SIMPLE,
-      description: "\u5C1A\u672A\u8BA1\u7B97\u4E1A\u52A1\u72B6\u6001\u65F6\u95F4\u7EBF"
+      description: "\u6682\u65E0\u4E1A\u52A1\u72B6\u6001\u65F6\u95F4\u7EBF"
     });
   }
   return /*#__PURE__*/React.createElement("ol", {
@@ -4316,7 +4318,7 @@ function StatusTimeline({
   }, /*#__PURE__*/React.createElement(StatusValue, {
     value: item.to_status,
     label: getDisplayValue(item.to_status, statusField)
-  }), /*#__PURE__*/React.createElement(Text, null, item.calculated_simulation_status_changed_at)), /*#__PURE__*/React.createElement(Text, {
+  }), /*#__PURE__*/React.createElement(Text, null, item.simulation_status_changed_at || item.calculated_simulation_status_changed_at)), /*#__PURE__*/React.createElement(Text, {
     type: "secondary"
   }, getDisplayValue(item.action_type, "action_type"), " \xB7 ", item.configured_duration_seconds || 0, " \u79D2"), item.movement_step_count !== null && item.movement_step_count !== undefined && /*#__PURE__*/React.createElement(Text, {
     type: "secondary"
@@ -4741,13 +4743,9 @@ function renderSimulationRunActions(row, actions) {
     }, "\u505C\u6B62"));
   }
   if (["COMPLETED", "STOPPED", "FAILED"].includes(status)) {
-    const calculating = row.business_timing_calculation_status === "CALCULATING";
     const costCalculating = row.cost_calculation_status === "CALCULATING";
     const revenueCalculating = row.revenue_calculation_status === "CALCULATING";
     return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
-      onClick: () => actions.requestBusinessTimingCalculation(row.simulation_run_id),
-      disabled: calculating
-    }, calculating ? "计算中" : row.business_timing_calculation_status ? "重算运营模拟时间" : "计算运营模拟时间"), /*#__PURE__*/React.createElement(RowActionButton, {
       type: "default",
       onClick: () => actions.requestCostCalculation(row.simulation_run_id),
       disabled: costCalculating

@@ -1430,6 +1430,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ARRIVAL_CONFIRM_FAILED|到达确认失败|result_type|
 |TEMPORARY_SUPPLY_REBALANCE|临时供给再平衡|enum_value|
 |LOW_DENSITY_NEARBY_SERVICE_AREA|低密度邻近服务区|enum_value|
+|TEMPORARY_RANDOM_SERVICE_AREA|临时随机服务区投放|enum_value|
+|RANDOM_SERVICE_AREA_DISPATCH|随机服务区投放|enum_value|
 |serviceOrder|服务订单|object_type / source_object_type / related_object_type|
 |trip|履约行驶记录|object_type / source_object_type / related_object_type|
 |readinessTask|运营准入任务|object_type / source_object_type / related_object_type|
@@ -1538,6 +1540,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |action_type|动作类型|运行态字段|产生状态变化的功能操作|
 |result_type|执行结果类型|运行态字段|动作结果分支|
 |to_status|变更后状态|运行态字段|本次进入状态|
+|simulation_action_started_at|模拟动作开始时间|运行态字段|业务动作实际开始的模拟时间|
+|simulation_status_changed_at|模拟状态变更时间|运行态字段|业务动作实际进入下一状态的模拟时间|
 |calculated_simulation_action_started_at|计算模拟动作开始时间|运行态字段|动作开始的模拟时间|
 |configured_duration_seconds|配置操作时长（秒）|运行态字段|本次计算使用的总耗时|
 |movement_step_count|移动步数|运行态字段|行驶动作实际使用的 Cell 移动步数|

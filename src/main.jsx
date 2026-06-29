@@ -355,7 +355,7 @@ const tableConfig = {
   },
   workflowTimingRules: {
     title: "工作流时效配置",
-    description: "配置业务状态边的操作时长，用于模拟完成后的状态时间线计算。",
+    description: "配置业务动作的运行时耗时，用于时间作业和业务生命周期推进。",
     columns: ["workflow_timing_rule_id", "business_object_type", "from_status", "action_type", "to_status", "transition_mode", "duration_source_type", "duration_mode", "configured_duration_seconds", "seconds_per_cell", "rule_status", "profile_version"],
   },
   costParameterRules: {
@@ -391,7 +391,7 @@ const tableConfig = {
   simulationRuns: {
     title: "模拟运行管理",
     description: "创建和管理自动运营模拟运行，查看实时进度和结果。",
-    columns: ["simulation_run_id", "simulation_name", "simulation_status", "business_timing_calculation_status", "cost_calculation_status", "revenue_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "cost_calculation_status", "revenue_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
   },
   simulationEvents: {
     title: "模拟事件记录",
@@ -668,6 +668,7 @@ function App() {
   const [pendingCostParameterRule, setPendingCostParameterRule] = useState(null);
   const [costParameterModalOpen, setCostParameterModalOpen] = useState(false);
   const [costParameterValue, setCostParameterValue] = useState("");
+  const autoFinanceCalculationRunIdsRef = useRef(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -1017,6 +1018,20 @@ function App() {
     return () => { if (simActionsRef.current) simActionsRef.current.cleanup(); };
   }, []);
 
+  useEffect(() => {
+    simulationRuns
+      .filter((run) => run.simulation_status === "COMPLETED")
+      .filter((run) => !autoFinanceCalculationRunIdsRef.current.has(run.simulation_run_id))
+      .filter((run) => run.cost_calculation_status !== "CALCULATING" && run.revenue_calculation_status !== "CALCULATING")
+      .forEach((run) => {
+        autoFinanceCalculationRunIdsRef.current.add(run.simulation_run_id);
+        window.setTimeout(() => {
+          runCostCalculation(run.simulation_run_id, { automatic: true });
+          runRevenueCalculation(run.simulation_run_id, { automatic: true });
+        }, 0);
+      });
+  }, [simulationRuns]);
+
   function requestBusinessTimingCalculation(runId) {
     const run = simulationRuns.find((item) => item.simulation_run_id === runId);
     if (!run) return;
@@ -1170,7 +1185,7 @@ function App() {
     runCostCalculation(runId);
   }
 
-  function runCostCalculation(runId) {
+  function runCostCalculation(runId, { automatic = false } = {}) {
     const run = simulationRuns.find((item) => item.simulation_run_id === runId);
     const profile = costModelProfiles.find((item) => item.profile_status === "ACTIVE");
     if (!run || !profile || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
@@ -1248,7 +1263,7 @@ function App() {
             calculation_errors: result.calculationRun.calculation_errors,
           },
         }), ...current]);
-        antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营成本计算完成" : "运营成本计算完成，存在待检查项");
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营成本计算完成" : "运营成本计算完成，存在待检查项");
       } catch (error) {
         setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
           ...item,
@@ -1265,7 +1280,7 @@ function App() {
           profile,
           failureReason: error.message,
         }), ...current]);
-        antd.message.error(`运营成本计算失败：${error.message}`);
+        if (!automatic) antd.message.error(`运营成本计算失败：${error.message}`);
       }
     }, 80);
   }
@@ -1300,7 +1315,7 @@ function App() {
     runRevenueCalculation(runId);
   }
 
-  function runRevenueCalculation(runId) {
+  function runRevenueCalculation(runId, { automatic = false } = {}) {
     const run = simulationRuns.find((item) => item.simulation_run_id === runId);
     if (!run || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
     const calculationRunId = `RCR-${String(revenueCalculationRuns.length + 1).padStart(4, "0")}`;
@@ -1337,7 +1352,7 @@ function App() {
           },
           revenue_calculation_errors: result.calculationRun.calculation_errors,
         } : item));
-        antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "收入记录生成完成" : "收入记录生成完成，存在待检查项");
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "收入记录生成完成" : "收入记录生成完成，存在待检查项");
       } catch (error) {
         setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
           ...item,
@@ -1345,7 +1360,7 @@ function App() {
           revenue_calculation_progress_percent: 100,
           revenue_calculation_errors: [{ error_type: "REVENUE_CALCULATION_FAILED", error_message: error.message }],
         } : item));
-        antd.message.error(`收入记录生成失败：${error.message}`);
+        if (!automatic) antd.message.error(`收入记录生成失败：${error.message}`);
       }
     }, 80);
   }
@@ -1465,7 +1480,6 @@ function App() {
                   simulationPolicies,
                   workflowTimingProfiles,
                   editWorkflowTimingRule,
-                  requestBusinessTimingCalculation,
                   requestCostCalculation,
                   requestRevenueCalculation,
                   editCostParameterRule,
@@ -1519,20 +1533,6 @@ function App() {
             <Input type="number" min={0} value={timingRuleValue} onChange={(event) => setTimingRuleValue(event.target.value)} />
           </label>
         </div>
-      </Modal>
-      <Modal
-        title={simulationRuns.find((item) => item.simulation_run_id === pendingCalculationRunId)?.business_timing_calculation_status ? "重算运营模拟时间" : "计算运营模拟时间"}
-        open={Boolean(pendingCalculationRunId)}
-        okText="开始计算"
-        cancelText="取消"
-        width={520}
-        onCancel={() => setPendingCalculationRunId(null)}
-        footer={[
-          <Button key="cancel" onClick={() => setPendingCalculationRunId(null)}>取消</Button>,
-          <Button key="calculate" type="primary" onClick={confirmBusinessTimingCalculation}>开始计算</Button>,
-        ]}
-      >
-        <Text>将使用当前生效的工作流时效配置生成新的状态时间线版本。原始模拟时间不会被修改。</Text>
       </Modal>
       <Modal
         title={simulationRuns.find((item) => item.simulation_run_id === pendingCostCalculationRunId)?.cost_calculation_status ? "重新计算运营成本" : "计算运营成本"}
@@ -3970,7 +3970,7 @@ function getDetailStatusField(selectedType) {
 
 function StatusTimeline({ history, statusField }) {
   if (!Array.isArray(history) || history.length === 0) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未计算业务状态时间线" />;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无业务状态时间线" />;
   }
   return (
     <ol className="status-timeline">
@@ -3980,7 +3980,7 @@ function StatusTimeline({ history, statusField }) {
           <div className="status-timeline-content">
             <div className="status-timeline-heading">
               <StatusValue value={item.to_status} label={getDisplayValue(item.to_status, statusField)} />
-              <Text>{item.calculated_simulation_status_changed_at}</Text>
+              <Text>{item.simulation_status_changed_at || item.calculated_simulation_status_changed_at}</Text>
             </div>
             <Text type="secondary">{getDisplayValue(item.action_type, "action_type")} · {item.configured_duration_seconds || 0} 秒</Text>
             {item.movement_step_count !== null && item.movement_step_count !== undefined && (
@@ -4390,14 +4390,10 @@ function renderSimulationRunActions(row, actions) {
     );
   }
   if (["COMPLETED", "STOPPED", "FAILED"].includes(status)) {
-    const calculating = row.business_timing_calculation_status === "CALCULATING";
     const costCalculating = row.cost_calculation_status === "CALCULATING";
     const revenueCalculating = row.revenue_calculation_status === "CALCULATING";
     return (
       <RowActionGroup>
-        <RowActionButton onClick={() => actions.requestBusinessTimingCalculation(row.simulation_run_id)} disabled={calculating}>
-          {calculating ? "计算中" : row.business_timing_calculation_status ? "重算运营模拟时间" : "计算运营模拟时间"}
-        </RowActionButton>
         <RowActionButton type="default" onClick={() => actions.requestCostCalculation(row.simulation_run_id)} disabled={costCalculating}>
           {costCalculating ? "成本计算中" : row.cost_calculation_status ? "重新计算运营成本" : "计算运营成本"}
         </RowActionButton>

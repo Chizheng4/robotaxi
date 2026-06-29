@@ -137,8 +137,7 @@ const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), 
 assert.match(mainSource, /row\.duration_source_type === "INHERITED"\s*\? renderViewDetailAction/);
 assert.match(mainSource, /if \(rule\.duration_source_type === "INHERITED"\) return;/);
 assert.doesNotMatch(mainSource, /key: "timing", label: "时效计算"/);
-assert.match(mainSource, /重算运营模拟时间/);
-assert.match(mainSource, /OPERATING_SIMULATION_TIME_CALCULATION_COMPLETED/);
+assert.doesNotMatch(mainSource, /重算运营模拟时间|计算运营模拟时间/);
 
 const createActionLabels = {
   READINESS_TASK_CREATE: "创建运营准入任务",

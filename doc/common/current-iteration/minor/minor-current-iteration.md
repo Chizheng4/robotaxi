@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v033.2`：业务生命周期时间线与自动财务计算小迭代，已归档到 `doc/common/iteration-history/minor/v033.2-business-lifecycle-timeline-and-auto-finance.md`。
 - `v033.1`：时间作业诊断与清理小迭代，已归档到 `doc/common/iteration-history/minor/v033.1-timed-operation-diagnostics.md`。
 - `v032.9`：供给触发周期对齐运营配置时间小迭代，已归档到 `doc/common/iteration-history/minor/v032.9-supply-trigger-window-cadence.md`。
 - `v032.8`：业务触发周期与工作时间约束修复小迭代，已归档到 `doc/common/iteration-history/minor/v032.8-trigger-cadence-and-work-hours.md`。

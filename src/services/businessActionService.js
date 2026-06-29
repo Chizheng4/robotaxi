@@ -21,7 +21,7 @@ export function createReadinessTask({ state, runtime }) {
   );
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "准入任务创建失败：没有待准入 Robotaxi", "readinessTask", null, "没有待准入 Robotaxi");
   const taskId = runtime.nextId("TASK-RC");
-  const task = {
+  const task = withLifecycleStatus({
     task_id: taskId,
     task_type: taskTypes.TaskType.READINESS_CHECK,
     task_status: taskTypes.ReadinessTaskStatus.WAITING_ASSIGNMENT,
@@ -30,7 +30,7 @@ export function createReadinessTask({ state, runtime }) {
     route_execution_id: null,
     created_at: runtime.now(),
     ...runtime.audit({ created: true }),
-  };
+  }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: null, toStatus: taskTypes.ReadinessTaskStatus.WAITING_ASSIGNMENT, actionType: "READINESS_TASK_CREATE", resultType: "READINESS_CREATED" });
   return success("READINESS_CREATED", `准入任务 ${taskId} 已创建`, { objectType: "readinessTask", objectId: taskId, robotaxiId: candidate.robotaxi_id }, {
     readinessTasks: [task, ...(state.readinessTasks || [])],
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", candidate.robotaxi_id, (robotaxi) => ({
@@ -50,14 +50,14 @@ export function assignReadinessTask({ state, objectId, runtime }) {
   const worker = (appData.workers || []).find((item) => item.worker_status === "IDLE") || (appData.workers || [])[0];
   if (!worker) return failure("READINESS_ASSIGN_FAILED", "准入任务分配失败：无可用作业人员", "readinessTask", objectId, "无可用作业人员");
   return success("READINESS_ASSIGNED", `准入任务 ${objectId} 已分配给 ${worker.worker_id}`, { objectType: "readinessTask", objectId, workerId: worker.worker_id }, {
-    readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, (item) => ({
+    readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, (item) => withLifecycleStatus({
       ...item,
       task_status: taskTypes.ReadinessTaskStatus.WAITING_CHECK,
       worker_id: worker.worker_id,
       assigned_worker_id: worker.worker_id,
       assigned_at: runtime.now(),
       ...runtime.audit(),
-    })),
+    }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: item.task_status, toStatus: taskTypes.ReadinessTaskStatus.WAITING_CHECK, actionType: "READINESS_TASK_ASSIGN", resultType: "READINESS_ASSIGNED" })),
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", task.robotaxi_id, (robotaxi) => ({
       ...robotaxi,
       current_task_status: taskTypes.ReadinessTaskStatus.WAITING_CHECK,
@@ -70,12 +70,12 @@ export function startReadinessTask({ state, objectId, runtime }) {
   const task = (state.readinessTasks || []).find((item) => item.task_id === objectId);
   if (!task) return failure("READINESS_START_FAILED", `未找到准入任务 ${objectId}`, "readinessTask", objectId, "未找到准入任务");
   return success("READINESS_STARTED", `准入任务 ${objectId} 检查中`, { objectType: "readinessTask", objectId }, {
-    readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, (item) => ({
+    readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, (item) => withLifecycleStatus({
       ...item,
       task_status: taskTypes.ReadinessTaskStatus.CHECKING,
       started_at: item.started_at || runtime.now(),
       ...runtime.audit(),
-    })),
+    }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: item.task_status, toStatus: taskTypes.ReadinessTaskStatus.CHECKING, actionType: "READINESS_TASK_START", resultType: "READINESS_STARTED" })),
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", task.robotaxi_id, (robotaxi) => ({
       ...robotaxi,
       availability_status: "IN_INSPECTION",
@@ -109,13 +109,13 @@ export function passReadinessTask({ state, objectId, runtime }) {
   const task = (state.readinessTasks || []).find((item) => item.task_id === objectId);
   if (!task) return failure("READINESS_PASS_FAILED", `未找到准入任务 ${objectId}`, "readinessTask", objectId, "未找到准入任务");
   return success("READINESS_PASSED", `准入任务 ${objectId} 已通过`, { objectType: "readinessTask", objectId, robotaxiId: task.robotaxi_id }, {
-    readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, (item) => ({
+    readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, (item) => withLifecycleStatus({
       ...item,
       task_status: taskTypes.ReadinessTaskStatus.COMPLETED,
       check_result: "PASSED",
       completed_at: runtime.now(),
       ...runtime.audit({ completed: true }),
-    })),
+    }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: item.task_status, toStatus: taskTypes.ReadinessTaskStatus.COMPLETED, actionType: "READINESS_TASK_PASS", resultType: "READINESS_PASSED", durationSeconds: getConfiguredDurationSeconds(runtime, "readiness_check_seconds", 30) })),
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", task.robotaxi_id, (robotaxi) => ({
       ...robotaxi,
       availability_status: "AVAILABLE",
@@ -137,7 +137,7 @@ export function createDeploymentTask({ state, runtime }) {
     robotaxi.availability_status === "AVAILABLE" && !robotaxi.current_task_id && !robotaxi.current_order_id
   );
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "投放任务创建失败：无可投放 Robotaxi", "deploymentTask", null, "无可投放 Robotaxi");
-  const target = routePlanningService.getRebalanceDeploymentTarget(appData, {
+  const target = routePlanningService.getRandomDeploymentTarget(appData, {
     originCellId: candidate.current_cell_id,
     robotaxiId: candidate.robotaxi_id,
     seed: `${candidate.robotaxi_id}-${runtime.now()}`,
@@ -146,7 +146,7 @@ export function createDeploymentTask({ state, runtime }) {
 
   const taskId = runtime.nextId("TASK-DP");
   const executionId = runtime.nextId("REX");
-  const task = {
+  const task = withLifecycleStatus({
     task_id: taskId,
     task_type: taskTypes.TaskType.DEPLOYMENT,
     task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
@@ -159,7 +159,7 @@ export function createDeploymentTask({ state, runtime }) {
     planned_target_zone_id: target.target_zone_id,
     planned_target_service_area_id: target.target_service_area_id,
     planned_target_cell_id: target.target_cell_id,
-    deployment_target_model: "TEMPORARY_SUPPLY_REBALANCE",
+    deployment_target_model: target.deployment_target_model || "TEMPORARY_RANDOM_SERVICE_AREA",
     rebalance_reason: target.rebalance_reason || null,
     service_area_vehicle_count: target.service_area_vehicle_count ?? null,
     estimated_distance_steps: target.estimated_distance_steps ?? null,
@@ -173,8 +173,8 @@ export function createDeploymentTask({ state, runtime }) {
     interruptible: true,
     created_at: runtime.now(),
     ...runtime.audit({ created: true }),
-  };
-  const execution = {
+  }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: null, toStatus: taskTypes.DeploymentTaskStatus.WAITING_START, actionType: "DEPLOYMENT_TASK_CREATE", resultType: "DEPLOYMENT_CREATED" });
+  const execution = withLifecycleStatus({
     route_execution_id: executionId,
     task_id: taskId,
     task_type: taskTypes.TaskType.DEPLOYMENT,
@@ -189,7 +189,7 @@ export function createDeploymentTask({ state, runtime }) {
     planned_target_zone_id: target.target_zone_id,
     planned_target_service_area_id: target.target_service_area_id,
     planned_target_cell_id: target.target_cell_id,
-    deployment_target_model: "TEMPORARY_SUPPLY_REBALANCE",
+    deployment_target_model: target.deployment_target_model || "TEMPORARY_RANDOM_SERVICE_AREA",
     rebalance_reason: target.rebalance_reason || null,
     service_area_vehicle_count: target.service_area_vehicle_count ?? null,
     estimated_distance_steps: target.estimated_distance_steps ?? null,
@@ -205,7 +205,7 @@ export function createDeploymentTask({ state, runtime }) {
     battery_consumed_percent: 0,
     created_at: runtime.now(),
     ...runtime.audit({ created: true }),
-  };
+  }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: null, toStatus: taskTypes.RouteExecutionStatus.WAITING_ROUTE, actionType: "ROUTEEXECUTION_CREATE", resultType: "ROUTE_EXECUTION_CREATED" });
   return success("DEPLOYMENT_CREATED", `投放任务 ${taskId} 已创建，关联 RouteExecution ${executionId}`, { objectType: "deploymentTask", objectId: taskId, routeExecutionId: executionId }, {
     deploymentTasks: [task, ...(state.deploymentTasks || [])],
     routeExecutions: [execution, ...(state.routeExecutions || [])],
@@ -236,8 +236,8 @@ export function executeRoutePlanning({ state, objectType, objectId, runtime }) {
   });
   const updates = {
     routePlanningRuns: [{ ...plan.routePlanningRun, ...runtime.audit({ created: true }) }, ...(state.routePlanningRuns || [])],
-    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, { ...plan.execution, ...runtime.audit() }),
-    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, { ...plan.task, ...runtime.audit() }),
+    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, withLifecycleStatus({ ...plan.execution, ...runtime.audit() }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: execution.execution_status, toStatus: plan.execution.execution_status, actionType: "ROUTE_PLAN", resultType: plan.route ? "ROUTE_PLANNED" : "ROUTE_PLAN_FAILED" })),
+    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, withLifecycleStatus({ ...plan.task, ...runtime.audit() }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: task.task_status, toStatus: plan.task.task_status, actionType: "ROUTE_PLAN", resultType: plan.route ? "ROUTE_PLANNED" : "ROUTE_PLAN_FAILED" })),
   };
   if (plan.route) {
     updates.routes = [plan.route, ...(state.routes || [])];
@@ -299,8 +299,8 @@ export function completeRouteExecutionTravel({ state, objectId, runtime }) {
     cellTravelSeconds: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS),
   });
   return success("ROUTE_TRAVEL_COMPLETED", `行驶执行 ${execution.route_execution_id} 已按时间到达目标`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task.task_id }, {
-    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, { ...completed.execution, ...runtime.audit() }),
-    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, { ...completed.task, ...runtime.audit() }),
+    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, withLifecycleStatus({ ...completed.execution, ...runtime.audit() }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: execution.execution_status, toStatus: completed.execution.execution_status, actionType: "ROUTE_EXECUTION_TRAVEL_COMPLETE", resultType: "ROUTE_TRAVEL_COMPLETED", durationSeconds: getRouteTravelDurationSeconds(route, runtime), movementStepCount: route.route_step_count, secondsPerCell: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS) })),
+    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, withLifecycleStatus({ ...completed.task, ...runtime.audit() }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: task.task_status, toStatus: completed.task.task_status, actionType: "ROUTE_EXECUTION_TRAVEL_COMPLETE", resultType: "ROUTE_TRAVEL_COMPLETED", durationSeconds: getRouteTravelDurationSeconds(route, runtime), movementStepCount: route.route_step_count, secondsPerCell: getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS) })),
     robotaxis: completed.robotaxi ? replaceById(state.robotaxis || [], "robotaxi_id", robotaxi.robotaxi_id, { ...completed.robotaxi, ...runtime.audit() }) : state.robotaxis,
     timedOperations: [
       createTimedOperation({
@@ -328,8 +328,8 @@ export function confirmRouteExecutionArrival({ state, objectId, runtime }) {
   const robotaxi = (state.robotaxis || []).find((item) => item.robotaxi_id === execution.robotaxi_id);
   const confirmed = routePlanningService.confirmRouteExecutionArrival({ execution, task, robotaxi });
   return success("ARRIVAL_CONFIRMED", `行驶执行 ${execution.route_execution_id} 到达确认完成`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task?.task_id }, {
-    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, { ...confirmed.execution, arrival_confirmed: true, ...runtime.audit({ completed: true }) }),
-    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, { ...confirmed.task, ...runtime.audit({ completed: true }) }),
+    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, withLifecycleStatus({ ...confirmed.execution, arrival_confirmed: true, ...runtime.audit({ completed: true }) }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: execution.execution_status, toStatus: confirmed.execution.execution_status, actionType: "ARRIVAL_CONFIRM", resultType: "ARRIVAL_CONFIRMED", durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3) })),
+    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, withLifecycleStatus({ ...confirmed.task, ...runtime.audit({ completed: true }) }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: task.task_status, toStatus: confirmed.task.task_status, actionType: "ARRIVAL_CONFIRM", resultType: "ARRIVAL_CONFIRMED", durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3) })),
     robotaxis: confirmed.robotaxi ? replaceById(state.robotaxis || [], "robotaxi_id", robotaxi.robotaxi_id, { ...confirmed.robotaxi, ...runtime.audit() }) : state.robotaxis,
   });
 }
@@ -353,7 +353,15 @@ export function createServiceOrder({ state, runtime }) {
       demandSimulationRuns: demandRun ? [{ ...demandRun, ...runtime.audit({ created: true }) }, ...(state.demandSimulationRuns || [])] : state.demandSimulationRuns,
     });
   }
-  const order = createServiceOrderFromDemandRun(demandRun, "OWN_APP_SIMULATED_ORDER", runtime);
+  const order = withLifecycleStatus(createServiceOrderFromDemandRun(demandRun, "OWN_APP_SIMULATED_ORDER", runtime), {
+    runtime,
+    objectType: "serviceOrder",
+    statusField: "order_status",
+    fromStatus: null,
+    toStatus: serviceOrderTypes.ServiceOrderStatus.WAITING_PRICE_ESTIMATE,
+    actionType: "SERVICE_ORDER_CREATE",
+    resultType: "ORDER_CREATED",
+  });
   return success("ORDER_CREATED", `服务订单 ${order.service_order_id} 已创建`, { objectType: "serviceOrder", objectId: order.service_order_id, serviceOrderId: order.service_order_id }, {
     demandSimulationRuns: [{ ...demandRun, ...runtime.audit({ created: true }) }, ...(state.demandSimulationRuns || [])],
     serviceOrders: [order, ...(state.serviceOrders || [])],
@@ -404,7 +412,7 @@ export function executePricing({ state, objectId, runtime }) {
     routePlanningRuns: [{ ...routePlanningRun, ...runtime.audit({ created: true }) }, ...(state.routePlanningRuns || [])],
     pricingStrategyRuns: [{ ...pricingResult.run, ...runtime.audit({ created: true }) }, ...(state.pricingStrategyRuns || [])],
     pricingDecisions: [{ ...pricingResult.decision, ...runtime.audit({ created: true }) }, ...(state.pricingDecisions || [])],
-    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
+    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({
       ...order,
       order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_CALL,
       estimated_pricing_decision_id: pricingResult.decision.pricing_decision_id,
@@ -420,7 +428,7 @@ export function executePricing({ state, objectId, runtime }) {
       pricing_breakdown_snapshot: pricingResult.decision.pricing_breakdown_snapshot,
       failure_reason: null,
       ...runtime.audit(),
-    }),
+    }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_CALL, actionType: "PRICING_EXECUTE", resultType: "PRICING_COMPLETED" })),
   });
 }
 
@@ -429,14 +437,14 @@ export function callRobotaxi({ state, objectId, runtime }) {
   if (!order) return failure("ROBOTAXI_CALL_FAILED", `未找到服务订单 ${objectId}`, "serviceOrder", objectId, "未找到服务订单");
   const waitSeconds = getConfiguredDurationSeconds(runtime, "order_assignment_wait_seconds", 60);
   return success("CUSTOMER_CONFIRMED", `服务订单 ${objectId} 客户已确认`, { objectType: "serviceOrder", objectId }, {
-    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
+    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({
       ...order,
       order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT,
       confirmed_at: runtime.now(),
       assignment_wait_timeout_seconds: waitSeconds,
       failure_reason: null,
       ...runtime.audit(),
-    }),
+    }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT, actionType: "ROBOTAXI_CALL", resultType: "CUSTOMER_CONFIRMED", durationSeconds: waitSeconds })),
     timedOperations: [
       createTimedOperation({
         timedOperationId: runtime.nextId("TOP"),
@@ -516,12 +524,20 @@ export function executeOrderMatching({ state, objectId, runtime }) {
   }
   const robotaxiId = matchingResult.decision.selected_robotaxi_id;
   const matchedOrder = { ...order, matched_robotaxi_id: robotaxiId };
-  const trip = createTripForOrder(matchedOrder, appData, runtime);
+  const trip = withLifecycleStatus(createTripForOrder(matchedOrder, appData, runtime), {
+    runtime,
+    objectType: "trip",
+    statusField: "trip_status",
+    fromStatus: null,
+    toStatus: tripTypes.TripStatus.WAITING_ROUTE,
+    actionType: "TRIP_CREATE",
+    resultType: "TRIP_CREATED",
+  });
   return success("MATCHING_COMPLETED", `服务订单 ${objectId} 匹配成功，Robotaxi: ${robotaxiId}`, { objectType: "serviceOrder", objectId, robotaxiId, tripId: trip.trip_id }, {
     orderMatchingRuns: [{ ...matchingResult.run, ...runtime.audit({ created: true }) }, ...(state.orderMatchingRuns || [])],
     orderMatchingDecisions: [{ ...matchingResult.decision, ...runtime.audit({ created: true }) }, ...(state.orderMatchingDecisions || [])],
     trips: [trip, ...(state.trips || [])],
-    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
+    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({
       ...order,
       order_status: serviceOrderTypes.ServiceOrderStatus.ON_THE_WAY_PICKUP,
       matched_robotaxi_id: robotaxiId,
@@ -535,7 +551,7 @@ export function executeOrderMatching({ state, objectId, runtime }) {
       simulation_matched_at: runtime.simulationTime(),
       failure_reason: null,
       ...runtime.audit(),
-    }),
+    }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: serviceOrderTypes.ServiceOrderStatus.ON_THE_WAY_PICKUP, actionType: "ORDER_MATCHING_EXECUTE", resultType: "MATCHING_COMPLETED" })),
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", robotaxiId, (robotaxi) => ({
       ...robotaxi,
       current_order_id: objectId,
@@ -565,7 +581,7 @@ export function cancelServiceOrder({ state, objectId, runtime }) {
   }
   const reason = runtime.context?.action?.operation_payload?.cancellation_reason || "ROBOTAXI_ASSIGNMENT_TIMEOUT";
   return success("SERVICE_ORDER_CANCELLED", `服务订单 ${objectId} 分配等待超时，已取消`, { objectType: "serviceOrder", objectId, cancellationReason: reason }, {
-    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
+    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({
       ...order,
       order_status: serviceOrderTypes.ServiceOrderStatus.CANCELLED,
       matching_retry_pending: false,
@@ -575,7 +591,7 @@ export function cancelServiceOrder({ state, objectId, runtime }) {
       simulation_cancelled_at: runtime.simulationTime(),
       failure_reason: null,
       ...runtime.audit({ completed: true }),
-    }),
+    }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: serviceOrderTypes.ServiceOrderStatus.CANCELLED, actionType: "SERVICE_ORDER_CANCEL", resultType: "SERVICE_ORDER_CANCELLED" })),
     timedOperations: cancelPendingTimedOperations(state.timedOperations || [], (operation) =>
       operation.object_type === "serviceOrder"
       && operation.object_id === objectId
@@ -592,7 +608,15 @@ export function advanceTrip({ state, objectId, runtime }) {
   if (!trip && order) trip = (state.trips || []).find((item) => item.trip_id === order.trip_id);
   if (!order) return failure("TRIP_NO_ORDER", `未找到服务订单 ${objectId}`, "trip", objectId, "未找到服务订单");
   if (!trip) {
-    const createdTrip = createTripForOrder(order, appData, runtime);
+    const createdTrip = withLifecycleStatus(createTripForOrder(order, appData, runtime), {
+      runtime,
+      objectType: "trip",
+      statusField: "trip_status",
+      fromStatus: null,
+      toStatus: tripTypes.TripStatus.WAITING_ROUTE,
+      actionType: "TRIP_CREATE",
+      resultType: "TRIP_CREATED",
+    });
     return success("TRIP_CREATED", `履约行驶 ${createdTrip.trip_id} 已创建`, { objectType: "trip", objectId: createdTrip.trip_id, serviceOrderId: order.service_order_id }, {
       trips: [createdTrip, ...(state.trips || [])],
       serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", order.service_order_id, { ...order, trip_id: createdTrip.trip_id, ...runtime.audit() }),
@@ -695,7 +719,7 @@ export function settleServiceOrder({ state, objectId, runtime }) {
   return success(result.decision ? "SETTLEMENT_COMPLETED" : "SETTLEMENT_FAILED", result.decision ? `服务订单 ${objectId} 结算完成，最终价格 ${result.decision.final_price}` : `服务订单 ${objectId} 结算失败`, { objectType: "serviceOrder", objectId, pricingDecisionId: result.decision?.pricing_decision_id || null }, {
     pricingStrategyRuns: result.run ? [{ ...result.run, ...runtime.audit({ created: true }) }, ...(state.pricingStrategyRuns || [])] : state.pricingStrategyRuns,
     pricingDecisions: result.decision ? [{ ...result.decision, ...runtime.audit({ created: true }) }, ...(state.pricingDecisions || [])] : state.pricingDecisions,
-    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, { ...nextOrder, ...runtime.audit() }),
+    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({ ...nextOrder, ...runtime.audit() }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: nextOrder.order_status, actionType: "SETTLEMENT_EXECUTE", resultType: result.decision ? "SETTLEMENT_COMPLETED" : "SETTLEMENT_FAILED" })),
   }, Boolean(result.decision));
 }
 
@@ -712,8 +736,8 @@ export function payServiceOrder({ state, objectId, runtime }) {
   });
   if (!result.success) return failure("PAYMENT_FAILED", `服务订单 ${objectId} 支付失败：${result.failureReason}`, "serviceOrder", objectId, result.failureReason);
   return success("PAYMENT_COMPLETED", `服务订单 ${objectId} 支付完成`, { objectType: "serviceOrder", objectId }, {
-    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, { ...result.serviceOrder, simulation_payment_completed_at: runtime.simulationTime(), ...runtime.audit({ completed: true }) }),
-    trips: result.trips.map((trip) => trip.service_order_id === objectId ? { ...trip, ...runtime.audit({ completed: true }) } : trip),
+    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({ ...result.serviceOrder, simulation_payment_completed_at: runtime.simulationTime(), ...runtime.audit({ completed: true }) }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: result.serviceOrder.order_status, actionType: "PAYMENT_EXECUTE", resultType: "PAYMENT_COMPLETED" })),
+    trips: result.trips.map((trip) => trip.service_order_id === objectId ? withLifecycleStatus({ ...trip, ...runtime.audit({ completed: true }) }, { runtime, objectType: "trip", statusField: "trip_status", fromStatus: trip.trip_status, toStatus: trip.trip_status, actionType: "PAYMENT_EXECUTE", resultType: "PAYMENT_COMPLETED" }) : trip),
     robotaxis: result.robotaxis.map((robotaxi) => robotaxi.current_order_id === objectId ? { ...robotaxi, motion_status: "PARKED", ...runtime.audit() } : robotaxi),
   });
 }
@@ -810,21 +834,35 @@ function planTripRoute({ state, objectId, runtime }) {
 }
 
 function tripUpdateResult({ state, order, trip, runtime, resultType, message, extraUpdates = {}, successValue = true }) {
+  const previousTrip = (state.trips || []).find((item) => item.trip_id === trip.trip_id);
+  const actionType = getTripLifecycleActionType(resultType);
+  const nextTrip = withLifecycleStatus(trip, {
+    runtime,
+    objectType: "trip",
+    statusField: "trip_status",
+    fromStatus: previousTrip?.trip_status,
+    toStatus: trip.trip_status,
+    actionType,
+    resultType,
+    durationSeconds: getTripLifecycleDurationSeconds(resultType, trip, runtime),
+    movementStepCount: trip.route_id ? trip.total_step_count : null,
+    secondsPerCell: resultType === "TRIP_TRAVEL_COMPLETED" ? getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS) : null,
+  });
   return {
     success: successValue,
     resultType,
     message,
     data: { objectType: "trip", objectId: trip.trip_id, serviceOrderId: order.service_order_id },
     updates: {
-      trips: replaceById(state.trips || [], "trip_id", trip.trip_id, trip),
-      serviceOrders: syncServiceOrderFromTrip(state.serviceOrders || [], order.service_order_id, trip, runtime),
-      robotaxis: updateRobotaxiFromTrip(state.robotaxis || [], trip, runtime),
+      trips: replaceById(state.trips || [], "trip_id", trip.trip_id, nextTrip),
+      serviceOrders: syncServiceOrderFromTrip(state.serviceOrders || [], order.service_order_id, nextTrip, runtime, { actionType, resultType }),
+      robotaxis: updateRobotaxiFromTrip(state.robotaxis || [], nextTrip, runtime),
       ...extraUpdates,
     },
   };
 }
 
-function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime) {
+function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime, lifecycle = {}) {
   const orderStatusByTripStatus = {
     ON_THE_WAY_PICKUP: serviceOrderTypes.ServiceOrderStatus.ON_THE_WAY_PICKUP,
     WAITING_CUSTOMER_BOARDING: serviceOrderTypes.ServiceOrderStatus.WAITING_CUSTOMER_BOARDING,
@@ -836,7 +874,7 @@ function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime) 
   };
   const orderStatus = orderStatusByTripStatus[trip.trip_status];
   if (!orderStatus) return serviceOrders;
-  return replaceById(serviceOrders, "service_order_id", serviceOrderId, (order) => ({
+  return replaceById(serviceOrders, "service_order_id", serviceOrderId, (order) => withLifecycleStatus({
     ...order,
     order_status: orderStatus,
     trip_total_distance_km: trip.total_distance_km,
@@ -844,7 +882,7 @@ function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime) 
     trip_distance_traveled_km: trip.distance_traveled_km,
     trip_distance_remaining_km: trip.distance_remaining_km,
     ...runtime.audit(),
-  }));
+  }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: orderStatus, actionType: lifecycle.actionType || "TRIP_STATUS_PROJECT", resultType: lifecycle.resultType || "TRIP_STATUS_PROJECTED" }));
 }
 
 function updateRobotaxiFromTrip(robotaxis, trip, runtime) {
@@ -928,6 +966,77 @@ function success(resultType, message, data, updates = {}, successValue = true) {
 
 function failure(resultType, message, objectType, objectId, failureReason, updates = {}) {
   return { success: false, resultType, message, data: { objectType, objectId, failureReason }, updates };
+}
+
+function withLifecycleStatus(item, {
+  runtime,
+  objectType,
+  statusField,
+  fromStatus,
+  toStatus,
+  actionType,
+  resultType,
+  durationSeconds = 0,
+  movementStepCount = null,
+  secondsPerCell = null,
+  sourceTransitionId = null,
+} = {}) {
+  if (!item || !statusField || !actionType) return item;
+  const previousStatus = fromStatus !== undefined ? fromStatus : item[statusField] || null;
+  const nextStatus = toStatus !== undefined ? toStatus : item[statusField] || null;
+  const history = Array.isArray(item.simulation_status_transition_history) ? item.simulation_status_transition_history : [];
+  if (history.length > 0 && previousStatus === nextStatus) return item;
+  const changedAt = runtime?.simulationTime?.() || item.simulation_updated_at || item.simulation_created_at || runtime?.now?.() || new Date().toISOString();
+  const transition = {
+    status_transition_id: runtime?.nextId ? runtime.nextId("ST") : `ST-${String(history.length + 1).padStart(4, "0")}`,
+    transition_sequence: history.length + 1,
+    business_object_type: objectType || null,
+    from_status: previousStatus,
+    action_type: actionType,
+    result_type: resultType || null,
+    to_status: nextStatus,
+    simulation_action_started_at: changedAt,
+    calculated_simulation_action_started_at: changedAt,
+    configured_duration_seconds: Math.max(0, Number(durationSeconds) || 0),
+    movement_step_count: movementStepCount,
+    seconds_per_cell: secondsPerCell,
+    simulation_status_changed_at: changedAt,
+    calculated_simulation_status_changed_at: changedAt,
+    workflow_timing_rule_id: null,
+    source_transition_id: sourceTransitionId,
+    business_timing_calculation_run_id: null,
+  };
+  return {
+    ...item,
+    simulation_status_transition_history: [...history, transition],
+  };
+}
+
+function getRouteTravelDurationSeconds(route, runtime) {
+  const cellSeconds = getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS);
+  return Math.max(1, (Number(route?.route_step_count) || 0) * cellSeconds);
+}
+
+function getTripLifecycleActionType(resultType) {
+  if (resultType === "TRIP_TRAVEL_COMPLETED") return "TRIP_TRAVEL_COMPLETE";
+  if (resultType === "TRIP_ADVANCED") return "TRIP_STEP_EXECUTE";
+  if (resultType === "TRIP_CREATED") return "TRIP_CREATE";
+  if (resultType === "ROUTE_PLAN_FAILED") return "ROUTE_PLAN";
+  return "TRIP_STEP_EXECUTE";
+}
+
+function getTripLifecycleDurationSeconds(resultType, trip, runtime) {
+  if (resultType === "TRIP_TRAVEL_COMPLETED") {
+    const cellSeconds = getConfiguredDurationSeconds(runtime, "cell_travel_seconds", routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS);
+    return Math.max(1, (Number(trip?.total_step_count) || 0) * cellSeconds);
+  }
+  if (trip?.trip_status === tripTypes.TripStatus.CUSTOMER_ONBOARD) {
+    return getConfiguredDurationSeconds(runtime, "passenger_boarding_seconds", 15);
+  }
+  if (trip?.trip_status === tripTypes.TripStatus.COMPLETED) {
+    return getConfiguredDurationSeconds(runtime, "customer_dropoff_seconds", 15);
+  }
+  return 0;
 }
 
 function replaceById(items, key, id, nextValue) {
