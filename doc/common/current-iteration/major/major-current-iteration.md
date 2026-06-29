@@ -11,7 +11,7 @@
 方案设计入口：
 
 - `doc/06-metrics-system/00-operating-metrics-system.md`
-- `doc/06-metrics-system/05-v034-operating-metrics-implementation-plan.md`
+- `doc/common/current-iteration/major/v034-operating-metrics-system-plan.md`
 
 最近完成大版本：`v033.0 高性能模拟运行内核与扩展规范`。
 
