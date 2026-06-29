@@ -201,6 +201,122 @@
 |REVENUE_AMOUNT_MISSING|缺少收入金额|收入生成错误|
 |REVENUE_CALCULATION_FAILED|收入生成失败|收入生成错误|
 
+## 1.2 Operating Metrics：经营指标系统
+
+### 1.2.1 MetricDefinition：指标定义
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|metric_definition_id|指标定义编号|持久化字段|稳定唯一指标编号|
+|metric_name_cn|指标中文名|持久化字段|前端展示中文名称|
+|metric_name_en|指标英文名|持久化字段|指标英文业务名称|
+|metric_layer|指标层级|持久化字段|STATE、PROCESS、OUTCOME、QUALITY|
+|metric_domain|指标领域|持久化字段|FINANCE、SERVICE、EFFICIENCY 等|
+|business_definition|业务定义|持久化字段|指标回答的经营问题|
+|calculation_formula|计算公式|持久化字段|使用正式字段描述的计算公式|
+|source_objects|来源对象|持久化字段|指标消费的业务对象或事实对象|
+|source_fields|来源字段|持久化字段|指标消费的正式字段|
+|time_basis|时间口径|持久化字段|SIMULATION_TIME|
+|default_time_window|默认时间窗|持久化字段|SIMULATION_RUN、DAY、HOUR、10_MINUTE|
+|supported_dimensions|支持维度|持久化字段|simulation_run_id、service_area_id 等|
+|zero_denominator_rule|零分母规则|持久化字段|分母为 0 时的处理方式|
+|data_readiness|数据就绪度|持久化字段|READY、DERIVABLE、MISSING_DATA|
+|display_unit|展示单位|持久化字段|currency、percent、count、second、km|
+|higher_is_better|越高越好|持久化字段|指标趋势解释方向|
+|metric_status|指标状态|持久化字段|ACTIVE、RESERVED、DISABLED|
+|definition_version|定义版本|持久化字段|指标定义版本|
+
+### 1.2.2 MetricCalculationRun：指标计算运行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|metric_calculation_run_id|指标计算运行编号|持久化字段|指标计算批次唯一编号|
+|simulation_run_id|模拟运行编号|持久化字段|来源 SimulationRun|
+|simulation_timeline_id|模拟时间轴编号|持久化字段|来源连续模拟时间轴|
+|calculation_status|计算状态|运行态字段|QUEUED、CALCULATING、SUCCEEDED、PARTIALLY_SUCCEEDED、FAILED|
+|calculation_progress_percent|计算进度（%）|运行态字段|指标计算进度|
+|metric_definition_count|指标定义数|运行态字段|本次纳入计算的指标定义数量|
+|generated_metric_observation_count|生成指标观测数|运行态字段|生成 MetricObservation 数量|
+|error_count|错误数量|运行态字段|指标质量或计算错误数量|
+|calculation_errors|计算错误列表|运行态字段|结构化错误列表|
+|algorithm_version|计算算法版本|持久化字段|指标计算算法版本|
+|started_at|开始时间|持久化字段|真实审计开始时间|
+|completed_at|完成时间|持久化字段|真实审计完成时间|
+
+### 1.2.3 MetricObservation：指标观测
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|metric_observation_id|指标观测编号|持久化字段|指标观测唯一编号|
+|metric_calculation_run_id|指标计算运行编号|持久化字段|来源指标计算批次|
+|metric_definition_id|指标定义编号|持久化字段|来源指标定义|
+|simulation_run_id|模拟运行编号|持久化字段|来源模拟运行|
+|simulation_timeline_id|模拟时间轴编号|持久化字段|来源连续模拟时间轴|
+|window_type|时间窗类型|持久化字段|SIMULATION_RUN、DAY、HOUR、10_MINUTE|
+|window_start_seconds|窗口开始秒|持久化字段|绝对模拟秒窗口开始|
+|window_end_seconds|窗口结束秒|持久化字段|绝对模拟秒窗口结束|
+|window_label|窗口显示名|运行态字段|前端可读时间窗|
+|dimension_type|维度类型|持久化字段|GLOBAL、SERVICE_AREA、ROBOTAXI、ORDER_CHANNEL|
+|dimension_id|维度编号|持久化字段|具体维度值|
+|metric_value|指标值|运行态字段|指标计算结果|
+|metric_unit|指标单位|运行态字段|currency、percent、count 等|
+|numerator_value|分子值|运行态字段|比率指标分子|
+|denominator_value|分母值|运行态字段|比率指标分母|
+|quality_status|质量状态|运行态字段|PASS、WARN、FAIL|
+|quality_reason|质量说明|运行态字段|指标质量解释|
+|source_record_count|来源记录数|运行态字段|参与计算的来源记录数|
+|source_object_refs|来源对象引用|运行态字段|可下钻来源对象|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### 1.2.4 SimulationRun 指标汇总字段
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|metric_calculation_status|指标计算状态|运行态字段|SimulationRun 上的指标计算状态|
+|metric_calculation_progress_percent|指标计算进度（%）|运行态字段|SimulationRun 上的指标计算进度|
+|active_metric_calculation_run_id|当前指标计算运行编号|运行态字段|当前使用的指标计算批次|
+|metric_result_summary|指标结果摘要|运行态字段|指标计算结果摘要|
+|metric_calculation_errors|指标计算错误|运行态字段|指标计算质量问题或错误|
+
+### 1.2.5 指标枚举中文
+
+|英文值|中文名|用途|
+|---|---|---|
+|STATE|状态指标|指标层级|
+|PROCESS|过程指标|指标层级|
+|OUTCOME|结果指标|指标层级|
+|QUALITY|质量指标|指标层级|
+|FINANCE|财务|指标领域|
+|SERVICE|服务|指标领域|
+|EFFICIENCY|效率|指标领域|
+|MATCHING|匹配|指标领域|
+|ROUTING|路径|指标领域|
+|SUPPLY|供给|指标领域|
+|DEMAND|需求|指标领域|
+|QUALITY|质量|指标领域|
+|ACTIVE|启用|指标状态|
+|RESERVED|预留|指标状态|
+|DISABLED|停用|指标状态|
+|READY|可直接计算|数据就绪度|
+|DERIVABLE|可推导|数据就绪度|
+|MISSING_DATA|缺少数据|数据就绪度|
+|SIMULATION_RUN|模拟运行|时间窗类型|
+|DAY|模拟日|时间窗类型|
+|HOUR|小时|时间窗类型|
+|10_MINUTE|10 分钟|时间窗类型|
+|GLOBAL|全局|维度类型|
+|SERVICE_AREA|服务区|维度类型|
+|ROBOTAXI|Robotaxi|维度类型|
+|ORDER_CHANNEL|订单渠道|维度类型|
+|PASS|通过|质量状态|
+|WARN|提示|质量状态|
+|FAIL|失败|质量状态|
+|currency|金额|指标单位 / 展示单位|
+|percent|比例|指标单位 / 展示单位|
+|count|数量|指标单位 / 展示单位|
+|second|秒|指标单位 / 展示单位|
+|km|公里|指标单位 / 展示单位|
+
 ### 1.1.9 工作流状态边枚举中文
 
 |英文值|中文名|用途|
