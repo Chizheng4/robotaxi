@@ -1,5 +1,9 @@
 # 后续待执行：Robotaxi 经营指标模型方案
 
+> 当前状态：已被 `doc/06-metrics-system/00-operating-metrics-system.md` 与 `doc/common/current-iteration/major/v034-operating-metrics-system-plan.md` 取代。
+>
+> 本文件保留早期分析痕迹，不再作为后续编码或版本推进入口。后续经营指标系统以 `v034` 方案为准。
+
 ## 1. 文档状态
 
 - 版本：待后续确认，不占用 `v028.1`

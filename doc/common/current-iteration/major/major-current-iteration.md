@@ -1,6 +1,17 @@
 # 当前大版本迭代
 
-当前大版本：暂无进行中的大版本。
+当前大版本：`v034 经营指标系统`。
+
+当前状态：方案设计完成，等待用户确认后再进入代码实现；不得自动推进编码。
+
+当前计划入口：
+
+方案设计：`v034-operating-metrics-system-plan.md`
+
+方案设计入口：
+
+- `doc/06-metrics-system/00-operating-metrics-system.md`
+- `doc/06-metrics-system/05-v034-operating-metrics-implementation-plan.md`
 
 最近完成大版本：`v033.0 高性能模拟运行内核与扩展规范`。
 
@@ -10,8 +21,10 @@
 - `doc/common/iteration-history/major/v032-auto-execution-plan.md`
 - `doc/common/iteration-history/major/v033.0-high-performance-simulation-runtime.md`
 
-后续待执行方案：`operating-metrics-model-pending-plan.md`。
+说明：
 
-经营指标模型继续等待业务状态时间线、路径规划事实和模拟业务闭环稳定后再获得正式版本编号，本入口不得提前驱动指标编码。
+`v032` 已完成统一时间世界、时间作业调度、行驶时间驱动、供需自动化闭环和运行失败可定位能力。
 
-`v032` 已完成统一时间世界、时间作业调度、行驶时间驱动、供需自动化闭环和运行失败可定位能力；不包含完整经营指标体系。
+`v033` 已完成高性能模拟运行、业务生命周期状态时间线、自动财务计算和工作流时效沉淀。
+
+`v034` 开始进入经营指标系统建设，以现有业务事实、成本事实和收入事实为基础，先建立指标定义、指标计算、指标观测、指标展示和质量护栏。
