@@ -36,6 +36,17 @@ export const MetricUnit = {
   KM: "km",
 };
 
+export const MetricScopeType = {
+  SIMULATION_RUN: "SIMULATION_RUN",
+  OPERATING_PERIOD: "OPERATING_PERIOD",
+};
+
+export const MetricPeriodType = {
+  ALL: "ALL",
+  LATEST_DAY: "LATEST_DAY",
+  LATEST_7_DAYS: "LATEST_7_DAYS",
+};
+
 export const defaultMetricDefinitions = [
   definition("OUTCOME-FIN-001", "应收收入", "Receivable Revenue", MetricDomain.FINANCE, "sum(RECEIVABLE_REVENUE.revenue_amount)", ["RevenueRecord"], ["revenue_type", "revenue_amount"], MetricUnit.CURRENCY, true),
   definition("OUTCOME-FIN-002", "实收收入", "Collected Revenue", MetricDomain.FINANCE, "sum(COLLECTED_REVENUE.revenue_amount)", ["RevenueRecord"], ["revenue_type", "revenue_amount"], MetricUnit.CURRENCY, true),
@@ -71,19 +82,46 @@ export function createMetricCalculation({
   calculationRunId,
   algorithmVersion = "1.0.0",
 }) {
-  const startedAt = new Date().toISOString();
-  const definitions = normalizeMetricDefinitions(metricDefinitions);
-  const runRevenueRecords = (revenueRecords || []).filter((record) => record.simulation_run_id === simulationRun.simulation_run_id);
-  const runCostRecords = (costRecords || []).filter((record) => record.simulation_run_id === simulationRun.simulation_run_id);
-  const runScope = scope || {};
-  const context = {
+  return createCalculationFromContext(createSimulationRunMetricContext({
     simulationRun,
-    scope: runScope,
-    revenueRecords: runRevenueRecords,
-    costRecords: runCostRecords,
+    scope,
+    revenueRecords,
+    costRecords,
     calculationRunId,
-    createdAt: startedAt,
-  };
+  }), normalizeMetricDefinitions(metricDefinitions), algorithmVersion);
+}
+
+export function createPeriodMetricCalculation({
+  simulationRuns = [],
+  scope,
+  revenueRecords = [],
+  costRecords = [],
+  metricDefinitions = initializeDefaultMetricDefinitions(),
+  calculationRunId,
+  periodType = MetricPeriodType.ALL,
+  algorithmVersion = "1.0.0",
+}) {
+  return createCalculationFromContext(createOperatingPeriodMetricContext({
+    simulationRuns,
+    scope,
+    revenueRecords,
+    costRecords,
+    calculationRunId,
+    periodType,
+  }), normalizeMetricDefinitions(metricDefinitions), algorithmVersion);
+}
+
+export function getMetricPeriodOptions() {
+  return [
+    { value: MetricPeriodType.ALL, label: "全量经营周期" },
+    { value: MetricPeriodType.LATEST_DAY, label: "最近 1 个模拟日" },
+    { value: MetricPeriodType.LATEST_7_DAYS, label: "最近 7 个模拟日" },
+  ];
+}
+
+function createCalculationFromContext(context, definitions, algorithmVersion) {
+  const startedAt = new Date().toISOString();
+  context.createdAt = startedAt;
   const observations = definitions
     .filter((item) => item.metric_status === "ACTIVE")
     .map((metricDefinition, index) => calculateObservation(metricDefinition, context, index + 1));
@@ -104,9 +142,13 @@ export function createMetricCalculation({
   return {
     metricObservations: observations,
     calculationRun: {
-      metric_calculation_run_id: calculationRunId,
-      simulation_run_id: simulationRun.simulation_run_id,
-      simulation_timeline_id: simulationRun.simulation_timeline_id || null,
+      metric_calculation_run_id: context.calculationRunId,
+      metric_scope_type: context.metricScopeType,
+      metric_period_type: context.metricPeriodType,
+      metric_period_label: context.metricPeriodLabel,
+      simulation_run_id: context.simulationRun?.simulation_run_id || null,
+      simulation_run_ids: context.simulationRunIds,
+      simulation_timeline_id: context.simulationTimelineId,
       calculation_status: status,
       calculation_progress_percent: 100,
       metric_definition_count: definitions.filter((item) => item.metric_status === "ACTIVE").length,
@@ -118,6 +160,126 @@ export function createMetricCalculation({
       completed_at: new Date().toISOString(),
     },
   };
+}
+
+function createSimulationRunMetricContext({ simulationRun, scope, revenueRecords = [], costRecords = [], calculationRunId }) {
+  const runRevenueRecords = (revenueRecords || []).filter((record) => record.simulation_run_id === simulationRun.simulation_run_id);
+  const runCostRecords = (costRecords || []).filter((record) => record.simulation_run_id === simulationRun.simulation_run_id);
+  return {
+    simulationRun,
+    simulationRunIds: [simulationRun.simulation_run_id],
+    simulationTimelineId: simulationRun.simulation_timeline_id || null,
+    metricScopeType: MetricScopeType.SIMULATION_RUN,
+    metricPeriodType: "SIMULATION_RUN",
+    metricPeriodLabel: simulationRun.simulation_name || simulationRun.simulation_run_id,
+    scope: scope || {},
+    revenueRecords: runRevenueRecords,
+    costRecords: runCostRecords,
+    calculationRunId,
+  };
+}
+
+function createOperatingPeriodMetricContext({ simulationRuns = [], scope = {}, revenueRecords = [], costRecords = [], calculationRunId, periodType }) {
+  const period = resolveOperatingPeriod(simulationRuns, periodType);
+  const runIds = new Set(period.simulationRuns.map((run) => run.simulation_run_id).filter(Boolean));
+  const scopedRunIds = runIds.size > 0 ? runIds : new Set((simulationRuns || []).map((run) => run.simulation_run_id).filter(Boolean));
+  const filteredScope = filterScopeBySimulationRuns(scope || {}, scopedRunIds);
+  return {
+    simulationRun: createPeriodAnchor(period, scopedRunIds),
+    simulationRunIds: [...scopedRunIds],
+    simulationTimelineId: period.simulationTimelineId,
+    metricScopeType: MetricScopeType.OPERATING_PERIOD,
+    metricPeriodType: period.periodType,
+    metricPeriodLabel: period.periodLabel,
+    scope: filteredScope,
+    revenueRecords: filterRecordsBySimulationRuns(revenueRecords, scopedRunIds),
+    costRecords: filterRecordsBySimulationRuns(costRecords, scopedRunIds),
+    calculationRunId,
+  };
+}
+
+function resolveOperatingPeriod(simulationRuns = [], periodType = MetricPeriodType.ALL) {
+  const normalizedRuns = (simulationRuns || []).filter((run) => run?.simulation_run_id);
+  const endSeconds = Math.max(0, ...normalizedRuns.map((run) => getRunEndSeconds(run)));
+  const earliestStartSeconds = normalizedRuns.length
+    ? Math.min(...normalizedRuns.map((run) => getRunStartSeconds(run)))
+    : 0;
+  const startSeconds = periodType === MetricPeriodType.LATEST_DAY
+    ? Math.max(0, endSeconds - 86400)
+    : periodType === MetricPeriodType.LATEST_7_DAYS
+      ? Math.max(0, endSeconds - 86400 * 7)
+      : earliestStartSeconds;
+  const periodRuns = periodType === MetricPeriodType.ALL
+    ? normalizedRuns
+    : normalizedRuns.filter((run) => getRunEndSeconds(run) >= startSeconds && getRunStartSeconds(run) <= endSeconds);
+  return {
+    periodType,
+    periodLabel: getPeriodLabel(periodType, startSeconds, endSeconds),
+    startSeconds,
+    endSeconds,
+    simulationRuns: periodRuns,
+    simulationTimelineId: periodRuns.find((run) => run.simulation_timeline_id)?.simulation_timeline_id || null,
+  };
+}
+
+function createPeriodAnchor(period, runIds) {
+  return {
+    simulation_run_id: null,
+    simulation_name: period.periodLabel,
+    simulation_timeline_id: period.simulationTimelineId,
+    start_simulation_seconds: period.startSeconds,
+    end_simulation_seconds: period.endSeconds,
+    start_time: formatMetricPeriodTime(period.startSeconds),
+    completed_time: formatMetricPeriodTime(period.endSeconds),
+    cost_calculation_status: "SUCCEEDED",
+    revenue_calculation_status: "SUCCEEDED",
+    source_simulation_run_count: runIds.size,
+  };
+}
+
+function getRunStartSeconds(run) {
+  return Number(run.start_simulation_seconds ?? run.simulation_start_seconds ?? 0) || 0;
+}
+
+function getRunEndSeconds(run) {
+  return Number(run.end_simulation_seconds ?? run.simulation_end_seconds ?? run.current_simulation_seconds ?? getRunStartSeconds(run)) || 0;
+}
+
+function getPeriodLabel(periodType, startSeconds, endSeconds) {
+  const option = getMetricPeriodOptions().find((item) => item.value === periodType);
+  return `${option?.label || "经营周期"}：${formatMetricPeriodTime(startSeconds)} - ${formatMetricPeriodTime(endSeconds)}`;
+}
+
+function formatMetricPeriodTime(totalSeconds) {
+  const seconds = Math.max(0, Number(totalSeconds || 0));
+  const day = Math.floor(seconds / 86400) + 1;
+  const secondsInDay = seconds % 86400;
+  const hour = Math.floor(secondsInDay / 3600);
+  const minute = Math.floor((secondsInDay % 3600) / 60);
+  const second = Math.floor(secondsInDay % 60);
+  return `Day${day} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
+}
+
+function filterScopeBySimulationRuns(scope, runIds) {
+  const shouldKeep = (item) => !item?.simulation_run_id || runIds.has(item.simulation_run_id);
+  return {
+    ...scope,
+    serviceOrders: (scope.serviceOrders || []).filter(shouldKeep),
+    trips: (scope.trips || []).filter(shouldKeep),
+    readinessTasks: (scope.readinessTasks || []).filter(shouldKeep),
+    deploymentTasks: (scope.deploymentTasks || []).filter(shouldKeep),
+    routeExecutions: (scope.routeExecutions || []).filter(shouldKeep),
+    pricingStrategyRuns: (scope.pricingStrategyRuns || []).filter(shouldKeep),
+    pricingDecisions: (scope.pricingDecisions || []).filter(shouldKeep),
+    orderMatchingRuns: (scope.orderMatchingRuns || []).filter(shouldKeep),
+    orderMatchingDecisions: (scope.orderMatchingDecisions || []).filter(shouldKeep),
+    routePlanningRuns: (scope.routePlanningRuns || []).filter(shouldKeep),
+    demandSimulationRuns: (scope.demandSimulationRuns || []).filter(shouldKeep),
+  };
+}
+
+function filterRecordsBySimulationRuns(records = [], runIds) {
+  return (records || []).filter((record) => !record?.simulation_run_id || runIds.has(record.simulation_run_id));
 }
 
 export function normalizeMetricDefinitions(definitions = []) {
@@ -160,12 +322,16 @@ function calculateObservation(metricDefinition, context, sequence) {
     metric_observation_id: `${context.calculationRunId}-MO-${String(sequence).padStart(5, "0")}`,
     metric_calculation_run_id: context.calculationRunId,
     metric_definition_id: metricDefinition.metric_definition_id,
-    simulation_run_id: context.simulationRun.simulation_run_id,
-    simulation_timeline_id: context.simulationRun.simulation_timeline_id || null,
-    window_type: "SIMULATION_RUN",
+    metric_scope_type: context.metricScopeType,
+    metric_period_type: context.metricPeriodType,
+    metric_period_label: context.metricPeriodLabel,
+    simulation_run_id: context.simulationRun?.simulation_run_id || null,
+    simulation_run_ids: context.simulationRunIds,
+    simulation_timeline_id: context.simulationTimelineId,
+    window_type: context.metricScopeType === MetricScopeType.OPERATING_PERIOD ? "OPERATING_PERIOD" : "SIMULATION_RUN",
     window_start_seconds: Number(context.simulationRun.start_simulation_seconds || 0),
     window_end_seconds: Number(context.simulationRun.end_simulation_seconds ?? context.simulationRun.current_simulation_seconds ?? 0),
-    window_label: `${context.simulationRun.start_time || context.simulationRun.current_time || "Simulation Run"} - ${context.simulationRun.completed_time || context.simulationRun.current_time || "Simulation Run"}`,
+    window_label: context.metricPeriodLabel || `${context.simulationRun.start_time || context.simulationRun.current_time || "Simulation Run"} - ${context.simulationRun.completed_time || context.simulationRun.current_time || "Simulation Run"}`,
     dimension_type: "GLOBAL",
     dimension_id: "GLOBAL",
     metric_value: normalizeMetricValue(rawValue, metricDefinition.display_unit),
@@ -192,7 +358,7 @@ function evaluateQuality(metricDefinition, context, value) {
   if (metricDefinition.source_objects.includes("RevenueRecord") && context.revenueRecords.length === 0) {
     return {
       qualityStatus: MetricQualityStatus.WARN,
-      qualityReason: "当前模拟运行缺少收入记录，财务指标可能不完整",
+      qualityReason: "当前统计周期缺少收入记录，财务指标可能不完整",
       numeratorValue: value?.numerator ?? null,
       denominatorValue: value?.denominator ?? null,
     };
@@ -200,7 +366,7 @@ function evaluateQuality(metricDefinition, context, value) {
   if (metricDefinition.source_objects.includes("CostRecord") && context.costRecords.length === 0) {
     return {
       qualityStatus: MetricQualityStatus.WARN,
-      qualityReason: "当前模拟运行缺少成本记录，成本或利润指标可能不完整",
+      qualityReason: "当前统计周期缺少成本记录，成本或利润指标可能不完整",
       numeratorValue: value?.numerator ?? null,
       denominatorValue: value?.denominator ?? null,
     };

@@ -8,7 +8,7 @@
 - 当前状态：方案设计完成后等待用户确认，不自动进入编码
 - 时间口径：默认使用模拟时间，不使用真实审计时间衡量经营表现
 
-经营指标系统是 Robotaxi 自动化运营模拟平台的经营表达层。它不直接创造业务事实，而是消费业务单据生命周期、模拟时间、成本事实和收入事实，形成可解释、可下钻、可复盘的经营指标。
+经营指标系统是 Robotaxi 自动化运营模拟平台的经营表达层。它不直接创造业务事实，而是消费业务单据生命周期、模拟时间、成本事实和收入事实，并按经营统计周期聚合多个模拟运行产生的业务事实，形成可解释、可下钻、可复盘的经营指标。
 
 ## 2. 目标
 
@@ -54,7 +54,7 @@
 2. 所有指标必须可追溯到来源对象和来源字段。
 3. 比率指标分母为 0 时返回空值和原因，不伪装为 0。
 4. 指标计算只消费事实，不修改业务单据生命周期。
-5. 指标计算应在模拟完成、成本计算完成、收入生成完成后自动触发，也允许人工重新计算。
+5. 指标计算不隶属于单个模拟运行对象，应由经营分析管理按可选择统计周期触发；模拟运行、成本记录和收入记录只是指标计算消费的事实来源。
 6. 指标前端必须保持 B 端经营工作台风格：清晰、轻盈、层次分明、可下钻，不做营销式大屏。
 7. 指标异常必须能下钻到来源订单、行驶记录、成本记录、收入记录或计算错误。
 
@@ -88,7 +88,11 @@
 |字段|中文名|说明|
 |---|---|---|
 |metric_calculation_run_id|指标计算运行编号|本次指标计算批次|
-|simulation_run_id|模拟运行编号|来源模拟运行|
+|metric_scope_type|指标统计范围|SIMULATION_RUN、OPERATING_PERIOD|
+|metric_period_type|指标统计周期|SIMULATION_RUN、ALL、LATEST_DAY、LATEST_7_DAYS|
+|metric_period_label|指标统计周期显示|前端展示的统计周期范围|
+|simulation_run_id|模拟运行编号|单次模拟运行兼容来源，经营周期计算为空|
+|simulation_run_ids|来源模拟运行编号列表|经营周期纳入统计的模拟运行集合|
 |simulation_timeline_id|模拟时间轴编号|跨运行连续统计时使用|
 |calculation_status|计算状态|QUEUED、CALCULATING、SUCCEEDED、PARTIALLY_SUCCEEDED、FAILED|
 |calculation_progress_percent|计算进度（%）|前端反馈|
@@ -107,7 +111,11 @@
 |metric_observation_id|指标观测编号|唯一编号|
 |metric_calculation_run_id|指标计算运行编号|来源计算批次|
 |metric_definition_id|指标定义编号|来源指标定义|
-|simulation_run_id|模拟运行编号|来源模拟运行|
+|metric_scope_type|指标统计范围|SIMULATION_RUN、OPERATING_PERIOD|
+|metric_period_type|指标统计周期|SIMULATION_RUN、ALL、LATEST_DAY、LATEST_7_DAYS|
+|metric_period_label|指标统计周期显示|前端展示的统计周期范围|
+|simulation_run_id|模拟运行编号|单次模拟运行兼容来源，经营周期计算为空|
+|simulation_run_ids|来源模拟运行编号列表|经营周期纳入统计的模拟运行集合|
 |simulation_timeline_id|模拟时间轴编号|来源时间轴|
 |window_type|时间窗类型|SIMULATION_RUN、DAY、HOUR、10_MINUTE|
 |window_start_seconds|窗口开始秒|绝对模拟秒|
@@ -184,4 +192,3 @@
 |指标计算结果持久化|支持历史对比和策略复盘|P0|
 |指标质量结果|避免错误指标误导经营判断|P0|
 |指标下钻引用|支持从指标定位到业务单据和成本/收入记录|P0|
-

@@ -231,7 +231,11 @@
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |metric_calculation_run_id|指标计算运行编号|持久化字段|指标计算批次唯一编号|
-|simulation_run_id|模拟运行编号|持久化字段|来源 SimulationRun|
+|metric_scope_type|指标统计范围|持久化字段|SIMULATION_RUN、OPERATING_PERIOD|
+|metric_period_type|指标统计周期|持久化字段|SIMULATION_RUN、ALL、LATEST_DAY、LATEST_7_DAYS|
+|metric_period_label|指标统计周期显示|运行态字段|前端展示的统计周期范围|
+|simulation_run_id|模拟运行编号|兼容字段|单次模拟运行计算来源；经营周期计算为空|
+|simulation_run_ids|来源模拟运行编号列表|持久化字段|经营周期纳入统计的模拟运行集合|
 |simulation_timeline_id|模拟时间轴编号|持久化字段|来源连续模拟时间轴|
 |calculation_status|计算状态|运行态字段|QUEUED、CALCULATING、SUCCEEDED、PARTIALLY_SUCCEEDED、FAILED|
 |calculation_progress_percent|计算进度（%）|运行态字段|指标计算进度|
@@ -250,7 +254,11 @@
 |metric_observation_id|指标观测编号|持久化字段|指标观测唯一编号|
 |metric_calculation_run_id|指标计算运行编号|持久化字段|来源指标计算批次|
 |metric_definition_id|指标定义编号|持久化字段|来源指标定义|
-|simulation_run_id|模拟运行编号|持久化字段|来源模拟运行|
+|metric_scope_type|指标统计范围|持久化字段|SIMULATION_RUN、OPERATING_PERIOD|
+|metric_period_type|指标统计周期|持久化字段|SIMULATION_RUN、ALL、LATEST_DAY、LATEST_7_DAYS|
+|metric_period_label|指标统计周期显示|运行态字段|前端展示的统计周期范围|
+|simulation_run_id|模拟运行编号|兼容字段|单次模拟运行计算来源；经营周期计算为空|
+|simulation_run_ids|来源模拟运行编号列表|持久化字段|经营周期纳入统计的模拟运行集合|
 |simulation_timeline_id|模拟时间轴编号|持久化字段|来源连续模拟时间轴|
 |window_type|时间窗类型|持久化字段|SIMULATION_RUN、DAY、HOUR、10_MINUTE|
 |window_start_seconds|窗口开始秒|持久化字段|绝对模拟秒窗口开始|
@@ -301,6 +309,10 @@
 |DERIVABLE|可推导|数据就绪度|
 |MISSING_DATA|缺少数据|数据就绪度|
 |SIMULATION_RUN|模拟运行|时间窗类型|
+|OPERATING_PERIOD|经营周期|指标统计范围 / 时间窗类型|
+|ALL|全量经营周期|指标统计周期|
+|LATEST_DAY|最近 1 个模拟日|指标统计周期|
+|LATEST_7_DAYS|最近 7 个模拟日|指标统计周期|
 |DAY|模拟日|时间窗类型|
 |HOUR|小时|时间窗类型|
 |10_MINUTE|10 分钟|时间窗类型|

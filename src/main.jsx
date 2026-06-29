@@ -73,6 +73,25 @@ const unfinishedDeploymentStatuses = new Set([
 const pageGroups = [
   { key: "console", label: "运营中控台", children: [{ key: "console", label: "运营中控台" }] },
   {
+    key: "businessAnalysis",
+    label: "经营分析管理",
+    children: [
+      { key: "operatingMetricsOverview", label: "经营指标总览" },
+      { key: "financialMetrics", label: "财务指标" },
+      { key: "serviceMetrics", label: "服务指标" },
+      { key: "processDiagnostics", label: "过程诊断" },
+      { key: "metricDefinitions", label: "指标定义" },
+      { key: "metricObservations", label: "指标观测" },
+      { key: "metricCalculationRuns", label: "指标计算记录" },
+      { key: "revenueRecords", label: "收入记录" },
+      { key: "costRecords", label: "成本记录" },
+      { key: "costParameterRules", label: "成本配置" },
+      { key: "revenueCalculationRuns", label: "收入生成记录" },
+      { key: "costCalculationRuns", label: "成本计算记录" },
+      { key: "costModelProfiles", label: "成本模型配置" },
+    ],
+  },
+  {
     key: "decision",
     label: "运营决策中心",
     children: [
@@ -165,25 +184,6 @@ const pageGroups = [
       { key: "places", label: "地点管理" },
       { key: "serviceAreas", label: "服务区管理" },
       { key: "zones", label: "Zone 管理" },
-    ],
-  },
-  {
-    key: "businessAnalysis",
-    label: "经营分析管理",
-    children: [
-      { key: "operatingMetricsOverview", label: "经营指标总览" },
-      { key: "financialMetrics", label: "财务指标" },
-      { key: "serviceMetrics", label: "服务指标" },
-      { key: "processDiagnostics", label: "过程诊断" },
-      { key: "metricDefinitions", label: "指标定义" },
-      { key: "metricObservations", label: "指标观测" },
-      { key: "metricCalculationRuns", label: "指标计算记录" },
-      { key: "revenueRecords", label: "收入记录" },
-      { key: "costRecords", label: "成本记录" },
-      { key: "costParameterRules", label: "成本配置" },
-      { key: "revenueCalculationRuns", label: "收入生成记录" },
-      { key: "costCalculationRuns", label: "成本计算记录" },
-      { key: "costModelProfiles", label: "成本模型配置" },
     ],
   },
   {
@@ -399,22 +399,22 @@ const tableConfig = {
   operatingMetricsOverview: {
     title: "经营指标总览",
     description: "汇总模拟运行的核心收入、成本、利润、履约和效率指标。",
-    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"],
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   financialMetrics: {
     title: "财务指标",
     description: "展示收入、成本、利润、利润率和单均经营结果。",
-    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"],
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   serviceMetrics: {
     title: "服务指标",
     description: "展示订单创建、完成、取消和履约相关服务结果。",
-    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "simulation_run_id", "window_label"],
+    columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   processDiagnostics: {
     title: "过程诊断",
     description: "查看匹配、路径规划、履约、供给任务和数据质量的过程指标。",
-    columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "simulation_run_id"],
+    columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "metric_period_label"],
   },
   metricDefinitions: {
     title: "指标定义",
@@ -424,17 +424,17 @@ const tableConfig = {
   metricCalculationRuns: {
     title: "指标计算记录",
     description: "记录每次经营指标计算的范围、状态、结果数量和质量问题。",
-    columns: ["metric_calculation_run_id", "simulation_run_id", "calculation_status", "calculation_progress_percent", "metric_definition_count", "generated_metric_observation_count", "error_count", "started_at", "completed_at"],
+    columns: ["metric_calculation_run_id", "metric_scope_type", "metric_period_type", "metric_period_label", "calculation_status", "calculation_progress_percent", "metric_definition_count", "generated_metric_observation_count", "error_count", "started_at", "completed_at"],
   },
   metricObservations: {
     title: "指标观测",
     description: "保存每个模拟运行、窗口和维度下的经营指标结果。",
-    columns: ["metric_observation_id", "metric_definition_id", "simulation_run_id", "window_type", "dimension_type", "dimension_id", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count"],
+    columns: ["metric_observation_id", "metric_definition_id", "metric_scope_type", "metric_period_type", "metric_period_label", "dimension_type", "dimension_id", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count"],
   },
   simulationRuns: {
     title: "模拟运行管理",
     description: "创建和管理自动运营模拟运行，查看实时进度、财务结果和指标结果。",
-    columns: ["simulation_run_id", "simulation_name", "simulation_status", "cost_calculation_status", "revenue_calculation_status", "metric_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
+    columns: ["simulation_run_id", "simulation_name", "simulation_status", "cost_calculation_status", "revenue_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"],
   },
   simulationEvents: {
     title: "模拟事件记录",
@@ -636,6 +636,11 @@ const overviewMetricIds = ["OUTCOME-FIN-002", "OUTCOME-FIN-004", "OUTCOME-FIN-00
 const financialMetricIds = ["OUTCOME-FIN-001", "OUTCOME-FIN-002", "OUTCOME-FIN-003", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-FIN-006", "OUTCOME-EFF-001", "OUTCOME-EFF-002"];
 const serviceMetricIds = ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "OUTCOME-SERVICE-004", "PROCESS-TRIP-001"];
 const diagnosticMetricIds = ["PROCESS-MATCH-001", "PROCESS-ROUTE-001", "PROCESS-TRIP-001", "PROCESS-SUPPLY-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "QUALITY-DATA-001"];
+const metricPeriodOptions = [
+  { value: "ALL", label: "全量经营周期" },
+  { value: "LATEST_DAY", label: "最近 1 个模拟日" },
+  { value: "LATEST_7_DAYS", label: "最近 7 个模拟日" },
+];
 const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
   "RPS-ABNORMAL-SAME-SA": "RPS-002",
@@ -736,8 +741,9 @@ function App() {
   const [pendingCostParameterRule, setPendingCostParameterRule] = useState(null);
   const [costParameterModalOpen, setCostParameterModalOpen] = useState(false);
   const [costParameterValue, setCostParameterValue] = useState("");
+  const [metricPeriodType, setMetricPeriodType] = useState(initialRuntime.metricPeriodType || "ALL");
+  const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
-  const autoMetricCalculationRunIdsRef = useRef(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -771,6 +777,7 @@ function App() {
       setMetricDefinitions(snapshot.metricDefinitions?.length ? metricCalculator.normalizeMetricDefinitions(snapshot.metricDefinitions) : metricCalculator.initializeDefaultMetricDefinitions());
       setMetricCalculationRuns(snapshot.metricCalculationRuns || []);
       setMetricObservations(snapshot.metricObservations || []);
+      setMetricPeriodType(snapshot.metricPeriodType || "ALL");
       setSimulationRuns(snapshot.simulationRuns || []);
       setTimedOperations(snapshot.timedOperations || []);
       const restoredPage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
@@ -979,6 +986,7 @@ function App() {
         metricDefinitions,
         metricCalculationRuns,
         metricObservations,
+        metricPeriodType,
         simulationRuns,
         simulationEvents,
         timedOperations,
@@ -991,7 +999,7 @@ function App() {
       persistSimulationEvents(simulationEvents);
     }, debounceMs);
     return () => window.clearTimeout(timerId);
-  }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, metricCalculationRuns, metricDefinitions, metricObservations, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
 
 
 
@@ -1116,19 +1124,6 @@ function App() {
         }, 0);
       });
   }, [simulationRuns]);
-
-  useEffect(() => {
-    simulationRuns
-      .filter((run) => run.simulation_status === "COMPLETED")
-      .filter((run) => !autoMetricCalculationRunIdsRef.current.has(run.simulation_run_id))
-      .filter((run) => ["SUCCEEDED", "PARTIALLY_SUCCEEDED"].includes(run.cost_calculation_status))
-      .filter((run) => ["SUCCEEDED", "PARTIALLY_SUCCEEDED"].includes(run.revenue_calculation_status))
-      .filter((run) => run.metric_calculation_status !== "CALCULATING")
-      .forEach((run) => {
-        autoMetricCalculationRunIdsRef.current.add(run.simulation_run_id);
-        window.setTimeout(() => runMetricCalculation(run.simulation_run_id, { automatic: true }), 0);
-      });
-  }, [simulationRuns, costRecords, revenueRecords]);
 
   function requestBusinessTimingCalculation(runId) {
     const run = simulationRuns.find((item) => item.simulation_run_id === runId);
@@ -1400,14 +1395,33 @@ function App() {
     });
   }
 
+  function createOperatingMetricScope() {
+    return {
+      serviceOrders,
+      trips,
+      readinessTasks,
+      deploymentTasks,
+      routeExecutions,
+      pricingStrategyRuns,
+      pricingDecisions,
+      orderMatchingRuns,
+      orderMatchingDecisions,
+      routePlanningRuns,
+      demandSimulationRuns,
+      routes: data.routes,
+      robotaxis: data.robotaxis,
+      maps: data.maps,
+    };
+  }
+
   function requestRevenueCalculation(runId) {
     const run = simulationRuns.find((item) => item.simulation_run_id === runId);
     if (!run) return;
     setPendingRevenueCalculationRunId(runId);
   }
 
-  function requestMetricCalculation(runId) {
-    runMetricCalculation(runId, { automatic: false });
+  function requestMetricCalculation(periodType = metricPeriodType) {
+    runMetricCalculation(periodType, { automatic: false });
   }
 
   function confirmRevenueCalculation() {
@@ -1467,53 +1481,49 @@ function App() {
     }, 80);
   }
 
-  function runMetricCalculation(runId, { automatic = false } = {}) {
-    const run = simulationRuns.find((item) => item.simulation_run_id === runId);
-    if (!run || !["COMPLETED", "STOPPED", "FAILED"].includes(run.simulation_status)) return;
+  function runMetricCalculation(periodType = metricPeriodType, { automatic = false } = {}) {
+    if (metricCalculationInProgress) return;
     const calculationRunId = `MCR-${String(metricCalculationRuns.length + 1).padStart(4, "0")}`;
-    const scope = createCurrentBusinessScope(run);
-    setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
-      ...item,
-      metric_calculation_status: "CALCULATING",
-      metric_calculation_progress_percent: 20,
-      active_metric_calculation_run_id: calculationRunId,
-    } : item));
+    const scope = createOperatingMetricScope();
+    setMetricCalculationInProgress(true);
     setTimeout(() => {
       try {
-        const result = metricCalculator.createMetricCalculation({
-          simulationRun: run,
+        const result = metricCalculator.createPeriodMetricCalculation({
+          simulationRuns,
           scope,
           revenueRecords,
           costRecords,
           metricDefinitions,
           calculationRunId,
+          periodType,
         });
         setMetricObservations((current) => [
           ...result.metricObservations,
-          ...current.filter((record) => record.simulation_run_id !== runId),
+          ...current.filter((record) => !(record.metric_scope_type === "OPERATING_PERIOD" && record.metric_period_type === periodType)),
         ]);
         setMetricCalculationRuns((current) => [result.calculationRun, ...current]);
-        setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
-          ...item,
-          metric_calculation_status: result.calculationRun.calculation_status,
-          metric_calculation_progress_percent: 100,
-          active_metric_calculation_run_id: calculationRunId,
-          metric_result_summary: {
-            metric_definition_count: result.calculationRun.metric_definition_count,
-            generated_metric_observation_count: result.calculationRun.generated_metric_observation_count,
-            error_count: result.calculationRun.error_count,
-          },
-          metric_calculation_errors: result.calculationRun.calculation_errors,
-        } : item));
-        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "经营指标计算完成" : "经营指标计算完成，存在质量提示");
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "经营周期指标计算完成" : "经营周期指标计算完成，存在质量提示");
       } catch (error) {
-        setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
-          ...item,
-          metric_calculation_status: "FAILED",
-          metric_calculation_progress_percent: 100,
-          metric_calculation_errors: [{ error_type: "METRIC_CALCULATION_FAILED", error_message: error.message }],
-        } : item));
-        if (!automatic) antd.message.error(`经营指标计算失败：${error.message}`);
+        setMetricCalculationRuns((current) => [{
+          metric_calculation_run_id: calculationRunId,
+          metric_scope_type: "OPERATING_PERIOD",
+          metric_period_type: periodType,
+          metric_period_label: metricPeriodOptions.find((item) => item.value === periodType)?.label || "经营周期",
+          simulation_run_id: null,
+          simulation_run_ids: simulationRuns.map((run) => run.simulation_run_id),
+          calculation_status: "FAILED",
+          calculation_progress_percent: 100,
+          metric_definition_count: metricDefinitions.length,
+          generated_metric_observation_count: 0,
+          error_count: 1,
+          calculation_errors: [{ error_type: "METRIC_CALCULATION_FAILED", error_message: error.message }],
+          algorithm_version: "1.0.0",
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+        }, ...current]);
+        if (!automatic) antd.message.error(`经营周期指标计算失败：${error.message}`);
+      } finally {
+        setMetricCalculationInProgress(false);
       }
     }, 80);
   }
@@ -1636,6 +1646,9 @@ function App() {
                   requestCostCalculation,
                   requestRevenueCalculation,
                   requestMetricCalculation,
+                  metricPeriodType,
+                  setMetricPeriodType,
+                  metricCalculationInProgress,
                   editCostParameterRule,
                   clearEndedTimedOperations,
                   requestClearAllTimedOperations,
@@ -3575,6 +3588,21 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         </div>
       )}
       {isMetricAnalysisPage && (
+        <div className="list-action-bar metric-period-actions">
+          <span>统计周期</span>
+          <Select
+            size="small"
+            value={actions.metricPeriodType}
+            onChange={actions.setMetricPeriodType}
+            getPopupContainer={() => document.body}
+            options={metricPeriodOptions}
+          />
+          <Button size="small" type="primary" onClick={() => actions.requestMetricCalculation(actions.metricPeriodType)} disabled={actions.metricCalculationInProgress}>
+            {actions.metricCalculationInProgress ? "指标计算中" : "计算经营周期指标"}
+          </Button>
+        </div>
+      )}
+      {isMetricAnalysisPage && (
         <MetricExperiencePanel
           page={page}
           rows={displayRows}
@@ -4065,7 +4093,6 @@ function getDetailTabs(selectedType) {
       { key: "time", label: "状态时间", keys: ["started_at", "paused_at", "resumed_at", "completed_at", "stopped_at", "failure_reason", "failure_summary", "result_summary"] },
       { key: "cost", label: "成本", keys: ["cost_calculation_status", "cost_calculation_progress_percent", "active_cost_calculation_run_id", "cost_model_profile_id", "cost_model_profile_version", "total_cost_amount", "cost_result_summary", "cost_calculation_errors"] },
       { key: "revenue", label: "收入", keys: ["revenue_calculation_status", "revenue_calculation_progress_percent", "active_revenue_calculation_run_id", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "revenue_result_summary", "revenue_calculation_errors"] },
-      { key: "metric", label: "指标", keys: ["metric_calculation_status", "metric_calculation_progress_percent", "active_metric_calculation_run_id", "metric_result_summary", "metric_calculation_errors"] },
       { key: "policy", label: "策略快照", keys: ["simulation_policy_snapshot"] },
     ];
   }
@@ -4131,14 +4158,14 @@ function getDetailTabs(selectedType) {
   }
   if (selectedType === "metricCalculationRun") {
     return [
-      { key: "basic", label: "计算信息", keys: ["metric_calculation_run_id", "simulation_run_id", "simulation_timeline_id", "calculation_status", "calculation_progress_percent", "started_at", "completed_at"] },
+      { key: "basic", label: "计算信息", keys: ["metric_calculation_run_id", "metric_scope_type", "metric_period_type", "metric_period_label", "simulation_run_ids", "simulation_timeline_id", "calculation_status", "calculation_progress_percent", "started_at", "completed_at"] },
       { key: "result", label: "计算结果", keys: ["metric_definition_count", "generated_metric_observation_count", "error_count", "calculation_errors", "algorithm_version"] },
     ];
   }
   if (selectedType === "metricObservation") {
     return [
-      { key: "basic", label: "指标结果", keys: ["metric_observation_id", "metric_definition_id", "simulation_run_id", "metric_value", "metric_unit", "quality_status", "quality_reason"] },
-      { key: "window", label: "窗口与维度", keys: ["window_type", "window_start_seconds", "window_end_seconds", "window_label", "dimension_type", "dimension_id"] },
+      { key: "basic", label: "指标结果", keys: ["metric_observation_id", "metric_definition_id", "metric_scope_type", "metric_period_type", "metric_period_label", "metric_value", "metric_unit", "quality_status", "quality_reason"] },
+      { key: "window", label: "窗口与维度", keys: ["simulation_run_ids", "simulation_timeline_id", "window_type", "window_start_seconds", "window_end_seconds", "window_label", "dimension_type", "dimension_id"] },
       { key: "source", label: "来源解释", keys: ["numerator_value", "denominator_value", "source_record_count", "source_object_refs", "created_at"] },
     ];
   }
@@ -4495,7 +4522,25 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
     ? overviewMetricIds.map((id) => latestRows.find((row) => row.metric_definition_id === id)).filter(Boolean)
     : latestRows.slice(0, 6);
   const warningRows = allRows.filter((row) => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
-  const latestRunId = latestRows[0]?.simulation_run_id || allRows[0]?.simulation_run_id || "无";
+  const periodLabel = latestRows[0]?.metric_period_label || allRows[0]?.metric_period_label || "尚未计算";
+  const metricById = new Map(createLatestMetricRows(allRows).map((row) => [row.metric_definition_id, row]));
+  const insightGroups = [
+    {
+      title: "财务结果",
+      primary: metricById.get("OUTCOME-FIN-005"),
+      secondary: [metricById.get("OUTCOME-FIN-002"), metricById.get("OUTCOME-FIN-004")].filter(Boolean),
+    },
+    {
+      title: "服务效率",
+      primary: metricById.get("OUTCOME-SERVICE-003"),
+      secondary: [metricById.get("OUTCOME-SERVICE-002"), metricById.get("OUTCOME-EFF-002")].filter(Boolean),
+    },
+    {
+      title: "过程质量",
+      primary: metricById.get("PROCESS-MATCH-001") || metricById.get("PROCESS-ROUTE-001"),
+      secondary: [metricById.get("PROCESS-ROUTE-001"), metricById.get("QUALITY-DATA-001")].filter(Boolean),
+    },
+  ];
   return (
     <div className="metric-experience-panel">
       <div className="metric-panel-header">
@@ -4503,7 +4548,7 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
           <Text strong>{tableConfig[page]?.title || "经营指标"}</Text>
           <Text type="secondary">{tableConfig[page]?.description || "基于模拟业务事实生成的经营指标。"}</Text>
         </div>
-        <span>最新模拟运行：{latestRunId}</span>
+        <span>当前统计周期：{periodLabel}</span>
       </div>
       <div className="metric-card-grid">
         {overviewRows.length > 0 ? overviewRows.map((row) => (
@@ -4513,8 +4558,17 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
             <small>{row.quality_status === "PASS" ? "数据通过" : row.quality_reason || "存在质量提示"}</small>
           </button>
         )) : (
-          <div className="metric-empty-summary">暂无指标结果，完成一次模拟并生成成本、收入后会自动计算。</div>
+          <div className="metric-empty-summary">暂无指标结果，请先选择统计周期并计算经营周期指标。</div>
         )}
+      </div>
+      <div className="metric-insight-lanes">
+        {insightGroups.map((group) => (
+          <div key={group.title} className="metric-insight-lane">
+            <span>{group.title}</span>
+            <strong>{group.primary ? `${group.primary.metric_name_cn} ${formatMetricDisplayValue(group.primary)}` : "暂无数据"}</strong>
+            <small>{group.secondary.length ? group.secondary.map((item) => `${item.metric_name_cn} ${formatMetricDisplayValue(item)}`).join(" / ") : "等待周期计算结果"}</small>
+          </div>
+        ))}
       </div>
       <div className="metric-panel-footer">
         <span>指标数 {allRows.length}</span>
@@ -4616,7 +4670,6 @@ function renderSimulationRunActions(row, actions) {
   if (["COMPLETED", "STOPPED", "FAILED"].includes(status)) {
     const costCalculating = row.cost_calculation_status === "CALCULATING";
     const revenueCalculating = row.revenue_calculation_status === "CALCULATING";
-    const metricCalculating = row.metric_calculation_status === "CALCULATING";
     return (
       <RowActionGroup>
         <RowActionButton type="default" onClick={() => actions.requestCostCalculation(row.simulation_run_id)} disabled={costCalculating}>
@@ -4624,9 +4677,6 @@ function renderSimulationRunActions(row, actions) {
         </RowActionButton>
         <RowActionButton type="default" onClick={() => actions.requestRevenueCalculation(row.simulation_run_id)} disabled={revenueCalculating}>
           {revenueCalculating ? "收入生成中" : row.revenue_calculation_status ? "重新生成收入记录" : "生成收入记录"}
-        </RowActionButton>
-        <RowActionButton type="default" onClick={() => actions.requestMetricCalculation(row.simulation_run_id)} disabled={metricCalculating || costCalculating || revenueCalculating}>
-          {metricCalculating ? "指标计算中" : row.metric_calculation_status ? "重新计算经营指标" : "计算经营指标"}
         </RowActionButton>
         {renderViewDetailAction(row, actions)}
       </RowActionGroup>
@@ -5243,7 +5293,7 @@ async function bootstrap() {
 		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"),
 		    import("./data/costModelCalculator.js?v=20260625-v029-1"),
 		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
-		    import("./data/metricCalculator.js?v=20260629-v034-5"),
+		    import("./data/metricCalculator.js?v=20260629-v034-6"),
 		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
 		    import("./services/routePlanningService.js?v=20260625-v029-4"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
@@ -6536,6 +6586,7 @@ function loadRuntimeSnapshot(initialData) {
     metricDefinitions: metricCalculator.initializeDefaultMetricDefinitions(),
     metricCalculationRuns: [],
     metricObservations: [],
+    metricPeriodType: "ALL",
     simulationRuns: [],
     simulationEvents: [],
     timedOperations: [],
@@ -6584,6 +6635,7 @@ function loadRuntimeSnapshot(initialData) {
       : metricCalculator.initializeDefaultMetricDefinitions();
     const metricCalculationRuns = Array.isArray(snapshot.metricCalculationRuns) ? snapshot.metricCalculationRuns : [];
     const metricObservations = Array.isArray(snapshot.metricObservations) ? snapshot.metricObservations : [];
+    const metricPeriodType = snapshot.metricPeriodType || "ALL";
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
     const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
     const timedOperations = Array.isArray(snapshot.timedOperations) ? snapshot.timedOperations : [];
@@ -6628,6 +6680,7 @@ function loadRuntimeSnapshot(initialData) {
       metricDefinitions,
       metricCalculationRuns,
       metricObservations,
+      metricPeriodType,
       simulationRuns,
       simulationEvents,
       timedOperations,
@@ -6722,6 +6775,7 @@ function saveRuntimeSnapshot(snapshot) {
     metricDefinitions: snapshot.metricDefinitions || [],
     metricCalculationRuns: snapshot.metricCalculationRuns || [],
     metricObservations: snapshot.metricObservations || [],
+    metricPeriodType: snapshot.metricPeriodType || "ALL",
     simulationRuns: snapshot.simulationRuns || [],
     simulationEvents: [],
     timedOperations: snapshot.timedOperations || [],
@@ -6747,6 +6801,7 @@ function saveRuntimeSnapshot(snapshot) {
       metricDefinitions: [],
       metricCalculationRuns: [],
       metricObservations: [],
+      metricPeriodType: snapshot.metricPeriodType || "ALL",
     }));
   } catch (error) {
     // Local persistence is a convenience for this prototype; runtime should continue if storage is unavailable.
@@ -6948,17 +7003,21 @@ function createMetricDisplayRows(metricObservations = [], metricDefinitions = []
       completed_at: run.completed_at,
     };
   }).sort((a, b) => {
-    const runOrder = String(b.simulation_run_id || "").localeCompare(String(a.simulation_run_id || ""));
+    const createdOrder = String(b.created_at || "").localeCompare(String(a.created_at || ""));
+    if (createdOrder !== 0) return createdOrder;
+    const runOrder = String(b.metric_calculation_run_id || "").localeCompare(String(a.metric_calculation_run_id || ""));
     if (runOrder !== 0) return runOrder;
     return String(a.metric_definition_id || "").localeCompare(String(b.metric_definition_id || ""));
   });
 }
 
 function filterMetricRowsForPage(metricRows = [], page) {
-  if (page === "operatingMetricsOverview") return pickLatestMetricRows(metricRows, overviewMetricIds);
-  if (page === "financialMetrics") return pickLatestMetricRows(metricRows, financialMetricIds);
-  if (page === "serviceMetrics") return pickLatestMetricRows(metricRows, serviceMetricIds);
-  if (page === "processDiagnostics") return pickLatestMetricRows(metricRows, diagnosticMetricIds);
+  const operatingPeriodRows = metricRows.filter((row) => row.metric_scope_type === "OPERATING_PERIOD");
+  const sourceRows = operatingPeriodRows.length ? operatingPeriodRows : metricRows;
+  if (page === "operatingMetricsOverview") return pickLatestMetricRows(sourceRows, overviewMetricIds);
+  if (page === "financialMetrics") return pickLatestMetricRows(sourceRows, financialMetricIds);
+  if (page === "serviceMetrics") return pickLatestMetricRows(sourceRows, serviceMetricIds);
+  if (page === "processDiagnostics") return pickLatestMetricRows(sourceRows, diagnosticMetricIds);
   return metricRows;
 }
 

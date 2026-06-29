@@ -728,6 +728,10 @@ export const fieldDictionary = {
   metric_status: "指标状态",
   definition_version: "定义版本",
   metric_calculation_run_id: "指标计算运行编号",
+  metric_scope_type: "指标统计范围",
+  metric_period_type: "指标统计周期",
+  metric_period_label: "指标统计周期显示",
+  simulation_run_ids: "来源模拟运行编号列表",
   metric_definition_count: "指标定义数",
   generated_metric_observation_count: "生成指标观测数",
   metric_observation_id: "指标观测编号",
@@ -1460,9 +1464,20 @@ export const fieldValueDictionary = {
   },
   window_type: {
     SIMULATION_RUN: "模拟运行",
+    OPERATING_PERIOD: "经营周期",
     DAY: "模拟日",
     HOUR: "小时",
     "10_MINUTE": "10 分钟",
+  },
+  metric_scope_type: {
+    SIMULATION_RUN: "单次模拟运行",
+    OPERATING_PERIOD: "经营统计周期",
+  },
+  metric_period_type: {
+    SIMULATION_RUN: "单次模拟运行",
+    ALL: "全量经营周期",
+    LATEST_DAY: "最近 1 个模拟日",
+    LATEST_7_DAYS: "最近 7 个模拟日",
   },
   dimension_type: {
     GLOBAL: "全局",

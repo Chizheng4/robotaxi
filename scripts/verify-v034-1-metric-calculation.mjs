@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
   createMetricCalculation,
+  createPeriodMetricCalculation,
   initializeDefaultMetricDefinitions,
   MetricCalculationStatus,
   MetricQualityStatus,
@@ -108,11 +109,48 @@ assert.equal(
   "零订单分母必须给出质量提示，而不是制造错误履约率",
 );
 
+const secondSimulationRun = {
+  ...simulationRun,
+  simulation_run_id: "SIM-RUN-METRIC-002",
+  start_simulation_seconds: 600,
+  end_simulation_seconds: 1200,
+};
+const periodResult = createPeriodMetricCalculation({
+  simulationRuns: [simulationRun, secondSimulationRun],
+  scope: {
+    ...scope,
+    serviceOrders: [
+      ...scope.serviceOrders,
+      { service_order_id: "SO-METRIC-003", simulation_run_id: secondSimulationRun.simulation_run_id, order_status: "COMPLETED", matched_robotaxi_id: "RTX-002", simulation_created_at: "Day1 00:12:00" },
+    ],
+  },
+  revenueRecords: [
+    ...revenueRecords,
+    { revenue_record_id: "REV-005", simulation_run_id: secondSimulationRun.simulation_run_id, revenue_type: "COLLECTED_REVENUE", revenue_amount: 40 },
+  ],
+  costRecords: [
+    ...costRecords,
+    { cost_record_id: "COST-003", simulation_run_id: secondSimulationRun.simulation_run_id, cost_amount: 12 },
+  ],
+  metricDefinitions: initializeDefaultMetricDefinitions(),
+  calculationRunId: "MCR-VERIFY-PERIOD-001",
+  periodType: "ALL",
+});
+const periodObservationByMetricId = new Map(periodResult.metricObservations.map((item) => [item.metric_definition_id, item]));
+assert.equal(periodResult.calculationRun.metric_scope_type, "OPERATING_PERIOD", "经营指标计算必须以经营周期为主范围");
+assert.deepEqual(periodResult.calculationRun.simulation_run_ids, [simulationRun.simulation_run_id, secondSimulationRun.simulation_run_id], "经营周期必须记录纳入统计的多个模拟运行");
+assert.equal(periodObservationByMetricId.get("OUTCOME-FIN-002").metric_value, 70, "经营周期实收收入必须跨多个模拟运行聚合");
+assert.equal(periodObservationByMetricId.get("OUTCOME-FIN-004").metric_value, 27, "经营周期成本必须跨多个模拟运行聚合");
+assert.equal(periodObservationByMetricId.get("OUTCOME-FIN-005").metric_value, 43, "经营周期贡献利润必须使用周期聚合收入和成本");
+assert.equal(periodObservationByMetricId.get("OUTCOME-FIN-002").metric_scope_type, "OPERATING_PERIOD", "指标观测必须标记经营周期范围");
+assert.equal(periodObservationByMetricId.get("OUTCOME-FIN-002").metric_period_type, "ALL", "指标观测必须标记统计周期");
+
 const mainSource = fs.readFileSync("src/main.jsx", "utf8");
 assert.match(mainSource, /metricDefinitions/, "前端运行态必须持久化指标定义");
 assert.match(mainSource, /metricObservations/, "前端运行态必须持久化指标观测");
-assert.match(mainSource, /requestMetricCalculation/, "模拟运行必须提供人工经营指标计算入口");
-assert.match(mainSource, /runMetricCalculation\(run\.simulation_run_id, \{ automatic: true \}\)/, "成本和收入完成后必须自动触发指标计算");
+assert.match(mainSource, /metricPeriodOptions/, "经营分析必须提供统计周期选择");
+assert.match(mainSource, /计算经营周期指标/, "经营分析必须提供经营周期指标计算入口");
+assert.doesNotMatch(mainSource, /runMetricCalculation\(run\.simulation_run_id, \{ automatic: true \}\)/, "指标计算不得再按单个模拟运行自动触发");
 assert.match(mainSource, /operatingMetricsOverview/, "经营分析管理必须接入经营指标总览");
 assert.match(mainSource, /financialMetrics/, "经营分析管理必须接入财务指标");
 assert.match(mainSource, /serviceMetrics/, "经营分析管理必须接入服务指标");
@@ -123,10 +161,13 @@ assert.match(mainSource, /createMetricDisplayRows/, "指标页面必须通过统
 const fieldDictionarySource = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 assert.match(fieldDictionarySource, /metricDefinition: \{ label: "指标定义"/, "代码字段字典必须声明指标定义对象");
 assert.match(fieldDictionarySource, /metric_definition_id: "指标定义编号"/, "代码字段字典必须声明指标定义编号");
+assert.match(fieldDictionarySource, /metric_scope_type: "指标统计范围"/, "代码字段字典必须声明指标统计范围");
+assert.match(fieldDictionarySource, /OPERATING_PERIOD: "经营统计周期"/, "指标统计范围必须中文化");
 assert.match(fieldDictionarySource, /display_unit: \{[\s\S]*currency: "金额"/, "指标展示单位必须通过统一值字典中文化");
 
 const fieldDictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
 assert.match(fieldDictionaryDoc, /MetricObservation：指标观测/, "文档字段字典必须声明指标观测对象");
+assert.match(fieldDictionaryDoc, /metric_scope_type\|指标统计范围/, "文档字段字典必须声明指标统计范围");
 assert.match(fieldDictionaryDoc, /metric_calculation_status\|指标计算状态/, "文档字段字典必须声明模拟运行指标汇总字段");
 
 console.log("v034 经营指标系统计算与页面接入验证通过。");

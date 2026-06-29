@@ -1449,6 +1449,22 @@ body {
   height: 28px;
 }
 
+.metric-period-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.metric-period-actions > span {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 500;
+}
+
+.metric-period-actions .ant-select {
+  min-width: 156px;
+}
+
 .metric-experience-panel {
   display: grid;
   flex: none;
@@ -1540,6 +1556,43 @@ body {
   color: var(--muted);
   background: #fbfcfe;
   font-size: var(--font-xs);
+}
+
+.metric-insight-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.metric-insight-lane {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-top: 1px solid var(--line-soft);
+  background: #ffffff;
+}
+
+.metric-insight-lane span {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.metric-insight-lane strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-insight-lane small {
+  overflow: hidden;
+  color: #6f7580;
+  font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metric-panel-footer {
@@ -1942,5 +1995,9 @@ body {
 
   .metric-card-grid {
     grid-template-columns: repeat(3, minmax(128px, 1fr));
+  }
+
+  .metric-insight-lanes {
+    grid-template-columns: 1fr;
   }
 }
