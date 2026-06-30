@@ -77,12 +77,24 @@ const pageGroups = [
     label: "经营分析管理",
     children: [
       { key: "operatingMetricsOverview", label: "经营指标总览" },
-      { key: "financialMetrics", label: "财务指标" },
-      { key: "serviceMetrics", label: "服务指标" },
-      { key: "processDiagnostics", label: "过程诊断" },
-      { key: "metricDefinitions", label: "指标定义" },
-      { key: "metricObservations", label: "指标观测" },
-      { key: "metricCalculationRuns", label: "指标计算记录" },
+      { key: "financialMetrics", label: "财务表现分析" },
+      { key: "serviceMetrics", label: "服务经营分析" },
+      { key: "processDiagnostics", label: "运营过程诊断" },
+      {
+        key: "dataCalculationManagement",
+        label: "数据计算管理",
+        children: [
+          { key: "metricDefinitions", label: "指标定义" },
+          { key: "metricObservations", label: "指标观测" },
+          { key: "metricCalculationRuns", label: "指标计算记录" },
+        ],
+      },
+    ],
+  },
+  {
+    key: "financialManagement",
+    label: "财务经营管理",
+    children: [
       { key: "revenueRecords", label: "收入记录" },
       { key: "costRecords", label: "成本记录" },
       { key: "costParameterRules", label: "成本配置" },
@@ -402,18 +414,18 @@ const tableConfig = {
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   financialMetrics: {
-    title: "财务指标",
-    description: "展示收入、成本、利润、利润率和单均经营结果。",
+    title: "财务表现分析",
+    description: "展示收入、成本、利润、利润率和单均经营结果，帮助判断经营结果是否健康。",
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   serviceMetrics: {
-    title: "服务指标",
-    description: "展示订单创建、完成、取消和履约相关服务结果。",
+    title: "服务经营分析",
+    description: "展示订单创建、完成、取消和履约相关服务结果，帮助定位服务规模与服务质量。",
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   processDiagnostics: {
-    title: "过程诊断",
-    description: "查看匹配、路径规划、履约、供给任务和数据质量的过程指标。",
+    title: "运营过程诊断",
+    description: "查看匹配、路径规划、履约、供给任务和数据质量的过程指标，用于异常下钻。",
     columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "metric_period_label"],
   },
   metricDefinitions: {
@@ -3427,6 +3439,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const [abnormalIssueType, setAbnormalIssueType] = useState(taskTypes?.IssueType?.LOW_BATTERY || "LOW_BATTERY");
   const [abnormalArrivalExecution, setAbnormalArrivalExecution] = useState(null);
   const [abnormalArrivalType, setAbnormalArrivalType] = useState(taskTypes?.ArrivalExecutionResult?.ARRIVED_WITH_TARGET_OCCUPIED || "ARRIVED_WITH_TARGET_OCCUPIED");
+  const [metricTableVisible, setMetricTableVisible] = useState(false);
   const filters = uiState.filters;
   const appliedFilters = uiState.appliedFilters;
   const pageSize = 14;
@@ -3474,6 +3487,11 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
 
   const tableScrollY = tableBodyHeight;
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
+  const showMainTable = !isMetricAnalysisPage || metricTableVisible;
+
+  useEffect(() => {
+    if (isMetricAnalysisPage) setMetricTableVisible(false);
+  }, [isMetricAnalysisPage, page]);
 
   return (
     <section className={isReadinessPage ? "record-page-new readiness-page" : "record-page-new"}>
@@ -3610,6 +3628,18 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           onSelect={(row) => onSelect(objectType, row[idField])}
         />
       )}
+      {isMetricAnalysisPage && (
+        <div className="metric-table-disclosure">
+          <div>
+            <span>指标明细表</span>
+            <small>用于核对计算结果和来源记录，默认收起以保留经营分析阅读空间。</small>
+          </div>
+          <Button size="small" onClick={() => setMetricTableVisible((visible) => !visible)}>
+            {metricTableVisible ? "收起明细表" : "查看明细表"}
+          </Button>
+        </div>
+      )}
+      {showMainTable && (
       <div className="record-table-section" ref={tableSectionRef}>
         <Table
           size="small"
@@ -3623,6 +3653,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           onChange={(pagination) => updatePagination(pagination.current)}
         />
       </div>
+      )}
       {hasEventPanel && (
         <div className="event-log-section" style={{ height: eventPanelHeight }}>
           <div className="event-log-resizer" onPointerDown={handleEventResizeStart} title="拖动调整事件区高度" />
@@ -4524,19 +4555,25 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
   const warningRows = allRows.filter((row) => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
   const periodLabel = latestRows[0]?.metric_period_label || allRows[0]?.metric_period_label || "尚未计算";
   const metricById = new Map(createLatestMetricRows(allRows).map((row) => [row.metric_definition_id, row]));
+  const sourceRecordCount = latestRows.reduce((total, row) => total + Number(row.source_record_count || 0), 0);
+  const qualityMetric = metricById.get("QUALITY-DATA-001");
+  const qualitySummary = qualityMetric ? `${qualityMetric.metric_name_cn} ${formatMetricDisplayValue(qualityMetric)}` : "等待数据质量结果";
   const insightGroups = [
     {
       title: "财务结果",
+      description: "收入、成本和利润形成经营结果判断。",
       primary: metricById.get("OUTCOME-FIN-005"),
       secondary: [metricById.get("OUTCOME-FIN-002"), metricById.get("OUTCOME-FIN-004")].filter(Boolean),
     },
     {
       title: "服务效率",
+      description: "订单规模和履约效率决定收入质量。",
       primary: metricById.get("OUTCOME-SERVICE-003"),
       secondary: [metricById.get("OUTCOME-SERVICE-002"), metricById.get("OUTCOME-EFF-002")].filter(Boolean),
     },
     {
       title: "过程质量",
+      description: "匹配、路径和数据质量解释异常来源。",
       primary: metricById.get("PROCESS-MATCH-001") || metricById.get("PROCESS-ROUTE-001"),
       secondary: [metricById.get("PROCESS-ROUTE-001"), metricById.get("QUALITY-DATA-001")].filter(Boolean),
     },
@@ -4549,6 +4586,11 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
           <Text type="secondary">{tableConfig[page]?.description || "基于模拟业务事实生成的经营指标。"}</Text>
         </div>
         <span>当前统计周期：{periodLabel}</span>
+      </div>
+      <div className="metric-decision-labels">
+        <span>上层经营结果</span>
+        <span>中层链路解释</span>
+        <span>下层数据可信度</span>
       </div>
       <div className="metric-card-grid">
         {overviewRows.length > 0 ? overviewRows.map((row) => (
@@ -4563,18 +4605,19 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
       </div>
       <div className="metric-insight-lanes">
         {insightGroups.map((group) => (
-          <div key={group.title} className="metric-insight-lane">
+          <button key={group.title} className="metric-insight-lane" onClick={() => group.primary && onSelect(group.primary)}>
             <span>{group.title}</span>
             <strong>{group.primary ? `${group.primary.metric_name_cn} ${formatMetricDisplayValue(group.primary)}` : "暂无数据"}</strong>
             <small>{group.secondary.length ? group.secondary.map((item) => `${item.metric_name_cn} ${formatMetricDisplayValue(item)}`).join(" / ") : "等待周期计算结果"}</small>
-          </div>
+            <em>{group.description}</em>
+          </button>
         ))}
       </div>
-      <div className="metric-panel-footer">
-        <span>指标数 {allRows.length}</span>
-        <span>当前筛选 {rows.length}</span>
-        <span>质量提示 {warningRows.length}</span>
-        {warningRows[0] && <span>{warningRows[0].metric_name_cn}：{warningRows[0].quality_reason}</span>}
+      <div className="metric-quality-strip">
+        <span>指标结果 {latestRows.length}</span>
+        <span>来源记录 {sourceRecordCount}</span>
+        <span>{qualitySummary}</span>
+        <span>{warningRows[0] ? `${warningRows[0].metric_name_cn}：${warningRows[0].quality_reason}` : "暂无质量提示"}</span>
       </div>
     </div>
   );

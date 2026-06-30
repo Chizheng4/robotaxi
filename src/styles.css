@@ -1468,7 +1468,7 @@ body {
 .metric-experience-panel {
   display: grid;
   flex: none;
-  gap: 10px;
+  gap: 9px;
   padding: 12px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--surface);
@@ -1498,6 +1498,14 @@ body {
   font-size: var(--font-xs);
 }
 
+.metric-decision-labels {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 8px;
+  color: #7a8492;
+  font-size: var(--font-xs);
+}
+
 .metric-card-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(128px, 1fr));
@@ -1508,7 +1516,7 @@ body {
   display: grid;
   gap: 5px;
   min-width: 0;
-  min-height: 82px;
+  min-height: 78px;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1534,7 +1542,7 @@ body {
 
 .metric-summary-card strong {
   color: #20252c;
-  font-size: var(--font-lg);
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
@@ -1569,8 +1577,17 @@ body {
   gap: 4px;
   min-width: 0;
   padding: 9px 10px;
+  border: 0;
   border-top: 1px solid var(--line-soft);
   background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.metric-insight-lane:hover {
+  border-top-color: #cbd8ea;
+  background: #fbfcfe;
 }
 
 .metric-insight-lane span {
@@ -1595,12 +1612,60 @@ body {
   white-space: nowrap;
 }
 
-.metric-panel-footer {
+.metric-insight-lane em {
+  overflow: hidden;
+  color: #8a94a3;
+  font-size: var(--font-xs);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-quality-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: 6px 12px;
+  padding-top: 2px;
   color: var(--muted);
   font-size: var(--font-xs);
+}
+
+.metric-quality-strip span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-table-disclosure {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #fbfcfe;
+}
+
+.metric-table-disclosure > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.metric-table-disclosure span {
+  color: var(--text);
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+
+.metric-table-disclosure small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .record-page-new .ant-table {
@@ -1997,7 +2062,16 @@ body {
     grid-template-columns: repeat(3, minmax(128px, 1fr));
   }
 
+  .metric-decision-labels {
+    grid-template-columns: 1fr;
+  }
+
   .metric-insight-lanes {
     grid-template-columns: 1fr;
+  }
+
+  .metric-table-disclosure {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

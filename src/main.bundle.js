@@ -95,23 +95,31 @@ const pageGroups = [{
     label: "经营指标总览"
   }, {
     key: "financialMetrics",
-    label: "财务指标"
+    label: "财务表现分析"
   }, {
     key: "serviceMetrics",
-    label: "服务指标"
+    label: "服务经营分析"
   }, {
     key: "processDiagnostics",
-    label: "过程诊断"
+    label: "运营过程诊断"
   }, {
-    key: "metricDefinitions",
-    label: "指标定义"
-  }, {
-    key: "metricObservations",
-    label: "指标观测"
-  }, {
-    key: "metricCalculationRuns",
-    label: "指标计算记录"
-  }, {
+    key: "dataCalculationManagement",
+    label: "数据计算管理",
+    children: [{
+      key: "metricDefinitions",
+      label: "指标定义"
+    }, {
+      key: "metricObservations",
+      label: "指标观测"
+    }, {
+      key: "metricCalculationRuns",
+      label: "指标计算记录"
+    }]
+  }]
+}, {
+  key: "financialManagement",
+  label: "财务经营管理",
+  children: [{
     key: "revenueRecords",
     label: "收入记录"
   }, {
@@ -481,18 +489,18 @@ const tableConfig = {
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"]
   },
   financialMetrics: {
-    title: "财务指标",
-    description: "展示收入、成本、利润、利润率和单均经营结果。",
+    title: "财务表现分析",
+    description: "展示收入、成本、利润、利润率和单均经营结果，帮助判断经营结果是否健康。",
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"]
   },
   serviceMetrics: {
-    title: "服务指标",
-    description: "展示订单创建、完成、取消和履约相关服务结果。",
+    title: "服务经营分析",
+    description: "展示订单创建、完成、取消和履约相关服务结果，帮助定位服务规模与服务质量。",
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"]
   },
   processDiagnostics: {
-    title: "过程诊断",
-    description: "查看匹配、路径规划、履约、供给任务和数据质量的过程指标。",
+    title: "运营过程诊断",
+    description: "查看匹配、路径规划、履约、供给任务和数据质量的过程指标，用于异常下钻。",
     columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "metric_period_label"]
   },
   metricDefinitions: {
@@ -3477,6 +3485,7 @@ function RecordTable({
   const [abnormalIssueType, setAbnormalIssueType] = useState(taskTypes?.IssueType?.LOW_BATTERY || "LOW_BATTERY");
   const [abnormalArrivalExecution, setAbnormalArrivalExecution] = useState(null);
   const [abnormalArrivalType, setAbnormalArrivalType] = useState(taskTypes?.ArrivalExecutionResult?.ARRIVED_WITH_TARGET_OCCUPIED || "ARRIVED_WITH_TARGET_OCCUPIED");
+  const [metricTableVisible, setMetricTableVisible] = useState(false);
   const filters = uiState.filters;
   const appliedFilters = uiState.appliedFilters;
   const pageSize = 14;
@@ -3518,6 +3527,10 @@ function RecordTable({
   }, [eventPanelHeight, hasEventPanel, page, rows.length]);
   const tableScrollY = tableBodyHeight;
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
+  const showMainTable = !isMetricAnalysisPage || metricTableVisible;
+  useEffect(() => {
+    if (isMetricAnalysisPage) setMetricTableVisible(false);
+  }, [isMetricAnalysisPage, page]);
   return /*#__PURE__*/React.createElement("section", {
     className: isReadinessPage ? "record-page-new readiness-page" : "record-page-new"
   }, statusOptions.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -3663,7 +3676,12 @@ function RecordTable({
     rows: displayRows,
     allRows: rows,
     onSelect: row => onSelect(objectType, row[idField])
-  }), /*#__PURE__*/React.createElement("div", {
+  }), isMetricAnalysisPage && /*#__PURE__*/React.createElement("div", {
+    className: "metric-table-disclosure"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u660E\u7EC6\u8868"), /*#__PURE__*/React.createElement("small", null, "\u7528\u4E8E\u6838\u5BF9\u8BA1\u7B97\u7ED3\u679C\u548C\u6765\u6E90\u8BB0\u5F55\uFF0C\u9ED8\u8BA4\u6536\u8D77\u4EE5\u4FDD\u7559\u7ECF\u8425\u5206\u6790\u9605\u8BFB\u7A7A\u95F4\u3002")), /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    onClick: () => setMetricTableVisible(visible => !visible)
+  }, metricTableVisible ? "收起明细表" : "查看明细表")), showMainTable && /*#__PURE__*/React.createElement("div", {
     className: "record-table-section",
     ref: tableSectionRef
   }, /*#__PURE__*/React.createElement(Table, {
@@ -4906,16 +4924,22 @@ function MetricExperiencePanel({
   const warningRows = allRows.filter(row => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
   const periodLabel = latestRows[0]?.metric_period_label || allRows[0]?.metric_period_label || "尚未计算";
   const metricById = new Map(createLatestMetricRows(allRows).map(row => [row.metric_definition_id, row]));
+  const sourceRecordCount = latestRows.reduce((total, row) => total + Number(row.source_record_count || 0), 0);
+  const qualityMetric = metricById.get("QUALITY-DATA-001");
+  const qualitySummary = qualityMetric ? `${qualityMetric.metric_name_cn} ${formatMetricDisplayValue(qualityMetric)}` : "等待数据质量结果";
   const insightGroups = [{
     title: "财务结果",
+    description: "收入、成本和利润形成经营结果判断。",
     primary: metricById.get("OUTCOME-FIN-005"),
     secondary: [metricById.get("OUTCOME-FIN-002"), metricById.get("OUTCOME-FIN-004")].filter(Boolean)
   }, {
     title: "服务效率",
+    description: "订单规模和履约效率决定收入质量。",
     primary: metricById.get("OUTCOME-SERVICE-003"),
     secondary: [metricById.get("OUTCOME-SERVICE-002"), metricById.get("OUTCOME-EFF-002")].filter(Boolean)
   }, {
     title: "过程质量",
+    description: "匹配、路径和数据质量解释异常来源。",
     primary: metricById.get("PROCESS-MATCH-001") || metricById.get("PROCESS-ROUTE-001"),
     secondary: [metricById.get("PROCESS-ROUTE-001"), metricById.get("QUALITY-DATA-001")].filter(Boolean)
   }];
@@ -4928,6 +4952,8 @@ function MetricExperiencePanel({
   }, tableConfig[page]?.title || "经营指标"), /*#__PURE__*/React.createElement(Text, {
     type: "secondary"
   }, tableConfig[page]?.description || "基于模拟业务事实生成的经营指标。")), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7EDF\u8BA1\u5468\u671F\uFF1A", periodLabel)), /*#__PURE__*/React.createElement("div", {
+    className: "metric-decision-labels"
+  }, /*#__PURE__*/React.createElement("span", null, "\u4E0A\u5C42\u7ECF\u8425\u7ED3\u679C"), /*#__PURE__*/React.createElement("span", null, "\u4E2D\u5C42\u94FE\u8DEF\u89E3\u91CA"), /*#__PURE__*/React.createElement("span", null, "\u4E0B\u5C42\u6570\u636E\u53EF\u4FE1\u5EA6")), /*#__PURE__*/React.createElement("div", {
     className: "metric-card-grid"
   }, overviewRows.length > 0 ? overviewRows.map(row => /*#__PURE__*/React.createElement("button", {
     key: row.metric_observation_id,
@@ -4937,12 +4963,13 @@ function MetricExperiencePanel({
     className: "metric-empty-summary"
   }, "\u6682\u65E0\u6307\u6807\u7ED3\u679C\uFF0C\u8BF7\u5148\u9009\u62E9\u7EDF\u8BA1\u5468\u671F\u5E76\u8BA1\u7B97\u7ECF\u8425\u5468\u671F\u6307\u6807\u3002")), /*#__PURE__*/React.createElement("div", {
     className: "metric-insight-lanes"
-  }, insightGroups.map(group => /*#__PURE__*/React.createElement("div", {
+  }, insightGroups.map(group => /*#__PURE__*/React.createElement("button", {
     key: group.title,
-    className: "metric-insight-lane"
-  }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primary ? `${group.primary.metric_name_cn} ${formatMetricDisplayValue(group.primary)}` : "暂无数据"), /*#__PURE__*/React.createElement("small", null, group.secondary.length ? group.secondary.map(item => `${item.metric_name_cn} ${formatMetricDisplayValue(item)}`).join(" / ") : "等待周期计算结果")))), /*#__PURE__*/React.createElement("div", {
-    className: "metric-panel-footer"
-  }, /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u6570 ", allRows.length), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7B5B\u9009 ", rows.length), /*#__PURE__*/React.createElement("span", null, "\u8D28\u91CF\u63D0\u793A ", warningRows.length), warningRows[0] && /*#__PURE__*/React.createElement("span", null, warningRows[0].metric_name_cn, "\uFF1A", warningRows[0].quality_reason)));
+    className: "metric-insight-lane",
+    onClick: () => group.primary && onSelect(group.primary)
+  }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primary ? `${group.primary.metric_name_cn} ${formatMetricDisplayValue(group.primary)}` : "暂无数据"), /*#__PURE__*/React.createElement("small", null, group.secondary.length ? group.secondary.map(item => `${item.metric_name_cn} ${formatMetricDisplayValue(item)}`).join(" / ") : "等待周期计算结果"), /*#__PURE__*/React.createElement("em", null, group.description)))), /*#__PURE__*/React.createElement("div", {
+    className: "metric-quality-strip"
+  }, /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u7ED3\u679C ", latestRows.length), /*#__PURE__*/React.createElement("span", null, "\u6765\u6E90\u8BB0\u5F55 ", sourceRecordCount), /*#__PURE__*/React.createElement("span", null, qualitySummary), /*#__PURE__*/React.createElement("span", null, warningRows[0] ? `${warningRows[0].metric_name_cn}：${warningRows[0].quality_reason}` : "暂无质量提示")));
 }
 function renderViewDetailAction(row, actions) {
   return /*#__PURE__*/React.createElement(RowActionButton, {
