@@ -93,6 +93,7 @@ node scripts/verify-v033-1-timed-operation-diagnostics.mjs
 node scripts/verify-v033-2-business-lifecycle-timeline.mjs
 node scripts/verify-v033-3-workflow-timing-lifecycle-contract.mjs
 node scripts/verify-v034-1-metric-calculation.mjs
+node scripts/verify-v036-3-service-order-auto-assignment.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

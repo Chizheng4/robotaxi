@@ -750,6 +750,21 @@
 |matching_retry_pending|等待匹配重试|运行态字段|当前订单是否已有等待中的匹配重试时间作业|
 |next_matching_retry_seconds|下次匹配重试秒数|运行态字段|下一次匹配重试在统一模拟时间中的目标秒数|
 |last_matching_failure_reason|最近匹配失败原因|运行态字段|最近一次订单匹配尝试失败原因|
+|assignment_mode|分配模式|运行态字段|服务订单 Robotaxi 分配入口：MANUAL / AUTO_TIMED|
+|assignment_status|自动分配状态|运行态字段|自动限时分配状态：ASSIGNING / ASSIGNED / TIMEOUT_CANCELLED / FAILED|
+|assignment_started_at|分配开始时间|运行态字段|真实时间模式下自动分配开始时间|
+|assignment_started_simulation_at|分配开始时间（模拟）|模拟时间字段|统一世界时间下自动分配开始时间|
+|assignment_deadline_seconds|分配截止秒|运行态字段|统一世界时间下自动分配最大等待截止秒|
+|assignment_deadline_simulation_at|分配截止时间（模拟）|模拟时间字段|统一 Day N HH:MM:SS 格式的自动分配截止时间|
+|assignment_max_wait_seconds|最大分配等待（秒）|配置/运行态字段|客户确认叫车后允许自动分配 Robotaxi 的最大等待秒数|
+|assignment_retry_interval_seconds|分配重试间隔（秒）|配置/运行态字段|自动分配会话中连续尝试匹配 Robotaxi 的推进间隔|
+|assignment_attempt_count|自动分配尝试次数|运行态字段|自动限时分配会话已经尝试匹配 Robotaxi 的次数|
+|assignment_elapsed_seconds|自动分配已耗时（秒）|运行态字段|自动分配会话已消耗的统一世界秒数|
+|assignment_remaining_seconds|自动分配剩余时间（秒）|运行态字段|自动分配会话距离最大等待截止剩余秒数|
+|assignment_last_attempt_simulation_at|最近分配尝试时间（模拟）|模拟时间字段|最近一次自动分配尝试发生的统一世界时间|
+|assignment_last_failure_reason|最近分配失败原因|运行态字段|最近一次自动分配失败原因|
+|assignment_completed_at|分配完成时间|运行态字段|真实时间模式下自动分配完成时间|
+|assignment_completed_simulation_at|分配完成时间（模拟）|模拟时间字段|统一世界时间下自动分配完成时间|
 |assignment_wait_timeout_seconds|分配等待超时（秒）|运行态字段|服务订单等待 Robotaxi 分配的最长模拟秒数|
 |cancellation_reason|取消原因|运行态字段|订单取消原因|
 |trip_id|履约行驶记录编号|运行态字段|关联 Trip，可为空|
@@ -1310,7 +1325,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |readiness_check_seconds|准入检查耗时（秒）|配置字段|Worker 执行准入检查的模拟耗时|
 |cell_travel_seconds|单 Cell 行驶耗时（秒）|配置字段|Robotaxi 沿 Route 移动一个 Cell 的模拟耗时|
 |arrival_detection_seconds|到达识别耗时（秒）|配置字段|Robotaxi 到达后识别正常或异常到达的模拟耗时|
-|order_matching_retry_seconds|订单匹配重试等待（秒）|配置字段|订单一次匹配无车后等待下一次匹配的模拟耗时|
+|assignment_retry_interval_seconds|分配重试间隔（秒）|配置字段|自动限时分配 Robotaxi 会话的连续重试推进间隔|
+|assignment_max_wait_seconds|最大分配等待（秒）|配置字段|客户确认叫车后自动分配 Robotaxi 的最大等待时长|
+|order_matching_retry_seconds|订单匹配重试等待（秒）|兼容配置字段|旧版订单一次匹配无车后等待下一次匹配的模拟耗时；新增逻辑优先使用 assignment_retry_interval_seconds|
 |order_matching_max_retry_count|订单匹配最大重试次数|配置字段|订单超过该次数后才进入终态分配失败|
 |passenger_boarding_seconds|乘客上车耗时（秒）|配置字段|乘客上车动作模拟耗时|
 |passenger_dropoff_seconds|乘客下车耗时（秒）|配置字段|乘客下车动作模拟耗时|
@@ -1406,8 +1423,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |---|---|---|---|
 |timed_operation_id|时间作业编号|运行态字段|TimedOperation 唯一编号|
 |time_mode|时间模式|运行态字段|REAL_MANUAL / REAL_AUTOMATION / SIMULATION|
-|operation_type|作业类型|运行态字段|TRAVEL / ARRIVAL_DETECTION / WORKER_CHECK / ORDER_MATCH_RETRY / ORDER_ASSIGNMENT_TIMEOUT / GENERIC_ACTION|
-|operation_status|作业状态|运行态字段|PENDING / RUNNING / COMPLETED / FAILED / CANCELLED|
+|operation_type|作业类型|运行态字段|TRAVEL / ARRIVAL_DETECTION / WORKER_CHECK / ORDER_AUTO_ASSIGNMENT / ORDER_MATCH_RETRY / ORDER_ASSIGNMENT_TIMEOUT / GENERIC_ACTION|
+|operation_status|作业状态|运行态字段|PENDING / RUNNING / COMPLETED / FAILED / CANCELLED；TimedOperation 中 CANCELLED 面向用户显示为“已撤销”，不等同于服务订单已取消|
 |object_type|业务单类型|运行态字段|时间作业关联的业务单或业务对象类型|
 |object_id|业务单编号|运行态字段|时间作业关联的业务单或业务对象编号|
 |action_type|触发动作|运行态字段|作业到期后应调用的业务动作，可为空|
@@ -1432,7 +1449,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |running_timed_operations|执行中作业数|运行态字段|正在随时间执行的作业数量|
 |completed_timed_operations|已完成作业数|运行态字段|已完成的作业数量|
 |failed_timed_operations|失败作业数|运行态字段|失败的作业数量|
-|cancelled_timed_operations|已取消作业数|运行态字段|已取消的作业数量|
+|cancelled_timed_operations|已撤销作业数|运行态字段|已撤销的作业数量|
 |created_at|创建时间|运行态字段|记录创建时间|
 
 ---
@@ -1495,6 +1512,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |PRICING_EXECUTE|执行定价|event_type / action_type|
 |ROBOTAXI_CALL|客户确认叫车|event_type / action_type|
 |ORDER_MATCHING_EXECUTE|执行订单匹配|event_type / action_type|
+|ORDER_AUTO_ASSIGNMENT_TICK|推进自动分配|event_type / action_type|
 |SERVICE_ORDER_CANCEL|取消服务订单|event_type / action_type|
 |TRIP_STEP_EXECUTE|推进履约行驶|event_type / action_type|
 |SETTLEMENT_EXECUTE|执行结算|event_type / action_type|
@@ -1515,7 +1533,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ROUTE_EXECUTION_TRAVEL_COMPLETE|运营行驶时间到达|event_type / action_type|
 |ARRIVAL_CONFIRM|确认到达|event_type / action_type|
 |TRIP_TRAVEL_COMPLETE|履约行驶时间到达|event_type / action_type|
-|ORDER_ASSIGNMENT_TIMEOUT|订单分配等待超时|operation_type|
+|ORDER_AUTO_ASSIGNMENT|订单自动分配|operation_type|
+|ORDER_ASSIGNMENT_TIMEOUT|订单分配等待超时|operation_type（兼容旧值）|
 |ROBOTAXI_ASSIGNMENT_TIMEOUT|Robotaxi 分配等待超时|reason_type|
 |BUSINESS_AND_CHECKPOINT|业务事件与检查点|event_recording_mode|
 |VERBOSE_TICK|详细 Tick 事件|event_recording_mode|
@@ -1527,6 +1546,11 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |MATCHING_COMPLETED|匹配完成|result_type|
 |MATCHING_FAILED|匹配失败|result_type|
 |MATCHING_RETRY_SCHEDULED|匹配重试已安排|result_type|
+|AUTO_ASSIGNMENT_CONTINUES|自动分配继续|result_type|
+|AUTO_ASSIGNMENT_COMPLETED|自动分配完成|result_type|
+|AUTO_ASSIGNMENT_TIMEOUT_CANCELLED|自动分配超时取消|result_type|
+|AUTO_ASSIGNMENT_REVOKED|自动分配已撤销|result_type|
+|AUTO_ASSIGNMENT_FAILED|自动分配失败|result_type|
 |READINESS_SKIPPED_OUT_OF_WORK_TIME|非工作时间跳过准入|result_type|
 |DEPLOYMENT_SKIPPED_OUT_OF_WORK_TIME|非工作时间跳过投放|result_type|
 |SERVICE_ORDER_CANCELLED|服务订单已取消|result_type|

@@ -25,6 +25,12 @@ const RUNTIME_RULES = {
     actionType: "ORDER_MATCHING_EXECUTE",
     valueKey: "configured_duration_seconds",
   },
+  assignment_max_wait_seconds: {
+    objectType: "serviceOrder",
+    fromState: "WAITING_ROBOTAXI_ASSIGNMENT",
+    actionType: "ORDER_MATCHING_EXECUTE",
+    valueKey: "configured_duration_seconds",
+  },
   order_matching_retry_seconds: {
     objectType: "serviceOrder",
     fromState: "WAITING_ROBOTAXI_ASSIGNMENT",

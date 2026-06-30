@@ -58,7 +58,7 @@ function hasImmediateWorkflowActions(scope, policySnapshot = {}) {
 
 function nextTimedOperationSecond(timedOperations = [], currentSeconds = 0) {
   return Math.min(...(timedOperations || [])
-    .map((operation) => Number(operation.planned_completed_seconds))
+    .flatMap((operation) => [Number(operation.operation_payload?.next_attempt_seconds), Number(operation.planned_completed_seconds)])
     .filter((value) => Number.isFinite(value) && value > currentSeconds));
 }
 

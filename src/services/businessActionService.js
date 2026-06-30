@@ -437,13 +437,30 @@ export function executePricing({ state, objectId, runtime }) {
 export function callRobotaxi({ state, objectId, runtime }) {
   const order = (state.serviceOrders || []).find((item) => item.service_order_id === objectId);
   if (!order) return failure("ROBOTAXI_CALL_FAILED", `未找到服务订单 ${objectId}`, "serviceOrder", objectId, "未找到服务订单");
-  const waitSeconds = getConfiguredDurationSeconds(runtime, "order_assignment_wait_seconds", 60);
+  const waitSeconds = getConfiguredDurationSeconds(runtime, "assignment_max_wait_seconds", getConfiguredDurationSeconds(runtime, "order_assignment_wait_seconds", 60));
+  const retryIntervalSeconds = getConfiguredDurationSeconds(runtime, "assignment_retry_interval_seconds", 1);
+  const startSeconds = Number(runtime.timeContext?.simulation_seconds) || 0;
   return success("CUSTOMER_CONFIRMED", `服务订单 ${objectId} 客户已确认`, { objectType: "serviceOrder", objectId }, {
     serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({
       ...order,
       order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT,
+      assignment_mode: "AUTO_TIMED",
+      assignment_status: "ASSIGNING",
+      assignment_started_at: runtime.now(),
+      assignment_started_simulation_at: runtime.simulationTime(),
+      assignment_deadline_seconds: startSeconds + waitSeconds,
+      assignment_deadline_simulation_at: getPlannedSimulationTimestamp(runtime, waitSeconds),
+      assignment_max_wait_seconds: waitSeconds,
+      assignment_retry_interval_seconds: retryIntervalSeconds,
+      assignment_attempt_count: 0,
+      assignment_elapsed_seconds: 0,
+      assignment_remaining_seconds: waitSeconds,
+      assignment_last_attempt_simulation_at: null,
+      assignment_last_failure_reason: null,
       confirmed_at: runtime.now(),
       assignment_wait_timeout_seconds: waitSeconds,
+      matching_retry_pending: true,
+      next_matching_retry_seconds: startSeconds,
       failure_reason: null,
       ...runtime.audit(),
     }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT, actionType: "ROBOTAXI_CALL", resultType: "CUSTOMER_CONFIRMED", durationSeconds: waitSeconds })),
@@ -452,21 +469,166 @@ export function callRobotaxi({ state, objectId, runtime }) {
         timedOperationId: runtime.nextId("TOP"),
         simulationRunId: runtime.timeContext?.simulation_run_id || null,
         timeMode: runtime.timeContext?.time_mode || "SIMULATION",
-        operationType: TimedOperationType.ORDER_ASSIGNMENT_TIMEOUT,
+        operationType: TimedOperationType.ORDER_AUTO_ASSIGNMENT,
         objectType: "serviceOrder",
         objectId,
-        actionType: "SERVICE_ORDER_CANCEL",
-        startSeconds: Number(runtime.timeContext?.simulation_seconds) || 0,
+        actionType: "ORDER_AUTO_ASSIGNMENT_TICK",
+        startSeconds,
         durationSeconds: waitSeconds,
         simulationStartedAt: runtime.simulationTime(),
         simulationPlannedCompletedAt: getPlannedSimulationTimestamp(runtime, waitSeconds),
         payload: {
-          cancellation_reason: "ROBOTAXI_ASSIGNMENT_TIMEOUT",
-          wait_seconds: waitSeconds,
+          assignment_max_wait_seconds: waitSeconds,
+          assignment_retry_interval_seconds: retryIntervalSeconds,
+          next_attempt_seconds: startSeconds,
+          attempt_count: 0,
+          last_failure_reason: null,
         },
       }),
       ...(state.timedOperations || []),
     ],
+  });
+}
+
+export function advanceOrderAutoAssignment({ state, objectId, runtime }) {
+  const appData = dataView(state);
+  const order = (state.serviceOrders || []).find((item) => item.service_order_id === objectId);
+  const operationId = runtime.context?.action?.timedOperationId;
+  const operation = (state.timedOperations || []).find((item) => item.timed_operation_id === operationId);
+  const currentSeconds = Number(runtime.timeContext?.simulation_seconds) || 0;
+  if (!order) return failure("AUTO_ASSIGNMENT_FAILED", `未找到服务订单 ${objectId}`, "serviceOrder", objectId, "未找到服务订单");
+  if (order.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT) {
+    return success("AUTO_ASSIGNMENT_REVOKED", `服务订单 ${objectId} 已进入其他生命周期，自动分配已撤销`, { objectType: "serviceOrder", objectId }, {
+      timedOperations: updateTimedOperation(state.timedOperations || [], operationId, (item) => cancelTimedOperation(item, "业务单已进入其他生命周期状态")),
+    });
+  }
+
+  const rawStartedSeconds = Number(operation?.start_seconds ?? order.assignment_started_seconds);
+  const startedSeconds = Number.isFinite(rawStartedSeconds) ? rawStartedSeconds : currentSeconds;
+  const maxWaitSeconds = Math.max(0, Number(order.assignment_max_wait_seconds ?? operation?.operation_payload?.assignment_max_wait_seconds) || getConfiguredDurationSeconds(runtime, "assignment_max_wait_seconds", getConfiguredDurationSeconds(runtime, "order_assignment_wait_seconds", 60)));
+  const retryIntervalSeconds = Math.max(1, Number(order.assignment_retry_interval_seconds ?? operation?.operation_payload?.assignment_retry_interval_seconds) || getConfiguredDurationSeconds(runtime, "assignment_retry_interval_seconds", 1));
+  const elapsedSeconds = Math.max(0, currentSeconds - startedSeconds);
+  const remainingSeconds = Math.max(0, maxWaitSeconds - elapsedSeconds);
+  if (elapsedSeconds >= maxWaitSeconds) {
+    const cancelled = withLifecycleStatus({
+      ...order,
+      order_status: serviceOrderTypes.ServiceOrderStatus.CANCELLED,
+      assignment_status: "TIMEOUT_CANCELLED",
+      assignment_elapsed_seconds: elapsedSeconds,
+      assignment_remaining_seconds: 0,
+      matching_retry_pending: false,
+      next_matching_retry_seconds: null,
+      cancellation_reason: "ROBOTAXI_ASSIGNMENT_TIMEOUT",
+      cancelled_at: runtime.now(),
+      simulation_cancelled_at: runtime.simulationTime(),
+      failure_reason: null,
+      ...runtime.audit({ completed: true }),
+    }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: serviceOrderTypes.ServiceOrderStatus.CANCELLED, actionType: "ORDER_AUTO_ASSIGNMENT_TICK", resultType: "AUTO_ASSIGNMENT_TIMEOUT_CANCELLED", durationSeconds: elapsedSeconds });
+    return success("AUTO_ASSIGNMENT_TIMEOUT_CANCELLED", `服务订单 ${objectId} 自动分配超时，已取消`, { objectType: "serviceOrder", objectId }, {
+      serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, cancelled),
+      timedOperations: updateTimedOperation(state.timedOperations || [], operationId, (item) => completeTimedOperation(item, runtime, {
+        assignment_result: "TIMEOUT_CANCELLED",
+        elapsed_seconds: elapsedSeconds,
+      })),
+    });
+  }
+
+  const strategy = appData.orderMatchingStrategies?.find((item) => item.strategy_status === "ACTIVE");
+  if (!strategy) return failure("AUTO_ASSIGNMENT_FAILED", "无可用匹配策略", "serviceOrder", objectId, "无可用匹配策略");
+  const matchingResult = serviceOrderService.executeOrderMatching({
+    strategy,
+    serviceOrder: order,
+    data: appData,
+    orderMatchingRunId: runtime.nextId("OMR"),
+    orderMatchingDecisionId: runtime.nextId("OMD"),
+    createdAt: runtime.now(),
+  });
+  const attemptCount = Number(order.assignment_attempt_count || order.matching_attempt_count || 0) + 1;
+  if (!matchingResult.success) {
+    const nextAttemptSeconds = Math.min(startedSeconds + maxWaitSeconds, currentSeconds + retryIntervalSeconds);
+    return success("AUTO_ASSIGNMENT_CONTINUES", `服务订单 ${objectId} 暂无可分配 Robotaxi，自动分配继续`, { objectType: "serviceOrder", objectId, failureReason: matchingResult.failureReason }, {
+      orderMatchingRuns: matchingResult.run ? [{ ...matchingResult.run, ...runtime.audit({ created: true }) }, ...(state.orderMatchingRuns || [])] : state.orderMatchingRuns,
+      orderMatchingDecisions: matchingResult.decision ? [{ ...matchingResult.decision, ...runtime.audit({ created: true }) }, ...(state.orderMatchingDecisions || [])] : state.orderMatchingDecisions,
+      serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
+        ...order,
+        assignment_status: "ASSIGNING",
+        assignment_attempt_count: attemptCount,
+        assignment_elapsed_seconds: elapsedSeconds,
+        assignment_remaining_seconds: remainingSeconds,
+        assignment_last_attempt_simulation_at: runtime.simulationTime(),
+        assignment_last_failure_reason: matchingResult.failureReason,
+        matching_attempt_count: attemptCount,
+        matching_retry_pending: true,
+        last_matching_failure_reason: matchingResult.failureReason,
+        next_matching_retry_seconds: nextAttemptSeconds,
+        failure_reason: null,
+        ...runtime.audit(),
+      }),
+      timedOperations: updateTimedOperation(state.timedOperations || [], operationId, (item) => ({
+        ...item,
+        operation_status: TimedOperationStatus.RUNNING,
+        operation_payload: {
+          ...(item.operation_payload || {}),
+          attempt_count: attemptCount,
+          last_failure_reason: matchingResult.failureReason,
+          last_triggered_attempt_seconds: currentSeconds,
+          next_attempt_seconds: nextAttemptSeconds,
+        },
+      })),
+    });
+  }
+
+  const robotaxiId = matchingResult.decision.selected_robotaxi_id;
+  const matchedOrder = { ...order, matched_robotaxi_id: robotaxiId };
+  const trip = withLifecycleStatus(createTripForOrder(matchedOrder, appData, runtime), {
+    runtime,
+    objectType: "trip",
+    statusField: "trip_status",
+    fromStatus: null,
+    toStatus: tripTypes.TripStatus.WAITING_ROUTE,
+    actionType: "TRIP_CREATE",
+    resultType: "TRIP_CREATED",
+  });
+  return success("AUTO_ASSIGNMENT_COMPLETED", `服务订单 ${objectId} 自动分配成功，Robotaxi: ${robotaxiId}`, { objectType: "serviceOrder", objectId, robotaxiId, tripId: trip.trip_id }, {
+    orderMatchingRuns: [{ ...matchingResult.run, ...runtime.audit({ created: true }) }, ...(state.orderMatchingRuns || [])],
+    orderMatchingDecisions: [{ ...matchingResult.decision, ...runtime.audit({ created: true }) }, ...(state.orderMatchingDecisions || [])],
+    trips: [trip, ...(state.trips || [])],
+    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({
+      ...order,
+      order_status: serviceOrderTypes.ServiceOrderStatus.ON_THE_WAY_PICKUP,
+      assignment_status: "ASSIGNED",
+      assignment_attempt_count: attemptCount,
+      assignment_elapsed_seconds: elapsedSeconds,
+      assignment_remaining_seconds: remainingSeconds,
+      assignment_completed_at: runtime.now(),
+      assignment_completed_simulation_at: runtime.simulationTime(),
+      assignment_last_attempt_simulation_at: runtime.simulationTime(),
+      assignment_last_failure_reason: null,
+      matched_robotaxi_id: robotaxiId,
+      trip_id: trip.trip_id,
+      order_matching_decision_id: matchingResult.decision.order_matching_decision_id,
+      matching_retry_pending: false,
+      next_matching_retry_seconds: null,
+      last_matching_failure_reason: null,
+      matching_attempt_count: attemptCount,
+      matched_at: runtime.now(),
+      simulation_matched_at: runtime.simulationTime(),
+      failure_reason: null,
+      ...runtime.audit(),
+    }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: serviceOrderTypes.ServiceOrderStatus.ON_THE_WAY_PICKUP, actionType: "ORDER_AUTO_ASSIGNMENT_TICK", resultType: "AUTO_ASSIGNMENT_COMPLETED", durationSeconds: elapsedSeconds })),
+    robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", robotaxiId, (robotaxi) => ({
+      ...robotaxi,
+      current_order_id: objectId,
+      motion_status: "STOPPED",
+      available_for_dispatch: false,
+      ...runtime.audit(),
+    })),
+    timedOperations: updateTimedOperation(state.timedOperations || [], operationId, (item) => completeTimedOperation(item, runtime, {
+      assignment_result: "ASSIGNED",
+      attempt_count: attemptCount,
+      elapsed_seconds: elapsedSeconds,
+      robotaxi_id: robotaxiId,
+    })),
   });
 }
 
@@ -825,13 +987,40 @@ function cancelPendingTimedOperations(timedOperations = [], predicate) {
   return (timedOperations || []).map((operation) => {
     if (!predicate(operation)) return operation;
     if (![TimedOperationStatus.PENDING, TimedOperationStatus.RUNNING].includes(operation.operation_status)) return operation;
-    return {
-      ...operation,
-      operation_status: TimedOperationStatus.CANCELLED,
-      remaining_seconds: 0,
-      failure_reason: "业务单已进入其他生命周期状态",
-    };
+    return cancelTimedOperation(operation, "业务单已进入其他生命周期状态");
   });
+}
+
+function updateTimedOperation(timedOperations = [], operationId, updater) {
+  return (timedOperations || []).map((operation) =>
+    operation.timed_operation_id === operationId ? updater(operation) : operation
+  );
+}
+
+function cancelTimedOperation(operation, reason) {
+  return {
+    ...operation,
+    operation_status: TimedOperationStatus.CANCELLED,
+    remaining_seconds: 0,
+    failure_reason: reason,
+  };
+}
+
+function completeTimedOperation(operation, runtime, payload = {}) {
+  const elapsedSeconds = Number(payload.elapsed_seconds ?? operation.elapsed_seconds ?? operation.duration_seconds);
+  return {
+    ...operation,
+    operation_status: TimedOperationStatus.COMPLETED,
+    elapsed_seconds: Number.isFinite(elapsedSeconds) ? elapsedSeconds : operation.duration_seconds,
+    remaining_seconds: 0,
+    progress_percent: 100,
+    completed_at: runtime.now(),
+    simulation_completed_at: runtime.simulationTime(),
+    operation_payload: {
+      ...(operation.operation_payload || {}),
+      ...payload,
+    },
+  };
 }
 
 function planTripRoute({ state, objectId, runtime }) {

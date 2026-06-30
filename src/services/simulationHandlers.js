@@ -128,6 +128,10 @@ export function handleOrderMatchingExecute({ objectId, data, context }) {
   return runBusinessAction((params) => businessActionService.executeOrderMatching({ ...params, objectId }), data, context);
 }
 
+export function handleOrderAutoAssignmentTick({ objectId, data, context }) {
+  return runBusinessAction((params) => businessActionService.advanceOrderAutoAssignment({ ...params, objectId }), data, context);
+}
+
 export function handleServiceOrderCancel({ objectId, data, context }) {
   return runBusinessAction((params) => businessActionService.cancelServiceOrder({ ...params, objectId }), data, context);
 }

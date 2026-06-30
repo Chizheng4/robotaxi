@@ -493,7 +493,7 @@ function makeEvent(runId, day, time, dayTick, globalTick, eventType, eventSource
 function getActionLabel(actionType) {
   const labels = {
     SERVICE_ORDER_CREATE: "创建订单", PRICING_EXECUTE: "定价执行", ROBOTAXI_CALL: "客户确认",
-    ORDER_MATCHING_EXECUTE: "匹配执行", TRIP_STEP_EXECUTE: "履约推进", SETTLEMENT_EXECUTE: "结算执行",
+    ORDER_MATCHING_EXECUTE: "匹配执行", ORDER_AUTO_ASSIGNMENT_TICK: "自动分配推进", TRIP_STEP_EXECUTE: "履约推进", SETTLEMENT_EXECUTE: "结算执行",
     PAYMENT_EXECUTE: "支付执行", READINESS_TASK_ASSIGN: "准入分配", READINESS_TASK_START: "准入开始",
     READINESS_TASK_PASS: "准入通过", ROUTE_PLAN: "路径规划", ROUTE_EXECUTION_STEP: "行驶步进",
     ARRIVAL_CONFIRM: "到达确认", DEPLOYMENT_TASK_CREATE: "创建投放任务", READINESS_TASK_CREATE: "创建准入任务",

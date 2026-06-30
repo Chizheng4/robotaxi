@@ -43,23 +43,23 @@ const callResult = businessActionService.callRobotaxi({
 });
 assert.equal(callResult.success, true, callResult.message);
 assert.equal(callResult.updates.serviceOrders[0].assignment_wait_timeout_seconds, 60);
-const timeoutOperation = callResult.updates.timedOperations[0];
-assert.equal(timeoutOperation.operation_type, "ORDER_ASSIGNMENT_TIMEOUT");
-assert.equal(timeoutOperation.action_type, "SERVICE_ORDER_CANCEL");
-assert.equal(timeoutOperation.duration_seconds, 60);
-assert.equal(timeoutOperation.planned_completed_seconds, 70);
+const autoAssignmentOperation = callResult.updates.timedOperations[0];
+assert.equal(autoAssignmentOperation.operation_type, "ORDER_AUTO_ASSIGNMENT");
+assert.equal(autoAssignmentOperation.action_type, "ORDER_AUTO_ASSIGNMENT_TICK");
+assert.equal(autoAssignmentOperation.duration_seconds, 60);
+assert.equal(autoAssignmentOperation.planned_completed_seconds, 70);
 
 const cancelResult = businessActionService.cancelServiceOrder({
   state: {
     ...createOrderState("WAITING_ROBOTAXI_ASSIGNMENT"),
-    timedOperations: [timeoutOperation],
+    timedOperations: [autoAssignmentOperation],
   },
   objectId: "SO-V0327",
   runtime: createRuntime({
     seconds: 70,
     simulationTimestamp: "Day 1 00:01:10",
     workflowTimingProfile,
-    action: { operation_payload: timeoutOperation.operation_payload },
+    action: { operation_payload: autoAssignmentOperation.operation_payload },
   }),
 });
 assert.equal(cancelResult.success, true, cancelResult.message);

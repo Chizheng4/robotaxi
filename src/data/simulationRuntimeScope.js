@@ -87,10 +87,14 @@ export function shouldAdvanceTimedOperation(operation, currentSeconds = 0, inclu
   if (!operation || timedOperationTerminalStatuses.has(operation.operation_status)) return false;
   const plannedCompletedSeconds = Number(operation.planned_completed_seconds);
   const startSeconds = Number(operation.start_seconds) || 0;
+  const nextAttemptSeconds = Number(operation.operation_payload?.next_attempt_seconds);
   const isDue = Number.isFinite(plannedCompletedSeconds) && plannedCompletedSeconds <= currentSeconds;
+  const isAutoAssignmentAttemptDue = operation.operation_type === TimedOperationType.ORDER_AUTO_ASSIGNMENT
+    && Number.isFinite(nextAttemptSeconds)
+    && nextAttemptSeconds <= currentSeconds;
   const shouldMarkRunning = operation.operation_status === TimedOperationStatus.PENDING && startSeconds <= currentSeconds;
   const shouldRefreshTravel = includeTravelProgress && operation.operation_type === TimedOperationType.TRAVEL;
-  return isDue || shouldMarkRunning || shouldRefreshTravel;
+  return isDue || isAutoAssignmentAttemptDue || shouldMarkRunning || shouldRefreshTravel;
 }
 
 export function mergeTimedOperationUpdates(allTimedOperations = [], scopedTimedOperations = []) {

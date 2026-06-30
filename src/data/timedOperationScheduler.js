@@ -1,4 +1,4 @@
-import { TimedOperationStatus } from "../domain/timedOperationTypes.js";
+import { TimedOperationStatus, TimedOperationType } from "../domain/timedOperationTypes.js";
 
 export function advanceTimedOperations({
   timedOperations = [],
@@ -9,7 +9,7 @@ export function advanceTimedOperations({
   let changed = false;
   const nextTimedOperations = timedOperations.map((operation) => {
     const next = advanceTimedOperation(operation, currentSeconds, timeContext);
-    if (isNewlyCompleted(operation, next)) dueOperations.push(next);
+    if (isNewlyCompleted(operation, next) || isAutoAssignmentAttemptDue(operation, next, currentSeconds)) dueOperations.push(next);
     if (next !== operation) changed = true;
     return next;
   });
@@ -20,6 +20,18 @@ export function advanceTimedOperations({
     summary: summarizeTimedOperations(nextTimedOperations, dueOperations),
     changed,
   };
+}
+
+function isAutoAssignmentAttemptDue(previous, next, currentSeconds) {
+  if (!next || next.operation_type !== TimedOperationType.ORDER_AUTO_ASSIGNMENT) return false;
+  if (![TimedOperationStatus.RUNNING, TimedOperationStatus.COMPLETED].includes(next.operation_status)) return false;
+  if (previous?.operation_status === TimedOperationStatus.PENDING && next.operation_status === TimedOperationStatus.RUNNING) return true;
+  if (next.operation_status === TimedOperationStatus.COMPLETED && previous?.operation_status !== TimedOperationStatus.COMPLETED) return true;
+  const nextAttemptSeconds = Number(next.operation_payload?.next_attempt_seconds);
+  const lastTriggeredSeconds = Number(next.operation_payload?.last_triggered_attempt_seconds);
+  return Number.isFinite(nextAttemptSeconds)
+    && nextAttemptSeconds <= currentSeconds
+    && lastTriggeredSeconds !== nextAttemptSeconds;
 }
 
 export function advanceTimedOperation(operation, currentSeconds, timeContext = {}) {

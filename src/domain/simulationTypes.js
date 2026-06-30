@@ -298,6 +298,8 @@ export function createDefaultSimulationPolicy(overrides = {}) {
       readiness_check_seconds: 30,
       cell_travel_seconds: 6,
       arrival_detection_seconds: 3,
+      assignment_retry_interval_seconds: 1,
+      assignment_max_wait_seconds: 60,
       order_matching_retry_seconds: 30,
       order_matching_max_retry_count: 5,
       passenger_boarding_seconds: 45,
