@@ -1,6 +1,7 @@
 import { clockTimeToSeconds, SECONDS_PER_DAY } from "../domain/simulationTime.js";
 import { computeTimeContext } from "./simulationClock.js";
 import { createSimulationRuntimeScope } from "./simulationRuntimeScope.js";
+import { queryAllWorkflowRules } from "./simulationWorkflowEngine.js";
 
 export function resolveIdleJumpTargetSeconds({ simulationRun, policySnapshot = {}, businessData = {} } = {}) {
   if (!simulationRun || !["RUNNING", "DRAINING"].includes(simulationRun.simulation_status)) return null;
@@ -18,11 +19,12 @@ export function resolveIdleJumpTargetSeconds({ simulationRun, policySnapshot = {
   const performanceConfig = policySnapshot?.simulation_performance_config || {};
   const includeTravelProgress = isUiSnapshotSecond(currentSeconds, performanceConfig);
   const scope = createSimulationRuntimeScope({ simulationRun, businessData, tickContext, includeTravelProgress });
-  if (hasActiveWorkflowObjects(scope) || scope.timedOperationCandidates.length > 0) return null;
+  if (hasImmediateWorkflowActions(scope, policySnapshot) || scope.timedOperationCandidates.length > 0) return null;
 
-  const demandSecond = nextDemandTriggerSecond(policySnapshot, currentSeconds);
-  const readinessSecond = nextSupplyTriggerSecond(policySnapshot, currentSeconds, "readiness");
-  const deploymentSecond = nextSupplyTriggerSecond(policySnapshot, currentSeconds, "deployment");
+  const isDraining = simulationRun.simulation_status === "DRAINING";
+  const demandSecond = isDraining ? Infinity : nextDemandTriggerSecond(policySnapshot, currentSeconds);
+  const readinessSecond = isDraining ? Infinity : nextSupplyTriggerSecond(policySnapshot, currentSeconds, "readiness");
+  const deploymentSecond = isDraining ? Infinity : nextSupplyTriggerSecond(policySnapshot, currentSeconds, "deployment");
   const plannedEndSeconds = Number(simulationRun.planned_simulation_end_seconds);
   if ([demandSecond, readinessSecond, deploymentSecond, plannedEndSeconds].some((value) => value === currentSeconds)) {
     return null;
@@ -41,8 +43,17 @@ export function resolveIdleJumpTargetSeconds({ simulationRun, policySnapshot = {
   return Math.min(...candidates);
 }
 
-function hasActiveWorkflowObjects(scope) {
-  return Object.values(scope?.workflowScope || {}).some((items) => (items || []).length > 0);
+function hasImmediateWorkflowActions(scope, policySnapshot = {}) {
+  const actions = queryAllWorkflowRules({
+    serviceOrders: scope.workflowScope.serviceOrders,
+    trips: scope.workflowScope.trips,
+    readinessTasks: scope.workflowScope.readinessTasks,
+    deploymentTasks: scope.workflowScope.deploymentTasks,
+    routeExecutions: scope.workflowScope.routeExecutions,
+    autoConfig: policySnapshot.service_order_auto_config || {},
+    defaultCompletionConfig: policySnapshot.default_completion_config || {},
+  });
+  return actions.length > 0;
 }
 
 function nextTimedOperationSecond(timedOperations = [], currentSeconds = 0) {

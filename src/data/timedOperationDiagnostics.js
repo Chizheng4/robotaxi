@@ -5,6 +5,13 @@ export function clearEndedTimedOperations(timedOperations = []) {
   return (timedOperations || []).filter((operation) => !TERMINAL_TIMED_OPERATION_STATUSES.has(operation?.operation_status));
 }
 
+export function pruneSuccessfulTimedOperationsForRun(timedOperations = [], simulationRunId) {
+  return (timedOperations || []).filter((operation) => {
+    if (!simulationRunId || operation?.simulation_run_id !== simulationRunId) return true;
+    return operation?.operation_status !== "COMPLETED";
+  });
+}
+
 export function canClearAllTimedOperations(simulationRuns = []) {
   return !(simulationRuns || []).some((run) => ACTIVE_SIMULATION_RUN_STATUSES.has(run?.simulation_status));
 }

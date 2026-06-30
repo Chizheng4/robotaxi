@@ -5,6 +5,8 @@
  * 通过 hook 模式封装 React state 操作。
  */
 
+import { pruneSuccessfulTimedOperationsForRun } from "../data/timedOperationDiagnostics.js";
+
 // 模块级变量，跨渲染保持
 const tickIntervalRef = { current: null };
 // 模块级依赖缓存，避免 React 闭包导致 setInterval 捕获过时的 simulationLoop
@@ -212,6 +214,8 @@ export function useSimulationActions({
           {
             phase: tickResult.phase,
             workflowActionCount: tickResult.workflowActionCount,
+            activeWorkflowObjectCount: tickResult.activeWorkflowObjectCount,
+            activeTimedOperationCount: tickResult.activeTimedOperationCount,
             performanceConfig: getSimulationPerformanceConfig(nextRun),
           }
         );
@@ -226,6 +230,9 @@ export function useSimulationActions({
       if (batchEvents.length) {
         const maxEvents = getMaxEventsInMemory(nextRun);
         setSimulationEvents((evts) => trimSimulationEvents([...batchEvents, ...evts], maxEvents));
+      }
+      if (!["RUNNING", "DRAINING"].includes(nextRun.simulation_status) && businessData?.setTimedOperations) {
+        businessData.setTimedOperations((current) => pruneSuccessfulTimedOperationsForRun(current, nextRun.simulation_run_id));
       }
       if (businessData?.flushBufferedUpdates) {
         businessData.flushBufferedUpdates();
@@ -278,7 +285,10 @@ function getMaxEventsInMemory(run) {
 }
 
 function trimSimulationEvents(events, maxEvents) {
-  return events.length > maxEvents ? events.slice(0, maxEvents) : events;
+  if (events.length <= maxEvents) return events;
+  const failedEvents = events.filter((event) => ["FAILED", "ERROR"].includes(event?.event_result));
+  const otherEvents = events.filter((event) => !["FAILED", "ERROR"].includes(event?.event_result));
+  return [...failedEvents, ...otherEvents].slice(0, maxEvents);
 }
 
 export function createBufferedBusinessData(source = {}) {

@@ -278,6 +278,8 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
   const phase = lifecycle.phase || simulationRun.simulation_status || SimulationStatus.RUNNING;
   const isDraining = phase === SimulationStatus.DRAINING;
   const workflowActionCount = Number(lifecycle.workflowActionCount) || 0;
+  const activeWorkflowObjectCount = Number(lifecycle.activeWorkflowObjectCount) || 0;
+  const activeTimedOperationCount = Number(lifecycle.activeTimedOperationCount) || 0;
   const performanceConfig = lifecycle.performanceConfig || {};
   const verboseTickEvents = performanceConfig.event_recording_mode === "VERBOSE_TICK";
   const checkpointIntervalSeconds = Math.max(1, Number(performanceConfig.checkpoint_interval_seconds) || 600);
@@ -385,7 +387,7 @@ export function completeTick(simulationRun, tickContext, supplyResult, demandRes
       EventResult.SUCCESS,
       `计划 Tick 已结束，开始排空既有工作流 | ${updated.current_time}`,
     ));
-  } else if (isDraining && workflowActionCount === 0) {
+  } else if (isDraining && workflowActionCount === 0 && activeWorkflowObjectCount === 0 && activeTimedOperationCount === 0) {
     updated = {
       ...updated,
       simulation_status: SimulationStatus.COMPLETED,

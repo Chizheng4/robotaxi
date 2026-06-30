@@ -14,7 +14,7 @@ import { runDemandTrigger } from "./simulationDemandTrigger.js";
 import { queryAllWorkflowRules } from "./simulationWorkflowEngine.js";
 import { executeActions } from "./simulationExecutionEngine.js";
 import { advanceTimedOperations } from "./timedOperationScheduler.js";
-import { createSimulationRuntimeScope, mergeTimedOperationUpdates } from "./simulationRuntimeScope.js";
+import { countActiveWorkflowObjects, createSimulationRuntimeScope, mergeTimedOperationUpdates } from "./simulationRuntimeScope.js";
 import { getActiveWorkflowTimingProfile } from "./workflowRuntimeConfig.js";
 import * as routePlanningService from "../services/routePlanningService.js";
 import * as tripService from "../services/tripService.js";
@@ -162,6 +162,9 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
       workflowTimingProfile,
     });
   }
+  const finalRuntimeScope = refreshedBusinessData
+    ? createSimulationRuntimeScope({ simulationRun, businessData: refreshedBusinessData, tickContext, includeTravelProgress })
+    : runtimeScope;
 
   // 合并所有执行结果
   const allResults = [...preExecutionResults, ...timedOperationExecutionResults, ...executionResults];
@@ -179,6 +182,8 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     tickEventSummary,
     phase: isDraining ? SimulationStatus.DRAINING : SimulationStatus.RUNNING,
     workflowActionCount: workflowActions.length,
+    activeWorkflowObjectCount: countActiveWorkflowObjects(finalRuntimeScope.workflowScope),
+    activeTimedOperationCount: finalRuntimeScope.activeTimedOperations.length,
   };
 }
 

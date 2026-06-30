@@ -11,6 +11,7 @@ import {
   simulationRuntimeObjectContracts,
 } from "../src/data/simulationRuntimeScope.js";
 import { advanceTimedOperations } from "../src/data/timedOperationScheduler.js";
+import { pruneSuccessfulTimedOperationsForRun } from "../src/data/timedOperationDiagnostics.js";
 import { createTimedOperation } from "../src/domain/timedOperationTypes.js";
 import { createDefaultSimulationPolicy } from "../src/domain/simulationTypes.js";
 import { validateFieldDisplayContract } from "../src/domain/fieldDisplayService.js";
@@ -275,6 +276,31 @@ assert.equal(resolveIdleJumpTargetSeconds({
     }],
   },
 }), 120, "存在行驶作业时应跳到下一 UI 快照秒或到期秒中的较早者");
+assert.equal(resolveIdleJumpTargetSeconds({
+  simulationRun: { ...createRun(101), simulation_status: "DRAINING" },
+  policySnapshot: idleJumpPolicy,
+  businessData: {
+    serviceOrders: [],
+    trips: [],
+    readinessTasks: [],
+    deploymentTasks: [],
+    routeExecutions: [],
+    timedOperations: [{
+      ...createTimedOperation({
+        timedOperationId: "TOP-DRAIN-DUE",
+        simulationRunId: "SIM-RUN-V033",
+        timeMode: "SIMULATION",
+        operationType: "GENERIC_ACTION",
+        objectType: "serviceOrder",
+        objectId: "SO-DRAIN",
+        actionType: "SERVICE_ORDER_CANCEL",
+        startSeconds: 100,
+        durationSeconds: 300,
+      }),
+      operation_status: "RUNNING",
+    }],
+  },
+}), 400, "排空阶段跳时必须优先跳到当前运行时间作业到期秒，不受需求/供给周期干扰");
 const jumpedRun = advanceIdleSimulationRun(createRun(1), { targetSeconds: 600, phase: "RUNNING" });
 assert.equal(jumpedRun.current_simulation_seconds, 600, "空闲跳时应按目标模拟秒推进");
 assert.equal(jumpedRun.trigger_ticks_completed, 599, "空闲跳时必须按跳过的模拟秒同步推进 Tick 计数");
@@ -304,6 +330,52 @@ const tickResult = executeTick({
 });
 observedWorkflowIds = tickResult.workflowActions.map((action) => action.objectId);
 assert.deepEqual(observedWorkflowIds, ["SO-CURRENT-WF"], "Tick 工作流查询不得扫描历史运行或终态业务对象");
+
+const drainingWithTimedOperation = completeTick(
+  { ...createRun(86400), simulation_status: "DRAINING", trigger_ticks_completed: 86400, total_ticks: 86400 },
+  createTickContext(86400),
+  { triggered_event_count: 0, no_action_count: 0 },
+  { order_count: 0 },
+  [],
+  {},
+  {
+    phase: "DRAINING",
+    workflowActionCount: 0,
+    activeWorkflowObjectCount: 0,
+    activeTimedOperationCount: 1,
+    performanceConfig: policy.simulation_performance_config,
+  },
+);
+assert.equal(drainingWithTimedOperation.simulationRun.simulation_status, "DRAINING", "排空阶段仍有未完成时间作业时不得完成模拟运行");
+
+const drainingComplete = completeTick(
+  { ...createRun(86400), simulation_status: "DRAINING", trigger_ticks_completed: 86400, total_ticks: 86400 },
+  createTickContext(86400),
+  { triggered_event_count: 0, no_action_count: 0 },
+  { order_count: 0 },
+  [],
+  {},
+  {
+    phase: "DRAINING",
+    workflowActionCount: 0,
+    activeWorkflowObjectCount: 0,
+    activeTimedOperationCount: 0,
+    performanceConfig: policy.simulation_performance_config,
+  },
+);
+assert.equal(drainingComplete.simulationRun.simulation_status, "COMPLETED", "排空阶段无工作流、无活跃对象、无时间作业时才能完成模拟运行");
+
+const prunedTimedOperations = pruneSuccessfulTimedOperationsForRun([
+  { timed_operation_id: "TOP-CURRENT-COMPLETED", simulation_run_id: "SIM-RUN-V033", operation_status: "COMPLETED" },
+  { timed_operation_id: "TOP-CURRENT-FAILED", simulation_run_id: "SIM-RUN-V033", operation_status: "FAILED" },
+  { timed_operation_id: "TOP-CURRENT-RUNNING", simulation_run_id: "SIM-RUN-V033", operation_status: "RUNNING" },
+  { timed_operation_id: "TOP-HISTORY-COMPLETED", simulation_run_id: "SIM-RUN-HISTORY", operation_status: "COMPLETED" },
+], "SIM-RUN-V033");
+assert.deepEqual(
+  prunedTimedOperations.map((operation) => operation.timed_operation_id),
+  ["TOP-CURRENT-FAILED", "TOP-CURRENT-RUNNING", "TOP-HISTORY-COMPLETED"],
+  "运行结束后只清理当前运行成功终态时间作业，失败、运行中和历史作业必须保留",
+);
 
 const displayContract = validateFieldDisplayContract({
   fields: [

@@ -53,6 +53,10 @@ export function createSimulationRuntimeScope({ simulationRun, businessData = {},
   };
 }
 
+export function countActiveWorkflowObjects(workflowScope = {}) {
+  return Object.values(workflowScope || {}).reduce((total, items) => total + ((items || []).length), 0);
+}
+
 export function createWorkflowScope(runId, businessData = {}) {
   return Object.fromEntries(Object.entries(simulationRuntimeObjectContracts)
     .filter(([, contract]) => contract.participatesInWorkflowScan)
@@ -104,6 +108,7 @@ export function getSimulationRuntimeScopeDiagnostics({ simulationRun, businessDa
     active_readiness_tasks: scope.workflowScope.readinessTasks.length,
     active_deployment_tasks: scope.workflowScope.deploymentTasks.length,
     active_route_executions: scope.workflowScope.routeExecutions.length,
+    active_workflow_objects: countActiveWorkflowObjects(scope.workflowScope),
     active_timed_operations: scope.activeTimedOperations.length,
     timed_operation_candidates: scope.timedOperationCandidates.length,
   };

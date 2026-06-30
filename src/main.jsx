@@ -5319,8 +5319,8 @@ async function bootstrap() {
 		    import("./domain/simulationTypes.js?v=20260624-v028-1-2"),
 		    import("./data/simulationInitialization.js?v=20260620-v027-4"),
 			    import("./data/simulationEngine.js?v=20260630-v035-4"),
-			    import("./services/simulationActions.js?v=20260630-v035-4"),
-			    import("./data/simulationLoop.js?v=20260630-v035-4"),
+			    import("./services/simulationActions.js?v=20260630-v036-1"),
+			    import("./data/simulationLoop.js?v=20260630-v036-1"),
 			    import("./services/simulationHandlers.js?v=20260624-v028-1-5"),
 		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"),
 		    import("./data/simulationExecutionEngine.js"),
@@ -5332,7 +5332,7 @@ async function bootstrap() {
 		    import("./services/routePlanningService.js?v=20260625-v029-4"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
 		    import("./domain/routePlanningStrategies.js?v=20260625-v030-3"),
-		    import("./data/timedOperationDiagnostics.js?v=20260629-v033-1"),
+		    import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
