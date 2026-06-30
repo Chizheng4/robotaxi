@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { completeTick } from "../src/data/simulationEngine.js";
 import { executeTick } from "../src/data/simulationLoop.js";
+import { createBufferedBusinessData } from "../src/services/simulationActions.js";
 import {
   createSimulationRuntimeScope,
   filterActiveTimedOperations,
@@ -197,6 +198,29 @@ assert.deepEqual(
   ["TOP-DUE", "TOP-TRAVEL-SNAPSHOT"],
   "Tick 内只推进到期作业和需要快照的行驶作业，未到期长作业不得每秒重写",
 );
+
+let flushedServiceOrderCount = 0;
+let flushedTripCount = 0;
+const bufferedBusinessData = createBufferedBusinessData({
+  serviceOrders: [{ service_order_id: "SO-BUFFER-1" }],
+  trips: [{ trip_id: "TRIP-BUFFER-1" }],
+  data: {},
+  setServiceOrders: (next) => {
+    flushedServiceOrderCount += 1;
+    assert.deepEqual(next.map((item) => item.service_order_id), ["SO-BUFFER-3"]);
+  },
+  setTrips: (next) => {
+    flushedTripCount += 1;
+    assert.deepEqual(next.map((item) => item.trip_id), ["TRIP-BUFFER-2"]);
+  },
+});
+bufferedBusinessData.setServiceOrders([{ service_order_id: "SO-BUFFER-2" }]);
+bufferedBusinessData.setServiceOrders([{ service_order_id: "SO-BUFFER-3" }]);
+bufferedBusinessData.setTrips([{ trip_id: "TRIP-BUFFER-2" }]);
+assert.deepEqual(bufferedBusinessData.data.serviceOrders.map((item) => item.service_order_id), ["SO-BUFFER-3"], "缓冲运行态必须立即向后续业务动作提供最新数据");
+bufferedBusinessData.flushBufferedUpdates();
+assert.equal(flushedServiceOrderCount, 1, "同一真实执行周期内同一集合最多刷新一次 React state");
+assert.equal(flushedTripCount, 1, "不同集合按脏集合刷新");
 
 const tickScopeRun = createRun(0);
 let observedWorkflowIds = [];

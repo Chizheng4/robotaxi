@@ -176,7 +176,8 @@ export function useSimulationActions({
       let nextRun = run;
       const batchEvents = [];
       const ticksPerCycle = getTicksPerRealCycle(run);
-      const businessData = getBD ? getBD() : null;
+      const rawBusinessData = getBD ? getBD() : null;
+      const businessData = rawBusinessData ? createBufferedBusinessData(rawBusinessData) : null;
       for (let i = 0; i < ticksPerCycle; i++) {
         if (!["RUNNING", "DRAINING"].includes(nextRun.simulation_status)) break;
         debug("Tick #" + (nextRun.current_global_tick+1) + " | time=" + nextRun.current_time, nextRun);
@@ -212,6 +213,9 @@ export function useSimulationActions({
       if (batchEvents.length) {
         const maxEvents = getMaxEventsInMemory(nextRun);
         setSimulationEvents((evts) => trimSimulationEvents([...batchEvents, ...evts], maxEvents));
+      }
+      if (businessData?.flushBufferedUpdates) {
+        businessData.flushBufferedUpdates();
       }
       return prev.map((r) => r.simulation_run_id === runId ? nextRun : r);
     });
@@ -262,4 +266,73 @@ function getMaxEventsInMemory(run) {
 
 function trimSimulationEvents(events, maxEvents) {
   return events.length > maxEvents ? events.slice(0, maxEvents) : events;
+}
+
+export function createBufferedBusinessData(source = {}) {
+  const buffered = { ...source };
+  const dirtyKeys = new Set();
+  const collectionKeys = [
+    "serviceOrders",
+    "trips",
+    "readinessTasks",
+    "deploymentTasks",
+    "routeExecutions",
+    "routePlanningRuns",
+    "demandSimulationRuns",
+    "pricingStrategyRuns",
+    "pricingDecisions",
+    "orderMatchingRuns",
+    "orderMatchingDecisions",
+    "taskEventLogs",
+    "timedOperations",
+    "robotaxis",
+    "routes",
+  ];
+
+  const refreshContextData = () => {
+    buffered.data = {
+      ...(source.data || buffered.data || {}),
+      serviceOrders: buffered.serviceOrders,
+      trips: buffered.trips,
+      readinessTasks: buffered.readinessTasks,
+      deploymentTasks: buffered.deploymentTasks,
+      routeExecutions: buffered.routeExecutions,
+      routePlanningRuns: buffered.routePlanningRuns,
+      demandSimulationRuns: buffered.demandSimulationRuns,
+      pricingStrategyRuns: buffered.pricingStrategyRuns,
+      pricingDecisions: buffered.pricingDecisions,
+      orderMatchingRuns: buffered.orderMatchingRuns,
+      orderMatchingDecisions: buffered.orderMatchingDecisions,
+      taskEventLogs: buffered.taskEventLogs,
+      timedOperations: buffered.timedOperations,
+      robotaxis: buffered.robotaxis,
+      routes: buffered.routes,
+      workflowTimingProfiles: buffered.workflowTimingProfiles,
+    };
+  };
+
+  collectionKeys.forEach((key) => {
+    const setterName = `set${key[0].toUpperCase()}${key.slice(1)}`;
+    if (typeof source[setterName] !== "function") return;
+    buffered[setterName] = (updater) => {
+      const nextValue = typeof updater === "function" ? updater(buffered[key]) : updater;
+      if (nextValue === buffered[key]) return;
+      buffered[key] = nextValue;
+      dirtyKeys.add(key);
+      refreshContextData();
+    };
+  });
+
+  buffered.flushBufferedUpdates = () => {
+    dirtyKeys.forEach((key) => {
+      const setterName = `set${key[0].toUpperCase()}${key.slice(1)}`;
+      if (typeof source[setterName] === "function") {
+        source[setterName](buffered[key]);
+      }
+    });
+    dirtyKeys.clear();
+  };
+
+  refreshContextData();
+  return buffered;
 }

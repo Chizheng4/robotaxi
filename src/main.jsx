@@ -5319,7 +5319,7 @@ async function bootstrap() {
 		    import("./domain/simulationTypes.js?v=20260624-v028-1-2"),
 		    import("./data/simulationInitialization.js?v=20260620-v027-4"),
 		    import("./data/simulationEngine.js?v=20260624-v028-1-2"),
-			    import("./services/simulationActions.js?v=20260620-v027-4"),
+			    import("./services/simulationActions.js?v=20260630-v035-3"),
 			    import("./data/simulationLoop.js?v=20260630-v035-2"),
 			    import("./services/simulationHandlers.js?v=20260624-v028-1-5"),
 		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"),
