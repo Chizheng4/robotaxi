@@ -3533,7 +3533,7 @@ function RecordTable({
   }, [isMetricAnalysisPage, page]);
   return /*#__PURE__*/React.createElement("section", {
     className: isReadinessPage ? "record-page-new readiness-page" : "record-page-new"
-  }, statusOptions.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, !isMetricAnalysisPage && statusOptions.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "status-segment-bar"
   }, /*#__PURE__*/React.createElement(Button, {
     size: "small",
@@ -3544,7 +3544,7 @@ function RecordTable({
     size: "small",
     type: appliedFilters.statusValue === option.value ? "primary" : "default",
     onClick: () => applyStatusFilter(option.value)
-  }, option.label, " ", option.count))), /*#__PURE__*/React.createElement("div", {
+  }, option.label, " ", option.count))), !isMetricAnalysisPage && /*#__PURE__*/React.createElement("div", {
     className: "list-filter-bar"
   }, /*#__PURE__*/React.createElement("div", {
     className: "filter-field keyword-field"
@@ -4946,14 +4946,6 @@ function MetricExperiencePanel({
   return /*#__PURE__*/React.createElement("div", {
     className: "metric-experience-panel"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "metric-panel-header"
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Text, {
-    strong: true
-  }, tableConfig[page]?.title || "经营指标"), /*#__PURE__*/React.createElement(Text, {
-    type: "secondary"
-  }, tableConfig[page]?.description || "基于模拟业务事实生成的经营指标。")), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7EDF\u8BA1\u5468\u671F\uFF1A", periodLabel)), /*#__PURE__*/React.createElement("div", {
-    className: "metric-decision-labels"
-  }, /*#__PURE__*/React.createElement("span", null, "\u4E0A\u5C42\u7ECF\u8425\u7ED3\u679C"), /*#__PURE__*/React.createElement("span", null, "\u4E2D\u5C42\u94FE\u8DEF\u89E3\u91CA"), /*#__PURE__*/React.createElement("span", null, "\u4E0B\u5C42\u6570\u636E\u53EF\u4FE1\u5EA6")), /*#__PURE__*/React.createElement("div", {
     className: "metric-card-grid"
   }, overviewRows.length > 0 ? overviewRows.map(row => /*#__PURE__*/React.createElement("button", {
     key: row.metric_observation_id,
@@ -4969,7 +4961,7 @@ function MetricExperiencePanel({
     onClick: () => group.primary && onSelect(group.primary)
   }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primary ? `${group.primary.metric_name_cn} ${formatMetricDisplayValue(group.primary)}` : "暂无数据"), /*#__PURE__*/React.createElement("small", null, group.secondary.length ? group.secondary.map(item => `${item.metric_name_cn} ${formatMetricDisplayValue(item)}`).join(" / ") : "等待周期计算结果"), /*#__PURE__*/React.createElement("em", null, group.description)))), /*#__PURE__*/React.createElement("div", {
     className: "metric-quality-strip"
-  }, /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u7ED3\u679C ", latestRows.length), /*#__PURE__*/React.createElement("span", null, "\u6765\u6E90\u8BB0\u5F55 ", sourceRecordCount), /*#__PURE__*/React.createElement("span", null, qualitySummary), /*#__PURE__*/React.createElement("span", null, warningRows[0] ? `${warningRows[0].metric_name_cn}：${warningRows[0].quality_reason}` : "暂无质量提示")));
+  }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7EDF\u8BA1\u5468\u671F\uFF1A", periodLabel), /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u7ED3\u679C ", latestRows.length), /*#__PURE__*/React.createElement("span", null, "\u6765\u6E90\u8BB0\u5F55 ", sourceRecordCount), /*#__PURE__*/React.createElement("span", null, qualitySummary), /*#__PURE__*/React.createElement("span", null, warningRows[0] ? `${warningRows[0].metric_name_cn}：${warningRows[0].quality_reason}` : "暂无质量提示")));
 }
 function renderViewDetailAction(row, actions) {
   return /*#__PURE__*/React.createElement(RowActionButton, {

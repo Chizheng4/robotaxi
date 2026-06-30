@@ -1474,38 +1474,6 @@ body {
   background: var(--surface);
 }
 
-.metric-panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.metric-panel-header > div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.metric-panel-header .ant-typography {
-  margin: 0;
-  font-size: var(--font-sm);
-}
-
-.metric-panel-header .ant-typography-secondary,
-.metric-panel-header > span {
-  color: var(--muted);
-  font-size: var(--font-xs);
-}
-
-.metric-decision-labels {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
-  gap: 8px;
-  color: #7a8492;
-  font-size: var(--font-xs);
-}
-
 .metric-card-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(128px, 1fr));
@@ -2060,10 +2028,6 @@ body {
 
   .metric-card-grid {
     grid-template-columns: repeat(3, minmax(128px, 1fr));
-  }
-
-  .metric-decision-labels {
-    grid-template-columns: 1fr;
   }
 
   .metric-insight-lanes {

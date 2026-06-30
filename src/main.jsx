@@ -3495,7 +3495,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
 
   return (
     <section className={isReadinessPage ? "record-page-new readiness-page" : "record-page-new"}>
-      {statusOptions.length > 0 && (
+      {!isMetricAnalysisPage && statusOptions.length > 0 && (
         <div className="status-segment-bar">
           <Button
             size="small"
@@ -3516,6 +3516,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           ))}
         </div>
       )}
+      {!isMetricAnalysisPage && (
       <div className="list-filter-bar">
         <div className="filter-field keyword-field">
           <span>关键词</span>
@@ -3574,6 +3575,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         <Button size="small" type="primary" aria-label="查询" onClick={() => applyFilters(filters)}>查询</Button>
         <Button size="small" aria-label="重置" onClick={resetFilters}>重置</Button>
       </div>
+      )}
       {isReadinessPage && (
         <>
           <div className="list-action-bar">
@@ -4580,18 +4582,6 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
   ];
   return (
     <div className="metric-experience-panel">
-      <div className="metric-panel-header">
-        <div>
-          <Text strong>{tableConfig[page]?.title || "经营指标"}</Text>
-          <Text type="secondary">{tableConfig[page]?.description || "基于模拟业务事实生成的经营指标。"}</Text>
-        </div>
-        <span>当前统计周期：{periodLabel}</span>
-      </div>
-      <div className="metric-decision-labels">
-        <span>上层经营结果</span>
-        <span>中层链路解释</span>
-        <span>下层数据可信度</span>
-      </div>
       <div className="metric-card-grid">
         {overviewRows.length > 0 ? overviewRows.map((row) => (
           <button key={row.metric_observation_id} className="metric-summary-card" onClick={() => onSelect(row)}>
@@ -4614,6 +4604,7 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
         ))}
       </div>
       <div className="metric-quality-strip">
+        <span>当前统计周期：{periodLabel}</span>
         <span>指标结果 {latestRows.length}</span>
         <span>来源记录 {sourceRecordCount}</span>
         <span>{qualitySummary}</span>
