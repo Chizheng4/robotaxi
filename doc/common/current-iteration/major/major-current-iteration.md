@@ -1,19 +1,19 @@
 # 当前大版本迭代
 
-当前大版本：`v034 经营指标系统`。
+当前大版本：`v035 模拟运行性能架构`。
 
-当前状态：方案设计完成，等待用户确认后再进入代码实现；不得自动推进编码。
+当前状态：v035.1 已完成，当前运行作用域、活跃对象扫描和时间作业推进已收敛。
 
 当前计划入口：
 
-方案设计：`v034-operating-metrics-system-plan.md`
+方案设计：`v035-simulation-runtime-performance-plan.md`
 
 方案设计入口：
 
-- `doc/06-metrics-system/00-operating-metrics-system.md`
-- `doc/common/current-iteration/major/v034-operating-metrics-system-plan.md`
+- `doc/rules/07-simulation-runtime-architecture-rules.md`
+- `doc/common/current-iteration/major/v035-simulation-runtime-performance-plan.md`
 
-最近完成大版本：`v033.0 高性能模拟运行内核与扩展规范`。
+最近完成大版本：`v034 经营指标系统`。
 
 最近完成历史方案：
 
@@ -27,4 +27,6 @@
 
 `v033` 已完成高性能模拟运行、业务生命周期状态时间线、自动财务计算和工作流时效沉淀。
 
-`v034` 开始进入经营指标系统建设，以现有业务事实、成本事实和收入事实为基础，先建立指标定义、指标计算、指标观测、指标展示和质量护栏。
+`v034` 已完成经营指标系统建设，以现有业务事实、成本事实和收入事实为基础，建立指标定义、指标计算、指标观测、指标展示和质量护栏。
+
+`v035` 开始进入模拟运行性能架构治理，目标是在保持统一世界时间和业务动作真实耗时的前提下，避免历史运行数据拖慢当前模拟运行。

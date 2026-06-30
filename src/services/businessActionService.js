@@ -85,6 +85,7 @@ export function startReadinessTask({ state, objectId, runtime }) {
     timedOperations: [
       createTimedOperation({
         timedOperationId: runtime.nextId("TOP"),
+        simulationRunId: runtime.timeContext?.simulation_run_id || null,
         timeMode: runtime.timeContext?.time_mode || "SIMULATION",
         operationType: TimedOperationType.WORKER_CHECK,
         objectType: "readinessTask",
@@ -305,6 +306,7 @@ export function completeRouteExecutionTravel({ state, objectId, runtime }) {
     timedOperations: [
       createTimedOperation({
         timedOperationId: runtime.nextId("TOP"),
+        simulationRunId: runtime.timeContext?.simulation_run_id || null,
         timeMode: runtime.timeContext?.time_mode || "SIMULATION",
         operationType: TimedOperationType.ARRIVAL_DETECTION,
         objectType: "routeExecution",
@@ -448,6 +450,7 @@ export function callRobotaxi({ state, objectId, runtime }) {
     timedOperations: [
       createTimedOperation({
         timedOperationId: runtime.nextId("TOP"),
+        simulationRunId: runtime.timeContext?.simulation_run_id || null,
         timeMode: runtime.timeContext?.time_mode || "SIMULATION",
         operationType: TimedOperationType.ORDER_ASSIGNMENT_TIMEOUT,
         objectType: "serviceOrder",
@@ -486,6 +489,7 @@ export function executeOrderMatching({ state, objectId, runtime }) {
     const retrySeconds = getConfiguredDurationSeconds(runtime, "order_matching_retry_seconds", 30);
     const retryOperation = createTimedOperation({
       timedOperationId: runtime.nextId("TOP"),
+      simulationRunId: runtime.timeContext?.simulation_run_id || null,
       timeMode: runtime.timeContext?.time_mode || "SIMULATION",
       operationType: TimedOperationType.ORDER_MATCH_RETRY,
       objectType: "serviceOrder",
@@ -778,6 +782,7 @@ function createTravelOperation({ runtime, objectType, objectId, actionType, rout
   const durationSeconds = Math.max(1, (Number(route.route_step_count) || 0) * cellTravelSeconds);
   return createTimedOperation({
     timedOperationId: runtime.nextId("TOP"),
+    simulationRunId: runtime.timeContext?.simulation_run_id || null,
     timeMode: runtime.timeContext?.time_mode || "SIMULATION",
     operationType: TimedOperationType.TRAVEL,
     objectType,

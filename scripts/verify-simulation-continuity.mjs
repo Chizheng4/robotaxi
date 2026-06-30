@@ -206,6 +206,7 @@ let drainBusinessData = {
   serviceOrderService,
   serviceOrders: [{
     service_order_id: "SO-LAST-TICK",
+    simulation_run_id: drainingRun.simulation_run_id,
     order_status: "WAITING_PAYMENT",
     payment_status: "UNPAID",
     final_price: 28,

@@ -17,6 +17,7 @@ export const TimedOperationType = {
 
 export function createTimedOperation({
   timedOperationId,
+  simulationRunId = null,
   timeMode,
   operationType,
   objectType,
@@ -35,6 +36,7 @@ export function createTimedOperation({
   const normalizedStart = Math.max(0, Number(startSeconds) || 0);
   return {
     timed_operation_id: timedOperationId,
+    simulation_run_id: simulationRunId,
     time_mode: timeMode,
     operation_type: operationType,
     operation_status: TimedOperationStatus.PENDING,

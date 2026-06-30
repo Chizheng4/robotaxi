@@ -195,6 +195,7 @@ function createBusinessData() {
   const businessData = {
     serviceOrders: [{
       service_order_id: "SO-VERIFY-001",
+      simulation_run_id: "SIM-RUN-V032-TRAVEL",
       order_status: "IN_SERVICE",
       trip_id: "TRIP-VERIFY-001",
       pickup_service_area_id: "SA-PICKUP",
@@ -205,6 +206,7 @@ function createBusinessData() {
     }],
     trips: [{
       trip_id: "TRIP-VERIFY-001",
+      simulation_run_id: "SIM-RUN-V032-TRAVEL",
       service_order_id: "SO-VERIFY-001",
       robotaxi_id: "RT-TRIP-001",
       trip_status: "WAITING_ROUTE",

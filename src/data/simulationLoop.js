@@ -14,6 +14,7 @@ import { runDemandTrigger } from "./simulationDemandTrigger.js";
 import { queryAllWorkflowRules } from "./simulationWorkflowEngine.js";
 import { executeActions } from "./simulationExecutionEngine.js";
 import { advanceTimedOperations } from "./timedOperationScheduler.js";
+import { createSimulationRuntimeScope, mergeTimedOperationUpdates } from "./simulationRuntimeScope.js";
 import { getActiveWorkflowTimingProfile } from "./workflowRuntimeConfig.js";
 import * as routePlanningService from "../services/routePlanningService.js";
 import * as tripService from "../services/tripService.js";
@@ -47,6 +48,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     tickSeconds: simulationRun.tick_seconds,
     policySnapshot,
   });
+  const runtimeScope = createSimulationRuntimeScope({ simulationRun, businessData });
 
   // 3. 供给侧触发判断
   const supplyResult = isDraining
@@ -61,12 +63,12 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
 
   // 5. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
   const timedOperationResult = advanceTimedOperations({
-    timedOperations: businessData?.timedOperations || [],
+    timedOperations: runtimeScope.activeTimedOperations,
     timeContext: tickContext,
   });
   const performanceConfig = policySnapshot?.simulation_performance_config || {};
   if (businessData?.setTimedOperations && timedOperationResult.changed) {
-    businessData.setTimedOperations(timedOperationResult.timedOperations);
+    businessData.setTimedOperations((current) => mergeTimedOperationUpdates(current, timedOperationResult.timedOperations));
   }
   if (businessData) {
     applyTravelProgressFromTimedOperations({
@@ -130,12 +132,13 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
   const defaultConfig = policySnapshot.default_completion_config || {};
   let workflowActions = [];
   if (refreshedBusinessData) {
+    const workflowRuntimeScope = createSimulationRuntimeScope({ simulationRun, businessData: refreshedBusinessData });
     workflowActions = queryAllWorkflowRules({
-      serviceOrders: refreshedBusinessData.serviceOrders || [],
-      trips: refreshedBusinessData.trips || [],
-      readinessTasks: refreshedBusinessData.readinessTasks || [],
-      deploymentTasks: refreshedBusinessData.deploymentTasks || [],
-      routeExecutions: refreshedBusinessData.routeExecutions || [],
+      serviceOrders: workflowRuntimeScope.workflowScope.serviceOrders,
+      trips: workflowRuntimeScope.workflowScope.trips,
+      readinessTasks: workflowRuntimeScope.workflowScope.readinessTasks,
+      deploymentTasks: workflowRuntimeScope.workflowScope.deploymentTasks,
+      routeExecutions: workflowRuntimeScope.workflowScope.routeExecutions,
       autoConfig,
       defaultCompletionConfig: defaultConfig,
     });
