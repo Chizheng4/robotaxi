@@ -18,6 +18,7 @@ import { createSimulationRuntimeScope, mergeTimedOperationUpdates } from "./simu
 import { getActiveWorkflowTimingProfile } from "./workflowRuntimeConfig.js";
 import * as routePlanningService from "../services/routePlanningService.js";
 import * as tripService from "../services/tripService.js";
+export { resolveIdleJumpTargetSeconds } from "./simulationEventHorizon.js";
 
 /**
  * 执行一个 SimulationTick

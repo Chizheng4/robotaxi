@@ -64,6 +64,7 @@ node --check src/data/costModelCalculator.js
 node --check src/data/revenueCalculator.js
 node --check src/data/metricCalculator.js
 node --check src/data/timedOperationScheduler.js
+node --check src/data/simulationEventHorizon.js
 node --check src/data/simulationLoop.js
 node --check src/data/simulationWorkflowEngine.js
 node scripts/verify-service-order-settlement.mjs

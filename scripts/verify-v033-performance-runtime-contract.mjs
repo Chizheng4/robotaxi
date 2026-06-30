@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
-import { completeTick } from "../src/data/simulationEngine.js";
-import { executeTick } from "../src/data/simulationLoop.js";
+import { advanceIdleSimulationRun, completeTick } from "../src/data/simulationEngine.js";
+import { executeTick, resolveIdleJumpTargetSeconds } from "../src/data/simulationLoop.js";
 import { createBufferedBusinessData } from "../src/services/simulationActions.js";
 import {
   createSimulationRuntimeScope,
@@ -221,6 +221,63 @@ assert.deepEqual(bufferedBusinessData.data.serviceOrders.map((item) => item.serv
 bufferedBusinessData.flushBufferedUpdates();
 assert.equal(flushedServiceOrderCount, 1, "同一真实执行周期内同一集合最多刷新一次 React state");
 assert.equal(flushedTripCount, 1, "不同集合按脏集合刷新");
+
+const idleJumpPolicy = {
+  ...policy,
+  demand_generation_config: { ...policy.demand_generation_config, demand_generation_enabled: true, demand_generation_interval_seconds: 600 },
+  supply_trigger_config: { ...policy.supply_trigger_config, supply_trigger_enabled: false },
+  simulation_performance_config: { ...policy.simulation_performance_config, ui_snapshot_interval_seconds: 30 },
+};
+assert.equal(resolveIdleJumpTargetSeconds({
+  simulationRun: createRun(1),
+  policySnapshot: idleJumpPolicy,
+  businessData: { serviceOrders: [], trips: [], readinessTasks: [], deploymentTasks: [], routeExecutions: [], timedOperations: [] },
+}), 600, "空闲运行应跳到下一需求触发秒");
+assert.equal(resolveIdleJumpTargetSeconds({
+  simulationRun: createRun(600),
+  policySnapshot: idleJumpPolicy,
+  businessData: { serviceOrders: [], trips: [], readinessTasks: [], deploymentTasks: [], routeExecutions: [], timedOperations: [] },
+}), null, "当前秒是业务触发点时不得跳过");
+assert.equal(resolveIdleJumpTargetSeconds({
+  simulationRun: createRun(1),
+  policySnapshot: idleJumpPolicy,
+  businessData: {
+    serviceOrders: [{ service_order_id: "SO-ACTIVE-JUMP", simulation_run_id: "SIM-RUN-V033", order_status: "WAITING_PRICE_ESTIMATE" }],
+    trips: [],
+    readinessTasks: [],
+    deploymentTasks: [],
+    routeExecutions: [],
+    timedOperations: [],
+  },
+}), null, "存在活跃业务对象时不得跳时");
+assert.equal(resolveIdleJumpTargetSeconds({
+  simulationRun: createRun(101),
+  policySnapshot: idleJumpPolicy,
+  businessData: {
+    serviceOrders: [],
+    trips: [],
+    readinessTasks: [],
+    deploymentTasks: [],
+    routeExecutions: [],
+    timedOperations: [{
+      ...createTimedOperation({
+        timedOperationId: "TOP-JUMP-TRAVEL",
+        simulationRunId: "SIM-RUN-V033",
+        timeMode: "SIMULATION",
+        operationType: "TRAVEL",
+        objectType: "trip",
+        objectId: "TRIP-JUMP",
+        actionType: "TRIP_TRAVEL_COMPLETE",
+        startSeconds: 100,
+        durationSeconds: 300,
+      }),
+      operation_status: "RUNNING",
+    }],
+  },
+}), 120, "存在行驶作业时应跳到下一 UI 快照秒或到期秒中的较早者");
+const jumpedRun = advanceIdleSimulationRun(createRun(1), { targetSeconds: 600, phase: "RUNNING" });
+assert.equal(jumpedRun.current_simulation_seconds, 600, "空闲跳时应按目标模拟秒推进");
+assert.equal(jumpedRun.trigger_ticks_completed, 599, "空闲跳时必须按跳过的模拟秒同步推进 Tick 计数");
 
 const tickScopeRun = createRun(0);
 let observedWorkflowIds = [];

@@ -180,6 +180,19 @@ export function useSimulationActions({
       const businessData = rawBusinessData ? createBufferedBusinessData(rawBusinessData) : null;
       for (let i = 0; i < ticksPerCycle; i++) {
         if (!["RUNNING", "DRAINING"].includes(nextRun.simulation_status)) break;
+        const jumpTargetSeconds = loop.resolveIdleJumpTargetSeconds?.({
+          simulationRun: nextRun,
+          policySnapshot: nextRun.simulation_policy_snapshot,
+          businessData,
+        });
+        if (engine.advanceIdleSimulationRun && Number.isFinite(jumpTargetSeconds) && jumpTargetSeconds > Number(nextRun.current_simulation_seconds)) {
+          debug("Idle jump: " + nextRun.current_simulation_seconds + " -> " + jumpTargetSeconds, nextRun);
+          nextRun = engine.advanceIdleSimulationRun(nextRun, {
+            targetSeconds: jumpTargetSeconds,
+            phase: nextRun.simulation_status,
+          });
+          continue;
+        }
         debug("Tick #" + (nextRun.current_global_tick+1) + " | time=" + nextRun.current_time, nextRun);
         const tickResult = loop.executeTick({
           simulationRun: nextRun,

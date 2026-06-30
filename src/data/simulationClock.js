@@ -86,6 +86,32 @@ export function advanceTick(simulationRun, { tickSeconds, phase = "RUNNING" } = 
   };
 }
 
+export function advanceSimulationRunToSeconds(simulationRun, { targetSeconds, phase = "RUNNING" } = {}) {
+  const currentSeconds = Number(simulationRun.current_simulation_seconds) || 0;
+  const normalizedTargetSeconds = Math.max(currentSeconds, Math.floor(Number(targetSeconds) || currentSeconds));
+  const resolvedTickSeconds = resolveTickSeconds({
+    tickSeconds: simulationRun.tick_seconds,
+    tickMinutes: simulationRun.tick_minutes || simulationRun.simulation_policy_snapshot?.tick_minutes,
+  });
+  const skippedSeconds = Math.max(0, normalizedTargetSeconds - currentSeconds);
+  const skippedTicks = Math.max(0, Math.floor(skippedSeconds / Math.max(1, resolvedTickSeconds)));
+  const position = getSimulationPosition(normalizedTargetSeconds, resolvedTickSeconds);
+
+  return {
+    ...simulationRun,
+    tick_seconds: resolvedTickSeconds,
+    current_simulation_seconds: normalizedTargetSeconds,
+    current_day: position.day,
+    current_time: position.displayTime,
+    current_clock_time: position.clockTime,
+    current_day_tick: position.dayTick,
+    current_run_tick: (Number(simulationRun.current_run_tick) || 0) + skippedTicks,
+    current_global_tick: (Number(simulationRun.current_global_tick) || 0) + skippedTicks,
+    trigger_ticks_completed: (Number(simulationRun.trigger_ticks_completed) || 0) + (phase === "RUNNING" ? skippedTicks : 0),
+    drain_ticks: (Number(simulationRun.drain_ticks) || 0) + (phase === "DRAINING" ? skippedTicks : 0),
+  };
+}
+
 export function isSimulationComplete(simulationRun) {
   return (Number(simulationRun.trigger_ticks_completed) || 0) >= Number(simulationRun.total_ticks || 0);
 }

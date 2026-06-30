@@ -15,7 +15,14 @@ import {
   createSimulationEvent,
 } from "../domain/simulationTypes.js";
 
-import { computeTimeContext, advanceTick, formatSimulationTimestamp, updateSimulationRunScene, isSimulationComplete } from "./simulationClock.js";
+import {
+  computeTimeContext,
+  advanceTick,
+  advanceSimulationRunToSeconds,
+  formatSimulationTimestamp,
+  updateSimulationRunScene,
+  isSimulationComplete,
+} from "./simulationClock.js";
 
 // ============================================================================
 // 1. SimulationRun 生命周期管理
@@ -251,6 +258,10 @@ export function stopSimulationRun(simulationRun) {
     message: `模拟运行 ${updated.simulation_run_id} 已停止 | Day ${updated.current_day} ${updated.current_time} | Tick #${updated.current_global_tick}`,
   });
   return { simulationRun: updated, event };
+}
+
+export function advanceIdleSimulationRun(simulationRun, { targetSeconds, phase } = {}) {
+  return advanceSimulationRunToSeconds(simulationRun, { targetSeconds, phase: phase || simulationRun?.simulation_status || SimulationStatus.RUNNING });
 }
 
 /**
