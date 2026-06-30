@@ -42,9 +42,42 @@ const second = initSimulationRun({
   previousSimulationRun: firstCompleted,
 }).simulationRun;
 assert.equal(second.previous_simulation_run_id, first.simulation_run_id);
-assert.equal(second.simulation_start_at, "Day 2 01:00:00");
-assert.equal(second.current_time, "Day 2 01:00:00");
-assert.equal(second.current_global_tick, 150);
+assert.equal(second.simulation_start_seconds, first.planned_simulation_end_seconds);
+assert.equal(second.simulation_start_at, "Day 2 00:00:00");
+assert.equal(second.current_time, "Day 2 00:00:00");
+assert.equal(second.current_global_tick, 86400);
+
+const legacyCompleted = {
+  ...firstCompleted,
+  planned_simulation_end_seconds: undefined,
+};
+const legacySecond = initSimulationRun({
+  simulationName: "连续运行兼容",
+  simulationPolicy: policy,
+  previousSimulationRun: legacyCompleted,
+}).simulationRun;
+assert.equal(legacySecond.simulation_start_at, "Day 2 01:00:00");
+
+resetSimulationCounters();
+const windowRun = initSimulationRun({ simulationName: "窗口连续运行 1", simulationPolicy: policy }).simulationRun;
+const drainedAfterWindow = {
+  ...windowRun,
+  simulation_status: "COMPLETED",
+  current_simulation_seconds: windowRun.planned_simulation_end_seconds + 30,
+  simulation_end_seconds: windowRun.planned_simulation_end_seconds + 30,
+  simulation_end_at: formatSimulationTimestamp(windowRun.planned_simulation_end_seconds + 30),
+  current_global_tick: windowRun.planned_simulation_end_seconds + 30,
+};
+const nextWindowRun = initSimulationRun({
+  simulationName: "窗口连续运行 2",
+  simulationPolicy: policy,
+  previousSimulationRun: drainedAfterWindow,
+}).simulationRun;
+assert.equal(nextWindowRun.previous_simulation_run_id, windowRun.simulation_run_id);
+assert.equal(nextWindowRun.simulation_start_seconds, windowRun.planned_simulation_end_seconds);
+assert.equal(nextWindowRun.simulation_start_at, windowRun.planned_simulation_end_at);
+assert.equal(nextWindowRun.current_global_tick, Math.floor(windowRun.planned_simulation_end_seconds / nextWindowRun.tick_seconds));
+assert.notEqual(nextWindowRun.simulation_start_seconds, drainedAfterWindow.simulation_end_seconds);
 
 const oneTickRun = initSimulationRun({
   simulationName: "单 Tick 时间验证",

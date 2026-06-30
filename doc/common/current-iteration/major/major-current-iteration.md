@@ -2,7 +2,7 @@
 
 当前大版本：`待定`。
 
-当前状态：暂无进行中的大版本。v036 已完成并归档。
+当前状态：暂无进行中的大版本。v036.2 已完成并归档。
 
 当前计划入口：
 
@@ -12,10 +12,11 @@
 
 - `doc/rules/07-simulation-runtime-architecture-rules.md`
 
-最近完成大版本：`v036 模拟运行排空与运行队列`。
+最近完成大版本：`v036.2 统一世界时间连续性修复`。
 
 最近完成历史方案：
 
+- `doc/common/iteration-history/major/v036.2-unified-world-time-continuity-plan.md`
 - `doc/common/iteration-history/major/v036-simulation-drain-and-runtime-queue-plan.md`
 - `doc/common/iteration-history/major/v035-simulation-runtime-performance-plan.md`
 - `doc/common/iteration-history/major/v032-unified-time-world-design.md`

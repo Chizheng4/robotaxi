@@ -1346,9 +1346,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |tick_minutes|Tick 时长（分钟，兼容）|持久化字段|兼容展示字段；运行推进以 tick_seconds 为准|
 |tick_seconds|Tick 时长（秒）|持久化字段|每次 Tick 的统一模拟秒数，是时间推进计算值|
 |total_ticks|总 Tick 数|持久化字段|模拟运行总 Tick 数|
-|simulation_start_seconds|模拟开始绝对秒|持久化字段|运行在时间轴上的开始绝对秒|
-|planned_simulation_end_seconds|计划结束绝对秒|持久化字段|计划触发周期的结束绝对秒|
-|simulation_end_seconds|实际结束绝对秒|运行态字段|包含排空阶段的实际结束绝对秒|
+|simulation_start_seconds|模拟开始绝对秒|持久化字段|本次运行在统一世界时间上的触发窗口起点|
+|planned_simulation_end_seconds|计划结束绝对秒|持久化字段|本次运行停止新增需求和供给触发的计划窗口终点；连续创建下一次运行时优先继承该值|
+|simulation_end_seconds|实际结束绝对秒|运行态字段|包含排空阶段的实际完成绝对秒，只记录收尾完成事实，不作为下一运行触发窗口起点|
 |simulation_start_at|模拟开始时间|持久化字段|统一 Day N HH:MM:SS 格式的开始时间|
 |planned_simulation_end_at|计划模拟结束时间|持久化字段|统一 Day N HH:MM:SS 格式的计划结束时间|
 |simulation_time_world_summary|统一模拟时间说明|聚合展示字段|前端解释统一模拟秒、当前显示时间、Tick 秒数和计划时间范围|
@@ -1359,7 +1359,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |current_clock_time|当前日内时间|运行态字段|供时间窗口计算使用的 HH:MM:SS|
 |current_day_tick|当天 Tick 序号|运行态字段|当天的 Tick 序号|
 |current_run_tick|当前运行 Tick 序号|运行态字段|本次运行实际 Tick，包含排空 Tick|
-|current_global_tick|全局 Tick 序号|运行态字段|同一时间轴连续累计的 Tick 序号|
+|current_global_tick|全局 Tick 序号|运行态字段|由统一世界秒和 tick_seconds 推导的连续 Tick 序号，不作为独立事实时间来源|
 |trigger_ticks_completed|已完成触发 Tick 数|运行态字段|已执行供给和需求触发的计划 Tick 数|
 |drain_ticks|排空 Tick 数|运行态字段|计划周期结束后用于完成既有工作流的 Tick 数|
 |max_drain_ticks|最大排空 Tick 数|持久化字段|排空未收敛前允许执行的最大 Tick 数|

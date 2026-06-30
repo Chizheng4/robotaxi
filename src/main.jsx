@@ -1816,6 +1816,7 @@ function App() {
     orderMatchingDecisionSequence = 0;
     tripSequence = 0;
     eventSequence = 0;
+    simulationEngine?.resetSimulationCounters?.();
     const nextSelection = { type: "map", id: initialData.maps[0].map_id };
     setOperationalData(initialData);
     setReadinessTasks([]);
@@ -5318,8 +5319,8 @@ async function bootstrap() {
 	    import("./services/tripService.js?v=20260624-v028-1-5"),
 		    import("./domain/simulationTypes.js?v=20260624-v028-1-2"),
 		    import("./data/simulationInitialization.js?v=20260620-v027-4"),
-			    import("./data/simulationEngine.js?v=20260630-v035-4"),
-			    import("./services/simulationActions.js?v=20260630-v036-1"),
+			    import("./data/simulationEngine.js?v=20260630-v036-2"),
+			    import("./services/simulationActions.js?v=20260630-v036-2"),
 			    import("./data/simulationLoop.js?v=20260630-v036-1"),
 			    import("./services/simulationHandlers.js?v=20260624-v028-1-5"),
 		    import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"),

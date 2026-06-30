@@ -41,6 +41,23 @@ function stopTickInterval() {
   }
 }
 
+function resolveRunWindowEndSeconds(run) {
+  const plannedEndSeconds = Number(run?.planned_simulation_end_seconds);
+  if (Number.isFinite(plannedEndSeconds)) return plannedEndSeconds;
+  const actualEndSeconds = Number(run?.simulation_end_seconds);
+  if (Number.isFinite(actualEndSeconds)) return actualEndSeconds;
+  const currentSeconds = Number(run?.current_simulation_seconds);
+  return Number.isFinite(currentSeconds) ? currentSeconds : 0;
+}
+
+function findPreviousSimulationRunForNextWindow(simulationRuns = []) {
+  return simulationRuns.reduce((latest, run) => {
+    const runEnd = resolveRunWindowEndSeconds(run);
+    const latestEnd = resolveRunWindowEndSeconds(latest);
+    return !latest || runEnd > latestEnd ? run : latest;
+  }, null);
+}
+
 /**
  * 创建 Simulation 控制 hook
  *
@@ -78,19 +95,17 @@ export function useSimulationActions({
     if (!simulationEngine || !simulationPolicies.length) { debug("createSimulationRun 失败: engine或policies缺失"); return; }
     const policy = simulationPolicies.find((p) => p.policy_status === "ACTIVE");
     if (!policy) { debug("createSimulationRun 失败: 无ACTIVE策略"); return; }
-    const previousSimulationRun = simulationRuns.reduce((latest, run) => {
-      const runEnd = Number(run.simulation_end_seconds ?? run.current_simulation_seconds) || 0;
-      const latestEnd = Number(latest?.simulation_end_seconds ?? latest?.current_simulation_seconds) || -1;
-      return runEnd > latestEnd ? run : latest;
-    }, null);
-    const { simulationRun: run, event: evt } = simulationEngine.initSimulationRun({
-      simulationName: `模拟运行 ${simulationRuns.length + 1}`,
-      simulationPolicy: policy,
-      previousSimulationRun,
+    setSimulationRuns((currentRuns) => {
+      const previousSimulationRun = findPreviousSimulationRunForNextWindow(currentRuns);
+      const { simulationRun: run, event: evt } = simulationEngine.initSimulationRun({
+        simulationName: `模拟运行 ${currentRuns.length + 1}`,
+        simulationPolicy: policy,
+        previousSimulationRun,
+      });
+      debug("createSimulationRun 成功: " + run.simulation_run_id + " status=" + run.simulation_status);
+      setSimulationEvents((prev) => [evt, ...prev]);
+      return [run, ...currentRuns];
     });
-    debug("createSimulationRun 成功: " + run.simulation_run_id + " status=" + run.simulation_status);
-    setSimulationRuns((prev) => [run, ...prev]);
-    setSimulationEvents((prev) => [evt, ...prev]);
   }
 
   function startSimulationRun(runId) {

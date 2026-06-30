@@ -136,19 +136,17 @@ function deriveNextCounter(items, field, prefix) {
  * @returns {Object} { simulationRun, event }
  */
 export function initSimulationRun({ simulationName, simulationPolicy, totalDays, tickMinutes, tickSeconds, previousSimulationRun = null }) {
-  const startSimulationSeconds = Number(previousSimulationRun?.simulation_end_seconds);
-  const inheritedStartSeconds = Number.isFinite(startSimulationSeconds)
-    ? startSimulationSeconds
-    : Number(previousSimulationRun?.current_simulation_seconds) || 0;
+  const resolvedTickSeconds = Number(tickSeconds) || Number(simulationPolicy.tick_seconds) || (tickMinutes || simulationPolicy.tick_minutes) * 60;
+  const inheritedStartSeconds = resolveNextSimulationStartSeconds(previousSimulationRun);
   const run = createSimulationRun({
     simulationRunId: nextSimulationRunId(),
     simulationName,
     simulationPolicy,
     totalDays: totalDays || simulationPolicy.simulation_days,
     tickMinutes: tickMinutes || simulationPolicy.tick_minutes,
-    tickSeconds: tickSeconds || simulationPolicy.tick_seconds,
+    tickSeconds: resolvedTickSeconds,
     startSimulationSeconds: inheritedStartSeconds,
-    startGlobalTick: previousSimulationRun?.current_global_tick || 0,
+    startGlobalTick: deriveGlobalTickFromWorldSeconds(inheritedStartSeconds, resolvedTickSeconds),
     simulationTimelineId: previousSimulationRun?.simulation_timeline_id || "SIM-TIMELINE-001",
     previousSimulationRunId: previousSimulationRun?.simulation_run_id || null,
   });
@@ -166,6 +164,22 @@ export function initSimulationRun({ simulationName, simulationPolicy, totalDays,
   });
 
   return { simulationRun: run, event };
+}
+
+function resolveNextSimulationStartSeconds(previousSimulationRun) {
+  if (!previousSimulationRun) return 0;
+  const plannedEndSeconds = Number(previousSimulationRun.planned_simulation_end_seconds);
+  if (Number.isFinite(plannedEndSeconds)) return Math.max(0, plannedEndSeconds);
+  const actualEndSeconds = Number(previousSimulationRun.simulation_end_seconds);
+  if (Number.isFinite(actualEndSeconds)) return Math.max(0, actualEndSeconds);
+  const currentSeconds = Number(previousSimulationRun.current_simulation_seconds);
+  return Number.isFinite(currentSeconds) ? Math.max(0, currentSeconds) : 0;
+}
+
+function deriveGlobalTickFromWorldSeconds(worldSeconds, tickSeconds) {
+  const resolvedTickSeconds = Number(tickSeconds) || 1;
+  const resolvedWorldSeconds = Number(worldSeconds) || 0;
+  return Math.floor(Math.max(0, resolvedWorldSeconds) / resolvedTickSeconds);
 }
 
 /**
