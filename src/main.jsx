@@ -858,10 +858,10 @@ function App() {
     costRecords,
     revenueCalculationRuns,
     revenueRecords,
-    operatingMetricsOverview: filterMetricRowsForPage(metricDisplayRows, "operatingMetricsOverview"),
-    financialMetrics: filterMetricRowsForPage(metricDisplayRows, "financialMetrics"),
-    serviceMetrics: filterMetricRowsForPage(metricDisplayRows, "serviceMetrics"),
-    processDiagnostics: filterMetricRowsForPage(metricDisplayRows, "processDiagnostics"),
+    operatingMetricsOverview: filterMetricRowsForPage(metricDisplayRows, "operatingMetricsOverview", metricPeriodType),
+    financialMetrics: filterMetricRowsForPage(metricDisplayRows, "financialMetrics", metricPeriodType),
+    serviceMetrics: filterMetricRowsForPage(metricDisplayRows, "serviceMetrics", metricPeriodType),
+    processDiagnostics: filterMetricRowsForPage(metricDisplayRows, "processDiagnostics", metricPeriodType),
     metricDefinitions,
     metricCalculationRuns,
     metricObservations: metricDisplayRows,
@@ -869,7 +869,7 @@ function App() {
     simulationEvents,
     timedOperations,
     validations,
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, simulationRuns, simulationEvents, timedOperations, validations]);
+  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -1432,7 +1432,7 @@ function App() {
     setPendingRevenueCalculationRunId(runId);
   }
 
-  function requestMetricCalculation(periodType = metricPeriodType) {
+  function refreshOperatingMetrics(periodType = metricPeriodType) {
     runMetricCalculation(periodType, { automatic: false });
   }
 
@@ -1514,7 +1514,7 @@ function App() {
           ...current.filter((record) => !(record.metric_scope_type === "OPERATING_PERIOD" && record.metric_period_type === periodType)),
         ]);
         setMetricCalculationRuns((current) => [result.calculationRun, ...current]);
-        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "经营周期指标计算完成" : "经营周期指标计算完成，存在质量提示");
+        if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "经营数据已更新" : "经营数据已更新，存在质量提示");
       } catch (error) {
         setMetricCalculationRuns((current) => [{
           metric_calculation_run_id: calculationRunId,
@@ -1533,7 +1533,7 @@ function App() {
           started_at: new Date().toISOString(),
           completed_at: new Date().toISOString(),
         }, ...current]);
-        if (!automatic) antd.message.error(`经营周期指标计算失败：${error.message}`);
+        if (!automatic) antd.message.error(`经营数据更新失败：${error.message}`);
       } finally {
         setMetricCalculationInProgress(false);
       }
@@ -1657,7 +1657,7 @@ function App() {
                   editWorkflowTimingRule,
                   requestCostCalculation,
                   requestRevenueCalculation,
-                  requestMetricCalculation,
+                  refreshOperatingMetrics,
                   metricPeriodType,
                   setMetricPeriodType,
                   metricCalculationInProgress,
@@ -3618,9 +3618,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
             getPopupContainer={() => document.body}
             options={metricPeriodOptions}
           />
-          <Button size="small" type="primary" onClick={() => actions.requestMetricCalculation(actions.metricPeriodType)} disabled={actions.metricCalculationInProgress}>
-            {actions.metricCalculationInProgress ? "指标计算中" : "计算经营周期指标"}
+          <Button size="small" type="primary" onClick={() => actions.refreshOperatingMetrics(actions.metricPeriodType)} disabled={actions.metricCalculationInProgress}>
+            {actions.metricCalculationInProgress ? "数据更新中" : "更新经营数据"}
           </Button>
+          <span className="metric-data-pool-state">{createMetricDataPoolState(actions.metricCalculationRuns, actions.metricPeriodType)}</span>
         </div>
       )}
       {isMetricAnalysisPage && (
@@ -3628,6 +3629,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           page={page}
           rows={displayRows}
           allRows={rows}
+          metricCalculationRuns={actions.metricCalculationRuns}
+          metricPeriodType={actions.metricPeriodType}
           onSelect={(row) => onSelect(objectType, row[idField])}
         />
       )}
@@ -4550,17 +4553,21 @@ function RowActionGroup({ children }) {
   return <Space size={4} className="row-action-group">{children}</Space>;
 }
 
-function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
+function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculationRuns = [], metricPeriodType = "ALL", onSelect }) {
   const latestRows = createLatestMetricRows(rows);
   const overviewRows = page === "operatingMetricsOverview"
     ? overviewMetricIds.map((id) => latestRows.find((row) => row.metric_definition_id === id)).filter(Boolean)
     : latestRows.slice(0, 6);
   const warningRows = allRows.filter((row) => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
-  const periodLabel = latestRows[0]?.metric_period_label || allRows[0]?.metric_period_label || "尚未计算";
+  const latestCalculationRun = getLatestMetricCalculationRun(metricCalculationRuns, metricPeriodType);
+  const periodLabel = latestRows[0]?.metric_period_label || latestCalculationRun?.metric_period_label || "尚未更新";
   const metricById = new Map(createLatestMetricRows(allRows).map((row) => [row.metric_definition_id, row]));
   const sourceRecordCount = latestRows.reduce((total, row) => total + Number(row.source_record_count || 0), 0);
   const qualityMetric = metricById.get("QUALITY-DATA-001");
   const qualitySummary = qualityMetric ? `${qualityMetric.metric_name_cn} ${formatMetricDisplayValue(qualityMetric)}` : "等待数据质量结果";
+  const calculationSummary = latestCalculationRun
+    ? `${latestCalculationRun.metric_calculation_run_id} · ${getDisplayValue(latestCalculationRun.calculation_status, "calculation_status")}`
+    : "暂无更新批次";
   const insightGroups = [
     {
       title: "财务结果",
@@ -4591,7 +4598,7 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
             <small>{row.quality_status === "PASS" ? "数据通过" : row.quality_reason || "存在质量提示"}</small>
           </button>
         )) : (
-          <div className="metric-empty-summary">暂无指标结果，请先选择统计周期并计算经营周期指标。</div>
+          <div className="metric-empty-summary">暂无经营数据，请选择统计周期后更新经营数据。</div>
         )}
       </div>
       <div className="metric-insight-lanes">
@@ -4605,6 +4612,7 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], onSelect }) {
         ))}
       </div>
       <div className="metric-quality-strip">
+        <span>数据池：{calculationSummary}</span>
         <span>当前统计周期：{periodLabel}</span>
         <span>指标结果 {latestRows.length}</span>
         <span>来源记录 {sourceRecordCount}</span>
@@ -7047,14 +7055,28 @@ function createMetricDisplayRows(metricObservations = [], metricDefinitions = []
   });
 }
 
-function filterMetricRowsForPage(metricRows = [], page) {
+function filterMetricRowsForPage(metricRows = [], page, periodType = "ALL") {
   const operatingPeriodRows = metricRows.filter((row) => row.metric_scope_type === "OPERATING_PERIOD");
-  const sourceRows = operatingPeriodRows.length ? operatingPeriodRows : metricRows;
+  const selectedPeriodRows = operatingPeriodRows.filter((row) => row.metric_period_type === periodType);
+  const sourceRows = selectedPeriodRows.length ? selectedPeriodRows : [];
   if (page === "operatingMetricsOverview") return pickLatestMetricRows(sourceRows, overviewMetricIds);
   if (page === "financialMetrics") return pickLatestMetricRows(sourceRows, financialMetricIds);
   if (page === "serviceMetrics") return pickLatestMetricRows(sourceRows, serviceMetricIds);
   if (page === "processDiagnostics") return pickLatestMetricRows(sourceRows, diagnosticMetricIds);
   return metricRows;
+}
+
+function getLatestMetricCalculationRun(metricCalculationRuns = [], periodType = "ALL") {
+  return (metricCalculationRuns || []).find((run) =>
+    run.metric_scope_type === "OPERATING_PERIOD" &&
+    run.metric_period_type === periodType
+  ) || null;
+}
+
+function createMetricDataPoolState(metricCalculationRuns = [], periodType = "ALL") {
+  const latestRun = getLatestMetricCalculationRun(metricCalculationRuns, periodType);
+  if (!latestRun) return "数据池尚未更新";
+  return `${latestRun.metric_calculation_run_id} · ${getDisplayValue(latestRun.calculation_status, "calculation_status")}`;
 }
 
 function pickLatestMetricRows(metricRows = [], metricIds = []) {

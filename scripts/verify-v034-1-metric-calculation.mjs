@@ -149,7 +149,9 @@ const mainSource = fs.readFileSync("src/main.jsx", "utf8");
 assert.match(mainSource, /metricDefinitions/, "前端运行态必须持久化指标定义");
 assert.match(mainSource, /metricObservations/, "前端运行态必须持久化指标观测");
 assert.match(mainSource, /metricPeriodOptions/, "经营分析必须提供统计周期选择");
-assert.match(mainSource, /计算经营周期指标/, "经营分析必须提供经营周期指标计算入口");
+assert.match(mainSource, /更新经营数据/, "经营分析必须提供统一经营数据刷新入口");
+assert.doesNotMatch(mainSource, /计算经营周期指标/, "经营分析页不得呈现为页面级指标计算入口");
+assert.match(mainSource, /createMetricDataPoolState/, "经营分析页必须展示统一数据池状态");
 assert.doesNotMatch(mainSource, /runMetricCalculation\(run\.simulation_run_id, \{ automatic: true \}\)/, "指标计算不得再按单个模拟运行自动触发");
 assert.match(mainSource, /operatingMetricsOverview/, "经营分析管理必须接入经营指标总览");
 assert.match(mainSource, /财务表现分析/, "经营分析管理必须接入财务表现分析");
@@ -163,6 +165,7 @@ assert.match(mainSource, /!isMetricAnalysisPage && statusOptions\.length > 0/, "
 assert.match(mainSource, /!isMetricAnalysisPage && \(/, "经营分析页不得显示业务对象查询筛选栏");
 assert.doesNotMatch(mainSource, /metric-decision-labels/, "经营分析页不得用额外说明标签干扰核心指标阅读");
 assert.match(mainSource, /createMetricDisplayRows/, "指标页面必须通过统一派生函数合并定义和观测");
+assert.match(mainSource, /filterMetricRowsForPage\(metricDisplayRows, "operatingMetricsOverview", metricPeriodType\)/, "经营分析页必须优先按当前统计周期消费统一指标结果池");
 
 const fieldDictionarySource = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 assert.match(fieldDictionarySource, /metricDefinition: \{ label: "指标定义"/, "代码字段字典必须声明指标定义对象");
