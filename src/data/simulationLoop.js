@@ -48,7 +48,14 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
     tickSeconds: simulationRun.tick_seconds,
     policySnapshot,
   });
-  const runtimeScope = createSimulationRuntimeScope({ simulationRun, businessData });
+  const performanceConfig = policySnapshot?.simulation_performance_config || {};
+  const includeTravelProgress = isUiSnapshotTick(tickContext, performanceConfig);
+  const runtimeScope = createSimulationRuntimeScope({
+    simulationRun,
+    businessData,
+    tickContext,
+    includeTravelProgress,
+  });
 
   // 3. 供给侧触发判断
   const supplyResult = isDraining
@@ -63,10 +70,9 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
 
   // 5. 根据需求触发结果，构造 SERVICE_ORDER_CREATE 动作
   const timedOperationResult = advanceTimedOperations({
-    timedOperations: runtimeScope.activeTimedOperations,
+    timedOperations: runtimeScope.timedOperationCandidates,
     timeContext: tickContext,
   });
-  const performanceConfig = policySnapshot?.simulation_performance_config || {};
   if (businessData?.setTimedOperations && timedOperationResult.changed) {
     businessData.setTimedOperations((current) => mergeTimedOperationUpdates(current, timedOperationResult.timedOperations));
   }
@@ -76,7 +82,7 @@ export function executeTick({ simulationRun, policySnapshot, randomSeed, busines
       businessData,
       tickContext,
       performanceConfig,
-      force: timedOperationResult.dueOperations.length > 0,
+      force: includeTravelProgress || timedOperationResult.dueOperations.length > 0,
     });
   }
   const workflowTimingProfile = getActiveWorkflowTimingProfile(businessData?.workflowTimingProfiles || []);

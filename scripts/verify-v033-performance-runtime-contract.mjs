@@ -6,6 +6,8 @@ import {
   createSimulationRuntimeScope,
   filterActiveTimedOperations,
   mergeTimedOperationUpdates,
+  selectTimedOperationAdvanceCandidates,
+  simulationRuntimeObjectContracts,
 } from "../src/data/simulationRuntimeScope.js";
 import { advanceTimedOperations } from "../src/data/timedOperationScheduler.js";
 import { createTimedOperation } from "../src/domain/timedOperationTypes.js";
@@ -123,6 +125,8 @@ assert.deepEqual(activeScope.workflowScope.readinessTasks.map((item) => item.tas
 assert.deepEqual(activeScope.workflowScope.deploymentTasks.map((item) => item.task_id), ["DP-ACTIVE"], "当前运行只扫描当前运行的非终态投放任务");
 assert.deepEqual(activeScope.workflowScope.routeExecutions.map((item) => item.route_execution_id), ["RE-ACTIVE"], "当前运行只扫描当前运行的非终态行驶记录");
 assert.deepEqual(activeScope.activeTimedOperations.map((item) => item.timed_operation_id), ["TOP-ACTIVE"], "当前运行只推进当前运行的非终态时间作业");
+assert.equal(simulationRuntimeObjectContracts.serviceOrders.idField, "service_order_id", "业务对象必须通过统一接入合同声明主键");
+assert.equal(simulationRuntimeObjectContracts.routeExecutions.statusField, "execution_status", "业务对象必须通过统一接入合同声明状态字段");
 
 const activeTimedOperations = filterActiveTimedOperations([
   completedOperation,
@@ -149,6 +153,50 @@ const mergedTimedOperations = mergeTimedOperationUpdates([completedOperation, ..
 assert.equal(advancedActiveTimedOperations.dueOperations[0].timed_operation_id, "TOP-V035-ACTIVE", "当前运行到期时间作业仍应按模拟秒准确触发");
 assert.equal(mergedTimedOperations[0], completedOperation, "历史终态时间作业不应被重写");
 assert.equal(mergedTimedOperations[1].operation_status, "COMPLETED", "活跃时间作业完成后必须合并回完整业务数据");
+
+const timedOperationCandidates = selectTimedOperationAdvanceCandidates([
+  {
+    ...createTimedOperation({
+      timedOperationId: "TOP-LONG-NOT-DUE",
+      simulationRunId: "SIM-RUN-V033",
+      timeMode: "SIMULATION",
+      operationType: "GENERIC_ACTION",
+      objectType: "serviceOrder",
+      objectId: "SO-LONG",
+      actionType: "ORDER_MATCHING_EXECUTE",
+      startSeconds: 100,
+      durationSeconds: 300,
+    }),
+    operation_status: "RUNNING",
+  },
+  createTimedOperation({
+    timedOperationId: "TOP-DUE",
+    simulationRunId: "SIM-RUN-V033",
+    timeMode: "SIMULATION",
+    operationType: "GENERIC_ACTION",
+    objectType: "serviceOrder",
+    objectId: "SO-DUE",
+    actionType: "ORDER_MATCHING_EXECUTE",
+    startSeconds: 100,
+    durationSeconds: 10,
+  }),
+  createTimedOperation({
+    timedOperationId: "TOP-TRAVEL-SNAPSHOT",
+    simulationRunId: "SIM-RUN-V033",
+    timeMode: "SIMULATION",
+    operationType: "TRAVEL",
+    objectType: "trip",
+    objectId: "TRIP-SNAPSHOT",
+    actionType: "TRIP_TRAVEL_COMPLETE",
+    startSeconds: 100,
+    durationSeconds: 300,
+  }),
+], { currentSeconds: 110, includeTravelProgress: true });
+assert.deepEqual(
+  timedOperationCandidates.map((operation) => operation.timed_operation_id),
+  ["TOP-DUE", "TOP-TRAVEL-SNAPSHOT"],
+  "Tick 内只推进到期作业和需要快照的行驶作业，未到期长作业不得每秒重写",
+);
 
 const tickScopeRun = createRun(0);
 let observedWorkflowIds = [];

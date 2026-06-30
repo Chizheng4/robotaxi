@@ -1,30 +1,35 @@
-import { TimedOperationStatus } from "../domain/timedOperationTypes.js";
+import { TimedOperationStatus, TimedOperationType } from "../domain/timedOperationTypes.js";
 
-const businessObjectContracts = {
+export const simulationRuntimeObjectContracts = {
   serviceOrders: {
     idField: "service_order_id",
     statusField: "order_status",
     terminalStatuses: new Set(["CANCELLED", "COMPLETED", "FAILED", "MATCH_FAILED", "MATCHING_FAILED", "PAYMENT_FAILED"]),
+    participatesInWorkflowScan: true,
   },
   trips: {
     idField: "trip_id",
     statusField: "trip_status",
     terminalStatuses: new Set(["COMPLETED", "FAILED", "CANCELLED"]),
+    participatesInWorkflowScan: true,
   },
   readinessTasks: {
     idField: "task_id",
     statusField: "task_status",
     terminalStatuses: new Set(["COMPLETED", "FAILED", "CANCELLED"]),
+    participatesInWorkflowScan: true,
   },
   deploymentTasks: {
     idField: "task_id",
     statusField: "task_status",
     terminalStatuses: new Set(["COMPLETED", "FAILED", "CANCELLED"]),
+    participatesInWorkflowScan: true,
   },
   routeExecutions: {
     idField: "route_execution_id",
     statusField: "execution_status",
     terminalStatuses: new Set(["COMPLETED", "FAILED", "CANCELLED"]),
+    participatesInWorkflowScan: true,
   },
 };
 
@@ -34,17 +39,24 @@ const timedOperationTerminalStatuses = new Set([
   TimedOperationStatus.CANCELLED,
 ]);
 
-export function createSimulationRuntimeScope({ simulationRun, businessData = {} } = {}) {
+export function createSimulationRuntimeScope({ simulationRun, businessData = {}, tickContext = null, includeTravelProgress = false } = {}) {
   const runId = simulationRun?.simulation_run_id;
+  const activeTimedOperations = filterActiveTimedOperations(businessData.timedOperations || [], runId);
   return {
     runId,
     workflowScope: createWorkflowScope(runId, businessData),
-    activeTimedOperations: filterActiveTimedOperations(businessData.timedOperations || [], runId),
+    activeTimedOperations,
+    timedOperationCandidates: selectTimedOperationAdvanceCandidates(activeTimedOperations, {
+      currentSeconds: tickContext?.current_simulation_seconds ?? simulationRun?.current_simulation_seconds,
+      includeTravelProgress,
+    }),
   };
 }
 
 export function createWorkflowScope(runId, businessData = {}) {
-  return Object.fromEntries(Object.entries(businessObjectContracts).map(([collectionKey, contract]) => [
+  return Object.fromEntries(Object.entries(simulationRuntimeObjectContracts)
+    .filter(([, contract]) => contract.participatesInWorkflowScan)
+    .map(([collectionKey, contract]) => [
     collectionKey,
     filterActiveBusinessObjects(businessData[collectionKey] || [], runId, contract),
   ]));
@@ -58,6 +70,23 @@ export function filterActiveTimedOperations(timedOperations = [], runId) {
   return (timedOperations || []).filter((operation) =>
     isCurrentRunObject(operation, runId) && !timedOperationTerminalStatuses.has(operation.operation_status)
   );
+}
+
+export function selectTimedOperationAdvanceCandidates(timedOperations = [], { currentSeconds = 0, includeTravelProgress = false } = {}) {
+  const normalizedCurrentSeconds = Number(currentSeconds) || 0;
+  return (timedOperations || []).filter((operation) =>
+    shouldAdvanceTimedOperation(operation, normalizedCurrentSeconds, includeTravelProgress)
+  );
+}
+
+export function shouldAdvanceTimedOperation(operation, currentSeconds = 0, includeTravelProgress = false) {
+  if (!operation || timedOperationTerminalStatuses.has(operation.operation_status)) return false;
+  const plannedCompletedSeconds = Number(operation.planned_completed_seconds);
+  const startSeconds = Number(operation.start_seconds) || 0;
+  const isDue = Number.isFinite(plannedCompletedSeconds) && plannedCompletedSeconds <= currentSeconds;
+  const shouldMarkRunning = operation.operation_status === TimedOperationStatus.PENDING && startSeconds <= currentSeconds;
+  const shouldRefreshTravel = includeTravelProgress && operation.operation_type === TimedOperationType.TRAVEL;
+  return isDue || shouldMarkRunning || shouldRefreshTravel;
 }
 
 export function mergeTimedOperationUpdates(allTimedOperations = [], scopedTimedOperations = []) {
@@ -76,6 +105,7 @@ export function getSimulationRuntimeScopeDiagnostics({ simulationRun, businessDa
     active_deployment_tasks: scope.workflowScope.deploymentTasks.length,
     active_route_executions: scope.workflowScope.routeExecutions.length,
     active_timed_operations: scope.activeTimedOperations.length,
+    timed_operation_candidates: scope.timedOperationCandidates.length,
   };
 }
 
