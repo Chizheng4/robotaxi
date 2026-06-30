@@ -1,22 +1,22 @@
 # 当前大版本迭代
 
-当前大版本：`v035 模拟运行性能架构`。
+当前大版本：`待定`。
 
-当前状态：v035.5 已完成，当前运行作用域、活跃对象合同、时间作业候选推进、运行态缓冲刷新、空闲跳时和自动计划收口验证均已收敛。
+当前状态：暂无进行中的大版本。v035 已完成并归档。
 
 当前计划入口：
 
-方案设计：`v035-simulation-runtime-performance-plan.md`
+暂无。
 
 方案设计入口：
 
 - `doc/rules/07-simulation-runtime-architecture-rules.md`
-- `doc/common/current-iteration/major/v035-simulation-runtime-performance-plan.md`
 
-最近完成大版本：`v034 经营指标系统`。
+最近完成大版本：`v035 模拟运行性能架构`。
 
 最近完成历史方案：
 
+- `doc/common/iteration-history/major/v035-simulation-runtime-performance-plan.md`
 - `doc/common/iteration-history/major/v032-unified-time-world-design.md`
 - `doc/common/iteration-history/major/v032-auto-execution-plan.md`
 - `doc/common/iteration-history/major/v033.0-high-performance-simulation-runtime.md`

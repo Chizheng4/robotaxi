@@ -58,8 +58,9 @@ Codex 每轮任务先确认：
 1. 当前迭代文档中所有标记为“待执行”的本轮计划项，要么已完成并改为“已完成”，要么因规则中的暂停条件明确阻塞并说明原因；
 2. 当前迭代文档中最新“已完成”子版本必须同步写入 `VERSION.md`；
 3. 稳定版本必须完成提交并打对应 tag，tag 版本号必须与最新完成子版本一致；
-4. `scripts/verify-automated-plan-closure.mjs` 必须通过；
-5. 最终回复前必须用 `git status --short` 和 `git tag --points-at HEAD` 确认没有漏提交、漏打 tag。
+4. 大版本计划全部完成后，计划文件必须从 `doc/common/current-iteration/major/` 移入 `doc/common/iteration-history/major/`；不能因为该文件仍被 `major-current-iteration.md` 声明为当前计划而继续留在 current 目录；
+5. `scripts/verify-current-iteration-archive.mjs` 和 `scripts/verify-automated-plan-closure.mjs` 必须通过；
+6. 最终回复前必须用 `git status --short` 和 `git tag --points-at HEAD` 确认没有漏提交、漏打 tag。
 
 禁止在计划文档已经标记后续版本完成、但 `VERSION.md`、提交或 tag 仍停留在更早版本时声称完成。
 
