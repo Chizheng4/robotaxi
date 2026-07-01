@@ -59,6 +59,8 @@ node --check src/services/serviceOrderService.js
 node --check src/services/businessActionService.js
 node --check src/services/simulationHandlers.js
 node --check src/services/routePlanningService.js
+node --check src/services/robotaxiService.js
+node --check src/services/fleetOperationTaskService.js
 node --check src/data/simulationRunBusinessScope.js
 node --check src/data/costModelCalculator.js
 node --check src/data/revenueCalculator.js
@@ -94,6 +96,8 @@ node scripts/verify-v033-2-business-lifecycle-timeline.mjs
 node scripts/verify-v033-3-workflow-timing-lifecycle-contract.mjs
 node scripts/verify-v034-1-metric-calculation.mjs
 node scripts/verify-v036-3-service-order-auto-assignment.mjs
+node scripts/verify-v037-2-fleet-operation-services.mjs
+node scripts/verify-v037-3-fleet-operation-pages.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

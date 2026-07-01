@@ -1,12 +1,12 @@
 # 当前大版本迭代
 
-当前大版本：`v037 Fleet Operations 车队运维闭环系统`。
+当前大版本：`待定`。
 
-当前状态：v037.0 方案设计基线已完成，准备进入 v037.1 字段字典与基础类型接入。
+当前状态：暂无进行中的大版本。v037 已完成并归档。
 
 当前计划入口：
 
-- `doc/common/current-iteration/major/v037-fleet-operations-system-plan.md`
+暂无。
 
 规则入口：
 
@@ -16,10 +16,11 @@
 - `doc/rules/05-codex-execution-rules.md`
 - `doc/rules/07-simulation-runtime-architecture-rules.md`
 
-最近完成大版本：`v036.4 统一经营数据池刷新体验`。
+最近完成大版本：`v037 Fleet Operations 车队运维闭环系统`。
 
 最近完成历史方案：
 
+- `doc/common/iteration-history/major/v037-fleet-operations-system-plan.md`
 - `doc/common/iteration-history/major/v036.3-service-order-auto-assignment-plan.md`
 - `doc/common/iteration-history/major/v036.2-unified-world-time-continuity-plan.md`
 - `doc/common/iteration-history/major/v036-simulation-drain-and-runtime-queue-plan.md`
