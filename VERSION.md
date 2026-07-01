@@ -1,3 +1,13 @@
+## v037.2
+
+核心：建立 RobotaxiService 与 Fleet Operations 任务基础服务合同。
+
+- 新增 `robotaxiService`，提供 Robotaxi 可运营判断、健康判断、运维任务触发选择和状态回写函数。
+- 新增 `fleetOperationTaskService`，支持清洁、充电、维修、故障处理和退役任务创建、防重复判断和等待中任务不占用 `current_task_id`。
+- 明确准入任务继续保留现有服务边界，不被新 Fleet Operation 任务服务接管。
+- 新增 v037.2 服务合同验证，覆盖可接单判断、等待任务不占用当前任务、即时任务占用当前任务、防重复和任务完成后恢复可运营。
+- 继续通过字段展示合同验证，保证新增任务和健康字段具备中文展示。
+
 ## v037.1
 
 核心：接入 Fleet Operations 字段字典、基础类型和状态注册合同。

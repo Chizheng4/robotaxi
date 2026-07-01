@@ -78,7 +78,7 @@ v037 聚焦 Fleet Operations 车队运维闭环系统。
 
 ### v037.2：RobotaxiService 与运维任务基础服务
 
-状态：待执行。
+状态：已完成。
 
 范围：
 
@@ -95,6 +95,14 @@ v037 聚焦 Fleet Operations 车队运维闭环系统。
 - 支持等待中任务不占用 `current_task_id`；
 - 支持任务完成后统一回写 Robotaxi 可运营状态；
 - 保持现有服务订单、投放和行驶闭环不被重写。
+
+完成记录：
+
+- 新增 `src/services/robotaxiService.js`，提供 Robotaxi 可运营判断、运维健康判断、任务触发选择和状态回写函数；
+- 新增 `src/services/fleetOperationTaskService.js`，提供清洁、充电、维修、故障处理和退役任务创建、防重复和等待不占用规则；
+- 准入任务不被新服务接管，继续保留现有准入任务服务边界；
+- 新增 `scripts/verify-v037-2-fleet-operation-services.mjs`，验证可接单判断、等待任务不占用、即时任务占用、防重复和恢复可运营；
+- 已通过 v037.2 服务合同验证和字段展示合同验证。
 
 暂停条件：
 
