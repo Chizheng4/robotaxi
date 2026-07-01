@@ -1,3 +1,16 @@
+## v037.0
+
+核心：完成 Fleet Operations 车队运维闭环系统方案设计基线。
+
+- 新增 `doc/09-fleet-operations-system/`，建立车队运维总览、Robotaxi 运维状态模型、Robotaxi 运营健康模型、统一运维工作流和清洁、充电、维修、故障处理、退役任务单方案。
+- 将运营准入任务从通用任务系统迁移到 Fleet Operations，将运营投放任务迁移到 Supply System，明确二者业务边界。
+- 新增 `doc/10-supply-system/` 和 `doc/11-strategy-system/` 的 overview，为未来供给系统和战略系统保留方案入口。
+- 明确第一阶段不新增 `FleetOperationRequirement`，运维需求由 Robotaxi 健康事实、报警、阈值、服务完成事件或人工操作经过 RobotaxiService 触发对应任务单。
+- 明确 RobotaxiService 是可运营判断、健康判断和运维任务触发统一入口；任务单服务只负责自身生命周期。
+- 明确等待中的运维任务不占用 `current_task_id`，正式执行后才占用当前任务引用。
+- 归档根目录 `design-qa.md` 为 `doc/common/iteration-history/major/v026-design-qa.md`，清理根目录游离文档。
+- 新增 `v037` 自动执行计划，后续继续推进字段字典、服务化代码、前端接入和验证收口。
+
 ## v036.4
 
 核心：将经营分析页从页面级“指标计算”心智调整为统一经营数据池刷新。

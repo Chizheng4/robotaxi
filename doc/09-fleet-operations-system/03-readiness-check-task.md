@@ -12,7 +12,27 @@ ReadinessCheckTask = 单台 Robotaxi 的运营准入任务单
 
 ---
 
-## 2. 核心关系
+## 2. 服务化边界
+
+ReadinessCheckTask 不自行扫描所有车辆并直接修改 Robotaxi 状态。
+
+准入任务的创建入口应由 RobotaxiService 或 ReadinessCheckTaskService 统一承接：
+
+```text
+RobotaxiService 判断 Robotaxi 需要准入检查
+  ↓
+ReadinessCheckTaskService 创建准入任务
+  ↓
+ReadinessCheckTask 执行检查生命周期
+  ↓
+RobotaxiService 根据检查结果回写可运营状态
+```
+
+这样维修、故障恢复、新车上线、人工复核和后续上层自动化都可以复用同一套准入闭环。
+
+---
+
+## 3. 核心关系
 
 ```text
 1 个 ReadinessCheckTask 对应 1 台 Robotaxi
@@ -39,19 +59,20 @@ ReadinessCheckTask = 单台 Robotaxi 的运营准入任务单
 
 ---
 
-## 3. 触发方式
+## 4. 触发方式
 
-ReadinessCheckTask 支持两种触发方式。
+ReadinessCheckTask 支持多种触发来源，但创建逻辑必须统一。
 
 |触发方式|含义|
 |---|---|
-|AUTO|系统每 10 分钟自动触发|
+|AUTO|系统按运营配置扫描候选 Robotaxi|
 |MANUAL|人工点击按钮触发|
+|TASK_RESULT|维修、故障处理、退役取消等任务结果触发|
 
-两种触发方式共用同一套后续逻辑：
+所有触发方式共用同一套后续逻辑：
 
 ```text
-查询候选 Robotaxi
+RobotaxiService / ReadinessCheckTaskService 查询候选 Robotaxi
 ↓
 创建任务单
 ↓
@@ -68,12 +89,13 @@ Worker 检查
 
 ---
 
-## 4. 创建条件
+## 5. 创建条件
 
 创建 ReadinessCheckTask 必须满足：
 
 ```text
 Robotaxi.availability_status = PENDING_INSPECTION
+OR Robotaxi.fleet_operation_status = READY_FOR_INSPECTION
 AND
 该 Robotaxi 当前不存在未完成的 ReadinessCheckTask
 AND
@@ -91,7 +113,7 @@ OpsCenter.can_inspect_robotaxi = true
 
 ---
 
-## 5. 防重复规则
+## 6. 防重复规则
 
 同一台 Robotaxi 同一时间只能存在一张未完成的 ReadinessCheckTask。
 
@@ -111,9 +133,9 @@ ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
 
 ---
 
-## 6. 字段字典
+## 7. 字段字典
 
-### 6.1 ReadinessCheckTask 字段
+### 7.1 ReadinessCheckTask 字段
 
 |英文字段|中文字段|说明|
 |---|---|---|
@@ -124,6 +146,7 @@ ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
 |trigger_type|触发方式|AUTO / MANUAL|
 |source_type|来源类型|固定为 OPS_CENTER|
 |source_id|来源编号|OpsCenter ID|
+|source_task_id|来源任务编号|维修、故障处理等来源任务，可为空|
 |robotaxi_id|Robotaxi 编号|被检查 Robotaxi|
 |worker_id|作业人员编号|执行 Worker，可为空|
 |ops_center_id|运营中心编号|检查所在 OpsCenter|
@@ -134,7 +157,7 @@ ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
 |started_at|开始时间|检查开始时间|
 |completed_at|完成时间|任务完成时间|
 
-### 6.2 TaskEventLog 字段
+### 7.2 TaskEventLog 字段
 
 |英文字段|中文字段|说明|
 |---|---|---|
@@ -150,7 +173,7 @@ ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
 
 ---
 
-## 7. 核心属性
+## 8. 核心属性
 
 |属性|含义|
 |---|---|
@@ -173,7 +196,7 @@ ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
 
 ---
 
-## 8. task_status
+## 9. task_status
 
 任务状态应表达：
 
@@ -205,7 +228,7 @@ check_result 表达检查结果。
 
 ---
 
-## 9. 状态与功能按钮
+## 10. 状态与功能按钮
 
 前端应根据 task_status 展示可用操作。
 
@@ -220,9 +243,9 @@ check_result 表达检查结果。
 
 ---
 
-## 10. 功能操作规则
+## 11. 功能操作规则
 
-### 10.1 手动触发创建任务
+### 11.1 手动触发创建任务
 
 功能按钮：
 
@@ -240,7 +263,7 @@ check_result 表达检查结果。
 
 ---
 
-### 10.2 分配 Worker
+### 11.2 分配 Worker
 
 适用状态：
 
@@ -281,7 +304,7 @@ NO_IDLE_WORKER
 
 ---
 
-### 10.3 开始检查
+### 11.3 开始检查
 
 适用状态：
 
@@ -304,7 +327,7 @@ Task.started_at = 当前时间
 
 ---
 
-### 10.4 提交检查结果
+### 11.4 提交检查结果
 
 适用状态：
 
@@ -341,7 +364,7 @@ Worker.current_task_id = null
 
 ---
 
-## 11. check_result
+## 12. check_result
 
 |check_result|含义|
 |---|---|
@@ -359,7 +382,7 @@ Worker.current_task_id = null
 
 ---
 
-## 12. issue_type
+## 13. issue_type
 
 |issue_type|含义|
 |---|---|
@@ -373,32 +396,38 @@ Worker.current_task_id = null
 
 ---
 
-## 13. 状态反馈
+## 14. 状态反馈
 
-### 13.1 检查通过
+### 14.1 检查通过
 
 ```text
 check_result = PASSED
 ↓
+RobotaxiService.markAvailableAfterFleetOperation(...)
+↓
 Robotaxi.availability_status = AVAILABLE
+Robotaxi.fleet_operation_status = NONE
 Task.task_status = COMPLETED
 Worker.worker_status = IDLE
 Worker.current_task_id = null
 ```
 
-### 13.2 检查不通过
+### 14.2 检查不通过
 
 ```text
 check_result = FAILED
 ↓
+RobotaxiService.markUnavailableForFleetOperation(...)
+↓
 Robotaxi.availability_status = UNAVAILABLE
-Robotaxi.unavailable_reason = issue_type
+Robotaxi.fleet_operation_status 根据 issue_type 进入 NEED_CLEANING / NEED_CHARGING / NEED_MAINTENANCE / BROKEN
+Robotaxi.operation_blocking_reason = issue_type
 Task.task_status = COMPLETED
 Worker.worker_status = IDLE
 Worker.current_task_id = null
 ```
 
-### 13.3 任务异常失败
+### 14.3 任务异常失败
 
 ```text
 task_status = FAILED
@@ -410,7 +439,7 @@ Worker.current_task_id = null
 
 ---
 
-## 14. TaskEventLog
+## 15. TaskEventLog
 
 ReadinessCheckTask 全流程需要记录事件消息。
 
@@ -447,7 +476,7 @@ ReadinessCheckTask 全流程需要记录事件消息。
 
 ---
 
-## 15. Worker 能力约束
+## 16. Worker 能力约束
 
 第一阶段 Worker 检查能力规则：
 
@@ -467,7 +496,7 @@ max_robotaxi_per_day = 5
 
 ---
 
-## 16. 示例数据
+## 17. 示例数据
 
 ```json
 {
@@ -492,7 +521,7 @@ max_robotaxi_per_day = 5
 
 ---
 
-## 17. 核心规则
+## 18. 核心规则
 
 1. ReadinessCheckTask 只能发生在 OpsCenter；
     
@@ -531,7 +560,7 @@ max_robotaxi_per_day = 5
 
 ---
 
-## 18. 核心原则
+## 19. 核心原则
 
 ```text
 ReadinessCheckTask = 单台 Robotaxi 的运营准入判断单
