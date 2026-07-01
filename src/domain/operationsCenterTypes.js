@@ -19,6 +19,7 @@ export const AvailabilityStatus = {
   IN_INSPECTION: "IN_INSPECTION",
   AVAILABLE: "AVAILABLE",
   UNAVAILABLE: "UNAVAILABLE",
+  RETIRED: "RETIRED",
 };
 
 export const MotionStatus = {
@@ -45,7 +46,19 @@ export function createOpsCenter(opsCenter) {
 }
 
 export function createRobotaxi(robotaxi) {
-  return robotaxi;
+  return {
+    fleet_operation_status: "NONE",
+    cleanliness_status: "CLEAN",
+    battery_operation_status: "ENOUGH",
+    maintenance_status: "NORMAL",
+    failure_status: "NONE",
+    retirement_status: "ACTIVE",
+    operation_blocking_reason: null,
+    pending_fleet_task_type: null,
+    pending_fleet_task_id: null,
+    last_health_check_at: null,
+    ...robotaxi,
+  };
 }
 
 export function createWorker(worker) {

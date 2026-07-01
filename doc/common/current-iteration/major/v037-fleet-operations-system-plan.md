@@ -49,7 +49,7 @@ v037 聚焦 Fleet Operations 车队运维闭环系统。
 
 ### v037.1：字段字典与基础类型接入
 
-状态：待执行。
+状态：已完成。
 
 范围：
 
@@ -64,6 +64,13 @@ v037 聚焦 Fleet Operations 车队运维闭环系统。
 - 同步 `doc/rules/field-dictionary.md` 和 `src/domain/fieldDictionary.js`；
 - 更新 `src/domain/taskTypes.js` 或新增必要的领域类型文件；
 - 增加字段展示合同验证覆盖。
+
+完成记录：
+
+- 已扩展任务类型、Robotaxi 运维健康状态、五类 Fleet Operations 任务状态和状态注册；
+- 已同步 `doc/rules/field-dictionary.md` 和 `src/domain/fieldDictionary.js`；
+- 已让字段展示合同覆盖 Robotaxi 健康字段和五类运维任务样本；
+- 已通过 `node scripts/verify-field-display-contract.mjs`。
 
 暂停条件：
 

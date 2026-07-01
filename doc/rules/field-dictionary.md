@@ -575,6 +575,16 @@
 |current_task_status|当前任务状态|聚合展示字段|由 current_task_id 关联 Task 推导|
 |current_route_execution_id|当前行驶记录|聚合展示字段|当前关联 RouteExecution，可为空，展示推导字段|
 |location_summary|位置摘要|聚合展示字段|由 current_cell_id 通过 CellContext 推导|
+|fleet_operation_status|车队运维状态|运行态字段|Robotaxi 当前车队运维恢复状态|
+|cleanliness_status|清洁状态|运行态字段|车辆是否需要清洁或正在清洁|
+|battery_operation_status|电量运营状态|运行态字段|电量是否满足运营、是否低电或充电中|
+|maintenance_status|维护状态|运行态字段|车辆维护周期和维修状态|
+|failure_status|故障状态|运行态字段|车辆故障报警和处置状态|
+|retirement_status|退役状态|运行态字段|车辆是否运营中、待退役评估或已退役|
+|operation_blocking_reason|运营阻塞原因|运行态字段|车辆不可运营的业务原因|
+|pending_fleet_task_type|待执行运维任务类型|运行态字段|等待车辆可执行的运维任务类型|
+|pending_fleet_task_id|待执行运维任务编号|运行态字段|等待车辆可执行的运维任务编号|
+|last_health_check_at|最近健康检查时间|运行态字段|最近一次 Robotaxi 运营健康检查时间|
 
 说明：
 
@@ -582,6 +592,41 @@
 - `current_task_id` 表达运营供给侧任务占用；
 - Robotaxi 不能同时存在 `current_order_id` 和 `current_task_id`；
 - 前端当前任务展示应优先展示服务订单，其次展示运营任务。
+
+### 11.1 Fleet Operations 任务公共字段
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|source_task_id|来源任务编号|持久化字段|触发当前任务的来源任务，可为空|
+|target_ops_center_id|目标运营中心|持久化字段|任务目标 OpsCenter|
+|pending_since_at|开始等待时间|运行态字段|任务开始等待 Robotaxi 可执行的时间|
+|operation_created_at|业务创建时间|持久化字段|任务业务创建时间|
+|operation_completed_at|业务完成时间|运行态字段|任务业务完成时间|
+|clean_level_before|清洁前等级|持久化字段|清洁任务执行前的脏污等级|
+|clean_level_after|清洁后等级|运行态字段|清洁任务执行后的清洁等级|
+|battery_percent_before|充电前电量（%）|持久化字段|充电开始前电量|
+|target_battery_percent|目标电量（%）|持久化字段|充电目标电量|
+|battery_percent_after|充电后电量（%）|运行态字段|充电完成后电量|
+|charger_id|充电桩编号|持久化字段|充电任务绑定的充电桩，可为空|
+|charging_started_at|充电开始时间|运行态字段|充电作业开始时间|
+|charging_completed_at|充电完成时间|运行态字段|充电作业完成时间|
+|maintenance_type|维修类型|持久化字段|维修任务类型|
+|failure_source_task_id|来源故障任务|持久化字段|维修任务来源故障处理任务，可为空|
+|maintenance_bay_id|维修工位编号|持久化字段|维修工位，可为空|
+|diagnosis_summary|诊断摘要|运行态字段|维修或故障诊断摘要|
+|repair_result|维修结果|运行态字段|维修任务结果|
+|requires_readiness_check|需要准入复核|运行态字段|维修后是否必须进入准入检查|
+|failure_event_id|故障事件编号|持久化字段|故障事件编号，可为空|
+|failure_type|故障类型|持久化字段|故障分类|
+|failure_severity|故障严重程度|运行态字段|LOW、MEDIUM、HIGH、CRITICAL|
+|allow_current_service_completion|允许完成当前服务|运行态字段|当前服务是否允许继续完成|
+|diagnosis_result|诊断结果|运行态字段|故障诊断结果|
+|disposition_result|处置结果|运行态字段|故障处置结果|
+|maintenance_task_id|维修任务编号|运行态字段|故障处理转维修后的关联任务|
+|retirement_task_id|退役任务编号|运行态字段|故障处理转退役后的关联任务|
+|retirement_reason|退役原因|持久化字段|退役任务原因|
+|approval_status|审批状态|运行态字段|退役确认或审批状态|
+|asset_exit_result|资产退出结果|运行态字段|退役资产处理结果|
 
 ---
 
@@ -1077,9 +1122,33 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |IN_INSPECTION|运维检查中|
 |AVAILABLE|可参与运营|
 |UNAVAILABLE|不可参与运营|
+|RETIRED|已退役|
 |PARKED|停车中|
 |STOPPED|临停中|
 |MOVING|行驶中|
+|CLEAN|清洁正常|
+|NEEDS_CLEANING|需要清洁|
+|IN_CLEANING|清洁中|
+|ENOUGH|电量充足|
+|LOW|低|
+|CRITICAL|严重|
+|NORMAL|普通|
+|DUE_SOON|即将维护|
+|DUE|需要维护|
+|IN_MAINTENANCE|维修中|
+|NONE|无|
+|ALERTED|已报警|
+|REMOTE_HANDLING|远程处理中|
+|BROKEN|故障不可运营|
+|ACTIVE|有效|
+|RETIREMENT_CANDIDATE|待退役评估|
+|NEED_CLEANING|需要清洁|
+|NEED_CHARGING|需要充电|
+|NEED_MAINTENANCE|需要维修|
+|WAITING_SERVICE_COMPLETION|等待当前服务完成|
+|MOVING_TO_OPS_CENTER|前往运营中心|
+|IN_CHARGING|充电中|
+|READY_FOR_INSPECTION|待准入复核|
 |INSPECTION_OPERATOR|检查人员|
 |CLEANING_OPERATOR|清洁人员|
 |CHARGING_OPERATOR|充电协助人员|
@@ -1087,15 +1156,69 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |IDLE|空闲|
 |BUSY|忙碌|
 |OFF_DUTY|非工作中|
+|READINESS_CHECK|运营准入检查|
 |DEPLOYMENT|运营投放|
+|CLEANING|清洁|
+|CHARGING|充电|
+|MAINTENANCE|维修|
+|FAILURE_HANDLING|故障处理|
+|RETIREMENT|退役|
+|CREATED|已创建|
+|WAITING_ASSIGNMENT|待分配|
+|WAITING_CHECK|待检查|
+|CHECKING|检查中|
+|WAITING_ROBOTAXI_AVAILABLE|等待 Robotaxi 可执行|
+|WAITING_DESTINATION_ASSIGNMENT|待分配目的地|
+|WAITING_CHARGING_DESTINATION_ASSIGNMENT|待分配充电位置|
+|WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT|待分配维修位置|
 |WAITING_ROUTE|待路径规划|
 |WAITING_START|待行驶|
+|ARRIVED_OPS_CENTER|已到达运营中心|
+|WAITING_RESOURCE_ASSIGNMENT|待分配资源|
+|WAITING_WORKER_ASSIGNMENT|待分配作业人员|
+|READY_TO_START|待开始作业|
+|IN_PROGRESS|作业中|
+|WAITING_RESULT_CONFIRMATION|待确认结果|
+|MOVING_TO_CHARGER|前往充电点|
+|ARRIVED_CHARGER|已到达充电点|
+|WAITING_CHARGER_ASSIGNMENT|待分配充电桩|
+|READY_TO_CHARGE|待开始充电|
+|MOVING_TO_MAINTENANCE_CENTER|前往维修中心|
+|ARRIVED_MAINTENANCE_CENTER|已到达维修中心|
+|WAITING_DIAGNOSIS_ASSIGNMENT|待分配诊断人员|
+|DIAGNOSING|诊断中|
+|WAITING_DISPOSITION|待处置决策|
+|TRANSFERRED_TO_MAINTENANCE|已转维修|
+|TRANSFERRED_TO_RETIREMENT|已转退役|
+|RESOLVED_NO_ACTION|无需处理|
+|WAITING_RETIREMENT_APPROVAL|待退役确认|
+|MOVING_TO_RETIREMENT_CENTER|前往退役处理点|
+|ARRIVED_RETIREMENT_CENTER|已到达退役处理点|
+|PROCESSING_RETIREMENT|退役处理中|
 |ARRIVED|已到达|
 |ARRIVAL_ABNORMAL|异常到达|
 |COMPLETED|已完成|
 |CANCELLED|已取消|
 |FAILED|失败|
 |SUPPLY_ASSIGNMENT_DECISION|供给分配决策|
+|TASK_RESULT|任务结果触发|
+|MEDIUM|中|
+|HIGH|高|
+|FALSE_ALARM|误报|
+|CONTINUE_OPERATION|可继续运营|
+|NEEDS_MAINTENANCE|需要维修|
+|NEEDS_RETIREMENT|需要退役|
+|WAIT_MANUAL_DECISION|等待人工决策|
+|REPAIRED|已修复|
+|NOT_REPAIRABLE|不可修复|
+|PARTIALLY_REPAIRED|部分修复|
+|SENSOR|传感器|
+|HARDWARE|硬件|
+|SOFTWARE|软件|
+|BATTERY|电池|
+|TIRE|轮胎|
+|BODY|车身|
+|SCHEDULED_SERVICE|周期保养|
 |AUTO_BY_SERVICE_AREA|按服务区能力自动处理|
 |TEMP_STOP_AND_STANDBY|临停待命|
 |PARK_AND_STANDBY|停车待命|
