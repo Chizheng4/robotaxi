@@ -214,6 +214,21 @@ const pageGroups = [{
       key: "readinessTasks",
       label: "运营准入"
     }, {
+      key: "cleaningTasks",
+      label: "清洁任务"
+    }, {
+      key: "chargingTasks",
+      label: "充电任务"
+    }, {
+      key: "maintenanceTasks",
+      label: "维修任务"
+    }, {
+      key: "failureHandlingTasks",
+      label: "故障处理"
+    }, {
+      key: "retirementTasks",
+      label: "退役任务"
+    }, {
       key: "deploymentTasks",
       label: "运营投放"
     }]
@@ -372,6 +387,31 @@ const tableConfig = {
     title: "运营准入任务",
     description: "用于将待检查 Robotaxi 转化为可运营车辆的准入任务单。",
     columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "worker_id", "check_result", "issue_type", "created_at", "simulation_created_at"]
+  },
+  cleaningTasks: {
+    title: "清洁任务",
+    description: "用于将 Robotaxi 从需要清洁状态恢复到可运营状态。",
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "target_ops_center_id", "worker_id", "clean_level_before", "clean_level_after", "pending_since_at", "operation_created_at", "operation_completed_at"]
+  },
+  chargingTasks: {
+    title: "充电任务",
+    description: "用于将 Robotaxi 从低电量或计划补能状态恢复到可运营电量状态。",
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "target_ops_center_id", "charger_id", "battery_percent_before", "target_battery_percent", "battery_percent_after", "charging_started_at", "charging_completed_at"]
+  },
+  maintenanceTasks: {
+    title: "维修任务",
+    description: "用于处理 Robotaxi 硬件、软件、传感器、电池、轮胎等维修事项。",
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "maintenance_type", "target_ops_center_id", "worker_id", "repair_result", "requires_readiness_check", "pending_since_at", "operation_completed_at"]
+  },
+  failureHandlingTasks: {
+    title: "故障处理任务",
+    description: "用于确认、分级和处置 Robotaxi 故障事件。",
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "failure_type", "failure_severity", "allow_current_service_completion", "diagnosis_result", "disposition_result", "maintenance_task_id", "retirement_task_id"]
+  },
+  retirementTasks: {
+    title: "退役任务",
+    description: "用于将 Robotaxi 从运营系统中永久移除并沉淀资产退出结果。",
+    columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "retirement_reason", "approval_status", "target_ops_center_id", "asset_exit_result", "operation_created_at", "operation_completed_at"]
   },
   deploymentTasks: {
     title: "运营投放任务",
@@ -552,6 +592,11 @@ const pageObjectType = {
   opsCenters: "opsCenter",
   workers: "worker",
   readinessTasks: "readinessTask",
+  cleaningTasks: "cleaningTask",
+  chargingTasks: "chargingTask",
+  maintenanceTasks: "maintenanceTask",
+  failureHandlingTasks: "failureHandlingTask",
+  retirementTasks: "retirementTask",
   deploymentTasks: "deploymentTask",
   routeExecutions: "routeExecution",
   taskEventLogs: "taskEventLog",
@@ -603,6 +648,11 @@ const idFieldByType = {
   opsCenter: "ops_center_id",
   worker: "worker_id",
   readinessTask: "task_id",
+  cleaningTask: "task_id",
+  chargingTask: "task_id",
+  maintenanceTask: "task_id",
+  failureHandlingTask: "task_id",
+  retirementTask: "task_id",
   deploymentTask: "task_id",
   routeExecution: "route_execution_id",
   taskEventLog: "event_id",
@@ -643,6 +693,11 @@ const statusFieldByPage = {
   opsCenters: "ops_center_status",
   workers: "worker_status",
   readinessTasks: "task_status",
+  cleaningTasks: "task_status",
+  chargingTasks: "task_status",
+  maintenanceTasks: "task_status",
+  failureHandlingTasks: "task_status",
+  retirementTasks: "task_status",
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
   routePlanningStrategies: "strategy_status",
@@ -735,6 +790,11 @@ function App() {
   const initialRuntime = useMemo(() => loadRuntimeSnapshot(initialData), [initialData]);
   const [operationalData, setOperationalData] = useState(initialRuntime.operationalData);
   const [readinessTasks, setReadinessTasks] = useState(initialRuntime.readinessTasks);
+  const [cleaningTasks, setCleaningTasks] = useState(initialRuntime.cleaningTasks);
+  const [chargingTasks, setChargingTasks] = useState(initialRuntime.chargingTasks);
+  const [maintenanceTasks, setMaintenanceTasks] = useState(initialRuntime.maintenanceTasks);
+  const [failureHandlingTasks, setFailureHandlingTasks] = useState(initialRuntime.failureHandlingTasks);
+  const [retirementTasks, setRetirementTasks] = useState(initialRuntime.retirementTasks);
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
@@ -774,6 +834,11 @@ function App() {
   const data = useMemo(() => ({
     ...operationalData,
     readinessCheckTasks: readinessTasks,
+    cleaningTasks,
+    chargingTasks,
+    maintenanceTasks,
+    failureHandlingTasks,
+    retirementTasks,
     deploymentTasks,
     routeExecutions,
     routePlanningRuns,
@@ -785,7 +850,7 @@ function App() {
     orderMatchingDecisions,
     trips,
     taskEventLogs
-  }), [demandSimulationRuns, deploymentTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips]);
+  }), [chargingTasks, cleaningTasks, demandSimulationRuns, deploymentTasks, failureHandlingTasks, maintenanceTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips]);
   const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateServiceOrders(data), ...validatePricing(data), ...validateOrderMatching(data), ...validateTrips(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
   const metricDisplayRows = useMemo(() => createMetricDisplayRows(metricObservations, metricDefinitions, simulationRuns), [metricDefinitions, metricObservations, simulationRuns]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
@@ -815,6 +880,11 @@ function App() {
       if (cancelled || !snapshot) return;
       setOperationalData(normalizeOperationalRouteStrategies(snapshot.operationalData || initialData));
       setReadinessTasks(Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : []);
+      setCleaningTasks(Array.isArray(snapshot.cleaningTasks) ? snapshot.cleaningTasks : []);
+      setChargingTasks(Array.isArray(snapshot.chargingTasks) ? snapshot.chargingTasks : []);
+      setMaintenanceTasks(Array.isArray(snapshot.maintenanceTasks) ? snapshot.maintenanceTasks : []);
+      setFailureHandlingTasks(Array.isArray(snapshot.failureHandlingTasks) ? snapshot.failureHandlingTasks : []);
+      setRetirementTasks(Array.isArray(snapshot.retirementTasks) ? snapshot.retirementTasks : []);
       setDeploymentTasks(normalizeRouteStrategyReferences(snapshot.deploymentTasks || []));
       setRouteExecutions(normalizeRouteStrategyReferences(snapshot.routeExecutions || []));
       setRoutePlanningRuns(normalizeRouteStrategyReferences(snapshot.routePlanningRuns || []));
@@ -878,6 +948,11 @@ function App() {
     opsCenters: data.opsCenters,
     workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks: readinessTasks.map(task => attachCostRecords(task, "readinessTask", costRecords)),
+    cleaningTasks: cleaningTasks.map(task => attachCostRecords(task, "cleaningTask", costRecords)),
+    chargingTasks: chargingTasks.map(task => attachCostRecords(task, "chargingTask", costRecords)),
+    maintenanceTasks: maintenanceTasks.map(task => attachCostRecords(task, "maintenanceTask", costRecords)),
+    failureHandlingTasks: failureHandlingTasks.map(task => attachCostRecords(task, "failureHandlingTask", costRecords)),
+    retirementTasks: retirementTasks.map(task => attachCostRecords(task, "retirementTask", costRecords)),
     deploymentTasks: deploymentTasks.map(task => attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions)),
     routeExecutions: routeExecutions.map(execution => attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords)),
     taskEventLogs,
@@ -921,7 +996,7 @@ function App() {
     simulationEvents,
     timedOperations,
     validations
-  }), [data, demandSimulationRuns, deploymentTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
+  }), [chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -983,11 +1058,16 @@ function App() {
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: readinessTasks,
+      cleaningTask: rowsByPage.cleaningTasks,
+      chargingTask: rowsByPage.chargingTasks,
+      maintenanceTask: rowsByPage.maintenanceTasks,
+      failureHandlingTask: rowsByPage.failureHandlingTasks,
+      retirementTask: rowsByPage.retirementTasks,
       taskEventLog: taskEventLogs,
       validation: validations
     };
     return collections[selected.type]?.find(item => item[idFieldByType[selected.type]] === selected.id) || null;
-  }, [costRecords, data, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, timedOperations, validations]);
+  }, [costRecords, data, deploymentTasks, readinessTasks, routeExecutions, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, taskEventLogs, timedOperations, validations]);
   const menuItems = pageGroups.map(group => {
     if (group.key === "console") return {
       key: "console",
@@ -1023,6 +1103,11 @@ function App() {
       saveRuntimeSnapshot({
         operationalData,
         readinessTasks,
+        cleaningTasks,
+        chargingTasks,
+        maintenanceTasks,
+        failureHandlingTasks,
+        retirementTasks,
         deploymentTasks,
         routeExecutions,
         routePlanningRuns,
@@ -1058,7 +1143,7 @@ function App() {
       persistSimulationEvents(simulationEvents);
     }, debounceMs);
     return () => window.clearTimeout(timerId);
-  }, [activePage, businessTimingCalculationRuns, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, chargingTasks, cleaningTasks, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, failureHandlingTasks, maintenanceTasks, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
 
   // ===== Simulation 控制 =====
   const getBusinessData = () => {
@@ -1066,6 +1151,11 @@ function App() {
       serviceOrders,
       trips,
       readinessTasks,
+      cleaningTasks,
+      chargingTasks,
+      maintenanceTasks,
+      failureHandlingTasks,
+      retirementTasks,
       deploymentTasks,
       routeExecutions,
       routes: data.routes,
@@ -1093,6 +1183,11 @@ function App() {
         serviceOrders: businessData.serviceOrders,
         trips: businessData.trips,
         readinessCheckTasks: businessData.readinessTasks,
+        cleaningTasks: businessData.cleaningTasks,
+        chargingTasks: businessData.chargingTasks,
+        maintenanceTasks: businessData.maintenanceTasks,
+        failureHandlingTasks: businessData.failureHandlingTasks,
+        retirementTasks: businessData.retirementTasks,
         deploymentTasks: businessData.deploymentTasks,
         routeExecutions: businessData.routeExecutions,
         routes: businessData.routes,
@@ -1116,6 +1211,11 @@ function App() {
     businessData.setServiceOrders = bindSetter("serviceOrders", setServiceOrders);
     businessData.setTrips = bindSetter("trips", setTrips);
     businessData.setReadinessTasks = bindSetter("readinessTasks", setReadinessTasks);
+    businessData.setCleaningTasks = bindSetter("cleaningTasks", setCleaningTasks);
+    businessData.setChargingTasks = bindSetter("chargingTasks", setChargingTasks);
+    businessData.setMaintenanceTasks = bindSetter("maintenanceTasks", setMaintenanceTasks);
+    businessData.setFailureHandlingTasks = bindSetter("failureHandlingTasks", setFailureHandlingTasks);
+    businessData.setRetirementTasks = bindSetter("retirementTasks", setRetirementTasks);
     businessData.setDeploymentTasks = bindSetter("deploymentTasks", setDeploymentTasks);
     businessData.setRouteExecutions = bindSetter("routeExecutions", setRouteExecutions);
     businessData.setRoutePlanningRuns = bindSetter("routePlanningRuns", setRoutePlanningRuns);
@@ -6678,6 +6778,11 @@ function loadRuntimeSnapshot(initialData) {
   const fallback = {
     operationalData: initialData,
     readinessTasks: [],
+    cleaningTasks: [],
+    chargingTasks: [],
+    maintenanceTasks: [],
+    failureHandlingTasks: [],
+    retirementTasks: [],
     deploymentTasks: [],
     routeExecutions: [],
     routePlanningRuns: [],
@@ -6726,6 +6831,11 @@ function loadRuntimeSnapshot(initialData) {
     if (!rawValue) return fallback;
     const snapshot = JSON.parse(rawValue);
     const readinessTasks = Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : [];
+    const cleaningTasks = Array.isArray(snapshot.cleaningTasks) ? snapshot.cleaningTasks : [];
+    const chargingTasks = Array.isArray(snapshot.chargingTasks) ? snapshot.chargingTasks : [];
+    const maintenanceTasks = Array.isArray(snapshot.maintenanceTasks) ? snapshot.maintenanceTasks : [];
+    const failureHandlingTasks = Array.isArray(snapshot.failureHandlingTasks) ? snapshot.failureHandlingTasks : [];
+    const retirementTasks = Array.isArray(snapshot.retirementTasks) ? snapshot.retirementTasks : [];
     const deploymentTasks = normalizeRouteStrategyReferences(Array.isArray(snapshot.deploymentTasks) ? snapshot.deploymentTasks : []);
     const routeExecutions = normalizeRouteStrategyReferences(Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : []);
     const routePlanningRuns = normalizeRouteStrategyReferences(Array.isArray(snapshot.routePlanningRuns) ? snapshot.routePlanningRuns : []);
@@ -6771,6 +6881,11 @@ function loadRuntimeSnapshot(initialData) {
     return {
       operationalData,
       readinessTasks,
+      cleaningTasks,
+      chargingTasks,
+      maintenanceTasks,
+      failureHandlingTasks,
+      retirementTasks,
       deploymentTasks,
       routeExecutions,
       routePlanningRuns,
