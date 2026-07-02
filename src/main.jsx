@@ -5304,13 +5304,22 @@ function getFleetOperationDispatchLabel(taskType) {
 }
 
 function renderRobotaxiFleetOperationActions(row, actions) {
+  const isRetired = row.availability_status === "RETIRED";
+  const hasTask = Boolean(row.current_task_id);
+  const hasOrder = Boolean(row.current_order_id);
+  const isOccupied = hasTask || hasOrder;
+  
+  if (isRetired) {
+    return <RowActionButton type="default" onClick={() => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])}>查看详情</RowActionButton>;
+  }
+  
   return (
     <RowActionGroup>
-      <RowActionButton onClick={() => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CLEANING)}>清洁</RowActionButton>
-      <RowActionButton type="default" onClick={() => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CHARGING)}>充电</RowActionButton>
-      <RowActionButton type="default" onClick={() => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.MAINTENANCE)}>维修</RowActionButton>
+      {!isOccupied && <RowActionButton onClick={() => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CLEANING)}>清洁</RowActionButton>}
+      {!isOccupied && <RowActionButton type="default" onClick={() => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CHARGING)}>充电</RowActionButton>}
+      {!isOccupied && <RowActionButton type="default" onClick={() => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.MAINTENANCE)}>维修</RowActionButton>}
       <RowActionButton type="default" danger onClick={() => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.FAILURE_HANDLING)}>故障</RowActionButton>
-      <RowActionButton type="default" danger onClick={() => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.RETIREMENT)}>退役</RowActionButton>
+      <RowActionButton type="default" danger onClick={() => actions.confirmRetirement(row)}>退役</RowActionButton>
     </RowActionGroup>
   );
 }
