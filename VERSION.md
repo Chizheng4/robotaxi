@@ -1,3 +1,12 @@
+## v039.9
+
+核心：修复模拟运行自动计算成本与收入的时序锁问题。
+
+- 自动检测 COMPLETED 模拟运行的 useEffect 不再先锁 runId 再异步调用计算函数。
+- runCostCalculation 和 runRevenueCalculation 分别在自己成功完成后再锁定 runId。
+- 首次触发时若成本配置不存在，不锁死 runId，配置创建或状态变化后可自动重试。
+- 不涉及模拟引擎、业务服务、字段字典或前端骨架改动。提交前检查通过。
+
 ## v039.7
 
 核心：规则化运营行驶记录服务化边界，并隔离未接入模拟的 Fleet Operation 行驶记录。

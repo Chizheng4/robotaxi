@@ -1377,7 +1377,7 @@ function App() {
   }, []);
   useEffect(() => {
     simulationRuns.filter(run => run.simulation_status === "COMPLETED").filter(run => !autoFinanceCalculationRunIdsRef.current.has(run.simulation_run_id)).filter(run => run.cost_calculation_status !== "CALCULATING" && run.revenue_calculation_status !== "CALCULATING").forEach(run => {
-      autoFinanceCalculationRunIdsRef.current.add(run.simulation_run_id);
+      // 锁已移至成功分支末尾
       window.setTimeout(() => {
         runCostCalculation(run.simulation_run_id, {
           automatic: true
@@ -1615,6 +1615,7 @@ function App() {
           }
         }), ...current]);
         if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营成本计算完成" : "运营成本计算完成，存在待检查项");
+        autoFinanceCalculationRunIdsRef.current.add(runId);
       } catch (error) {
         setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
           ...item,
@@ -1729,6 +1730,7 @@ function App() {
           revenue_calculation_errors: result.calculationRun.calculation_errors
         } : item));
         if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "收入记录生成完成" : "收入记录生成完成，存在待检查项");
+        autoFinanceCalculationRunIdsRef.current.add(runId);
       } catch (error) {
         setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
           ...item,
