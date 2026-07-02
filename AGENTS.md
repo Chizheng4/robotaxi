@@ -70,6 +70,7 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 2. 检查 bundle 语法
 3. 重启服务
 4. 验证页面可正常加载
+5. 若修改 bootstrap、动态 import、运行态初始化、`loadRuntimeSnapshot`、`saveRuntimeSnapshot`、启动脚本或页面入口，必须运行真实浏览器加载检查：`node scripts/verify-browser-load.mjs`，或通过 `./start-robotaxi.command` 触发同等检查
 
 以上任何一步失败，必须先修复再继续。
 

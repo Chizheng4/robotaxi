@@ -114,6 +114,17 @@
 
 没有接入合同的新增业务，不得进入模拟自动化主路径。
 
+新增运行态集合、策略执行记录、调度记录或业务结果集合时，还必须同步接入：
+
+1. `loadRuntimeSnapshot` 的默认 fallback；
+2. IndexedDB/localStorage 恢复兼容；
+3. `saveRuntimeSnapshot` 的持久化结构；
+4. 序列号恢复；
+5. `rowsByPage`、`pageObjectType`、`idFieldByType`、`statusFieldByPage` 等页面数据合同；
+6. 真实浏览器加载验证，确认旧快照、空快照和新增页面不会导致白屏。
+
+所有被上述初始化、恢复或首屏页面使用的服务模块，必须在 `bootstrap` 的 `Promise.all` 中等待完成。禁止把这类服务放到独立 `import().then(...)` 分支后再让 React 先渲染。
+
 ## 7. 性能验收
 
 模拟性能迭代必须验证：
