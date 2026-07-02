@@ -1887,6 +1887,7 @@ function App() {
       runFleetOperationPolicy,
       createDirectFleetOperationTaskFromRobotaxi,
       dispatchFleetOperationTaskDestination,
+      planFleetOperationRoute,
       editFleetOperationPolicy,
       assignWorker,
       startCheck,
@@ -2583,6 +2584,61 @@ function App() {
     if (collectionKey === "maintenanceTasks") setMaintenanceTasks(updater);
     if (collectionKey === "failureHandlingTasks") setFailureHandlingTasks(updater);
     if (collectionKey === "retirementTasks") setRetirementTasks(updater);
+  }
+  function planFleetOperationRoute(task) {
+    if (!task?.task_id || !task.robotaxi_id || !task.target_cell_id) return;
+    const robotaxi = operationalData.robotaxis?.find(r => r.robotaxi_id === task.robotaxi_id);
+    if (!robotaxi || !routePlanningService) return;
+    const strategy = data.routePlanningStrategies?.find(s => s.strategy_status === "ACTIVE" && s.strategy_type === "OPERATIONAL_EXECUTION") || data.routePlanningStrategies?.[0];
+    if (!strategy) return;
+    const run = routePlanningService.runRoutePlanning({
+      strategy,
+      context: {
+        robotaxi,
+        task,
+        targetCellId: task.target_cell_id,
+        originCellId: robotaxi.current_cell_id,
+        data
+      },
+      planningAlgorithm: strategy.planning_algorithm || "BFS"
+    });
+    setRoutePlanningRuns(r => [run, ...r]);
+    if (run.planning_result === "SUCCESS" && run.result_route_id) {
+      const route = data.routes?.find(r => r.route_id === run.result_route_id);
+      const execId = `REX-${String(++routeExecutionSequence).padStart(3, "0")}`;
+      const movStatus = task.task_type === "CHARGING" ? "MOVING_TO_CHARGER" : task.task_type === "MAINTENANCE" ? "MOVING_TO_MAINTENANCE_CENTER" : task.task_type === "RETIREMENT" ? "MOVING_TO_RETIREMENT_CENTER" : "MOVING_TO_OPS_CENTER";
+      const execution = {
+        route_execution_id: execId,
+        route_id: run.result_route_id,
+        robotaxi_id: task.robotaxi_id,
+        task_id: task.task_id,
+        execution_status: "WAITING_START",
+        origin_cell_id: robotaxi.current_cell_id,
+        target_cell_id: task.target_cell_id,
+        current_cell_id: robotaxi.current_cell_id,
+        total_step_count: route?.route_step_count || 0,
+        current_step_index: 0,
+        total_distance_km: route?.total_distance_km || 0,
+        distance_traveled_km: 0,
+        distance_remaining_km: route?.total_distance_km || 0,
+        created_at: now()
+      };
+      setRouteExecutions(r => [execution, ...r]);
+      const setter = items => items.map(item => item.task_id === task.task_id ? {
+        ...item,
+        task_status: movStatus,
+        route_execution_id: execId,
+        route_id: run.result_route_id
+      } : item);
+      setCleaningTasks(setter);
+      setChargingTasks(setter);
+      setMaintenanceTasks(setter);
+      setFailureHandlingTasks(setter);
+      setRetirementTasks(setter);
+      antd.message.success("路径规划完成");
+    } else {
+      antd.message.warning("路径规划失败");
+    }
   }
   function dispatchFleetOperationTaskDestination(task) {
     if (!task?.task_id || !fleetOperationDispatchService) return;
@@ -5527,7 +5583,7 @@ function renderFleetOperationTaskActions(row, actions) {
   }
   if (status && status.includes("WAITING_ROUTE")) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
-      onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
+      onClick: () => actions.planFleetOperationRoute(row)
     }, "\u8DEF\u5F84\u89C4\u5212");
   }
   if (status && (status.includes("WAITING_WORKER_ASSIGNMENT") || status.includes("WAITING_CHARGER_ASSIGNMENT") || status.includes("WAITING_RESOURCE_ASSIGNMENT"))) {

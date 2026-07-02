@@ -1,3 +1,10 @@
+## v039.2
+
+核心：Fleet Operations 路径规划与行驶记录闭环。
+
+- 五种任务单 WAITING_ROUTE 状态接入路径规划动作，复用 routePlanningService。
+- 路径规划成功后自动创建运营行驶记录，任务单状态变为 MOVING_TO_OPS_CENTER 等对应移动状态。
+- 行驶记录复用现有路由执行闭环（WAITING_START → MOVING → ARRIVED）。
 ## v039.1
 
 核心：Fleet Operations 状态治理与运维调度策略 v039 第一子版本。
