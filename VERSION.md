@@ -1,3 +1,9 @@
+## v039.4
+
+核心：v039 大版本归档收口。
+
+- 大版本计划 v039-auto-execution-plan.md 已归档至历史。
+- 当前 major 入口恢复为待定。
 ## v039.3
 
 核心：Fleet Operations 行驶推进与到达确认。
