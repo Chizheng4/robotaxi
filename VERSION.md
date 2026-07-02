@@ -1,3 +1,15 @@
+## v040.0
+
+核心：Robotaxi 运维状态治理基础 — 标记字段与 fleet_operation_status 收敛。
+
+- Robotaxi 新增 needs_cleaning、needs_charging、needs_maintenance、pending_task_queue 四个运维标记字段。
+- robotaxiService 中 needsCleaning/needsCharging/needsMaintenance 同时检查新 tag 和旧 fleet_operation_status，并行兼容。
+- fleetOperationTaskService 创建任务时同时设置对应 tag。
+- fleetOperationPolicyService 策略快照记录 tag 值。
+- 字段字典（code 版和 doc 版）同步更新。
+- 不涉及模拟引擎、业务动作服务、成本/收入/指标计算。
+- 提交前检查通过。
+
 ## v039.9
 
 核心：修复模拟运行自动计算成本与收入的时序锁问题。
