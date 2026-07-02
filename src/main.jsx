@@ -438,7 +438,7 @@ const tableConfig = {
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "fleet_operation_status", "needs_cleaning", "needs_charging", "needs_maintenance", "cleanliness_status", "battery_operation_status", "maintenance_status", "failure_status", "retirement_status", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "available_for_dispatch", "current_route_id", "current_route_execution_id", "unavailable_reason"],
+    columns: ["robotaxi_id", "fleet_id", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "fleet_operation_status", "operation_tags", "needs_cleaning", "needs_charging", "needs_maintenance", "cleanliness_status", "battery_operation_status", "maintenance_status", "failure_status", "retirement_status", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "available_for_dispatch", "current_route_id", "current_route_execution_id", "unavailable_reason"],
   },
   validations: {
     title: "初始化校验",
@@ -5302,6 +5302,15 @@ function getFleetOperationDispatchLabel(taskType) {
   return "分配运维中心";
 }
 
+
+function renderOperationTags(row) {
+  const tags = [];
+  if (row.needs_cleaning) tags.push(React.createElement("span",{key:"cln",className:"tag tag-warning",style:{marginRight:4}},"清洁"));
+  if (row.needs_charging) tags.push(React.createElement("span",{key:"chg",className:"tag tag-info",style:{marginRight:4}},"充电"));
+  if (row.needs_maintenance) tags.push(React.createElement("span",{key:"mnt",className:"tag tag-danger",style:{marginRight:4}},"维修"));
+  if (row.failure_status && row.failure_status !== "NONE") tags.push(React.createElement("span",{key:"flr",className:"tag tag-danger",style:{marginRight:4}},"故障"));
+  return tags.length > 0 ? React.createElement("span",null,...tags) : React.createElement("span",{style:{color:"var(--muted)"}},"无");
+}
 function renderRobotaxiFleetOperationActions(row, actions) {
   const isRetired = row.availability_status === "RETIRED";
   const hasTask = Boolean(row.current_task_id);

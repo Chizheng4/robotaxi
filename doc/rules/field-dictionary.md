@@ -201,6 +201,18 @@
 |REVENUE_AMOUNT_MISSING|缺少收入金额|收入生成错误|
 |REVENUE_CALCULATION_FAILED|收入生成失败|收入生成错误|
 
+## 1.1.9 任务优先级调度配置
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|config_id|配置编号|持久化字段|优先级配置唯一编号|
+|config_status|配置状态|运行态字段|ACTIVE、DISABLED|
+|priority_rank|优先级排序|持久化字段|各任务类型优先级数值映射|
+|interrupt_policy|中断策略|持久化字段|哪些任务类型的中断标记|
+|allow_queuing|允许排队|持久化字段|是否允许任务排队|
+|max_queue_size|最大排队数量|持久化字段|单个 Robotaxi 最大排队任务数|
+
+
 ## 1.2 Operating Metrics：经营指标系统
 
 ### 1.2.1 MetricDefinition：指标定义
