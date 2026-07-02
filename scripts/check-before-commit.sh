@@ -101,6 +101,7 @@ node scripts/verify-v037-2-fleet-operation-services.mjs
 node scripts/verify-v037-3-fleet-operation-pages.mjs
 node scripts/verify-v038-fleet-operation-policy.mjs
 node scripts/verify-v038-fleet-operation-pages.mjs
+node scripts/verify-v039-runtime-load-contract.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

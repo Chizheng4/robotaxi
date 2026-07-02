@@ -61,9 +61,10 @@ SERVER_PID=$!
 sleep 1
 
 if python3 scripts/verify-server-readiness.py "${HOST}" "${PORT}"; then
+  ROBOTAXI_BROWSER_VERIFY_URL="${URL}" node scripts/verify-browser-load.mjs
   open "$URL"
   echo "==> Opened ${URL}"
-  echo "==> Concurrent resource check passed. Cache disabled. Runtime data preserved."
+  echo "==> Concurrent resource check passed. Browser render check passed. Cache disabled. Runtime data preserved."
 else
   kill "${SERVER_PID}" >/dev/null 2>&1 || true
   echo "ERROR: Server failed to start. See ${LOG_FILE}"
