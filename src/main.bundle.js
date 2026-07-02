@@ -65,12 +65,14 @@ let statusRegistry;
 let routePlanningStrategies;
 let timedOperationDiagnostics;
 let fleetOperationTaskService;
+let robotaxiTaskPriorityService;
 let fleetOperationPolicyService;
 let fleetOperationDispatchService;
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
 let fleetOperationPolicyRunSequence = 0;
 let fleetOperationPolicyResultSequence = 0;
+// taskPriorityConfig has no sequence counter
 let fleetOperationDispatchRunSequence = 0;
 let fleetOperationDispatchDecisionSequence = 0;
 let deploymentTaskSequence = 0;
@@ -258,6 +260,9 @@ const pageGroups = [{
     }, {
       key: "fleetOperationDispatchRuns",
       label: "运维调度执行"
+    }, {
+      key: "taskPriorityConfig",
+      label: "任务优先级调度配置"
     }]
   }, {
     key: "opsCenters",
@@ -654,6 +659,7 @@ const pageObjectType = {
   fleetOperationPolicyResults: "fleetOperationPolicyResult",
   fleetOperationDispatchStrategies: "fleetOperationDispatchStrategy",
   fleetOperationDispatchRuns: "fleetOperationDispatchRun",
+  taskPriorityConfig: "taskPriorityConfig",
   deploymentTasks: "deploymentTask",
   routeExecutions: "routeExecution",
   taskEventLogs: "taskEventLog",
@@ -715,6 +721,7 @@ const idFieldByType = {
   fleetOperationPolicyResult: "fleet_operation_policy_result_id",
   fleetOperationDispatchStrategy: "fleet_operation_dispatch_strategy_id",
   fleetOperationDispatchRun: "fleet_operation_dispatch_run_id",
+  taskPriorityConfig: "config_id",
   deploymentTask: "task_id",
   routeExecution: "route_execution_id",
   taskEventLog: "event_id",
@@ -765,6 +772,7 @@ const statusFieldByPage = {
   fleetOperationPolicyResults: "result_status",
   fleetOperationDispatchStrategies: "strategy_status",
   fleetOperationDispatchRuns: "run_status",
+  taskPriorityConfig: "config_status",
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
   routePlanningStrategies: "strategy_status",
@@ -868,6 +876,7 @@ function App() {
   const [fleetOperationDispatchStrategies, setFleetOperationDispatchStrategies] = useState(initialRuntime.fleetOperationDispatchStrategies);
   const [fleetOperationDispatchRuns, setFleetOperationDispatchRuns] = useState(initialRuntime.fleetOperationDispatchRuns);
   const [fleetOperationDispatchDecisions, setFleetOperationDispatchDecisions] = useState(initialRuntime.fleetOperationDispatchDecisions);
+  const [taskPriorityConfigs, setTaskPriorityConfigs] = useState(initialRuntime.taskPriorityConfigs);
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
@@ -961,6 +970,7 @@ function App() {
       setMaintenanceTasks(Array.isArray(snapshot.maintenanceTasks) ? snapshot.maintenanceTasks : []);
       setFailureHandlingTasks(Array.isArray(snapshot.failureHandlingTasks) ? snapshot.failureHandlingTasks : []);
       setRetirementTasks(Array.isArray(snapshot.retirementTasks) ? snapshot.retirementTasks : []);
+      setTaskPriorityConfigs(snapshot.taskPriorityConfigs?.length ? snapshot.taskPriorityConfigs : [robotaxiTaskPriorityService.initializeDefaultPriorityConfig()]);
       setFleetOperationPolicies(snapshot.fleetOperationPolicies?.length ? snapshot.fleetOperationPolicies : fleetOperationPolicyService.initializeDefaultFleetOperationPolicies());
       setFleetOperationPolicyRuns(Array.isArray(snapshot.fleetOperationPolicyRuns) ? snapshot.fleetOperationPolicyRuns : []);
       setFleetOperationPolicyResults(Array.isArray(snapshot.fleetOperationPolicyResults) ? snapshot.fleetOperationPolicyResults : []);
@@ -5665,12 +5675,22 @@ function getFleetOperationDispatchLabel(taskType) {
   return "分配运维中心";
 }
 function renderRobotaxiFleetOperationActions(row, actions) {
-  return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
+  const isRetired = row.availability_status === "RETIRED";
+  const hasTask = Boolean(row.current_task_id);
+  const hasOrder = Boolean(row.current_order_id);
+  const isOccupied = hasTask || hasOrder;
+  if (isRetired) {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      type: "default",
+      onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
+    }, "\u67E5\u770B\u8BE6\u60C5");
+  }
+  return /*#__PURE__*/React.createElement(RowActionGroup, null, !isOccupied && /*#__PURE__*/React.createElement(RowActionButton, {
     onClick: () => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CLEANING)
-  }, "\u6E05\u6D01"), /*#__PURE__*/React.createElement(RowActionButton, {
+  }, "\u6E05\u6D01"), !isOccupied && /*#__PURE__*/React.createElement(RowActionButton, {
     type: "default",
     onClick: () => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CHARGING)
-  }, "\u5145\u7535"), /*#__PURE__*/React.createElement(RowActionButton, {
+  }, "\u5145\u7535"), !isOccupied && /*#__PURE__*/React.createElement(RowActionButton, {
     type: "default",
     onClick: () => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.MAINTENANCE)
   }, "\u7EF4\u4FEE"), /*#__PURE__*/React.createElement(RowActionButton, {
@@ -5680,7 +5700,7 @@ function renderRobotaxiFleetOperationActions(row, actions) {
   }, "\u6545\u969C"), /*#__PURE__*/React.createElement(RowActionButton, {
     type: "default",
     danger: true,
-    onClick: () => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.RETIREMENT)
+    onClick: () => actions.confirmRetirement(row)
   }, "\u9000\u5F79"));
 }
 function renderFleetOperationPolicyActions(row, actions) {
@@ -6263,7 +6283,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -6309,6 +6329,7 @@ async function bootstrap() {
   statusRegistry = statusRegistryModule;
   routePlanningStrategies = routePlanningStrategiesModule;
   timedOperationDiagnostics = timedOperationDiagnosticsModule;
+  robotaxiTaskPriorityService = robotaxiTaskPriorityServiceModule;
   fleetOperationTaskService = fleetOperationTaskServiceModule;
   fleetOperationPolicyService = fleetOperationPolicyServiceModule;
   fleetOperationDispatchService = fleetOperationDispatchServiceModule;
@@ -7445,6 +7466,8 @@ function loadRuntimeSnapshot(initialData) {
     fleetOperationDispatchStrategies: fleetOperationDispatchService.initializeDefaultFleetOperationDispatchStrategies(),
     fleetOperationDispatchRuns: [],
     fleetOperationDispatchDecisions: [],
+    taskPriorityConfigs: [robotaxiTaskPriorityService?.initializeDefaultPriorityConfig() || {}],
+    taskPriorityConfigs: [robotaxiTaskPriorityService?.initializeDefaultPriorityConfig() || {}],
     deploymentTasks: [],
     routeExecutions: [],
     routePlanningRuns: [],
@@ -7534,6 +7557,7 @@ function loadRuntimeSnapshot(initialData) {
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
     fleetOperationTaskSequence = Math.max(deriveSequence(cleaningTasks, "task_id", "TASK-CLN-"), deriveSequence(chargingTasks, "task_id", "TASK-CHG-"), deriveSequence(maintenanceTasks, "task_id", "TASK-MNT-"), deriveSequence(failureHandlingTasks, "task_id", "TASK-FHL-"), deriveSequence(retirementTasks, "task_id", "TASK-RET-"));
     fleetOperationPolicyRunSequence = deriveSequence(fleetOperationPolicyRuns, "fleet_operation_policy_run_id", "FOP-RUN-");
+    // taskPriorityConfig no sequence restore needed
     fleetOperationPolicyResultSequence = deriveSequence(fleetOperationPolicyResults, "fleet_operation_policy_result_id", "FOP-RESULT-");
     fleetOperationDispatchRunSequence = deriveSequence(fleetOperationDispatchRuns, "fleet_operation_dispatch_run_id", "FODR-");
     fleetOperationDispatchDecisionSequence = deriveSequence(fleetOperationDispatchDecisions, "fleet_operation_dispatch_decision_id", "FODD-");
@@ -7565,6 +7589,7 @@ function loadRuntimeSnapshot(initialData) {
       fleetOperationDispatchStrategies,
       fleetOperationDispatchRuns,
       fleetOperationDispatchDecisions,
+      taskPriorityConfigs,
       deploymentTasks,
       routeExecutions,
       routePlanningRuns,
@@ -7670,6 +7695,7 @@ function saveRuntimeSnapshot(snapshot) {
     fleetOperationPolicyResults: snapshot.fleetOperationPolicyResults || [],
     fleetOperationDispatchStrategies: snapshot.fleetOperationDispatchStrategies || [],
     fleetOperationDispatchRuns: snapshot.fleetOperationDispatchRuns || [],
+    taskPriorityConfigs: snapshot.taskPriorityConfigs || [],
     fleetOperationDispatchDecisions: snapshot.fleetOperationDispatchDecisions || [],
     simulationPolicies: snapshot.simulationPolicies || [],
     workflowTimingProfiles: snapshot.workflowTimingProfiles || [],

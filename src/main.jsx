@@ -790,8 +790,7 @@ function App() {
   const [fleetOperationPolicyResults, setFleetOperationPolicyResults] = useState(initialRuntime.fleetOperationPolicyResults);
   const [fleetOperationDispatchStrategies, setFleetOperationDispatchStrategies] = useState(initialRuntime.fleetOperationDispatchStrategies);
   const [fleetOperationDispatchRuns, setFleetOperationDispatchRuns] = useState(initialRuntime.fleetOperationDispatchRuns);
-  const [fleetOperationDispatchDecisions,
-    taskPriorityConfigs, setFleetOperationDispatchDecisions] = useState(initialRuntime.fleetOperationDispatchDecisions);
+  const [fleetOperationDispatchDecisions, setFleetOperationDispatchDecisions] = useState(initialRuntime.fleetOperationDispatchDecisions);
   const [taskPriorityConfigs, setTaskPriorityConfigs] = useState(initialRuntime.taskPriorityConfigs);
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
