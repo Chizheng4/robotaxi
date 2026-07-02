@@ -65,10 +65,13 @@ let statusRegistry;
 let routePlanningStrategies;
 let timedOperationDiagnostics;
 let fleetOperationPolicyService;
+let fleetOperationDispatchService;
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
 let fleetOperationPolicyRunSequence = 0;
 let fleetOperationPolicyResultSequence = 0;
+let fleetOperationDispatchRunSequence = 0;
+let fleetOperationDispatchDecisionSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
@@ -248,6 +251,12 @@ const pageGroups = [{
     }, {
       key: "fleetOperationPolicyResults",
       label: "运维策略结果"
+    }, {
+      key: "fleetOperationDispatchStrategies",
+      label: "运维调度策略"
+    }, {
+      key: "fleetOperationDispatchRuns",
+      label: "运维调度执行"
     }]
   }, {
     key: "opsCenters",
@@ -445,6 +454,16 @@ const tableConfig = {
     description: "按单车记录每次运维策略执行的生成、跳过和失败结果，便于复盘策略是否准确命中 Robotaxi。",
     columns: ["fleet_operation_policy_result_id", "fleet_operation_policy_run_id", "fleet_operation_policy_id", "policy_type", "target_task_type", "robotaxi_id", "result_status", "result_reason", "task_id", "task_type", "robotaxi_snapshot", "created_at"]
   },
+  fleetOperationDispatchStrategies: {
+    title: "运维调度策略",
+    description: "配置运维任务的目的地调度规则。",
+    columns: ["fleet_operation_dispatch_strategy_id", "strategy_name", "dispatch_algorithm", "strategy_status", "created_at"]
+  },
+  fleetOperationDispatchRuns: {
+    title: "运维调度执行",
+    description: "记录每次运维调度策略的执行过程。",
+    columns: ["fleet_operation_dispatch_run_id", "fleet_operation_dispatch_strategy_id", "task_id", "task_type", "robotaxi_id", "origin_cell_id", "run_status", "decision_count", "created_at"]
+  },
   deploymentTasks: {
     title: "运营投放任务",
     description: "用于将可运营 Robotaxi 投放到指定服务区或待命位置。",
@@ -632,6 +651,8 @@ const pageObjectType = {
   fleetOperationPolicies: "fleetOperationPolicy",
   fleetOperationPolicyRuns: "fleetOperationPolicyRun",
   fleetOperationPolicyResults: "fleetOperationPolicyResult",
+  fleetOperationDispatchStrategies: "fleetOperationDispatchStrategy",
+  fleetOperationDispatchRuns: "fleetOperationDispatchRun",
   deploymentTasks: "deploymentTask",
   routeExecutions: "routeExecution",
   taskEventLogs: "taskEventLog",
@@ -691,6 +712,8 @@ const idFieldByType = {
   fleetOperationPolicy: "fleet_operation_policy_id",
   fleetOperationPolicyRun: "fleet_operation_policy_run_id",
   fleetOperationPolicyResult: "fleet_operation_policy_result_id",
+  fleetOperationDispatchStrategy: "fleet_operation_dispatch_strategy_id",
+  fleetOperationDispatchRun: "fleet_operation_dispatch_run_id",
   deploymentTask: "task_id",
   routeExecution: "route_execution_id",
   taskEventLog: "event_id",
@@ -739,6 +762,8 @@ const statusFieldByPage = {
   fleetOperationPolicies: "policy_status",
   fleetOperationPolicyRuns: "run_status",
   fleetOperationPolicyResults: "result_status",
+  fleetOperationDispatchStrategies: "strategy_status",
+  fleetOperationDispatchRuns: "run_status",
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
   routePlanningStrategies: "strategy_status",
@@ -839,6 +864,9 @@ function App() {
   const [fleetOperationPolicies, setFleetOperationPolicies] = useState(initialRuntime.fleetOperationPolicies);
   const [fleetOperationPolicyRuns, setFleetOperationPolicyRuns] = useState(initialRuntime.fleetOperationPolicyRuns);
   const [fleetOperationPolicyResults, setFleetOperationPolicyResults] = useState(initialRuntime.fleetOperationPolicyResults);
+  const [fleetOperationDispatchStrategies, setFleetOperationDispatchStrategies] = useState(initialRuntime.fleetOperationDispatchStrategies);
+  const [fleetOperationDispatchRuns, setFleetOperationDispatchRuns] = useState(initialRuntime.fleetOperationDispatchRuns);
+  const [fleetOperationDispatchDecisions, setFleetOperationDispatchDecisions] = useState(initialRuntime.fleetOperationDispatchDecisions);
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
@@ -935,6 +963,9 @@ function App() {
       setFleetOperationPolicies(snapshot.fleetOperationPolicies?.length ? snapshot.fleetOperationPolicies : fleetOperationPolicyService.initializeDefaultFleetOperationPolicies());
       setFleetOperationPolicyRuns(Array.isArray(snapshot.fleetOperationPolicyRuns) ? snapshot.fleetOperationPolicyRuns : []);
       setFleetOperationPolicyResults(Array.isArray(snapshot.fleetOperationPolicyResults) ? snapshot.fleetOperationPolicyResults : []);
+      setFleetOperationDispatchStrategies(Array.isArray(snapshot.fleetOperationDispatchStrategies) && snapshot.fleetOperationDispatchStrategies.length ? snapshot.fleetOperationDispatchStrategies : fleetOperationDispatchService.initializeDefaultFleetOperationDispatchStrategies());
+      setFleetOperationDispatchRuns(Array.isArray(snapshot.fleetOperationDispatchRuns) ? snapshot.fleetOperationDispatchRuns : []);
+      setFleetOperationDispatchDecisions(Array.isArray(snapshot.fleetOperationDispatchDecisions) ? snapshot.fleetOperationDispatchDecisions : []);
       setDeploymentTasks(normalizeRouteStrategyReferences(snapshot.deploymentTasks || []));
       setRouteExecutions(normalizeRouteStrategyReferences(snapshot.routeExecutions || []));
       setRoutePlanningRuns(normalizeRouteStrategyReferences(snapshot.routePlanningRuns || []));
@@ -1006,6 +1037,9 @@ function App() {
     fleetOperationPolicies,
     fleetOperationPolicyRuns,
     fleetOperationPolicyResults,
+    fleetOperationDispatchStrategies,
+    fleetOperationDispatchRuns,
+    fleetOperationDispatchDecisions,
     deploymentTasks: deploymentTasks.map(task => attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions)),
     routeExecutions: routeExecutions.map(execution => attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords)),
     taskEventLogs,
@@ -1049,7 +1083,7 @@ function App() {
     simulationEvents,
     timedOperations,
     validations
-  }), [chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
+  }), [chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -1119,6 +1153,8 @@ function App() {
       fleetOperationPolicy: rowsByPage.fleetOperationPolicies,
       fleetOperationPolicyRun: rowsByPage.fleetOperationPolicyRuns,
       fleetOperationPolicyResult: rowsByPage.fleetOperationPolicyResults,
+      fleetOperationDispatchStrategy: rowsByPage.fleetOperationDispatchStrategies,
+      fleetOperationDispatchRun: rowsByPage.fleetOperationDispatchRuns,
       taskEventLog: taskEventLogs,
       validation: validations
     };
@@ -1167,6 +1203,9 @@ function App() {
         fleetOperationPolicies,
         fleetOperationPolicyRuns,
         fleetOperationPolicyResults,
+        fleetOperationDispatchStrategies,
+        fleetOperationDispatchRuns,
+        fleetOperationDispatchDecisions,
         deploymentTasks,
         routeExecutions,
         routePlanningRuns,
@@ -1202,7 +1241,7 @@ function App() {
       persistSimulationEvents(simulationEvents);
     }, debounceMs);
     return () => window.clearTimeout(timerId);
-  }, [activePage, businessTimingCalculationRuns, chargingTasks, cleaningTasks, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, failureHandlingTasks, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, chargingTasks, cleaningTasks, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
 
   // ===== Simulation 控制 =====
   const getBusinessData = () => {
@@ -1847,6 +1886,7 @@ function App() {
       runFleetOperationPolicyForPage,
       runFleetOperationPolicy,
       createDirectFleetOperationTaskFromRobotaxi,
+      dispatchFleetOperationTaskDestination,
       editFleetOperationPolicy,
       assignWorker,
       startCheck,
@@ -2410,7 +2450,8 @@ function App() {
         now,
         nextId: nextFleetOperationTaskId,
         nextRunId: nextFleetOperationPolicyRunId,
-        nextResultId: nextFleetOperationPolicyResultId
+        nextResultId: nextFleetOperationPolicyResultId,
+        opsCenters: data.opsCenters
       }
     });
     setFleetOperationPolicyRuns(runs => [result.run, ...runs]);
@@ -2456,7 +2497,8 @@ function App() {
       },
       context: {
         now,
-        nextId: nextFleetOperationTaskId
+        nextId: nextFleetOperationTaskId,
+        opsCenters: data.opsCenters
       }
     });
     if (!result.created) {
@@ -2541,6 +2583,40 @@ function App() {
     if (collectionKey === "maintenanceTasks") setMaintenanceTasks(updater);
     if (collectionKey === "failureHandlingTasks") setFailureHandlingTasks(updater);
     if (collectionKey === "retirementTasks") setRetirementTasks(updater);
+  }
+  function dispatchFleetOperationTaskDestination(task) {
+    if (!task?.task_id || !fleetOperationDispatchService) return;
+    const robotaxi = operationalData.robotaxis?.find(r => r.robotaxi_id === task.robotaxi_id);
+    if (!robotaxi) return;
+    const strategy = fleetOperationDispatchStrategies[0] || null;
+    const result = fleetOperationDispatchService.dispatchFleetOperationDestination({
+      task,
+      robotaxi,
+      opsCenters: data.opsCenters,
+      strategy,
+      context: {
+        now,
+        nextDispatchRunId: nextFleetOperationDispatchRunId,
+        nextDispatchDecisionId: nextFleetOperationDispatchDecisionId
+      }
+    });
+    setFleetOperationDispatchRuns(runs => [result.run, ...runs]);
+    if (result.decision) setFleetOperationDispatchDecisions(d => [result.decision, ...d]);
+    if (result.targetOpsCenterId) {
+      const setter = cur => cur.map(item => item.task_id === task.task_id ? {
+        ...item,
+        target_ops_center_id: result.targetOpsCenterId,
+        target_cell_id: result.targetCellId
+      } : item);
+      setCleaningTasks(setter);
+      setChargingTasks(setter);
+      setMaintenanceTasks(setter);
+      setFailureHandlingTasks(setter);
+      setRetirementTasks(setter);
+      antd.message.success("已分配目的地，请执行路径规划。");
+    } else {
+      antd.message.warning(result.run?.run_status === "NO_ELIGIBLE_CENTER" ? "没有符合条件的运维中心" : "调度失败");
+    }
   }
   function assignWorker(taskId) {
     const task = readinessTasks.find(item => item.task_id === taskId);
@@ -4317,6 +4393,20 @@ function RecordTable({
         }))
       };
     }
+    if (isFleetOperationTaskPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 150,
+        render: (_, row) => renderActionCell(row, renderFleetOperationTaskActions(row, {
+          ...actions,
+          page,
+          objectType,
+          idField
+        }))
+      };
+    }
     if (isFleetOperationPolicyPage) {
       return {
         key: "actions",
@@ -5427,6 +5517,37 @@ function renderDeploymentActions(row, actions) {
   }
   return renderViewDetailAction(row, actions);
 }
+function renderFleetOperationTaskActions(row, actions) {
+  const status = row.task_status;
+  const dispatchLabel = getFleetOperationDispatchLabel(row.task_type);
+  if (status && status.includes("WAITING_DESTINATION_ASSIGNMENT")) {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.dispatchFleetOperationTaskDestination(row)
+    }, dispatchLabel);
+  }
+  if (status && status.includes("WAITING_ROUTE")) {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
+    }, "\u8DEF\u5F84\u89C4\u5212");
+  }
+  if (status && (status.includes("WAITING_WORKER_ASSIGNMENT") || status.includes("WAITING_CHARGER_ASSIGNMENT") || status.includes("WAITING_RESOURCE_ASSIGNMENT"))) {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
+    }, "\u5206\u914DWorker");
+  }
+  return /*#__PURE__*/React.createElement(RowActionButton, {
+    type: "default",
+    onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
+  }, "\u67E5\u770B\u8BE6\u60C5");
+}
+function getFleetOperationDispatchLabel(taskType) {
+  if (taskType === "CLEANING") return "分配清洁站";
+  if (taskType === "CHARGING") return "分配充电站";
+  if (taskType === "MAINTENANCE") return "分配维修站";
+  if (taskType === "FAILURE_HANDLING") return "分配故障处理中心";
+  if (taskType === "RETIREMENT") return "分配退役处理中心";
+  return "分配运维中心";
+}
 function renderRobotaxiFleetOperationActions(row, actions) {
   return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
     onClick: () => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CLEANING)
@@ -6073,6 +6194,9 @@ async function bootstrap() {
   routePlanningStrategies = routePlanningStrategiesModule;
   timedOperationDiagnostics = timedOperationDiagnosticsModule;
   fleetOperationPolicyService = fleetOperationPolicyServiceModule;
+  import("./services/fleetOperationDispatchService.js?v=20260702-v039-0").then(mod => {
+    fleetOperationDispatchService = mod;
+  });
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -7080,6 +7204,14 @@ function nextFleetOperationPolicyRunId() {
 function nextFleetOperationPolicyResultId() {
   fleetOperationPolicyResultSequence += 1;
   return `FOP-RESULT-${String(fleetOperationPolicyResultSequence).padStart(4, "0")}`;
+}
+function nextFleetOperationDispatchRunId() {
+  fleetOperationDispatchRunSequence += 1;
+  return `FODR-${String(fleetOperationDispatchRunSequence).padStart(4, "0")}`;
+}
+function nextFleetOperationDispatchDecisionId() {
+  fleetOperationDispatchDecisionSequence += 1;
+  return `FODD-${String(fleetOperationDispatchDecisionSequence).padStart(4, "0")}`;
 }
 function createDefaultPageUiState() {
   return {

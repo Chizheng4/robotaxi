@@ -49,7 +49,6 @@ export const statusRegistry = {
     },
     legacy: {
       compat: [
-        "CREATED",
         "CALCULATING_PRICE",
         "WAITING_CUSTOMER_CONFIRM",
         "WAITING_FOR_VEHICLE",
@@ -139,7 +138,6 @@ export const statusRegistry = {
     statusField: "task_status",
     current: {
       normal: [
-        "CREATED",
         "WAITING_ROBOTAXI_AVAILABLE",
         "WAITING_DESTINATION_ASSIGNMENT",
         "WAITING_ROUTE",
@@ -159,7 +157,6 @@ export const statusRegistry = {
     statusField: "task_status",
     current: {
       normal: [
-        "CREATED",
         "WAITING_ROBOTAXI_AVAILABLE",
         "WAITING_CHARGING_DESTINATION_ASSIGNMENT",
         "WAITING_ROUTE",
@@ -179,7 +176,6 @@ export const statusRegistry = {
     statusField: "task_status",
     current: {
       normal: [
-        "CREATED",
         "WAITING_ROBOTAXI_AVAILABLE",
         "WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT",
         "WAITING_ROUTE",
@@ -199,7 +195,6 @@ export const statusRegistry = {
     statusField: "task_status",
     current: {
       normal: [
-        "CREATED",
         "WAITING_ROBOTAXI_AVAILABLE",
         "WAITING_DIAGNOSIS_ASSIGNMENT",
         "DIAGNOSING",
@@ -217,7 +212,6 @@ export const statusRegistry = {
     statusField: "task_status",
     current: {
       normal: [
-        "CREATED",
         "WAITING_ROBOTAXI_AVAILABLE",
         "WAITING_RETIREMENT_APPROVAL",
         "WAITING_DESTINATION_ASSIGNMENT",

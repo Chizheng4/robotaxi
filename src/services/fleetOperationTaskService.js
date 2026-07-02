@@ -20,6 +20,7 @@ const TASK_CONFIG = {
     idPrefix: "TASK-CLN",
     defaultStatus: FleetOperationTaskStatus.WAITING_DESTINATION_ASSIGNMENT,
     waitingStatus: FleetOperationTaskStatus.WAITING_ROBOTAXI_AVAILABLE,
+    directAssignmentStatus: FleetOperationTaskStatus.WAITING_WORKER_ASSIGNMENT,
     factory: createCleaningTask,
   },
   [TaskType.CHARGING]: {
@@ -27,6 +28,7 @@ const TASK_CONFIG = {
     idPrefix: "TASK-CHG",
     defaultStatus: ChargingTaskStatus.WAITING_CHARGING_DESTINATION_ASSIGNMENT,
     waitingStatus: ChargingTaskStatus.WAITING_ROBOTAXI_AVAILABLE,
+    directAssignmentStatus: ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
     factory: createChargingTask,
   },
   [TaskType.MAINTENANCE]: {
@@ -34,6 +36,7 @@ const TASK_CONFIG = {
     idPrefix: "TASK-MNT",
     defaultStatus: MaintenanceTaskStatus.WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT,
     waitingStatus: MaintenanceTaskStatus.WAITING_ROBOTAXI_AVAILABLE,
+    directAssignmentStatus: MaintenanceTaskStatus.WAITING_RESOURCE_ASSIGNMENT,
     factory: createMaintenanceTask,
   },
   [TaskType.FAILURE_HANDLING]: {
@@ -41,6 +44,7 @@ const TASK_CONFIG = {
     idPrefix: "TASK-FHL",
     defaultStatus: FailureHandlingTaskStatus.WAITING_DIAGNOSIS_ASSIGNMENT,
     waitingStatus: FailureHandlingTaskStatus.WAITING_ROBOTAXI_AVAILABLE,
+    directAssignmentStatus: FailureHandlingTaskStatus.WAITING_DIAGNOSIS_ASSIGNMENT,
     factory: createFailureHandlingTask,
   },
   [TaskType.RETIREMENT]: {
@@ -48,6 +52,7 @@ const TASK_CONFIG = {
     idPrefix: "TASK-RET",
     defaultStatus: RetirementTaskStatus.WAITING_RETIREMENT_APPROVAL,
     waitingStatus: RetirementTaskStatus.WAITING_ROBOTAXI_AVAILABLE,
+    directAssignmentStatus: RetirementTaskStatus.WAITING_RETIREMENT_APPROVAL,
     factory: createRetirementTask,
   },
 };
@@ -82,12 +87,20 @@ export function createFleetOperationTask({
   }
 
   const taskId = resolveNextId(context, config.idPrefix);
-  const shouldWait = Boolean(robotaxi.current_order_id || robotaxi.current_task_id);
+  const taskPriorityLevel = resolvePriorityLevel(trigger.task_priority || TaskPriority.NORMAL);
+  const isOccupied = Boolean(robotaxi.current_order_id || robotaxi.current_task_id);
+  const canInterrupt = isOccupied && taskPriorityLevel >= resolvePriorityLevel(TaskPriority.HIGH);
+  const shouldWait = isOccupied && !canInterrupt;
+  const isAtOpsCenterWithCapability = !isOccupied && isRobotaxiAtMatchingOpsCenter(robotaxi, taskType, context.opsCenters);
   const now = resolveNow(context);
   const task = config.factory({
     task_id: taskId,
     task_type: taskType,
-    task_status: shouldWait ? config.waitingStatus : config.defaultStatus,
+    task_status: shouldWait
+      ? config.waitingStatus
+      : isAtOpsCenterWithCapability && config.directAssignmentStatus
+        ? config.directAssignmentStatus
+        : config.defaultStatus,
     task_priority: trigger.task_priority || TaskPriority.NORMAL,
     trigger_type: trigger.trigger_type || TriggerType.TASK_RESULT,
     trigger_source: trigger.trigger_source || null,
@@ -159,4 +172,27 @@ function resolveNow(context) {
 function resolveAudit(context, options) {
   if (typeof context.audit === "function") return context.audit(options);
   return {};
+}
+function resolvePriorityLevel(priority) {
+  if (priority === TaskPriority.URGENT) return 4;
+  if (priority === TaskPriority.HIGH) return 3;
+  if (priority === TaskPriority.NORMAL) return 2;
+  if (priority === TaskPriority.LOW) return 1;
+  return 2;
+}
+
+function isRobotaxiAtMatchingOpsCenter(robotaxi, taskType, opsCenters = []) {
+  if (!robotaxi?.current_cell_id || !Array.isArray(opsCenters) || !opsCenters.length) return false;
+  const capabilityMap = {
+    [TaskType.CLEANING]: "can_clean_robotaxi",
+    [TaskType.CHARGING]: "can_charge_robotaxi",
+    [TaskType.MAINTENANCE]: "can_repair_robotaxi",
+    [TaskType.FAILURE_HANDLING]: "can_repair_robotaxi",
+    [TaskType.RETIREMENT]: "can_receive_robotaxi",
+  };
+  const capabilityKey = capabilityMap[taskType];
+  if (!capabilityKey) return false;
+  return opsCenters.some((oc) =>
+    oc.cell_ids?.includes(robotaxi.current_cell_id) && oc[capabilityKey]
+  );
 }
