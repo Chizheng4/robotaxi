@@ -4,6 +4,10 @@ import {
   FleetOperationTaskStatus,
   MaintenanceTaskStatus,
   RetirementTaskStatus,
+  RouteChangeReason,
+  RoutePlanningFailureReason,
+  RoutePlanningResult,
+  RoutePlanningStrategy,
   TaskPriority,
   TaskType,
   TriggerType,
@@ -13,6 +17,7 @@ import {
   createMaintenanceTask,
   createRetirementTask,
 } from "../domain/taskTypes.js";
+import * as routePlanningService from "./routePlanningService.js";
 
 const TASK_CONFIG = {
   [TaskType.CLEANING]: {
@@ -124,6 +129,189 @@ export function createFleetOperationTask({
   };
 }
 
+export function planFleetOperationRoute({
+  task,
+  robotaxi,
+  data = {},
+  context = {},
+} = {}) {
+  if (!task?.task_id || !task?.robotaxi_id || !robotaxi?.robotaxi_id || !task?.target_cell_id) {
+    return { succeeded: false, reason: "INVALID_FLEET_OPERATION_ROUTE_INPUT" };
+  }
+  const now = resolveNow(context);
+  const routeExecutionId = task.route_execution_id || resolveNextId(context, "REX");
+  const routeId = resolveNextId(context, "DRT");
+  const routePlanningRunId = resolveNextId(context, "RPR");
+  const originCellId = robotaxi.current_cell_id || task.origin_cell_id;
+  const targetCellId = task.target_cell_id;
+  const targetServiceAreaId = task.target_service_area_id || task.planned_target_service_area_id || null;
+  const route = routePlanningService.createDeploymentRouteForOperation({
+    task,
+    data,
+    routeId,
+    routePlanningRunId,
+    routeExecutionId,
+    originCellId,
+    targetCellId,
+    targetServiceAreaId,
+    strategyId: RoutePlanningStrategy.INITIAL_DEPLOYMENT,
+  });
+  const routePlanningRun = routePlanningService.createRoutePlanningRun({
+    routePlanningRunId,
+    routeStrategyId: route.route_strategy_id,
+    planningAlgorithm: route.planning_algorithm,
+    taskId: task.task_id,
+    routeExecutionId,
+    robotaxiId: task.robotaxi_id,
+    originCellId,
+    targetCellId,
+    resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
+    planningResult: route.route_steps.length > 0 ? RoutePlanningResult.SUCCESS : RoutePlanningResult.FAILED,
+    failureReason: route.route_steps.length > 0 ? RoutePlanningFailureReason.NONE : route.failure_reason,
+    routeStepCount: route.route_step_count,
+    totalDistanceKm: route.total_distance_km,
+    createdAt: now,
+  });
+  if (route.route_steps.length === 0) {
+    return {
+      succeeded: false,
+      reason: route.failure_reason,
+      routePlanningRun,
+      task: {
+        ...task,
+        task_status: "FAILED",
+        failure_reason: route.failure_reason,
+        updated_at: now,
+      },
+    };
+  }
+  const routeCellIds = routePlanningService.getRouteExecutionCells(route, data.roadSegments || [], originCellId, targetCellId);
+  const movingStatus = getFleetOperationMovingStatus(task.task_type);
+  const execution = routePlanningService.applyTravelMetrics({
+    record: {
+      route_execution_id: routeExecutionId,
+      task_id: task.task_id,
+      task_type: task.task_type,
+      source_task_id: task.task_id,
+      robotaxi_id: task.robotaxi_id,
+      execution_status: "MOVING",
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      origin_cell_id: originCellId,
+      current_cell_id: originCellId,
+      target_ops_center_id: task.target_ops_center_id || null,
+      target_service_area_id: targetServiceAreaId,
+      target_cell_id: targetCellId,
+      current_target_service_area_id: targetServiceAreaId,
+      route_cell_ids: routeCellIds,
+      current_step_index: 0,
+      total_step_count: Math.max(0, routeCellIds.length - 1),
+      route_history: [routePlanningService.createRouteHistoryEntry(route, RouteChangeReason.INITIAL_PLANNING, null)],
+      time_elapsed: "0",
+      battery_consumed_percent: 0,
+      simulation_run_id: task.simulation_run_id || null,
+      created_at: now,
+      operation_created_at: now,
+      ...resolveAudit(context, { created: true }),
+    },
+    routes: [route],
+    currentRouteId: route.route_id,
+    currentStepIndex: 0,
+  });
+  return {
+    succeeded: true,
+    route,
+    routePlanningRun,
+    routeExecution: execution,
+    task: {
+      ...task,
+      task_status: movingStatus,
+      route_execution_id: routeExecutionId,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      started_at: now,
+      updated_at: now,
+    },
+    robotaxi: {
+      ...robotaxi,
+      current_task_id: task.task_id,
+      current_task_type: task.task_type,
+      current_task_status: movingStatus,
+      current_route_id: route.route_id,
+      current_route_execution_id: routeExecutionId,
+      motion_status: "MOVING",
+      availability_status: "UNAVAILABLE",
+      available_for_dispatch: false,
+      updated_at: now,
+    },
+  };
+}
+
+export function advanceFleetOperationRouteExecution({ execution, task, route, robotaxi, context = {} } = {}) {
+  const step = routePlanningService.advanceRouteExecution({ execution, task, route, robotaxi });
+  if (!step) return { succeeded: false, reason: "FLEET_OPERATION_ROUTE_STEP_UNAVAILABLE" };
+  const now = resolveNow(context);
+  const arrived = step.execution.execution_status === "ARRIVED";
+  const arrivedStatus = getFleetOperationArrivedStatus(task?.task_type);
+  const movingStatus = getFleetOperationMovingStatus(task?.task_type);
+  return {
+    succeeded: true,
+    routeExecution: {
+      ...step.execution,
+      updated_at: now,
+    },
+    task: task ? {
+      ...task,
+      task_status: arrived ? arrivedStatus : movingStatus,
+      updated_at: now,
+    } : null,
+    robotaxi: step.robotaxi ? {
+      ...step.robotaxi,
+      current_task_status: arrived ? arrivedStatus : movingStatus,
+      updated_at: now,
+    } : null,
+    arrived,
+  };
+}
+
+export function confirmFleetOperationArrival({ execution, task, robotaxi, context = {} } = {}) {
+  if (!execution || !task || execution.execution_status !== "ARRIVED") {
+    return { succeeded: false, reason: "FLEET_OPERATION_ARRIVAL_NOT_READY" };
+  }
+  const now = resolveNow(context);
+  const nextTaskStatus = getFleetOperationAfterArrivalStatus(task.task_type);
+  return {
+    succeeded: true,
+    routeExecution: {
+      ...execution,
+      execution_status: "COMPLETED",
+      arrival_confirmed: true,
+      arrival_execution_result: "NORMAL_ARRIVAL",
+      actual_target_cell_id: execution.current_cell_id,
+      actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id || null,
+      completed_at: now,
+      updated_at: now,
+    },
+    task: {
+      ...task,
+      task_status: nextTaskStatus,
+      arrival_confirmed_at: now,
+      actual_target_cell_id: execution.current_cell_id,
+      actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id || null,
+      updated_at: now,
+    },
+    robotaxi: robotaxi ? {
+      ...robotaxi,
+      current_cell_id: execution.current_cell_id,
+      current_route_id: null,
+      current_route_execution_id: null,
+      current_task_status: nextTaskStatus,
+      motion_status: "PARKED",
+      updated_at: now,
+    } : null,
+  };
+}
+
 export function applyFleetOperationTaskReference(robotaxi, { task, shouldWait, now } = {}) {
   if (!task) return robotaxi;
   if (shouldWait) {
@@ -156,6 +344,28 @@ export function resolveFleetOperationStatusForTask(taskType) {
   if (taskType === TaskType.FAILURE_HANDLING) return "BROKEN";
   if (taskType === TaskType.RETIREMENT) return "RETIRED";
   return "NONE";
+}
+
+export function getFleetOperationMovingStatus(taskType) {
+  if (taskType === TaskType.CHARGING) return ChargingTaskStatus.MOVING_TO_CHARGER;
+  if (taskType === TaskType.MAINTENANCE) return MaintenanceTaskStatus.MOVING_TO_MAINTENANCE_CENTER;
+  if (taskType === TaskType.RETIREMENT) return RetirementTaskStatus.MOVING_TO_RETIREMENT_CENTER;
+  return FleetOperationTaskStatus.MOVING_TO_OPS_CENTER;
+}
+
+export function getFleetOperationArrivedStatus(taskType) {
+  if (taskType === TaskType.CHARGING) return ChargingTaskStatus.ARRIVED_CHARGER;
+  if (taskType === TaskType.MAINTENANCE) return MaintenanceTaskStatus.ARRIVED_MAINTENANCE_CENTER;
+  if (taskType === TaskType.RETIREMENT) return RetirementTaskStatus.ARRIVED_RETIREMENT_CENTER;
+  return FleetOperationTaskStatus.ARRIVED_OPS_CENTER;
+}
+
+export function getFleetOperationAfterArrivalStatus(taskType) {
+  if (taskType === TaskType.CHARGING) return ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT;
+  if (taskType === TaskType.MAINTENANCE) return MaintenanceTaskStatus.WAITING_RESOURCE_ASSIGNMENT;
+  if (taskType === TaskType.RETIREMENT) return RetirementTaskStatus.PROCESSING_RETIREMENT;
+  if (taskType === TaskType.FAILURE_HANDLING) return FailureHandlingTaskStatus.WAITING_DIAGNOSIS_ASSIGNMENT;
+  return FleetOperationTaskStatus.WAITING_WORKER_ASSIGNMENT;
 }
 
 function resolveNextId(context, prefix) {

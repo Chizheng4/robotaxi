@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v039.7`：运营行驶记录服务化边界与模拟隔离小迭代，已归档到 `doc/common/iteration-history/minor/v039.7-serviceized-route-execution-boundary.md`。
 - `v038.1`：Fleet Operations 触发链路与策略结果小迭代，已归档到 `doc/common/iteration-history/minor/v038.1-fleet-operation-trigger-and-result-plan.md`。
 - `v036.4`：经营指标统一刷新体验小迭代，已归档到 `doc/common/iteration-history/minor/v036.4-metric-unified-refresh-plan.md`。
 - `v033.3`：工作流时效与业务生命周期时间线小迭代，已归档到 `doc/common/iteration-history/minor/v033.3-workflow-timing-lifecycle-contract.md`。

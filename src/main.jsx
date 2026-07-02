@@ -41,6 +41,7 @@ let simulationRunBusinessScope;
 let statusRegistry;
 let routePlanningStrategies;
 let timedOperationDiagnostics;
+let fleetOperationTaskService;
 let fleetOperationPolicyService;
 let fleetOperationDispatchService;
 let taskSequence = 0;
@@ -2480,6 +2481,24 @@ function App() {
     return map[collectionKey] || [];
   }
 
+  function findFleetOperationTaskByExecution(execution) {
+    if (!execution?.task_id || execution.task_type === taskTypes.TaskType.DEPLOYMENT) return null;
+    const collectionKey = getFleetOperationTaskCollectionKey(execution.task_type);
+    if (!collectionKey) return null;
+    return getFleetOperationTasksByCollection(collectionKey).find((item) => item.task_id === execution.task_id) || null;
+  }
+
+  function updateFleetOperationTask(nextTask) {
+    if (!nextTask?.task_id) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(nextTask.task_type);
+    const setter = (items) => items.map((item) => item.task_id === nextTask.task_id ? nextTask : item);
+    if (collectionKey === "cleaningTasks") setCleaningTasks(setter);
+    if (collectionKey === "chargingTasks") setChargingTasks(setter);
+    if (collectionKey === "maintenanceTasks") setMaintenanceTasks(setter);
+    if (collectionKey === "failureHandlingTasks") setFailureHandlingTasks(setter);
+    if (collectionKey === "retirementTasks") setRetirementTasks(setter);
+  }
+
   function appendFleetOperationTasks(collectionKey, tasks) {
     const updater = (current) => [...tasks, ...current];
     if (collectionKey === "cleaningTasks") setCleaningTasks(updater);
@@ -2490,42 +2509,89 @@ function App() {
   }
 
   function planFleetOperationRoute(task) {
-    if (!task?.task_id || !task.robotaxi_id || !task.target_cell_id) return;
+    if (!task?.task_id || !task.robotaxi_id || !task.target_cell_id || !fleetOperationTaskService) return;
     const robotaxi = operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi || !routePlanningService) return;
-    const strategy = data.routePlanningStrategies?.find((s) => s.strategy_status === "ACTIVE" && s.strategy_type === "OPERATIONAL_EXECUTION")
-      || data.routePlanningStrategies?.[0];
-    if (!strategy) return;
-    const run = routePlanningService.runRoutePlanning({
-      strategy,
-      context: { robotaxi, task, targetCellId: task.target_cell_id, originCellId: robotaxi.current_cell_id, data },
-      planningAlgorithm: strategy.planning_algorithm || "BFS",
+    const result = fleetOperationTaskService.planFleetOperationRoute({
+      task,
+      robotaxi,
+      data,
+      context: {
+        now,
+        nextId: (prefix) => {
+          if (prefix === "REX") return nextRouteExecutionId();
+          if (prefix === "RPR") return nextRoutePlanningRunId();
+          return nextDeploymentRouteId();
+        },
+      },
     });
-    setRoutePlanningRuns((r) => [run, ...r]);
-    if (run.planning_result === "SUCCESS" && run.result_route_id) {
-      const route = data.routes?.find((r) => r.route_id === run.result_route_id);
-      const execId = `REX-${String(++routeExecutionSequence).padStart(3, "0")}`;
-      const movStatus = task.task_type === "CHARGING" ? "MOVING_TO_CHARGER" : task.task_type === "MAINTENANCE" ? "MOVING_TO_MAINTENANCE_CENTER" : task.task_type === "RETIREMENT" ? "MOVING_TO_RETIREMENT_CENTER" : "MOVING_TO_OPS_CENTER";
-      const execution = { route_execution_id: execId, route_id: run.result_route_id, robotaxi_id: task.robotaxi_id, task_id: task.task_id, execution_status: "WAITING_START", origin_cell_id: robotaxi.current_cell_id, target_cell_id: task.target_cell_id, current_cell_id: robotaxi.current_cell_id, total_step_count: route?.route_step_count || 0, current_step_index: 0, total_distance_km: route?.total_distance_km || 0, distance_traveled_km: 0, distance_remaining_km: route?.total_distance_km || 0, created_at: now() };
-      setRouteExecutions((r) => [execution, ...r]);
-      const setter = (items) => items.map((item) => item.task_id === task.task_id ? { ...item, task_status: movStatus, route_execution_id: execId, route_id: run.result_route_id } : item);
-      setCleaningTasks(setter); setChargingTasks(setter); setMaintenanceTasks(setter); setFailureHandlingTasks(setter); setRetirementTasks(setter);
+    if (result.routePlanningRun) setRoutePlanningRuns((items) => [result.routePlanningRun, ...items]);
+    if (result.succeeded) {
+      setOperationalData((current) => ({
+        ...current,
+        routes: [result.route, ...current.routes],
+        robotaxis: current.robotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+      }));
+      setRouteExecutions((items) => [result.routeExecution, ...items]);
+      updateFleetOperationTask(result.task);
       antd.message.success("路径规划完成");
     } else {
+      if (result.task) updateFleetOperationTask(result.task);
       antd.message.warning("路径规划失败");
     }
   }
 
   function advanceFleetOperationRouteExecution(execution) {
-    if (!execution) return;
-    advanceRouteExecution(execution.route_execution_id);
+    if (!execution || !fleetOperationTaskService) return;
+    const task = findFleetOperationTaskByExecution(execution);
+    const route = data.routes.find((item) => item.route_id === execution.route_id);
+    const robotaxi = operationalData.robotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id);
+    const result = fleetOperationTaskService.advanceFleetOperationRouteExecution({
+      execution,
+      task,
+      route,
+      robotaxi,
+      context: { now },
+    });
+    if (!result.succeeded) return;
+    setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? result.routeExecution : item));
+    if (result.task) updateFleetOperationTask(result.task);
+    if (result.robotaxi) {
+      setOperationalData((current) => ({
+        ...current,
+        robotaxis: current.robotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+      }));
+    }
+    focusRouteExecutionStatus(result.arrived ? taskTypes.RouteExecutionStatus.ARRIVED : taskTypes.RouteExecutionStatus.MOVING);
   }
 
   function confirmFleetOperationArrival(task) {
-    if (!task?.route_execution_id || !task.task_id) return;
-    const setter = (items) => items.map((item) => item.task_id === task.task_id ? { ...item, task_status: task.task_type === "CHARGING" ? "ARRIVED_CHARGER" : task.task_type === "MAINTENANCE" ? "ARRIVED_MAINTENANCE_CENTER" : task.task_type === "RETIREMENT" ? "ARRIVED_RETIREMENT_CENTER" : "ARRIVED_OPS_CENTER", arrival_confirmed_at: now() } : item);
-    setCleaningTasks(setter); setChargingTasks(setter); setMaintenanceTasks(setter); setFailureHandlingTasks(setter); setRetirementTasks(setter);
+    const execution = routeExecutions.find((item) => item.route_execution_id === task?.route_execution_id);
+    if (!execution || !fleetOperationTaskService) return;
+    submitFleetOperationNormalArrival(execution);
+  }
+
+  function submitFleetOperationNormalArrival(execution) {
+    if (!execution || !fleetOperationTaskService) return;
+    const task = findFleetOperationTaskByExecution(execution);
+    const robotaxi = operationalData.robotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id);
+    const result = fleetOperationTaskService.confirmFleetOperationArrival({
+      execution,
+      task,
+      robotaxi,
+      context: { now },
+    });
+    if (!result.succeeded) return;
+    setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? result.routeExecution : item));
+    updateFleetOperationTask(result.task);
+    if (result.robotaxi) {
+      setOperationalData((current) => ({
+        ...current,
+        robotaxis: current.robotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+      }));
+    }
     antd.message.success("已确认到达");
+    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.COMPLETED);
   }
 
   function dispatchFleetOperationTaskDestination(task) {
@@ -3575,6 +3641,10 @@ function App() {
   function advanceRouteExecution(routeExecutionId) {
     const execution = routeExecutions.find((item) => item.route_execution_id === routeExecutionId);
     if (!execution || execution.execution_status !== taskTypes.RouteExecutionStatus.MOVING) return;
+    if (execution.task_type && execution.task_type !== taskTypes.TaskType.DEPLOYMENT) {
+      advanceFleetOperationRouteExecution(execution);
+      return;
+    }
     const task = deploymentTasks.find((item) => item.task_id === execution.task_id);
     const route = data.routes.find((item) => item.route_id === execution.route_id);
     if (!task || !route) return;
@@ -3652,6 +3722,10 @@ function App() {
 
   function submitNormalArrival(routeExecutionId) {
     const execution = routeExecutions.find((item) => item.route_execution_id === routeExecutionId);
+    if (execution?.task_type && execution.task_type !== taskTypes.TaskType.DEPLOYMENT) {
+      submitFleetOperationNormalArrival(execution);
+      return;
+    }
     const task = deploymentTasks.find((item) => item.task_id === execution?.task_id);
     if (!execution || !task || execution.execution_status !== taskTypes.RouteExecutionStatus.ARRIVED) return;
     setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? {
@@ -5927,6 +6001,7 @@ async function bootstrap() {
 		    statusRegistryModule,
 		    routePlanningStrategiesModule,
 		    timedOperationDiagnosticsModule,
+		    fleetOperationTaskServiceModule,
 		    fleetOperationPolicyServiceModule,
 		    fleetOperationDispatchServiceModule,
 		  ] = await Promise.all([
@@ -5976,6 +6051,7 @@ async function bootstrap() {
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
 		    import("./domain/routePlanningStrategies.js?v=20260625-v030-3"),
 		    import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"),
+		    import("./services/fleetOperationTaskService.js?v=20260702-v039-7"),
 		    import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"),
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		  ]);
@@ -6025,6 +6101,7 @@ async function bootstrap() {
 		  statusRegistry = statusRegistryModule;
 		  routePlanningStrategies = routePlanningStrategiesModule;
 		  timedOperationDiagnostics = timedOperationDiagnosticsModule;
+		  fleetOperationTaskService = fleetOperationTaskServiceModule;
 		  fleetOperationPolicyService = fleetOperationPolicyServiceModule;
 		  fleetOperationDispatchService = fleetOperationDispatchServiceModule;
 

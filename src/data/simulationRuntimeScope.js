@@ -30,6 +30,7 @@ export const simulationRuntimeObjectContracts = {
     statusField: "execution_status",
     terminalStatuses: new Set(["COMPLETED", "FAILED", "CANCELLED"]),
     participatesInWorkflowScan: true,
+    includeInWorkflowScan: (item) => !item?.task_type || item.task_type === "DEPLOYMENT" || Boolean(item.deployment_task_id),
   },
 };
 
@@ -124,5 +125,6 @@ function isCurrentRunObject(item, runId) {
 
 function isActiveBusinessObject(item, contract) {
   if (!item || !contract) return false;
+  if (typeof contract.includeInWorkflowScan === "function" && !contract.includeInWorkflowScan(item)) return false;
   return !contract.terminalStatuses.has(item[contract.statusField]);
 }
