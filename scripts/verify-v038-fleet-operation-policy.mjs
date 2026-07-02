@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 
 import { BatteryOperationStatus, CleanlinessStatus, TaskType } from "../src/domain/taskTypes.js";
 import {
+  FleetOperationPolicyResultStatus,
   FleetOperationPolicyRunStatus,
+  createDirectFleetOperationTask,
   executeFleetOperationPolicy,
   initializeDefaultFleetOperationPolicies,
 } from "../src/services/fleetOperationPolicyService.js";
@@ -32,7 +34,12 @@ const createResult = executeFleetOperationPolicy({
 });
 assert.equal(createResult.run.run_status, FleetOperationPolicyRunStatus.SUCCEEDED);
 assert.equal(createResult.tasks.length, 1);
+assert.equal(createResult.policyResults.length, 1);
+assert.equal(createResult.policyResults[0].result_status, FleetOperationPolicyResultStatus.TASK_CREATED);
+assert.equal(createResult.policyResults[0].fleet_operation_policy_run_id, createResult.run.fleet_operation_policy_run_id);
 assert.equal(createResult.tasks[0].task_type, TaskType.CLEANING);
+assert.equal(createResult.tasks[0].trigger_source, "FLEET_OPERATION_POLICY");
+assert.equal(createResult.tasks[0].trigger_object_id, cleaningPolicy.fleet_operation_policy_id);
 assert.equal(createResult.collectionKey, "cleaningTasks");
 assert.equal(createResult.robotaxis[0].pending_fleet_task_id || createResult.robotaxis[0].current_task_id, createResult.tasks[0].task_id);
 
@@ -46,6 +53,21 @@ const chargingResult = executeFleetOperationPolicy({
 assert.equal(chargingResult.tasks[0].task_type, TaskType.CHARGING);
 assert.equal(chargingResult.tasks[0].battery_percent_before, 12);
 assert.equal(chargingResult.tasks[0].target_battery_percent, 90);
+
+const directResult = createDirectFleetOperationTask({
+  taskType: TaskType.CLEANING,
+  robotaxi: createRobotaxi({ robotaxi_id: "RT-DIRECT-CLEAN" }),
+  existingTasks: [],
+  taskFields: {
+    trigger_object_type: "robotaxi",
+    trigger_object_id: "RT-DIRECT-CLEAN",
+  },
+  context: createContext(),
+});
+assert.equal(directResult.created, true);
+assert.equal(directResult.task.trigger_source, "DIRECT_ROBOTAXI_OPERATION");
+assert.equal(directResult.task.trigger_object_type, "robotaxi");
+assert.equal(directResult.task.trigger_object_id, "RT-DIRECT-CLEAN");
 
 console.log("v038 Fleet Operations 运维策略服务合同验证通过");
 
@@ -79,5 +101,6 @@ function createContext() {
       runSequence += 1;
       return `FOP-RUN-${String(runSequence).padStart(4, "0")}`;
     },
+    nextResultId: () => `FOP-RESULT-${String(runSequence + taskSequence + 1).padStart(4, "0")}`,
   };
 }

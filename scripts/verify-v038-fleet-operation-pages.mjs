@@ -6,7 +6,10 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 [
   "fleetOperationPolicies",
   "fleetOperationPolicyRuns",
+  "fleetOperationPolicyResults",
   "runFleetOperationPolicyForPage",
+  "createDirectFleetOperationTaskFromRobotaxi",
+  "editFleetOperationPolicy",
   "createFleetTaskEventRows",
   "isFleetOperationTaskPage",
   "最近策略执行",

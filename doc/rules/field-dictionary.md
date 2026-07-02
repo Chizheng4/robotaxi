@@ -671,16 +671,42 @@
 |started_at|开始时间|持久化字段|真实审计开始时间|
 |completed_at|完成时间|持久化字段|真实审计完成时间|
 
-### 11.4 Fleet Operations 策略枚举中文
+### 11.4 FleetOperationPolicyResult：运维策略结果
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|fleet_operation_policy_result_id|运维策略结果编号|持久化字段|策略单车结果唯一编号|
+|fleet_operation_policy_run_id|运维策略执行编号|持久化字段|来源策略执行|
+|fleet_operation_policy_id|运维策略编号|持久化字段|来源策略配置|
+|policy_type|策略类型|持久化字段|策略类型|
+|target_task_type|目标任务类型|持久化字段|目标生成任务类型|
+|robotaxi_id|Robotaxi 编号|持久化字段|本条结果对应的车辆|
+|task_id|任务编号|运行态字段|本条结果生成的任务，可为空|
+|task_type|任务类型|运行态字段|生成任务类型，可为空|
+|result_status|结果状态|运行态字段|TASK_CREATED、SKIPPED、FAILED|
+|result_reason|结果原因|运行态字段|任务生成、跳过或失败原因|
+|robotaxi_snapshot|Robotaxi 快照|持久化字段|策略执行时该车辆的关键状态快照|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### 11.5 Fleet Operations 策略枚举中文
 
 |英文值|中文名|用途|
 |---|---|---|
 |ALL_ROBOTAXI|全部 Robotaxi|执行范围|
 |FLEET_OPERATION_POLICY|运维策略触发|触发来源|
 |DIRECT_ROBOTAXI_OPERATION|Robotaxi 直接触发|触发来源|
-|NO_ACTION|无动作|策略执行结果|
+|NO_ACTION|未发现符合车辆|策略执行结果|
 |INVALID_FLEET_OPERATION_POLICY|运维策略无效|无动作或失败原因|
 |ROBOTAXI_ALREADY_HAS_OPEN_FLEET_OPERATION_TASK|Robotaxi 已有未完成运维任务|任务创建跳过原因|
+|TASK_CREATED|任务已生成|策略结果状态|
+
+### 11.6 Fleet Operations 任务触发来源字段
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|trigger_source|触发来源|运行态字段|策略触发、Robotaxi 直接触发或其他来源|
+|trigger_object_type|触发对象类型|持久化字段|触发当前任务的对象类型|
+|trigger_object_id|触发对象编号|持久化字段|触发当前任务的对象编号|
 
 ---
 

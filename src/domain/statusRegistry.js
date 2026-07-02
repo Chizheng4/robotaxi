@@ -127,6 +127,14 @@ export const statusRegistry = {
     },
     legacy: { compat: [] },
   },
+  fleetOperationPolicyResult: {
+    statusField: "result_status",
+    current: {
+      normal: ["TASK_CREATED", "SKIPPED"],
+      exception: ["FAILED"],
+    },
+    legacy: { compat: [] },
+  },
   cleaningTask: {
     statusField: "task_status",
     current: {
@@ -250,6 +258,7 @@ export const pageStatusRegistryMap = {
   retirementTasks: "retirementTask",
   fleetOperationPolicies: "fleetOperationPolicy",
   fleetOperationPolicyRuns: "fleetOperationPolicyRun",
+  fleetOperationPolicyResults: "fleetOperationPolicyResult",
   timedOperations: "timedOperation",
 };
 

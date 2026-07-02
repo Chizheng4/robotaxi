@@ -24,6 +24,12 @@ export const FleetOperationPolicyRunStatus = {
   FAILED: "FAILED",
 };
 
+export const FleetOperationPolicyResultStatus = {
+  TASK_CREATED: "TASK_CREATED",
+  SKIPPED: "SKIPPED",
+  FAILED: "FAILED",
+};
+
 const DEFAULT_POLICY_CONFIGS = [
   {
     id: "FOP-CLEANING-001",
@@ -124,7 +130,9 @@ export function executeFleetOperationPolicy({
   const policySnapshot = createPolicySnapshot(policy);
   const candidates = findFleetOperationPolicyCandidates(policy, robotaxis);
   const taskResults = [];
+  const policyResults = [];
   let updatedRobotaxis = robotaxis;
+  const runId = resolveRunId(context);
 
   for (const robotaxi of candidates) {
     const currentExistingTasks = [
@@ -139,11 +147,27 @@ export function executeFleetOperationPolicy({
         trigger_type: triggerType,
         trigger_source: "FLEET_OPERATION_POLICY",
         task_priority: resolveTaskPriority(policy.target_task_type),
-        task_fields: resolveTaskFields(policy, robotaxi),
+        task_fields: {
+          ...resolveTaskFields(policy, robotaxi),
+          fleet_operation_policy_run_id: runId,
+          trigger_object_type: "fleetOperationPolicy",
+          trigger_object_id: policy.fleet_operation_policy_id,
+        },
       },
       context,
     });
     taskResults.push(result);
+    policyResults.push(createFleetOperationPolicyResult({
+      resultId: resolveResultId(context),
+      runId,
+      policy,
+      robotaxi,
+      task: result.task || null,
+      status: result.created ? FleetOperationPolicyResultStatus.TASK_CREATED : FleetOperationPolicyResultStatus.SKIPPED,
+      reason: result.created ? "TASK_CREATED" : result.reason,
+      snapshot: createRobotaxiSnapshot(robotaxi),
+      occurredAt: startedAt,
+    }));
     if (result.created && result.robotaxi) {
       updatedRobotaxis = updatedRobotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item);
     }
@@ -154,7 +178,7 @@ export function executeFleetOperationPolicy({
   const runStatus = resolveRunStatus({ candidates, generatedTasks, skippedCount });
   const completedAt = resolveNow(context);
   const run = createFleetOperationPolicyRun({
-    runId: resolveRunId(context),
+    runId,
     policy,
     policySnapshot,
     triggerType,
@@ -169,6 +193,7 @@ export function executeFleetOperationPolicy({
 
   return {
     run,
+    policyResults,
     tasks: generatedTasks,
     collectionKey: getFleetOperationCollectionKey(policy.target_task_type),
     robotaxis: updatedRobotaxis,
@@ -196,6 +221,33 @@ export function createDirectFleetOperationTask({
     },
     context,
   });
+}
+
+export function createFleetOperationPolicyResult({
+  resultId,
+  runId,
+  policy,
+  robotaxi,
+  task,
+  status,
+  reason,
+  snapshot,
+  occurredAt,
+} = {}) {
+  return {
+    fleet_operation_policy_result_id: resultId,
+    fleet_operation_policy_run_id: runId,
+    fleet_operation_policy_id: policy?.fleet_operation_policy_id || null,
+    policy_type: policy?.policy_type || null,
+    target_task_type: policy?.target_task_type || null,
+    robotaxi_id: robotaxi?.robotaxi_id || null,
+    task_id: task?.task_id || null,
+    task_type: task?.task_type || policy?.target_task_type || null,
+    result_status: status,
+    result_reason: reason || null,
+    robotaxi_snapshot: snapshot || null,
+    created_at: occurredAt || defaultNow(),
+  };
 }
 
 export function findFleetOperationPolicyCandidates(policy, robotaxis = []) {
@@ -267,6 +319,8 @@ function createFleetOperationPolicyRun({
     policy_snapshot: policySnapshot,
     candidate_robotaxi_ids: candidateRobotaxiIds,
     generated_task_ids: generatedTaskIds,
+    generated_task_count: generatedTaskIds.length,
+    skipped_robotaxi_count: Math.max(0, candidateRobotaxiIds.length - generatedTaskIds.length),
     no_action_reason: noActionReason,
     result_summary: resultSummary,
     started_at: startedAt,
@@ -318,6 +372,22 @@ function createPolicySnapshot(policy) {
   }));
 }
 
+function createRobotaxiSnapshot(robotaxi) {
+  return {
+    robotaxi_id: robotaxi.robotaxi_id,
+    availability_status: robotaxi.availability_status,
+    current_order_id: robotaxi.current_order_id || null,
+    current_task_id: robotaxi.current_task_id || null,
+    fleet_operation_status: robotaxi.fleet_operation_status || null,
+    cleanliness_status: robotaxi.cleanliness_status || null,
+    battery_percent: robotaxi.battery_percent ?? null,
+    battery_operation_status: robotaxi.battery_operation_status || null,
+    maintenance_status: robotaxi.maintenance_status || null,
+    failure_status: robotaxi.failure_status || null,
+    retirement_status: robotaxi.retirement_status || null,
+  };
+}
+
 function resolveTaskFields(policy, robotaxi) {
   const taskType = policy.target_task_type;
   if (taskType === TaskType.CLEANING) {
@@ -367,6 +437,12 @@ function resolveRunId(context) {
   if (typeof context.nextRunId === "function") return context.nextRunId();
   const sequence = String(context.runSequence || 1).padStart(4, "0");
   return `FOP-RUN-${sequence}`;
+}
+
+function resolveResultId(context) {
+  if (typeof context.nextResultId === "function") return context.nextResultId();
+  const sequence = String(context.resultSequence || 1).padStart(4, "0");
+  return `FOP-RESULT-${sequence}`;
 }
 
 function resolveNow(context) {
