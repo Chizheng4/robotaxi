@@ -1,3 +1,10 @@
+## v039.3
+
+核心：Fleet Operations 行驶推进与到达确认。
+
+- 新增 advanceFleetOperationRouteExecution 和 confirmFleetOperationArrival 动作。
+- 行驶记录推进复用现有 advanceRouteExecution。
+- 到达后任务单状态切换为 ARRIVED_OPS_CENTER 等对应已到达状态。
 ## v039.2
 
 核心：Fleet Operations 路径规划与行驶记录闭环。

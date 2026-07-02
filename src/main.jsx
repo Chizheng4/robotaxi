@@ -1811,6 +1811,8 @@ function App() {
                   createDirectFleetOperationTaskFromRobotaxi,
                   dispatchFleetOperationTaskDestination,
                   planFleetOperationRoute,
+                  advanceFleetOperationRouteExecution,
+                  confirmFleetOperationArrival,
                   editFleetOperationPolicy,
                   assignWorker,
                   startCheck,
@@ -2489,6 +2491,18 @@ function App() {
 
 
   function planFleetOperationRoute(task) {
+
+  function advanceFleetOperationRouteExecution(execution) {
+    if (!execution) return;
+    advanceRouteExecution(execution.route_execution_id);
+  }
+
+  function confirmFleetOperationArrival(task) {
+    if (!task?.route_execution_id || !task.task_id) return;
+    const setter = (items) => items.map((item) => item.task_id === task.task_id ? { ...item, task_status: task.task_type === "CHARGING" ? "ARRIVED_CHARGER" : task.task_type === "MAINTENANCE" ? "ARRIVED_MAINTENANCE_CENTER" : task.task_type === "RETIREMENT" ? "ARRIVED_RETIREMENT_CENTER" : "ARRIVED_OPS_CENTER", arrival_confirmed_at: now() } : item);
+    setCleaningTasks(setter); setChargingTasks(setter); setMaintenanceTasks(setter); setFailureHandlingTasks(setter); setRetirementTasks(setter);
+    antd.message.success("已确认到达");
+  }
     if (!task?.task_id || !task.robotaxi_id || !task.target_cell_id) return;
     const robotaxi = operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi || !routePlanningService) return;
