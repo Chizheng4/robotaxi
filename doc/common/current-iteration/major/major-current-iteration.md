@@ -2,9 +2,9 @@
 
 当前大版本：`v039` — Fleet Operations 任务单状态治理与运维调度策略。
 
-当前状态：v039 进行中。
+当前状态：v039 进行中。v039.1 已提交。
 
-当前计划入口：v039-auto-execution-plan.md
+自动化执行计划：`v039-auto-execution-plan.md`
 
 规则入口：
 

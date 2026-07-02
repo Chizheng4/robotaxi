@@ -1,3 +1,14 @@
+## v039.1
+
+核心：Fleet Operations 状态治理与运维调度策略 v039 第一子版本。
+
+- 从五种运维任务类型移除未使用的 CREATED 状态。
+- 任务创建补齐三种场景路由：被占用等待、空闲需调度、空闲且在运维中心直入 Worker 分配。
+- 新增 FleetOperationDispatchStrategy/Run/Decision 调度策略模块。
+- 五种任务单 WAITING_DESTINATION_ASSIGNMENT 状态新增分配动作（分配清洁站/充电站/维修站/故障处理中心/退役处理中心）。
+- Robotaxi 运维状态字段前置展示。
+- 新增 `fleetOperationDispatchService` 和 `fleetOperationDispatchTypes`。
+- 更新字段字典和状态注册。
 ## v038.1
 
 核心：补齐 Fleet Operations 人工触发、策略结果和策略配置闭环。
@@ -1490,14 +1501,3 @@
 - 实现左侧对象列表、中间画布、右侧详情面板。
 - 支持点击 Point / Route 查看对象详情。
 
-## v039.1
-
-核心：Fleet Operations 状态治理与运维调度策略 v039 第一子版本。
-
-- 从五种运维任务类型移除未使用的 CREATED 状态。
-- 任务创建补齐三种场景路由：被占用等待、空闲需调度、空闲且在运维中心直入 Worker 分配。
-- 新增 FleetOperationDispatchStrategy/Run/Decision 调度策略模块。
-- 五种任务单 WAITING_DESTINATION_ASSIGNMENT 状态新增分配动作（分配清洁站/充电站/维修站/故障处理中心/退役处理中心）。
-- Robotaxi 运维状态字段前置展示。
-- 新增 `fleetOperationDispatchService` 和 `fleetOperationDispatchTypes`。
-- 更新字段字典和状态注册。
