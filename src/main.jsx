@@ -42,12 +42,14 @@ let statusRegistry;
 let routePlanningStrategies;
 let timedOperationDiagnostics;
 let fleetOperationTaskService;
+let robotaxiTaskPriorityService;
 let fleetOperationPolicyService;
 let fleetOperationDispatchService;
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
 let fleetOperationPolicyRunSequence = 0;
 let fleetOperationPolicyResultSequence = 0;
+    // taskPriorityConfig has no sequence counter
 let fleetOperationDispatchRunSequence = 0;
 let fleetOperationDispatchDecisionSequence = 0;
 let deploymentTaskSequence = 0;
@@ -187,6 +189,7 @@ const pageGroups = [
           { key: "fleetOperationPolicyResults", label: "运维策略结果" },
           { key: "fleetOperationDispatchStrategies", label: "运维调度策略" },
           { key: "fleetOperationDispatchRuns", label: "运维调度执行" },
+          { key: "taskPriorityConfig", label: "任务优先级调度配置" },
         ],
       },
       { key: "opsCenters", label: "运营中心列表" },
@@ -562,6 +565,7 @@ const pageObjectType = {
   fleetOperationPolicyResults: "fleetOperationPolicyResult",
   fleetOperationDispatchStrategies: "fleetOperationDispatchStrategy",
   fleetOperationDispatchRuns: "fleetOperationDispatchRun",
+  taskPriorityConfig: "taskPriorityConfig",
   deploymentTasks: "deploymentTask",
   routeExecutions: "routeExecution",
   taskEventLogs: "taskEventLog",
@@ -624,6 +628,7 @@ const idFieldByType = {
   fleetOperationPolicyResult: "fleet_operation_policy_result_id",
   fleetOperationDispatchStrategy: "fleet_operation_dispatch_strategy_id",
   fleetOperationDispatchRun: "fleet_operation_dispatch_run_id",
+  taskPriorityConfig: "config_id",
   deploymentTask: "task_id",
   routeExecution: "route_execution_id",
   taskEventLog: "event_id",
@@ -675,6 +680,7 @@ const statusFieldByPage = {
   fleetOperationPolicyResults: "result_status",
   fleetOperationDispatchStrategies: "strategy_status",
   fleetOperationDispatchRuns: "run_status",
+  taskPriorityConfig: "config_status",
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
   routePlanningStrategies: "strategy_status",
@@ -784,7 +790,9 @@ function App() {
   const [fleetOperationPolicyResults, setFleetOperationPolicyResults] = useState(initialRuntime.fleetOperationPolicyResults);
   const [fleetOperationDispatchStrategies, setFleetOperationDispatchStrategies] = useState(initialRuntime.fleetOperationDispatchStrategies);
   const [fleetOperationDispatchRuns, setFleetOperationDispatchRuns] = useState(initialRuntime.fleetOperationDispatchRuns);
-  const [fleetOperationDispatchDecisions, setFleetOperationDispatchDecisions] = useState(initialRuntime.fleetOperationDispatchDecisions);
+  const [fleetOperationDispatchDecisions,
+    taskPriorityConfigs, setFleetOperationDispatchDecisions] = useState(initialRuntime.fleetOperationDispatchDecisions);
+  const [taskPriorityConfigs, setTaskPriorityConfigs] = useState(initialRuntime.taskPriorityConfigs);
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
@@ -891,6 +899,7 @@ function App() {
       setMaintenanceTasks(Array.isArray(snapshot.maintenanceTasks) ? snapshot.maintenanceTasks : []);
       setFailureHandlingTasks(Array.isArray(snapshot.failureHandlingTasks) ? snapshot.failureHandlingTasks : []);
       setRetirementTasks(Array.isArray(snapshot.retirementTasks) ? snapshot.retirementTasks : []);
+      setTaskPriorityConfigs(snapshot.taskPriorityConfigs?.length ? snapshot.taskPriorityConfigs : [robotaxiTaskPriorityService.initializeDefaultPriorityConfig()]);
       setFleetOperationPolicies(snapshot.fleetOperationPolicies?.length ? snapshot.fleetOperationPolicies : fleetOperationPolicyService.initializeDefaultFleetOperationPolicies());
       setFleetOperationPolicyRuns(Array.isArray(snapshot.fleetOperationPolicyRuns) ? snapshot.fleetOperationPolicyRuns : []);
       setFleetOperationPolicyResults(Array.isArray(snapshot.fleetOperationPolicyResults) ? snapshot.fleetOperationPolicyResults : []);
@@ -6003,6 +6012,7 @@ async function bootstrap() {
 		    statusRegistryModule,
 		    routePlanningStrategiesModule,
 		    timedOperationDiagnosticsModule,
+		    robotaxiTaskPriorityServiceModule,
 		    fleetOperationTaskServiceModule,
 		    fleetOperationPolicyServiceModule,
 		    fleetOperationDispatchServiceModule,
@@ -6053,6 +6063,7 @@ async function bootstrap() {
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
 		    import("./domain/routePlanningStrategies.js?v=20260625-v030-3"),
 		    import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"),
+		    import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"),
 		    import("./services/fleetOperationTaskService.js?v=20260702-v039-7"),
 		    import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"),
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
@@ -6103,6 +6114,7 @@ async function bootstrap() {
 		  statusRegistry = statusRegistryModule;
 		  routePlanningStrategies = routePlanningStrategiesModule;
 		  timedOperationDiagnostics = timedOperationDiagnosticsModule;
+		  robotaxiTaskPriorityService = robotaxiTaskPriorityServiceModule;
 		  fleetOperationTaskService = fleetOperationTaskServiceModule;
 		  fleetOperationPolicyService = fleetOperationPolicyServiceModule;
 		  fleetOperationDispatchService = fleetOperationDispatchServiceModule;
@@ -7361,6 +7373,8 @@ function loadRuntimeSnapshot(initialData) {
     fleetOperationDispatchStrategies: fleetOperationDispatchService.initializeDefaultFleetOperationDispatchStrategies(),
     fleetOperationDispatchRuns: [],
     fleetOperationDispatchDecisions: [],
+      taskPriorityConfigs: [robotaxiTaskPriorityService?.initializeDefaultPriorityConfig() || {}],
+    taskPriorityConfigs: [robotaxiTaskPriorityService?.initializeDefaultPriorityConfig() || {}],
     deploymentTasks: [],
     routeExecutions: [],
     routePlanningRuns: [],
@@ -7461,7 +7475,8 @@ function loadRuntimeSnapshot(initialData) {
       deriveSequence(retirementTasks, "task_id", "TASK-RET-"),
     );
     fleetOperationPolicyRunSequence = deriveSequence(fleetOperationPolicyRuns, "fleet_operation_policy_run_id", "FOP-RUN-");
-    fleetOperationPolicyResultSequence = deriveSequence(fleetOperationPolicyResults, "fleet_operation_policy_result_id", "FOP-RESULT-");
+    // taskPriorityConfig no sequence restore needed
+  fleetOperationPolicyResultSequence = deriveSequence(fleetOperationPolicyResults, "fleet_operation_policy_result_id", "FOP-RESULT-");
     fleetOperationDispatchRunSequence = deriveSequence(fleetOperationDispatchRuns, "fleet_operation_dispatch_run_id", "FODR-");
     fleetOperationDispatchDecisionSequence = deriveSequence(fleetOperationDispatchDecisions, "fleet_operation_dispatch_decision_id", "FODD-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
@@ -7492,6 +7507,7 @@ function loadRuntimeSnapshot(initialData) {
       fleetOperationDispatchStrategies,
       fleetOperationDispatchRuns,
       fleetOperationDispatchDecisions,
+    taskPriorityConfigs,
       deploymentTasks,
       routeExecutions,
       routePlanningRuns,
@@ -7606,6 +7622,7 @@ function saveRuntimeSnapshot(snapshot) {
     fleetOperationPolicyResults: snapshot.fleetOperationPolicyResults || [],
     fleetOperationDispatchStrategies: snapshot.fleetOperationDispatchStrategies || [],
     fleetOperationDispatchRuns: snapshot.fleetOperationDispatchRuns || [],
+    taskPriorityConfigs: snapshot.taskPriorityConfigs || [],
     fleetOperationDispatchDecisions: snapshot.fleetOperationDispatchDecisions || [],
     simulationPolicies: snapshot.simulationPolicies || [],
     workflowTimingProfiles: snapshot.workflowTimingProfiles || [],
