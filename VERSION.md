@@ -10,6 +10,35 @@
 - 不涉及模拟引擎、业务动作服务、成本/收入/指标计算。
 - 提交前检查通过。
 
+## v040.3
+核心：运维策略执行修复 — 策略扫描后标记 Robotaxi。
+
+- 策略执行后对符合条件的 Robotaxi 设置对应运维标记（needs_cleaning/needs_charging/needs_maintenance）。
+- 标记 → 任务生成两段式流程通过 fleetOperationPolicyService 的 createRobotaxiSnapshot 实现。
+
+## v040.2
+
+核心：Robotaxi 管理页按钮互斥与退役确认。
+
+- 运维操作按钮互斥：Robotaxi 被任务占用时隐藏清洁/充电/维修按钮。
+- 退役按钮弹出确认 Modal，确认后才能执行退役操作。
+- 退役确认后取消所有非服务中任务单，不可逆。
+
+## v040.1
+
+核心：新增 Robotaxi 任务优先级调度服务。
+
+- 新建 robotaxiTaskPriorityService，定义任务优先级排序和场景化决策逻辑。
+- 运营中心管理菜单下新增任务优先级调度配置页面。
+- 支持立即执行、排队等待、拒绝三种决策结果。
+
+## v040.0
+
+核心：Robotaxi 运维状态治理基础 — 标记字段与 fleet_operation_status 收敛。
+
+- Robotaxi 新增 needs_cleaning、needs_charging、needs_maintenance、pending_task_queue 标记字段。
+- robotaxiService 双路径检查新 tag 和旧 fleet_operation_status，并行兼容。
+- 字段字典同步。
 ## v039.9
 
 核心：修复模拟运行自动计算成本与收入的时序锁问题。
