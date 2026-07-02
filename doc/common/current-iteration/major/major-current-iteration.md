@@ -2,7 +2,7 @@
 
 当前大版本：`待定`。
 
-当前状态：暂无进行中的大版本。v037 已完成并归档。
+当前状态：暂无进行中的大版本。v038 已完成并归档。
 
 当前计划入口：
 
@@ -16,10 +16,11 @@
 - `doc/rules/05-codex-execution-rules.md`
 - `doc/rules/07-simulation-runtime-architecture-rules.md`
 
-最近完成大版本：`v037 Fleet Operations 车队运维闭环系统`。
+最近完成大版本：`v038 Fleet Operations 运维策略与任务单体验`。
 
 最近完成历史方案：
 
+- `doc/common/iteration-history/major/v038-fleet-operation-policy-and-task-ux-plan.md`
 - `doc/common/iteration-history/major/v037-fleet-operations-system-plan.md`
 - `doc/common/iteration-history/major/v036.3-service-order-auto-assignment-plan.md`
 - `doc/common/iteration-history/major/v036.2-unified-world-time-continuity-plan.md`

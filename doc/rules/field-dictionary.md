@@ -628,6 +628,60 @@
 |approval_status|审批状态|运行态字段|退役确认或审批状态|
 |asset_exit_result|资产退出结果|运行态字段|退役资产处理结果|
 
+### 11.2 FleetOperationPolicy：运维策略配置
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|fleet_operation_policy_id|运维策略编号|持久化字段|运维策略唯一编号|
+|policy_name|策略名称|持久化字段|用户可识别的策略名称|
+|policy_type|策略类型|持久化字段|策略所属类型，通常与目标任务类型一致|
+|target_task_type|目标任务类型|持久化字段|策略触发生成的任务类型|
+|policy_status|策略状态|运行态字段|DRAFT、ACTIVE、DISABLED、ARCHIVED|
+|policy_version|配置版本|持久化字段|策略配置版本号|
+|policy_parameters|策略参数|持久化字段|策略结构化参数集合|
+|execution_scope|执行范围|持久化字段|策略扫描对象范围，第一阶段为 ALL_ROBOTAXI|
+|low_peak_start_time|低峰开始时间|持久化字段|低峰清洁等策略的开始时间|
+|low_peak_end_time|低峰结束时间|持久化字段|低峰清洁等策略的结束时间|
+|service_order_count_threshold|服务单数阈值|持久化字段|达到该服务单数量后可进入策略候选|
+|service_duration_minutes_threshold|服务时长阈值（分钟）|持久化字段|达到该累计服务时长后可进入策略候选|
+|battery_percent_threshold|电量阈值（%）|持久化字段|低于该电量后可进入充电候选|
+|maintenance_due_days_threshold|临近维修天数阈值|持久化字段|临近定期维修的天数阈值|
+|failure_severity_threshold|故障严重度阈值|持久化字段|故障策略关注的最低严重度|
+|retirement_score_threshold|退役评分阈值|持久化字段|退役评估策略阈值|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+|updated_at|更新时间|持久化字段|真实审计更新时间|
+
+### 11.3 FleetOperationPolicyRun：运维策略执行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|fleet_operation_policy_run_id|运维策略执行编号|持久化字段|策略执行记录唯一编号|
+|fleet_operation_policy_id|运维策略编号|持久化字段|来源运维策略配置|
+|policy_version|配置版本|持久化字段|执行时使用的策略版本|
+|policy_type|策略类型|持久化字段|执行策略类型|
+|target_task_type|目标任务类型|持久化字段|本次执行要生成的任务类型|
+|run_status|执行状态|运行态字段|SUCCEEDED、PARTIALLY_SUCCEEDED、NO_ACTION、FAILED|
+|trigger_type|触发方式|运行态字段|MANUAL、AUTO 等|
+|execution_scope|执行范围|持久化字段|本次策略扫描范围|
+|policy_snapshot|策略配置快照|持久化字段|本次执行使用的不可变策略配置快照|
+|candidate_robotaxi_ids|候选 Robotaxi 列表|运行态字段|本次策略筛出的候选车辆编号|
+|generated_task_ids|生成任务列表|运行态字段|本次策略成功生成的任务编号|
+|no_action_reason|无动作原因|运行态字段|无候选或无需创建任务的原因|
+|result_summary|结果摘要|运行态字段|面向用户的策略执行结果说明|
+|started_at|开始时间|持久化字段|真实审计开始时间|
+|completed_at|完成时间|持久化字段|真实审计完成时间|
+
+### 11.4 Fleet Operations 策略枚举中文
+
+|英文值|中文名|用途|
+|---|---|---|
+|ALL_ROBOTAXI|全部 Robotaxi|执行范围|
+|FLEET_OPERATION_POLICY|运维策略触发|触发来源|
+|DIRECT_ROBOTAXI_OPERATION|Robotaxi 直接触发|触发来源|
+|NO_ACTION|无动作|策略执行结果|
+|INVALID_FLEET_OPERATION_POLICY|运维策略无效|无动作或失败原因|
+|ROBOTAXI_ALREADY_HAS_OPEN_FLEET_OPERATION_TASK|Robotaxi 已有未完成运维任务|任务创建跳过原因|
+
 ---
 
 ## 12. Worker：运营中心作业人员

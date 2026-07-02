@@ -41,7 +41,10 @@ let simulationRunBusinessScope;
 let statusRegistry;
 let routePlanningStrategies;
 let timedOperationDiagnostics;
+let fleetOperationPolicyService;
 let taskSequence = 0;
+let fleetOperationTaskSequence = 0;
+let fleetOperationPolicyRunSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
@@ -168,6 +171,14 @@ const pageGroups = [
           { key: "failureHandlingTasks", label: "故障处理" },
           { key: "retirementTasks", label: "退役任务" },
           { key: "deploymentTasks", label: "运营投放" },
+        ],
+      },
+      {
+        key: "fleetOperationPolicyManagement",
+        label: "运维策略管理",
+        children: [
+          { key: "fleetOperationPolicies", label: "运维策略配置" },
+          { key: "fleetOperationPolicyRuns", label: "运维策略执行" },
         ],
       },
       { key: "opsCenters", label: "运营中心列表" },
@@ -327,6 +338,16 @@ const tableConfig = {
     title: "退役任务",
     description: "用于将 Robotaxi 从运营系统中永久移除并沉淀资产退出结果。",
     columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "retirement_reason", "approval_status", "target_ops_center_id", "asset_exit_result", "operation_created_at", "operation_completed_at"],
+  },
+  fleetOperationPolicies: {
+    title: "运维策略配置",
+    description: "配置清洁、充电、维修、故障处理和退役任务的触发参数。",
+    columns: ["fleet_operation_policy_id", "policy_name", "policy_type", "target_task_type", "policy_status", "policy_version", "execution_scope", "low_peak_start_time", "low_peak_end_time", "service_order_count_threshold", "service_duration_minutes_threshold", "battery_percent_threshold", "maintenance_due_days_threshold", "failure_severity_threshold", "retirement_score_threshold", "updated_at"],
+  },
+  fleetOperationPolicyRuns: {
+    title: "运维策略执行",
+    description: "记录每次运维策略扫描、候选车辆、生成任务和配置快照。",
+    columns: ["fleet_operation_policy_run_id", "fleet_operation_policy_id", "policy_type", "target_task_type", "run_status", "trigger_type", "candidate_robotaxi_ids", "generated_task_ids", "no_action_reason", "result_summary", "started_at", "completed_at"],
   },
   deploymentTasks: {
     title: "运营投放任务",
@@ -513,6 +534,8 @@ const pageObjectType = {
   maintenanceTasks: "maintenanceTask",
   failureHandlingTasks: "failureHandlingTask",
   retirementTasks: "retirementTask",
+  fleetOperationPolicies: "fleetOperationPolicy",
+  fleetOperationPolicyRuns: "fleetOperationPolicyRun",
   deploymentTasks: "deploymentTask",
   routeExecutions: "routeExecution",
   taskEventLogs: "taskEventLog",
@@ -570,6 +593,8 @@ const idFieldByType = {
   maintenanceTask: "task_id",
   failureHandlingTask: "task_id",
   retirementTask: "task_id",
+  fleetOperationPolicy: "fleet_operation_policy_id",
+  fleetOperationPolicyRun: "fleet_operation_policy_run_id",
   deploymentTask: "task_id",
   routeExecution: "route_execution_id",
   taskEventLog: "event_id",
@@ -616,6 +641,8 @@ const statusFieldByPage = {
   maintenanceTasks: "task_status",
   failureHandlingTasks: "task_status",
   retirementTasks: "task_status",
+  fleetOperationPolicies: "policy_status",
+  fleetOperationPolicyRuns: "run_status",
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
   routePlanningStrategies: "strategy_status",
@@ -720,6 +747,8 @@ function App() {
   const [maintenanceTasks, setMaintenanceTasks] = useState(initialRuntime.maintenanceTasks);
   const [failureHandlingTasks, setFailureHandlingTasks] = useState(initialRuntime.failureHandlingTasks);
   const [retirementTasks, setRetirementTasks] = useState(initialRuntime.retirementTasks);
+  const [fleetOperationPolicies, setFleetOperationPolicies] = useState(initialRuntime.fleetOperationPolicies);
+  const [fleetOperationPolicyRuns, setFleetOperationPolicyRuns] = useState(initialRuntime.fleetOperationPolicyRuns);
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
   const [routePlanningRuns, setRoutePlanningRuns] = useState(initialRuntime.routePlanningRuns);
@@ -823,6 +852,8 @@ function App() {
       setMaintenanceTasks(Array.isArray(snapshot.maintenanceTasks) ? snapshot.maintenanceTasks : []);
       setFailureHandlingTasks(Array.isArray(snapshot.failureHandlingTasks) ? snapshot.failureHandlingTasks : []);
       setRetirementTasks(Array.isArray(snapshot.retirementTasks) ? snapshot.retirementTasks : []);
+      setFleetOperationPolicies(snapshot.fleetOperationPolicies?.length ? snapshot.fleetOperationPolicies : fleetOperationPolicyService.initializeDefaultFleetOperationPolicies());
+      setFleetOperationPolicyRuns(Array.isArray(snapshot.fleetOperationPolicyRuns) ? snapshot.fleetOperationPolicyRuns : []);
       setDeploymentTasks(normalizeRouteStrategyReferences(snapshot.deploymentTasks || []));
       setRouteExecutions(normalizeRouteStrategyReferences(snapshot.routeExecutions || []));
       setRoutePlanningRuns(normalizeRouteStrategyReferences(snapshot.routePlanningRuns || []));
@@ -891,6 +922,8 @@ function App() {
     maintenanceTasks: maintenanceTasks.map((task) => attachCostRecords(task, "maintenanceTask", costRecords)),
     failureHandlingTasks: failureHandlingTasks.map((task) => attachCostRecords(task, "failureHandlingTask", costRecords)),
     retirementTasks: retirementTasks.map((task) => attachCostRecords(task, "retirementTask", costRecords)),
+    fleetOperationPolicies,
+    fleetOperationPolicyRuns,
     deploymentTasks: deploymentTasks.map((task) => attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions)),
     routeExecutions: routeExecutions.map((execution) => attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords)),
     taskEventLogs,
@@ -1007,6 +1040,8 @@ function App() {
       maintenanceTask: rowsByPage.maintenanceTasks,
       failureHandlingTask: rowsByPage.failureHandlingTasks,
       retirementTask: rowsByPage.retirementTasks,
+      fleetOperationPolicy: rowsByPage.fleetOperationPolicies,
+      fleetOperationPolicyRun: rowsByPage.fleetOperationPolicyRuns,
       taskEventLog: taskEventLogs,
       validation: validations,
     };
@@ -1051,6 +1086,8 @@ function App() {
         maintenanceTasks,
         failureHandlingTasks,
         retirementTasks,
+        fleetOperationPolicies,
+        fleetOperationPolicyRuns,
         deploymentTasks,
         routeExecutions,
         routePlanningRuns,
@@ -1086,7 +1123,7 @@ function App() {
       persistSimulationEvents(simulationEvents);
     }, debounceMs);
     return () => window.clearTimeout(timerId);
-  }, [activePage, businessTimingCalculationRuns, chargingTasks, cleaningTasks, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, failureHandlingTasks, maintenanceTasks, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, chargingTasks, cleaningTasks, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, failureHandlingTasks, fleetOperationPolicies, fleetOperationPolicyRuns, maintenanceTasks, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
 
 
 
@@ -1101,6 +1138,8 @@ function App() {
       maintenanceTasks,
       failureHandlingTasks,
       retirementTasks,
+      fleetOperationPolicies,
+      fleetOperationPolicyRuns,
       deploymentTasks,
       routeExecutions,
       routes: data.routes,
@@ -1711,6 +1750,8 @@ function App() {
                 actions={{
                   createManualTask,
                   runAutoReadinessCheck,
+                  runFleetOperationPolicyForPage,
+                  runFleetOperationPolicy,
                   assignWorker,
                   startCheck,
                   submitCheckResult,
@@ -1736,6 +1777,7 @@ function App() {
                   submitAbnormalArrival,
                   data,
                   taskEventLogs,
+                  fleetOperationPolicyRuns,
                   routePlanningRuns: rowsByPage.routePlanningRuns,
                   demandSimulationRuns: rowsByPage.demandSimulationRuns,
                   pricingStrategyRuns: rowsByPage.pricingStrategyRuns,
@@ -1893,6 +1935,8 @@ function App() {
 
   function resetRuntime() {
     taskSequence = 0;
+    fleetOperationTaskSequence = 0;
+    fleetOperationPolicyRunSequence = 0;
     deploymentTaskSequence = 0;
     routeExecutionSequence = 0;
     deploymentRouteSequence = 0;
@@ -1910,6 +1954,13 @@ function App() {
     const nextSelection = { type: "map", id: initialData.maps[0].map_id };
     setOperationalData(initialData);
     setReadinessTasks([]);
+    setCleaningTasks([]);
+    setChargingTasks([]);
+    setMaintenanceTasks([]);
+    setFailureHandlingTasks([]);
+    setRetirementTasks([]);
+    setFleetOperationPolicies(fleetOperationPolicyService.initializeDefaultFleetOperationPolicies());
+    setFleetOperationPolicyRuns([]);
     setDeploymentTasks([]);
     setRouteExecutions([]);
     setRoutePlanningRuns([]);
@@ -2163,6 +2214,111 @@ function App() {
       triggerLog,
       ...logs,
     ]);
+  }
+
+  function runFleetOperationPolicyForPage(page) {
+    const taskType = getFleetOperationTaskTypeByPage(page);
+    if (taskType) runFleetOperationPolicy(taskType);
+  }
+
+  function runFleetOperationPolicy(taskType) {
+    const policy = fleetOperationPolicies.find((item) => item.target_task_type === taskType && item.policy_status === "ACTIVE")
+      || fleetOperationPolicies.find((item) => item.target_task_type === taskType);
+    if (!policy) {
+      antd.message.warning("没有找到可用的运维策略配置");
+      return;
+    }
+
+    const collectionKey = getFleetOperationTaskCollectionKey(taskType);
+    const result = fleetOperationPolicyService.executeFleetOperationPolicy({
+      policy,
+      robotaxis: data.robotaxis,
+      existingTasks: getFleetOperationTasksByCollection(collectionKey),
+      triggerType: taskTypes.TriggerType.MANUAL,
+      context: {
+        now,
+        nextId: nextFleetOperationTaskId,
+        nextRunId: nextFleetOperationPolicyRunId,
+      },
+    });
+
+    setFleetOperationPolicyRuns((runs) => [result.run, ...runs]);
+    setOperationalData((current) => ({
+      ...current,
+      robotaxis: result.robotaxis?.length ? result.robotaxis : current.robotaxis,
+    }));
+
+    if (result.tasks?.length) {
+      appendFleetOperationTasks(collectionKey, result.tasks);
+      setTaskEventLogs((logs) => [
+        ...result.tasks.map((task) => createEventLog({
+          event_type: taskTypes.TaskEventType.TASK_CREATED,
+          event_result: taskTypes.TaskEventResult.SUCCESS,
+          task_id: task.task_id,
+          robotaxi_id: task.robotaxi_id,
+          trigger_type: task.trigger_type,
+          message: `运维策略已创建 ${getDisplayValue(task.task_type)}任务`,
+        })),
+        ...logs,
+      ]);
+      const firstTask = result.tasks[0];
+      selectForPage(collectionKey, pageObjectType[collectionKey], firstTask.task_id);
+      antd.message.success(result.run.result_summary || "运维任务已生成");
+      return;
+    }
+
+    setTaskEventLogs((logs) => [
+      createEventLog({
+        event_type: taskTypes.TaskEventType.NO_CANDIDATE_ROBOTAXI,
+        event_result: taskTypes.TaskEventResult.SKIPPED,
+        trigger_type: taskTypes.TriggerType.MANUAL,
+        message: result.run.result_summary || "当前无符合条件的 Robotaxi",
+      }),
+      ...logs,
+    ]);
+    antd.message.info(result.run.result_summary || "当前无符合条件的 Robotaxi");
+  }
+
+  function getFleetOperationTaskTypeByPage(page) {
+    const map = {
+      cleaningTasks: taskTypes.TaskType.CLEANING,
+      chargingTasks: taskTypes.TaskType.CHARGING,
+      maintenanceTasks: taskTypes.TaskType.MAINTENANCE,
+      failureHandlingTasks: taskTypes.TaskType.FAILURE_HANDLING,
+      retirementTasks: taskTypes.TaskType.RETIREMENT,
+    };
+    return map[page] || null;
+  }
+
+  function getFleetOperationTaskCollectionKey(taskType) {
+    const map = {
+      [taskTypes.TaskType.CLEANING]: "cleaningTasks",
+      [taskTypes.TaskType.CHARGING]: "chargingTasks",
+      [taskTypes.TaskType.MAINTENANCE]: "maintenanceTasks",
+      [taskTypes.TaskType.FAILURE_HANDLING]: "failureHandlingTasks",
+      [taskTypes.TaskType.RETIREMENT]: "retirementTasks",
+    };
+    return map[taskType] || null;
+  }
+
+  function getFleetOperationTasksByCollection(collectionKey) {
+    const map = {
+      cleaningTasks,
+      chargingTasks,
+      maintenanceTasks,
+      failureHandlingTasks,
+      retirementTasks,
+    };
+    return map[collectionKey] || [];
+  }
+
+  function appendFleetOperationTasks(collectionKey, tasks) {
+    const updater = (current) => [...tasks, ...current];
+    if (collectionKey === "cleaningTasks") setCleaningTasks(updater);
+    if (collectionKey === "chargingTasks") setChargingTasks(updater);
+    if (collectionKey === "maintenanceTasks") setMaintenanceTasks(updater);
+    if (collectionKey === "failureHandlingTasks") setFailureHandlingTasks(updater);
+    if (collectionKey === "retirementTasks") setRetirementTasks(updater);
   }
 
   function assignWorker(taskId) {
@@ -3499,6 +3655,8 @@ function WorkspaceBar({ pages, activePage, onActivate, onClose }) {
 
 function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect, actions }) {
   const isReadinessPage = page === "readinessTasks";
+  const isFleetOperationTaskPage = ["cleaningTasks", "chargingTasks", "maintenanceTasks", "failureHandlingTasks", "retirementTasks"].includes(page);
+  const isFleetOperationPolicyPage = page === "fleetOperationPolicies";
   const isDeploymentPage = page === "deploymentTasks";
   const isRouteExecutionPage = page === "routeExecutions";
   const isRoutePlanningPage = page === "routePlanningStrategies";
@@ -3517,8 +3675,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
-  const isTaskOperationPage = isReadinessPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
+  const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
+  const hasEventPanel = isTaskOperationPage || isFleetOperationPolicyPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -3558,10 +3716,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isFleetOperationPolicyPage ? actions.fleetOperationPolicyRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const visibleEventRows = eventRows.slice(0, 300);
-  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   useEffect(() => {
     const node = tableSectionRef.current;
     if (!node) return undefined;
@@ -3680,6 +3838,22 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <Button size="small" type="primary" onClick={actions.createDeploymentTasks}>生成投放任务</Button>
         </div>
       )}
+      {isFleetOperationTaskPage && (
+        <div className="list-action-bar">
+          <Button size="small" type="primary" onClick={() => actions.runFleetOperationPolicyForPage(page)}>
+            {getFleetOperationTaskActionLabel(page)}
+          </Button>
+        </div>
+      )}
+      {isFleetOperationPolicyPage && (
+        <div className="list-action-bar">
+          <Button size="small" type="primary" onClick={() => actions.runFleetOperationPolicyForPage("cleaningTasks")}>执行清洁策略</Button>
+          <Button size="small" onClick={() => actions.runFleetOperationPolicyForPage("chargingTasks")}>执行充电策略</Button>
+          <Button size="small" onClick={() => actions.runFleetOperationPolicyForPage("maintenanceTasks")}>执行维修策略</Button>
+          <Button size="small" onClick={() => actions.runFleetOperationPolicyForPage("failureHandlingTasks")}>执行故障策略</Button>
+          <Button size="small" onClick={() => actions.runFleetOperationPolicyForPage("retirementTasks")}>执行退役策略</Button>
+        </div>
+      )}
       {isServiceOrderPage && (
         <div className="list-action-bar">
           <Button size="small" type="primary" onClick={() => actions.createServiceOrderFromDemand("OWN_APP_SIMULATED_ORDER")}>创建自有平台服务订单</Button>
@@ -3753,7 +3927,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
       {hasEventPanel && (
         <div className="event-log-section" style={{ height: eventPanelHeight }}>
           <div className="event-log-resizer" onPointerDown={handleEventResizeStart} title="拖动调整事件区高度" />
-          <div className="event-log-title">{isTripPage ? "履约行驶事件" : isServiceOrderPage ? "最近事件记录" : isSimulationRunPage ? "模拟运行事件" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
+          <div className="event-log-title">{isTripPage ? "履约行驶事件" : isServiceOrderPage ? "最近事件记录" : isSimulationRunPage ? "模拟运行事件" : isFleetOperationPolicyPage ? "最近策略执行" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
           <Table
             size="small"
             rowKey={eventRowKey}
@@ -3919,6 +4093,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editCostParameterRule(row)}>配置</RowActionButton>),
       };
     }
+    if (isFleetOperationPolicyPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 110,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runFleetOperationPolicy(row.target_task_type)}>执行策略</RowActionButton>),
+      };
+    }
     return null;
   }
 
@@ -4038,6 +4221,24 @@ function createServiceOrderEventRows(eventLogs = [], serviceOrders = []) {
   return (eventLogs || [])
     .filter((event) => event.service_order_id && (visibleOrderIds.size === 0 || visibleOrderIds.has(event.service_order_id)))
     .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
+}
+
+function createFleetTaskEventRows(eventLogs = [], tasks = []) {
+  const visibleTaskIds = new Set(tasks.map((task) => task.task_id).filter(Boolean));
+  return (eventLogs || [])
+    .filter((event) => event.task_id && (visibleTaskIds.size === 0 || visibleTaskIds.has(event.task_id)))
+    .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
+}
+
+function getFleetOperationTaskActionLabel(page) {
+  const labels = {
+    cleaningTasks: "生成清洁任务",
+    chargingTasks: "生成充电任务",
+    maintenanceTasks: "生成维修任务",
+    failureHandlingTasks: "生成故障处理任务",
+    retirementTasks: "生成退役任务",
+  };
+  return labels[page] || "生成运维任务";
 }
 
 function createTripEventMessage(event, trip) {
@@ -5385,6 +5586,7 @@ async function bootstrap() {
 		    statusRegistryModule,
 		    routePlanningStrategiesModule,
 		    timedOperationDiagnosticsModule,
+		    fleetOperationPolicyServiceModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -5432,6 +5634,7 @@ async function bootstrap() {
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
 		    import("./domain/routePlanningStrategies.js?v=20260625-v030-3"),
 		    import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"),
+		    import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -5479,6 +5682,7 @@ async function bootstrap() {
 		  statusRegistry = statusRegistryModule;
 		  routePlanningStrategies = routePlanningStrategiesModule;
 		  timedOperationDiagnostics = timedOperationDiagnosticsModule;
+		  fleetOperationPolicyService = fleetOperationPolicyServiceModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -6605,6 +6809,16 @@ function nextEventId() {
   return `EVT-${String(eventSequence).padStart(3, "0")}`;
 }
 
+function nextFleetOperationTaskId(prefix) {
+  fleetOperationTaskSequence += 1;
+  return `${prefix}-${String(fleetOperationTaskSequence).padStart(4, "0")}`;
+}
+
+function nextFleetOperationPolicyRunId() {
+  fleetOperationPolicyRunSequence += 1;
+  return `FOP-RUN-${String(fleetOperationPolicyRunSequence).padStart(4, "0")}`;
+}
+
 function createDefaultPageUiState() {
   return {
     filters: { ...defaultPageFilters },
@@ -6703,6 +6917,8 @@ function loadRuntimeSnapshot(initialData) {
     maintenanceTasks: [],
     failureHandlingTasks: [],
     retirementTasks: [],
+    fleetOperationPolicies: fleetOperationPolicyService.initializeDefaultFleetOperationPolicies(),
+    fleetOperationPolicyRuns: [],
     deploymentTasks: [],
     routeExecutions: [],
     routePlanningRuns: [],
@@ -6751,6 +6967,10 @@ function loadRuntimeSnapshot(initialData) {
     const maintenanceTasks = Array.isArray(snapshot.maintenanceTasks) ? snapshot.maintenanceTasks : [];
     const failureHandlingTasks = Array.isArray(snapshot.failureHandlingTasks) ? snapshot.failureHandlingTasks : [];
     const retirementTasks = Array.isArray(snapshot.retirementTasks) ? snapshot.retirementTasks : [];
+    const fleetOperationPolicies = Array.isArray(snapshot.fleetOperationPolicies) && snapshot.fleetOperationPolicies.length
+      ? snapshot.fleetOperationPolicies
+      : fleetOperationPolicyService.initializeDefaultFleetOperationPolicies();
+    const fleetOperationPolicyRuns = Array.isArray(snapshot.fleetOperationPolicyRuns) ? snapshot.fleetOperationPolicyRuns : [];
     const deploymentTasks = normalizeRouteStrategyReferences(Array.isArray(snapshot.deploymentTasks) ? snapshot.deploymentTasks : []);
     const routeExecutions = normalizeRouteStrategyReferences(Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : []);
     const routePlanningRuns = normalizeRouteStrategyReferences(Array.isArray(snapshot.routePlanningRuns) ? snapshot.routePlanningRuns : []);
@@ -6785,6 +7005,14 @@ function loadRuntimeSnapshot(initialData) {
     const timedOperations = Array.isArray(snapshot.timedOperations) ? snapshot.timedOperations : [];
     const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
+    fleetOperationTaskSequence = Math.max(
+      deriveSequence(cleaningTasks, "task_id", "TASK-CLN-"),
+      deriveSequence(chargingTasks, "task_id", "TASK-CHG-"),
+      deriveSequence(maintenanceTasks, "task_id", "TASK-MNT-"),
+      deriveSequence(failureHandlingTasks, "task_id", "TASK-FHL-"),
+      deriveSequence(retirementTasks, "task_id", "TASK-RET-"),
+    );
+    fleetOperationPolicyRunSequence = deriveSequence(fleetOperationPolicyRuns, "fleet_operation_policy_run_id", "FOP-RUN-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
     routePlanningRunSequence = deriveSequence(routePlanningRuns, "route_planning_run_id", "RPR-");
@@ -6807,6 +7035,8 @@ function loadRuntimeSnapshot(initialData) {
       maintenanceTasks,
       failureHandlingTasks,
       retirementTasks,
+      fleetOperationPolicies,
+      fleetOperationPolicyRuns,
       deploymentTasks,
       routeExecutions,
       routePlanningRuns,
@@ -6902,6 +7132,8 @@ function saveRuntimeSnapshot(snapshot) {
   const storedSnapshot = {
     ...snapshot,
     taskSequence,
+    fleetOperationTaskSequence,
+    fleetOperationPolicyRunSequence,
     deploymentRouteSequence,
     serviceRouteSequence,
     routePlanningRunSequence,
@@ -6913,6 +7145,8 @@ function saveRuntimeSnapshot(snapshot) {
     orderMatchingDecisionSequence,
     tripSequence,
     eventSequence,
+    fleetOperationPolicies: snapshot.fleetOperationPolicies || [],
+    fleetOperationPolicyRuns: snapshot.fleetOperationPolicyRuns || [],
     simulationPolicies: snapshot.simulationPolicies || [],
     workflowTimingProfiles: snapshot.workflowTimingProfiles || [],
     businessTimingCalculationRuns: snapshot.businessTimingCalculationRuns || [],
@@ -7107,6 +7341,14 @@ function deriveSequence(items, field, prefix) {
 
 function restoreRuntimeSequences(snapshot) {
   taskSequence = deriveSequence(snapshot.readinessTasks || [], "task_id", "TASK-RC-");
+  fleetOperationTaskSequence = Math.max(
+    deriveSequence(snapshot.cleaningTasks || [], "task_id", "TASK-CLN-"),
+    deriveSequence(snapshot.chargingTasks || [], "task_id", "TASK-CHG-"),
+    deriveSequence(snapshot.maintenanceTasks || [], "task_id", "TASK-MNT-"),
+    deriveSequence(snapshot.failureHandlingTasks || [], "task_id", "TASK-FHL-"),
+    deriveSequence(snapshot.retirementTasks || [], "task_id", "TASK-RET-"),
+  );
+  fleetOperationPolicyRunSequence = deriveSequence(snapshot.fleetOperationPolicyRuns || [], "fleet_operation_policy_run_id", "FOP-RUN-");
   deploymentTaskSequence = deriveSequence(snapshot.deploymentTasks || [], "task_id", "TASK-DP-");
   routeExecutionSequence = deriveSequence(snapshot.routeExecutions || [], "route_execution_id", "REX-");
   routePlanningRunSequence = deriveSequence(snapshot.routePlanningRuns || [], "route_planning_run_id", "RPR-");
