@@ -326,6 +326,7 @@ export function applyFleetOperationTaskReference(robotaxi, { task, shouldWait, n
   }
   return {
     ...robotaxi,
+    ...getTagUpdatesForTaskType(task.task_type),
     current_task_id: task.task_id,
     current_task_type: task.task_type,
     current_task_status: task.task_status,
@@ -335,6 +336,13 @@ export function applyFleetOperationTaskReference(robotaxi, { task, shouldWait, n
     operation_blocking_reason: task.task_type,
     updated_at: now || robotaxi.updated_at,
   };
+}
+
+export function getTagUpdatesForTaskType(taskType) {
+  if (taskType === "CLEANING") return { needs_cleaning: true };
+  if (taskType === "CHARGING") return { needs_charging: true };
+  if (taskType === "MAINTENANCE") return { needs_maintenance: true };
+  return {};
 }
 
 export function resolveFleetOperationStatusForTask(taskType) {

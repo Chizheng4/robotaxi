@@ -268,6 +268,7 @@ function isCleaningCandidate(robotaxi, parameters) {
   const orderCountThreshold = Number(parameters.service_order_count_threshold || 0);
   const durationThreshold = Number(parameters.service_duration_minutes_threshold || 0);
   return robotaxi.cleanliness_status === CleanlinessStatus.NEEDS_CLEANING
+    || robotaxi.needs_cleaning === true
     || robotaxi.fleet_operation_status === "NEED_CLEANING"
     || Number(robotaxi.service_order_count || 0) >= orderCountThreshold
     || Number(robotaxi.service_duration_minutes || 0) >= durationThreshold;
@@ -281,6 +282,7 @@ function isChargingCandidate(robotaxi, parameters) {
 
 function isMaintenanceCandidate(robotaxi) {
   return [MaintenanceStatus.DUE, MaintenanceStatus.IN_MAINTENANCE].includes(robotaxi.maintenance_status)
+    || robotaxi.needs_maintenance === true
     || robotaxi.fleet_operation_status === "NEED_MAINTENANCE";
 }
 
@@ -379,6 +381,9 @@ function createRobotaxiSnapshot(robotaxi) {
     current_order_id: robotaxi.current_order_id || null,
     current_task_id: robotaxi.current_task_id || null,
     fleet_operation_status: robotaxi.fleet_operation_status || null,
+    needs_cleaning: (robotaxi.needs_cleaning || false),
+    needs_charging: (robotaxi.needs_charging || false),
+    needs_maintenance: (robotaxi.needs_maintenance || false),
     cleanliness_status: robotaxi.cleanliness_status || null,
     battery_percent: robotaxi.battery_percent ?? null,
     battery_operation_status: robotaxi.battery_operation_status || null,

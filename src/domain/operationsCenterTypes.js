@@ -48,6 +48,10 @@ export function createOpsCenter(opsCenter) {
 export function createRobotaxi(robotaxi) {
   return {
     fleet_operation_status: "NONE",
+    needs_cleaning: false,
+    needs_charging: false,
+    needs_maintenance: false,
+    pending_task_queue: [],
     cleanliness_status: "CLEAN",
     battery_operation_status: "ENOUGH",
     maintenance_status: "NORMAL",

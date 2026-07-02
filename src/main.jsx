@@ -435,7 +435,7 @@ const tableConfig = {
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "fleet_operation_status", "cleanliness_status", "battery_operation_status", "maintenance_status", "failure_status", "retirement_status", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "available_for_dispatch", "current_route_id", "current_route_execution_id", "unavailable_reason"],
+    columns: ["robotaxi_id", "fleet_id", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "fleet_operation_status", "needs_cleaning", "needs_charging", "needs_maintenance", "cleanliness_status", "battery_operation_status", "maintenance_status", "failure_status", "retirement_status", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "available_for_dispatch", "current_route_id", "current_route_execution_id", "unavailable_reason"],
   },
   validations: {
     title: "初始化校验",

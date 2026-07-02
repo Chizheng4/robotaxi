@@ -48,16 +48,19 @@ export function canAcceptSupplyRebalance(robotaxi, context) {
 
 export function needsCleaning(robotaxi) {
   return robotaxi?.cleanliness_status === CleanlinessStatus.NEEDS_CLEANING
+    || robotaxi?.needs_cleaning === true
     || robotaxi?.fleet_operation_status === FleetOperationStatus.NEED_CLEANING;
 }
 
 export function needsCharging(robotaxi) {
   return [BatteryOperationStatus.LOW, BatteryOperationStatus.CRITICAL].includes(robotaxi?.battery_operation_status)
+    || robotaxi?.needs_charging === true
     || robotaxi?.fleet_operation_status === FleetOperationStatus.NEED_CHARGING;
 }
 
 export function needsMaintenance(robotaxi) {
   return [MaintenanceStatus.DUE, MaintenanceStatus.IN_MAINTENANCE].includes(robotaxi?.maintenance_status)
+    || robotaxi?.needs_maintenance === true
     || robotaxi?.fleet_operation_status === FleetOperationStatus.NEED_MAINTENANCE;
 }
 
@@ -70,6 +73,14 @@ export function shouldRetire(robotaxi) {
   return robotaxi?.retirement_status === RetirementStatus.RETIREMENT_CANDIDATE
     || robotaxi?.retirement_status === RetirementStatus.RETIRED
     || robotaxi?.availability_status === "RETIRED";
+}
+
+
+export function hasActiveFleetOperationTag(robotaxi) {
+  return robotaxi?.needs_cleaning === true
+    || robotaxi?.needs_charging === true
+    || robotaxi?.needs_maintenance === true
+    || hasActiveFailure(robotaxi);
 }
 
 export function resolveFleetInterruptionPolicy(robotaxi, currentWork = {}, trigger = {}) {

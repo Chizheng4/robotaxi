@@ -576,6 +576,10 @@
 |current_route_execution_id|当前行驶记录|聚合展示字段|当前关联 RouteExecution，可为空，展示推导字段|
 |location_summary|位置摘要|聚合展示字段|由 current_cell_id 通过 CellContext 推导|
 |fleet_operation_status|车队运维状态|运行态字段|Robotaxi 当前车队运维恢复状态|
+|needs_cleaning|需要清洁标记|运行态字段|Robotaxi 运维容器：是否需要清洁|
+|needs_charging|需要充电标记|运行态字段|Robotaxi 运维容器：是否需要充电|
+|needs_maintenance|需要维修标记|运行态字段|Robotaxi 运维容器：是否需要维修|
+|pending_task_queue|待执行任务队列|运行态字段|Robotaxi 运维任务排队列表|
 |cleanliness_status|清洁状态|运行态字段|车辆是否需要清洁或正在清洁|
 |battery_operation_status|电量运营状态|运行态字段|电量是否满足运营、是否低电或充电中|
 |maintenance_status|维护状态|运行态字段|车辆维护周期和维修状态|
