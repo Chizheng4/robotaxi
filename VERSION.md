@@ -1,6 +1,15 @@
 
 
 
+## v040.6
+
+核心：Robotaxi 管理页 UX 优化与字段字典补齐。
+
+- Robotaxi 表格新增运维标记列，彩色 tag 显示清洁/充电/维修/故障标记。
+- Robotaxi 详情新增任务排队 tab，展示 pending_task_queue。
+- 补齐 taskPriorityConfig 相关字段在两份字段字典中的录入。
+- Bundle 编译和真实浏览器加载验证通过。
+
 ## v040.5
 
 核心：v040 大版本归档收口。
