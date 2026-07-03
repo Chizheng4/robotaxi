@@ -2124,6 +2124,10 @@ function App() {
     fleetOperationTaskSequence = 0;
     fleetOperationPolicyRunSequence = 0;
     fleetOperationPolicyResultSequence = 0;
+    fleetOperationDispatchRunSequence = 0;
+    fleetOperationDispatchDecisionSequence = 0;
+    taskDispatchRunSequence = 0;
+    taskDispatchResultSequence = 0;
     deploymentTaskSequence = 0;
     routeExecutionSequence = 0;
     deploymentRouteSequence = 0;
@@ -2137,6 +2141,8 @@ function App() {
     orderMatchingDecisionSequence = 0;
     tripSequence = 0;
     eventSequence = 0;
+    simActionsRef.current?.cleanup?.();
+    autoFinanceCalculationRunIdsRef.current.clear();
     simulationEngine?.resetSimulationCounters?.();
     const nextSelection = { type: "map", id: initialData.maps[0].map_id };
     setOperationalData(initialData);
@@ -2149,6 +2155,13 @@ function App() {
     setFleetOperationPolicies(fleetOperationPolicyService.initializeDefaultFleetOperationPolicies());
     setFleetOperationPolicyRuns([]);
     setFleetOperationPolicyResults([]);
+    setFleetOperationDispatchStrategies(fleetOperationDispatchService.initializeDefaultFleetOperationDispatchStrategies());
+    setFleetOperationDispatchRuns([]);
+    setFleetOperationDispatchDecisions([]);
+    setTaskDispatchStrategies(taskDispatchStrategyService.initializeDefaultTaskDispatchStrategies());
+    setTaskDispatchRuns([]);
+    setTaskDispatchResults([]);
+    setTaskPriorityConfigs([robotaxiTaskPriorityService.initializeDefaultPriorityConfig()]);
     setDeploymentTasks([]);
     setRouteExecutions([]);
     setRoutePlanningRuns([]);
@@ -2168,6 +2181,11 @@ function App() {
     setCostRecords([]);
     setRevenueCalculationRuns([]);
     setRevenueRecords([]);
+    setMetricDefinitions(metricCalculator.initializeDefaultMetricDefinitions());
+    setMetricCalculationRuns([]);
+    setMetricObservations([]);
+    setMetricPeriodType("ALL");
+    setMetricCalculationInProgress(false);
     setSimulationRuns([]);
     setSimulationEvents([]);
     setTimedOperations([]);
