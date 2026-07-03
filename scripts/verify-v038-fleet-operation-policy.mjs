@@ -83,9 +83,11 @@ const queuedDirectResult = createDirectFleetOperationTask({
   },
   context: createContext(),
 });
-assert.equal(queuedDirectResult.created, false);
+assert.equal(queuedDirectResult.created, true);
 assert.equal(queuedDirectResult.queued, true);
+assert.equal(queuedDirectResult.task.task_status, "WAITING_ROBOTAXI_AVAILABLE");
 assert.equal(queuedDirectResult.robotaxi.pending_task_queue.length, 1);
+assert.equal(queuedDirectResult.robotaxi.pending_task_queue[0].task_id, queuedDirectResult.task.task_id);
 assert.equal(queuedDirectResult.robotaxi.pending_task_queue[0].task_type, TaskType.CLEANING);
 
 const dispatchStrategy = initializeDefaultFleetOperationDispatchStrategies()[0];

@@ -51,11 +51,15 @@ const waitingResult = createFleetOperationTask({
   existingTasks: [],
   context: fixedContext(),
 });
-assert.equal(waitingResult.created, false);
+assert.equal(waitingResult.created, true);
 assert.equal(waitingResult.queued, true);
+assert.equal(waitingResult.task.task_status, "WAITING_ROBOTAXI_AVAILABLE");
 assert.equal(waitingResult.robotaxi.current_task_id, null);
+assert.equal(waitingResult.robotaxi.pending_fleet_task_id, waitingResult.task.task_id);
 assert.equal(waitingResult.robotaxi.pending_task_queue[0].task_type, TaskType.CLEANING);
+assert.equal(waitingResult.robotaxi.pending_task_queue[0].task_id, waitingResult.task.task_id);
 assert.equal(waitingResult.robotaxi.fleet_operation_status, "WAITING_SERVICE_COMPLETION");
+assert.equal(waitingResult.robotaxi.availability_status, "UNAVAILABLE");
 
 const immediateResult = createFleetOperationTaskIfNeeded({
   robotaxi: dirtyRobotaxi,

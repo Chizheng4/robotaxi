@@ -741,7 +741,7 @@
 |task_type|任务类型|持久化字段|本次调度对应的任务类型|
 |robotaxi_id|Robotaxi 编号|持久化字段|本次调度对应的车辆|
 |selected_ops_center_id|选中运营中心|运行态字段|调度选中的目标运营中心，可为空|
-|target_cell_id|当前目标位置|运行态字段|调度选中的目标 Cell，可为空|
+|target_cell_id|目的地位置|运行态字段|调度选中的目的地 Cell，可为空|
 |decision_result|决策结果|运行态字段|DISPATCHED、NO_CAPACITY、NO_MATCHING_CAPABILITY|
 |distance_m|距离（米）|运行态字段|Robotaxi 当前位置到目标运营中心 Cell 的估算距离|
 |total_distance_km|总距离（公里）|运行态字段|调度距离的公里展示|
@@ -845,8 +845,8 @@
 |planned_target_service_area_id|计划目标服务区|持久化字段|运营投放任务创建时的原始计划 ServiceArea，异常重规划不得覆盖|
 |planned_target_cell_id|计划目标位置|持久化字段|运营投放任务创建时的原始计划 Cell，异常重规划不得覆盖|
 |target_service_area_id|当前目标服务区|运行态字段|任务或行驶记录当前 Route 指向的目标 ServiceArea，会随异常重规划更新|
-|target_cell_id|当前目标位置|运行态字段|任务或行驶记录当前 Route 指向的目标 Cell，会随异常重规划更新|
-|current_target_cell_id|当前目标位置|聚合展示字段|行驶记录当前 Route 指向的目标 Cell|
+|target_cell_id|目的地位置|运行态字段|任务或行驶记录当前 Route 指向的目的地 Cell，会随异常重规划更新|
+|current_target_cell_id|当前目的地位置|聚合展示字段|行驶记录当前 Route 指向的目的地 Cell|
 |actual_target_service_area_id|实际停靠服务区|运行态字段|Robotaxi 实际完成停靠的 ServiceArea，可为空|
 |actual_target_cell_id|实际到达位置|运行态字段|Robotaxi 实际完成停靠的 Cell，可为空|
 |arrival_behavior|到达驻留要求|持久化字段|Robotaxi 到达后应临停、停车或待命的要求|
@@ -863,8 +863,11 @@
 |arrival_result|到达结果|运行态字段|记录正常到达或异常到达等执行反馈|
 |exception_type|异常类型|运行态字段|发生异常时的具体原因，可为空|
 |origin_location_summary|起点位置摘要|聚合展示字段|由起点 CellContext 推导|
-|target_location_summary|终点位置摘要|聚合展示字段|由终点 CellContext 推导|
+|target_location_summary|目的地位置|聚合展示字段|由目的地 CellContext 推导|
 |current_location_summary|当前位置摘要|聚合展示字段|由当前 CellContext 推导|
+|robotaxi_current_cell_id|Robotaxi 当前位置|聚合展示字段|运维任务展示时由 Robotaxi 当前 Cell 推导，不在任务单中冗余存储|
+|robotaxi_current_location_summary|Robotaxi 当前位置|聚合展示字段|运维任务展示时由 Robotaxi 当前 CellContext 推导|
+|robotaxi_current_location_detail|Robotaxi 位置详情|聚合展示字段|运维任务展示时由 Robotaxi 当前结构化位置上下文推导|
 |origin_location_detail|起点位置详情|聚合展示字段|起点结构化位置上下文|
 |target_location_detail|终点位置详情|聚合展示字段|终点结构化位置上下文|
 |current_location_detail|当前位置详情|聚合展示字段|当前位置结构化位置上下文|
@@ -1298,7 +1301,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |NEED_CHARGING|需要充电|
 |NEED_MAINTENANCE|需要维修|
 |WAITING_SERVICE_COMPLETION|等待当前服务完成|
-|MOVING_TO_OPS_CENTER|前往运营中心|
+|MOVING_TO_OPS_CENTER|前往目的地|
 |IN_CHARGING|充电中|
 |READY_FOR_INSPECTION|待准入复核|
 |INSPECTION_OPERATOR|检查人员|
@@ -1320,23 +1323,26 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |WAITING_CHECK|待检查|
 |CHECKING|检查中|
 |WAITING_ROBOTAXI_AVAILABLE|等待 Robotaxi 可执行|
-|WAITING_DESTINATION_ASSIGNMENT|待分配目的地|
-|WAITING_CHARGING_DESTINATION_ASSIGNMENT|待分配充电位置|
-|WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT|待分配维修位置|
-|WAITING_ROUTE|待路径规划|
+|WAITING_DESTINATION_ASSIGNMENT|待 Robotaxi 执行|
+|WAITING_CHARGING_DESTINATION_ASSIGNMENT|待 Robotaxi 执行|
+|WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT|待 Robotaxi 执行|
+|WAITING_ROUTE|待行驶|
 |WAITING_START|待行驶|
-|ARRIVED_OPS_CENTER|已到达运营中心|
+|ARRIVED_OPS_CENTER|已到达目的地|
 |WAITING_RESOURCE_ASSIGNMENT|待分配资源|
 |WAITING_WORKER_ASSIGNMENT|待分配作业人员|
 |READY_TO_START|待开始作业|
+|CLEANING_IN_PROGRESS|清洁中|
 |IN_PROGRESS|作业中|
-|WAITING_RESULT_CONFIRMATION|待确认结果|
-|MOVING_TO_CHARGER|前往充电点|
-|ARRIVED_CHARGER|已到达充电点|
-|WAITING_CHARGER_ASSIGNMENT|待分配充电桩|
+|MOVING_TO_CHARGER|前往目的地|
+|ARRIVED_CHARGER|已到达目的地|
+|WAITING_CHARGER_ASSIGNMENT|待分配作业人员|
+|CONNECTING_CHARGER|接入充电中|
 |READY_TO_CHARGE|待开始充电|
-|MOVING_TO_MAINTENANCE_CENTER|前往维修中心|
-|ARRIVED_MAINTENANCE_CENTER|已到达维修中心|
+|DISCONNECTING_CHARGER|断开充电中|
+|MOVING_TO_MAINTENANCE_CENTER|前往目的地|
+|ARRIVED_MAINTENANCE_CENTER|已到达目的地|
+|MAINTENANCE_IN_PROGRESS|维护中|
 |WAITING_DIAGNOSIS_ASSIGNMENT|待分配诊断人员|
 |DIAGNOSING|诊断中|
 |WAITING_DISPOSITION|待处置决策|
@@ -1344,8 +1350,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |TRANSFERRED_TO_RETIREMENT|已转退役|
 |RESOLVED_NO_ACTION|无需处理|
 |WAITING_RETIREMENT_APPROVAL|待退役确认|
-|MOVING_TO_RETIREMENT_CENTER|前往退役处理点|
-|ARRIVED_RETIREMENT_CENTER|已到达退役处理点|
+|MOVING_TO_RETIREMENT_CENTER|前往目的地|
+|ARRIVED_RETIREMENT_CENTER|已到达目的地|
 |PROCESSING_RETIREMENT|退役处理中|
 |ARRIVED|已到达|
 |ARRIVAL_ABNORMAL|异常到达|

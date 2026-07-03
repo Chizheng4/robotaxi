@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v040.8`：Fleet Operations 生命周期闭环修复小迭代，已归档到 `doc/common/iteration-history/minor/v040.8-fleet-operation-lifecycle-contract.md`。
 - `v040.7`：Fleet Operations 架构合同止血修复小迭代，已归档到 `doc/common/iteration-history/minor/v040.7-fleet-operation-contract-remediation.md`。
 - `v039.7`：运营行驶记录服务化边界与模拟隔离小迭代，已归档到 `doc/common/iteration-history/minor/v039.7-serviceized-route-execution-boundary.md`。
 - `v038.1`：Fleet Operations 触发链路与策略结果小迭代，已归档到 `doc/common/iteration-history/minor/v038.1-fleet-operation-trigger-and-result-plan.md`。

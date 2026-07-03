@@ -5,6 +5,8 @@ import * as tripTypes from "../domain/tripTypes.js";
 import { runDemandSimulation } from "../data/demandSimulationEngine.js";
 import * as serviceOrderSettlement from "../domain/serviceOrderSettlement.js";
 import * as routePlanningService from "./routePlanningService.js";
+import * as robotaxiService from "./robotaxiService.js";
+import * as fleetOperationTaskService from "./fleetOperationTaskService.js";
 import * as serviceOrderService from "./serviceOrderService.js";
 import * as tripService from "./tripService.js";
 import { TimedOperationStatus, TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
@@ -135,7 +137,7 @@ export function createDeploymentTask({ state, runtime }) {
   }
   const appData = dataView(state);
   const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi) =>
-    robotaxi.availability_status === "AVAILABLE" && !robotaxi.current_task_id && !robotaxi.current_order_id
+    robotaxiService.canAcceptDeploymentTask(robotaxi)
   );
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "投放任务创建失败：无可投放 Robotaxi", "deploymentTask", null, "无可投放 Robotaxi");
   const target = routePlanningService.getRandomDeploymentTarget(appData, {
@@ -901,11 +903,58 @@ export function payServiceOrder({ state, objectId, runtime }) {
     tripTypes,
   });
   if (!result.success) return failure("PAYMENT_FAILED", `服务订单 ${objectId} 支付失败：${result.failureReason}`, "serviceOrder", objectId, result.failureReason);
+  const activatedFleetOperation = activateQueuedFleetOperationTasksAfterRelease({
+    state,
+    robotaxis: result.robotaxis,
+    runtime,
+  });
   return success("PAYMENT_COMPLETED", `服务订单 ${objectId} 支付完成`, { objectType: "serviceOrder", objectId }, {
     serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({ ...result.serviceOrder, simulation_payment_completed_at: runtime.simulationTime(), ...runtime.audit({ completed: true }) }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: result.serviceOrder.order_status, actionType: "PAYMENT_EXECUTE", resultType: "PAYMENT_COMPLETED" })),
     trips: result.trips.map((trip) => trip.service_order_id === objectId ? withLifecycleStatus({ ...trip, ...runtime.audit({ completed: true }) }, { runtime, objectType: "trip", statusField: "trip_status", fromStatus: trip.trip_status, toStatus: trip.trip_status, actionType: "PAYMENT_EXECUTE", resultType: "PAYMENT_COMPLETED" }) : trip),
-    robotaxis: result.robotaxis.map((robotaxi) => robotaxi.current_order_id === objectId ? { ...robotaxi, motion_status: "PARKED", ...runtime.audit() } : robotaxi),
+    robotaxis: activatedFleetOperation.robotaxis,
+    cleaningTasks: activatedFleetOperation.cleaningTasks,
+    chargingTasks: activatedFleetOperation.chargingTasks,
+    maintenanceTasks: activatedFleetOperation.maintenanceTasks,
+    failureHandlingTasks: activatedFleetOperation.failureHandlingTasks,
+    retirementTasks: activatedFleetOperation.retirementTasks,
   });
+}
+
+function activateQueuedFleetOperationTasksAfterRelease({ state, robotaxis = [], runtime }) {
+  const appData = dataView(state);
+  const result = {
+    robotaxis: robotaxis.map((robotaxi) => ({ ...robotaxi, motion_status: robotaxi.motion_status === "STOPPED" ? "PARKED" : robotaxi.motion_status, ...runtime.audit() })),
+    cleaningTasks: state.cleaningTasks || [],
+    chargingTasks: state.chargingTasks || [],
+    maintenanceTasks: state.maintenanceTasks || [],
+    failureHandlingTasks: state.failureHandlingTasks || [],
+    retirementTasks: state.retirementTasks || [],
+  };
+  for (const robotaxi of result.robotaxis) {
+    const queuedTaskId = robotaxi.pending_fleet_task_id || robotaxi.pending_task_queue?.[0]?.task_id || null;
+    if (!queuedTaskId || robotaxi.current_order_id || robotaxi.current_task_id) continue;
+    const taskRef = findFleetOperationTaskById(result, queuedTaskId);
+    if (!taskRef.task) continue;
+    const activation = fleetOperationTaskService.activateQueuedFleetOperationTask({
+      task: taskRef.task,
+      robotaxi,
+      opsCenters: appData.opsCenters || [],
+      context: { now: runtime.now, audit: runtime.audit },
+    });
+    if (!activation.succeeded) continue;
+    result.robotaxis = replaceById(result.robotaxis, "robotaxi_id", robotaxi.robotaxi_id, { ...activation.robotaxi, ...runtime.audit() });
+    result[taskRef.collectionKey] = replaceById(result[taskRef.collectionKey], "task_id", queuedTaskId, { ...activation.task, ...runtime.audit() });
+  }
+  return result;
+}
+
+function findFleetOperationTaskById(collections, taskId) {
+  const collectionKeys = ["cleaningTasks", "chargingTasks", "maintenanceTasks", "failureHandlingTasks", "retirementTasks"];
+  for (const collectionKey of collectionKeys) {
+    const task = (collections[collectionKey] || []).find((item) => item.task_id === taskId);
+    if (task) return { collectionKey, task };
+  }
+  return { collectionKey: null, task: null };
 }
 
 function executePriceRoutePlanning({ state, order, runtime }) {

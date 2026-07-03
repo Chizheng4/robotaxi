@@ -47,6 +47,7 @@ rm -f "$TMP_BUNDLE"
 print_step "检查 JavaScript 语法"
 node --check src/main.bundle.js
 node --check src/data/deploymentTaskValidation.js
+node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js
 node --check src/domain/fieldDisplayService.js
 node --check src/domain/taskTypes.js
@@ -103,6 +104,7 @@ node scripts/verify-v038-fleet-operation-policy.mjs
 node scripts/verify-v038-fleet-operation-pages.mjs
 node scripts/verify-v039-runtime-load-contract.mjs
 node scripts/verify-v039-7-route-execution-service-boundary.mjs
+node scripts/verify-v040-8-fleet-operation-lifecycle.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

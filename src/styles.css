@@ -1651,6 +1651,7 @@ body {
   color: #252a31;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+  table-layout: fixed;
 }
 
 .record-page-new .ant-table-container {
@@ -1676,6 +1677,13 @@ body {
   padding: 7px 10px !important;
   border-bottom-color: var(--line-soft);
   transition: background 120ms ease;
+}
+
+.record-page-new .ant-table-thead > tr > th,
+.record-page-new .ant-table-tbody > tr > td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .record-page-new .ant-table-tbody > tr:hover > td {

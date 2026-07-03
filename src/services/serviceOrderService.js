@@ -150,14 +150,20 @@ export function payServiceOrder({
     trip_phase: tripTypes.TripPhase.COMPLETED,
     completed_at: completedAt,
   } : trip);
-  const nextRobotaxis = robotaxis.map((robotaxi) => robotaxi.current_order_id === serviceOrder.service_order_id ? {
-    ...robotaxi,
-    current_order_id: null,
-    current_route_id: null,
-    availability_status: "AVAILABLE",
-    motion_status: "STOPPED",
-    available_for_dispatch: true,
-  } : robotaxi);
+  const nextRobotaxis = robotaxis.map((robotaxi) => {
+    if (robotaxi.current_order_id !== serviceOrder.service_order_id) return robotaxi;
+    const hasPendingFleetOperation = Boolean(robotaxi.pending_fleet_task_id)
+      || (Array.isArray(robotaxi.pending_task_queue) && robotaxi.pending_task_queue.length > 0)
+      || (robotaxi.fleet_operation_status && robotaxi.fleet_operation_status !== "NONE");
+    return {
+      ...robotaxi,
+      current_order_id: null,
+      current_route_id: null,
+      availability_status: hasPendingFleetOperation ? "UNAVAILABLE" : "AVAILABLE",
+      motion_status: "STOPPED",
+      available_for_dispatch: !hasPendingFleetOperation,
+    };
+  });
   return {
     success: true,
     serviceOrder: nextServiceOrder,

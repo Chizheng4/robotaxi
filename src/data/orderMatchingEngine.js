@@ -13,7 +13,8 @@ export function runOrderMatching({ strategy, serviceOrder, data, orderMatchingRu
   const candidates = (data.robotaxis || []).filter((robotaxi) =>
     robotaxi.availability_status === "AVAILABLE" &&
     !robotaxi.current_order_id &&
-    !robotaxi.current_task_id
+    !robotaxi.current_task_id &&
+    !hasFleetOperationBlocker(robotaxi)
   );
   const eligible = candidates
     .filter((robotaxi) => Number(robotaxi.battery_percent) >= Number(strategy.min_battery_threshold || 20))
@@ -82,6 +83,20 @@ export function runOrderMatching({ strategy, serviceOrder, data, orderMatchingRu
     created_at: createdAt,
   });
   return { run, decision };
+}
+
+function hasFleetOperationBlocker(robotaxi) {
+  return Boolean(
+    (robotaxi?.fleet_operation_status && robotaxi.fleet_operation_status !== "NONE") ||
+    robotaxi?.pending_fleet_task_id ||
+    robotaxi?.needs_cleaning === true ||
+    robotaxi?.needs_charging === true ||
+    robotaxi?.needs_maintenance === true ||
+    robotaxi?.cleanliness_status === "NEEDS_CLEANING" ||
+    ["LOW", "CRITICAL"].includes(robotaxi?.battery_operation_status) ||
+    ["DUE", "IN_MAINTENANCE"].includes(robotaxi?.maintenance_status) ||
+    ["ALERTED", "REMOTE_HANDLING", "BROKEN"].includes(robotaxi?.failure_status)
+  );
 }
 
 function createFailedResult({ strategy, serviceOrder, orderMatchingRunId, orderMatchingDecisionId, createdAt, failureReason, candidateRobotaxiCount = 0, eligibleRobotaxiCount = 0, candidateSnapshot = [] }) {

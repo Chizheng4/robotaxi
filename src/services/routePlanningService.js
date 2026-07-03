@@ -852,6 +852,7 @@ function countAvailableVehiclesByServiceArea(data, excludedRobotaxiId = null) {
   for (const robotaxi of data.robotaxis || []) {
     if (robotaxi.robotaxi_id === excludedRobotaxiId) continue;
     if (robotaxi.current_order_id || robotaxi.current_task_id) continue;
+    if (hasFleetOperationBlocker(robotaxi)) continue;
     const serviceArea = serviceAreas.find((item) =>
       getCandidateServiceAreaCellIds(item).includes(robotaxi.current_cell_id)
     );
@@ -859,6 +860,18 @@ function countAvailableVehiclesByServiceArea(data, excludedRobotaxiId = null) {
     counts.set(serviceArea.service_area_id, (counts.get(serviceArea.service_area_id) || 0) + 1);
   }
   return counts;
+}
+
+function hasFleetOperationBlocker(robotaxi) {
+  return robotaxi?.fleet_operation_status && robotaxi.fleet_operation_status !== "NONE"
+    || robotaxi?.pending_fleet_task_id
+    || robotaxi?.needs_cleaning === true
+    || robotaxi?.needs_charging === true
+    || robotaxi?.needs_maintenance === true
+    || robotaxi?.cleanliness_status === "NEEDS_CLEANING"
+    || ["LOW", "CRITICAL"].includes(robotaxi?.battery_operation_status)
+    || ["DUE", "IN_MAINTENANCE"].includes(robotaxi?.maintenance_status)
+    || ["ALERTED", "REMOTE_HANDLING", "BROKEN"].includes(robotaxi?.failure_status);
 }
 
 function estimateCellDistance(data, originCellId, targetCellId) {
