@@ -19,6 +19,19 @@ export function initializeDefaultTaskDispatchStrategies() {
   ];
 }
 
+export function resolveTaskPriorityConfig(strategy = null) {
+  const activeStrategy = strategy || initializeDefaultTaskDispatchStrategies()[0];
+  return {
+    config_id: activeStrategy.task_dispatch_strategy_id || "TDS-STANDARD-001",
+    config_status: activeStrategy.strategy_status || "ACTIVE",
+    priority_rank: { ...(activeStrategy.priority_rank || {}) },
+    interrupt_policy: { ...(activeStrategy.interrupt_policy || {}) },
+    allow_queuing: activeStrategy.allow_queuing !== false,
+    max_queue_size: Number(activeStrategy.max_queue_size || 5),
+    source_strategy_name: activeStrategy.strategy_name || null,
+  };
+}
+
 export function executeTaskDispatchStrategy({
   strategy = null,
   robotaxi = null,
@@ -192,6 +205,11 @@ function createStrategySnapshot(strategy) {
     fleet_operation_priority: strategy.fleet_operation_priority,
     service_order_priority: strategy.service_order_priority,
     deployment_task_priority: strategy.deployment_task_priority,
+    priority_rank: strategy.priority_rank,
+    interrupt_policy: strategy.interrupt_policy,
+    allow_queuing: strategy.allow_queuing,
+    max_queue_size: strategy.max_queue_size,
+    invocation_rules: strategy.invocation_rules,
   };
 }
 

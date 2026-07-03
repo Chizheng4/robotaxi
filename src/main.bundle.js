@@ -275,9 +275,6 @@ const pageGroups = [{
     }, {
       key: "taskDispatchResults",
       label: "任务调度结果"
-    }, {
-      key: "taskPriorityConfig",
-      label: "任务优先级调度配置"
     }]
   }, {
     key: "opsCenters",
@@ -348,7 +345,7 @@ const pageGroups = [{
     label: "时间作业"
   }]
 }];
-const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles"]);
+const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles", "taskPriorityConfig"]);
 const tableConfig = {
   maps: {
     title: "地图管理",
@@ -1979,7 +1976,6 @@ function App() {
       runAutoReadinessCheck,
       runFleetOperationPolicyForPage,
       runFleetOperationPolicy,
-      runTaskDispatchStrategy,
       createDirectFleetOperationTaskFromRobotaxi,
       confirmRetirement,
       dispatchFleetOperationTaskDestination,
@@ -2555,10 +2551,22 @@ function App() {
     const taskType = getFleetOperationTaskTypeByPage(page);
     if (taskType) runFleetOperationPolicy(taskType);
   }
+  function getActiveTaskDispatchStrategy() {
+    return taskDispatchStrategies.find(item => item.strategy_status === "ACTIVE") || taskDispatchStrategies[0] || null;
+  }
+  function getActiveTaskPriorityConfig() {
+    return taskDispatchStrategyService?.resolveTaskPriorityConfig(getActiveTaskDispatchStrategy()) || taskPriorityConfigs[0] || robotaxiTaskPriorityService.initializeDefaultPriorityConfig();
+  }
   function runFleetOperationPolicy(taskType) {
     const policy = fleetOperationPolicies.find(item => item.target_task_type === taskType && item.policy_status === "ACTIVE") || fleetOperationPolicies.find(item => item.target_task_type === taskType);
     if (!policy) {
-      antd.message.warning("没有找到可用的运维策略配置");
+      appendFleetOperationPageEvent(getFleetOperationTaskCollectionKey(taskType), {
+        event_type: taskTypes.TaskEventType.TASK_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        trigger_type: taskTypes.TriggerType.MANUAL,
+        task_type: taskType,
+        message: "没有找到可用的运维策略配置"
+      });
       return;
     }
     const collectionKey = getFleetOperationTaskCollectionKey(taskType);
@@ -2573,7 +2581,7 @@ function App() {
         nextRunId: nextFleetOperationPolicyRunId,
         nextResultId: nextFleetOperationPolicyResultId,
         opsCenters: data.opsCenters,
-        taskPriorityConfig: taskPriorityConfigs[0]
+        taskPriorityConfig: getActiveTaskPriorityConfig()
       }
     });
     setFleetOperationPolicyRuns(runs => [result.run, ...runs]);
@@ -2588,22 +2596,29 @@ function App() {
         event_type: taskTypes.TaskEventType.TASK_CREATED,
         event_result: taskTypes.TaskEventResult.SUCCESS,
         task_id: task.task_id,
+        task_type: task.task_type,
+        source_page: collectionKey,
+        source_object_type: "fleetOperationPolicy",
+        source_object_id: policy.fleet_operation_policy_id,
+        fleet_operation_policy_run_id: result.run.fleet_operation_policy_run_id,
         robotaxi_id: task.robotaxi_id,
         trigger_type: task.trigger_type,
         message: `运维策略已创建 ${getDisplayValue(task.task_type)}任务`
       })), ...logs]);
       const firstTask = result.tasks[0];
       selectForPage(collectionKey, pageObjectType[collectionKey], firstTask.task_id);
-      antd.message.success(result.run.result_summary || "运维任务已生成");
       return;
     }
-    setTaskEventLogs(logs => [createEventLog({
+    appendFleetOperationPageEvent(collectionKey, {
       event_type: taskTypes.TaskEventType.NO_CANDIDATE_ROBOTAXI,
       event_result: taskTypes.TaskEventResult.SKIPPED,
       trigger_type: taskTypes.TriggerType.MANUAL,
+      task_type: taskType,
+      source_object_type: "fleetOperationPolicy",
+      source_object_id: policy.fleet_operation_policy_id,
+      fleet_operation_policy_run_id: result.run.fleet_operation_policy_run_id,
       message: result.run.result_summary || "当前无符合条件的 Robotaxi"
-    }), ...logs]);
-    antd.message.info(result.run.result_summary || "当前无符合条件的 Robotaxi");
+    });
   }
   function createDirectFleetOperationTaskFromRobotaxi(robotaxi, taskType) {
     if (!robotaxi?.robotaxi_id || !taskType) return;
@@ -2621,7 +2636,7 @@ function App() {
         now,
         nextId: nextFleetOperationTaskId,
         opsCenters: data.opsCenters,
-        taskPriorityConfig: taskPriorityConfigs[0]
+        taskPriorityConfig: getActiveTaskPriorityConfig()
       }
     });
     if (!result.created) {
@@ -2635,14 +2650,23 @@ function App() {
         setTaskEventLogs(logs => [createEventLog({
           event_type: taskTypes.TaskEventType.TASK_CREATED,
           event_result: taskTypes.TaskEventResult.SKIPPED,
+          task_id: result.task?.task_id || null,
+          task_type: taskType,
+          source_page: collectionKey,
           robotaxi_id: robotaxi.robotaxi_id,
           trigger_type: taskTypes.TriggerType.MANUAL,
           message: `${getDisplayValue(taskType)}任务已进入待执行队列`
         }), ...logs]);
-        antd.message.info(`${getDisplayValue(taskType)}任务已排队`);
         return;
       }
-      antd.message.warning(getDisplayValue(result.reason, "result_reason") || "当前 Robotaxi 暂不能生成运维任务");
+      appendFleetOperationPageEvent(collectionKey, {
+        event_type: taskTypes.TaskEventType.TASK_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_type: taskType,
+        robotaxi_id: robotaxi.robotaxi_id,
+        trigger_type: taskTypes.TriggerType.MANUAL,
+        message: getDisplayValue(result.reason, "result_reason") || "当前 Robotaxi 暂不能生成运维任务"
+      });
       return;
     }
     appendFleetOperationTasks(collectionKey, [result.task]);
@@ -2654,12 +2678,15 @@ function App() {
       event_type: taskTypes.TaskEventType.TASK_CREATED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       task_id: result.task.task_id,
+      task_type: result.task.task_type,
+      source_page: collectionKey,
+      source_object_type: "robotaxi",
+      source_object_id: robotaxi.robotaxi_id,
       robotaxi_id: result.task.robotaxi_id,
       trigger_type: result.task.trigger_type,
       message: result.queued ? `${getDisplayValue(taskType)}任务已创建并等待 Robotaxi 可执行` : `Robotaxi 直接触发${getDisplayValue(taskType)}任务`
     }), ...logs]);
     selectForPage(collectionKey, pageObjectType[collectionKey], result.task.task_id);
-    antd.message.success(result.queued ? `${getDisplayValue(taskType)}任务已排队` : `${getDisplayValue(taskType)}任务已生成`);
   }
   function confirmRetirement(robotaxi) {
     if (!robotaxi?.robotaxi_id) return;
@@ -2697,7 +2724,14 @@ function App() {
     }));
     setFleetOperationPolicyModalOpen(false);
     setPendingFleetOperationPolicy(null);
-    antd.message.success("运维策略配置已更新");
+    appendFleetOperationPageEvent(getFleetOperationTaskCollectionKey(pendingFleetOperationPolicy.target_task_type), {
+      event_type: "FLEET_OPERATION_POLICY_UPDATED",
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_type: pendingFleetOperationPolicy.target_task_type,
+      source_object_type: "fleetOperationPolicy",
+      source_object_id: pendingFleetOperationPolicy.fleet_operation_policy_id,
+      message: "运维策略配置已更新"
+    });
   }
   function getFleetOperationTaskTypeByPage(page) {
     const map = {
@@ -2755,6 +2789,7 @@ function App() {
   }
   function planFleetOperationRoute(task) {
     if (!task?.task_id || !task.robotaxi_id || !task.target_cell_id || !fleetOperationTaskService) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
     const robotaxi = operationalData.robotaxis?.find(r => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi || !routePlanningService) return;
     const result = fleetOperationTaskService.planFleetOperationRoute({
@@ -2783,14 +2818,22 @@ function App() {
         event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
         event_result: taskTypes.TaskEventResult.SUCCESS,
         task_id: result.task.task_id,
+        task_type: result.task.task_type,
+        source_page: collectionKey,
         robotaxi_id: result.task.robotaxi_id,
         route_execution_id: result.routeExecution.route_execution_id,
         message: "运营行驶记录已生成，Robotaxi 前往目的地"
       }), ...logs]);
-      antd.message.success("运营行驶记录已生成");
     } else {
       if (result.task) updateFleetOperationTask(result.task);
-      antd.message.warning("路径规划失败");
+      appendFleetOperationPageEvent(collectionKey, {
+        event_type: taskTypes.TaskEventType.ROUTE_PLANNING_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        task_type: task.task_type,
+        robotaxi_id: task.robotaxi_id,
+        message: "路径规划失败"
+      });
     }
   }
   function advanceFleetOperationRouteExecution(execution) {
@@ -2826,6 +2869,7 @@ function App() {
   function submitFleetOperationNormalArrival(execution) {
     if (!execution || !fleetOperationTaskService) return;
     const task = findFleetOperationTaskByExecution(execution);
+    const collectionKey = getFleetOperationTaskCollectionKey(task?.task_type);
     const robotaxi = operationalData.robotaxis.find(item => item.robotaxi_id === execution.robotaxi_id);
     const result = fleetOperationTaskService.confirmFleetOperationArrival({
       execution,
@@ -2844,11 +2888,20 @@ function App() {
         robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item)
       }));
     }
-    antd.message.success("已确认到达");
+    appendFleetOperationPageEvent(collectionKey, {
+      event_type: taskTypes.TaskEventType.ARRIVAL_NORMAL,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: result.task.task_id,
+      task_type: result.task.task_type,
+      robotaxi_id: result.task.robotaxi_id,
+      route_execution_id: result.routeExecution.route_execution_id,
+      message: "已确认到达，任务进入后续作业"
+    });
     focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.COMPLETED);
   }
   function dispatchFleetOperationTaskDestination(task) {
     if (!task?.task_id || !fleetOperationTaskService) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
     const robotaxi = operationalData.robotaxis?.find(r => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi) return;
     const strategy = (Array.isArray(fleetOperationDispatchStrategies) ? fleetOperationDispatchStrategies : [])[0] || null;
@@ -2878,23 +2931,26 @@ function App() {
         event_type: taskTypes.TaskEventType.TASK_CREATED,
         event_result: taskTypes.TaskEventResult.SUCCESS,
         task_id: result.task.task_id,
+        task_type: result.task.task_type,
+        source_page: collectionKey,
         robotaxi_id: result.task.robotaxi_id,
         message: result.alreadyAssigned ? "任务已有目的地，等待行驶" : "已分配目的地，等待行驶"
       }), ...logs]);
-      antd.message.success(result.alreadyAssigned ? "任务已有目的地" : "已分配目的地");
     } else {
       setTaskEventLogs(logs => [createEventLog({
         event_type: taskTypes.TaskEventType.TASK_FAILED,
         event_result: taskTypes.TaskEventResult.FAILED,
         task_id: task.task_id,
+        task_type: task.task_type,
+        source_page: collectionKey,
         robotaxi_id: task.robotaxi_id,
         message: result.run?.run_status === "NO_ELIGIBLE_CENTER" ? "没有符合条件的运维中心" : "目的地分配失败"
       }), ...logs]);
-      antd.message.warning(result.run?.run_status === "NO_ELIGIBLE_CENTER" ? "没有符合条件的运维中心" : "调度失败");
     }
   }
   function startFleetOperationWork(task) {
     if (!task?.task_id || !fleetOperationTaskService) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
     const robotaxi = operationalData.robotaxis?.find(r => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi) return;
     const result = fleetOperationTaskService.startFleetOperationWork({
@@ -2905,7 +2961,14 @@ function App() {
       }
     });
     if (!result.succeeded) {
-      antd.message.warning("当前任务不能开始作业");
+      appendFleetOperationPageEvent(collectionKey, {
+        event_type: taskTypes.TaskEventType.TASK_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        task_type: task.task_type,
+        robotaxi_id: task.robotaxi_id,
+        message: "当前任务不能开始作业"
+      });
       return;
     }
     updateFleetOperationTask(result.task);
@@ -2917,12 +2980,15 @@ function App() {
       event_type: taskTypes.TaskEventType.CHECK_STARTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       task_id: result.task.task_id,
+      task_type: result.task.task_type,
+      source_page: collectionKey,
       robotaxi_id: result.task.robotaxi_id,
       message: `${getDisplayValue(result.task.task_status)}已开始`
     }), ...logs]);
   }
   function completeFleetOperationWork(task) {
     if (!task?.task_id || !fleetOperationTaskService) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
     const robotaxi = operationalData.robotaxis?.find(r => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi) return;
     const result = fleetOperationTaskService.completeFleetOperationWork({
@@ -2933,7 +2999,14 @@ function App() {
       }
     });
     if (!result.succeeded) {
-      antd.message.warning("当前任务不能完成作业");
+      appendFleetOperationPageEvent(collectionKey, {
+        event_type: taskTypes.TaskEventType.TASK_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        task_type: task.task_type,
+        robotaxi_id: task.robotaxi_id,
+        message: "当前任务不能完成作业"
+      });
       return;
     }
     updateFleetOperationTask(result.task);
@@ -2945,10 +3018,11 @@ function App() {
       event_type: result.task.task_status === "COMPLETED" ? taskTypes.TaskEventType.ROBOTAXI_MARKED_AVAILABLE : taskTypes.TaskEventType.CHECK_SUBMITTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       task_id: result.task.task_id,
+      task_type: result.task.task_type,
+      source_page: collectionKey,
       robotaxi_id: result.task.robotaxi_id,
       message: result.task.task_status === "COMPLETED" ? "运维任务已完成，Robotaxi 恢复可运营" : `${getDisplayValue(result.task.task_status)}已完成`
     }), ...logs]);
-    antd.message.success(result.task.task_status === "COMPLETED" ? "任务已完成，Robotaxi 恢复可运营" : "作业已推进");
   }
   function assignWorker(taskId) {
     const task = readinessTasks.find(item => item.task_id === taskId);
@@ -3466,31 +3540,6 @@ function App() {
       message: `${serviceOrderId} 支付完成，支付金额 ${result.paidAmount}`
     });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
-  }
-  function runTaskDispatchStrategy(strategyId = null) {
-    if (!taskDispatchStrategyService) return;
-    const strategy = taskDispatchStrategies.find(item => item.task_dispatch_strategy_id === strategyId) || taskDispatchStrategies.find(item => item.strategy_status === "ACTIVE") || taskDispatchStrategies[0];
-    if (!strategy) return;
-    const fleetTasks = [...cleaningTasks, ...chargingTasks, ...maintenanceTasks, ...failureHandlingTasks, ...retirementTasks];
-    const releasedRobotaxis = (data.robotaxis || []).filter(robotaxi => robotaxi.availability_status === "AVAILABLE" && robotaxi.available_for_dispatch !== false && !robotaxi.current_order_id && !robotaxi.current_task_id);
-    const executions = releasedRobotaxis.length ? releasedRobotaxis : [null];
-    const results = executions.map(robotaxi => taskDispatchStrategyService.executeTaskDispatchStrategy({
-      strategy,
-      robotaxi,
-      pendingFleetTasks: fleetTasks,
-      serviceOrders,
-      deploymentTasks,
-      context: {
-        now,
-        nextTaskDispatchRunId,
-        nextTaskDispatchResultId,
-        trigger_object_type: "taskDispatchStrategy",
-        trigger_object_id: strategy.task_dispatch_strategy_id
-      }
-    }));
-    setTaskDispatchRuns(items => [...results.map(item => item.run).filter(Boolean), ...items]);
-    setTaskDispatchResults(items => [...results.flatMap(item => item.results || []), ...items]);
-    selectForPage("taskDispatchStrategies", "taskDispatchStrategy", strategy.task_dispatch_strategy_id);
   }
   function viewTripForServiceOrder(serviceOrder) {
     const trip = trips.find(item => item.trip_id === serviceOrder.trip_id || item.service_order_id === serviceOrder.service_order_id);
@@ -4104,6 +4153,13 @@ function App() {
   function addLog(log) {
     setTaskEventLogs(logs => [createEventLog(log), ...logs]);
   }
+  function appendFleetOperationPageEvent(page, event) {
+    if (!page) return;
+    setTaskEventLogs(logs => [createEventLog({
+      ...event,
+      source_page: page
+    }), ...logs]);
+  }
   function createTask(robotaxi, triggerType) {
     const opsCenter = data.opsCenters[0];
     return taskTypes.createReadinessCheckTask({
@@ -4316,13 +4372,13 @@ function RecordTable({
     key,
     title: getFieldLabel(key),
     dataIndex: key,
-    ellipsis: true,
-    width: getColumnWidth(key),
+    ellipsis: false,
+    width: getColumnWidth(key, displayRows),
     render: (_, row) => renderCellValue(key, row)
   }));
   const actionColumn = getActionColumn();
   const finalColumns = actionColumn ? [...columns, actionColumn] : columns;
-  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isFleetOperationPolicyPage ? actions.fleetOperationPolicyRuns : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const visibleEventRows = eventRows.slice(0, 300);
   const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
   const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
@@ -4342,7 +4398,7 @@ function RecordTable({
   const tableScrollY = tableBodyHeight;
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
   const tableScrollX = finalColumns.reduce((sum, column) => sum + Number(column.width || 128), 0);
-  const eventTableScrollX = eventColumns.reduce((sum, key) => sum + getColumnWidth(key), 0);
+  const eventTableScrollX = eventColumns.reduce((sum, key) => sum + getColumnWidth(key, visibleEventRows), 0);
   const showMainTable = !isMetricAnalysisPage || metricTableVisible;
   useEffect(() => {
     if (isMetricAnalysisPage) setMetricTableVisible(false);
@@ -4453,13 +4509,7 @@ function RecordTable({
     size: "small",
     type: "primary",
     onClick: () => actions.runFleetOperationPolicyForPage(page)
-  }, getFleetOperationTaskActionLabel(page))), isTaskDispatchStrategyPage && /*#__PURE__*/React.createElement("div", {
-    className: "list-action-bar"
-  }, /*#__PURE__*/React.createElement(Button, {
-    size: "small",
-    type: "primary",
-    onClick: () => actions.runTaskDispatchStrategy()
-  }, "\u6267\u884C\u4EFB\u52A1\u8C03\u5EA6")), isServiceOrderPage && /*#__PURE__*/React.createElement("div", {
+  }, getFleetOperationTaskActionLabel(page))), isServiceOrderPage && /*#__PURE__*/React.createElement("div", {
     className: "list-action-bar"
   }, /*#__PURE__*/React.createElement(Button, {
     size: "small",
@@ -4531,7 +4581,7 @@ function RecordTable({
       x: tableScrollX,
       y: tableScrollY
     },
-    tableLayout: "fixed",
+    tableLayout: "auto",
     rowClassName: row => selected?.type === objectType && selected?.id === row[idField] ? "active-table-row" : "",
     onRow: row => ({
       onClick: () => onSelect(objectType, row[idField])
@@ -4555,8 +4605,8 @@ function RecordTable({
       key,
       title: getFieldLabel(key),
       dataIndex: key,
-      ellipsis: true,
-      width: getColumnWidth(key),
+      ellipsis: false,
+      width: getColumnWidth(key, visibleEventRows),
       render: (_, row) => renderCellValue(key, row)
     })),
     dataSource: visibleEventRows,
@@ -4565,7 +4615,7 @@ function RecordTable({
       x: eventTableScrollX,
       y: eventTableScrollY
     },
-    tableLayout: "fixed"
+    tableLayout: "auto"
   })), /*#__PURE__*/React.createElement(ModuleFooter, {
     page: page,
     totalCount: rows.length,
@@ -4797,20 +4847,6 @@ function RecordTable({
         }))
       };
     }
-    if (isTaskDispatchStrategyPage) {
-      return {
-        key: "actions",
-        title: "操作",
-        fixed: "right",
-        width: 150,
-        render: (_, row) => renderActionCell(row, renderTaskDispatchStrategyActions(row, {
-          ...actions,
-          page,
-          objectType,
-          idField
-        }))
-      };
-    }
     return null;
   }
   function renderActionCell(row, actionContent) {
@@ -4936,9 +4972,17 @@ function createServiceOrderEventRows(eventLogs = [], serviceOrders = []) {
   const visibleOrderIds = new Set(serviceOrders.map(order => order.service_order_id).filter(Boolean));
   return (eventLogs || []).filter(event => event.service_order_id && (visibleOrderIds.size === 0 || visibleOrderIds.has(event.service_order_id))).sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
 }
-function createFleetTaskEventRows(eventLogs = [], tasks = []) {
+function createFleetTaskEventRows(eventLogs = [], tasks = [], page = null) {
   const visibleTaskIds = new Set(tasks.map(task => task.task_id).filter(Boolean));
-  return (eventLogs || []).filter(event => event.task_id && (visibleTaskIds.size === 0 || visibleTaskIds.has(event.task_id))).sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
+  return (eventLogs || []).filter(event => {
+    const taskMatched = event.task_id && (visibleTaskIds.size === 0 || visibleTaskIds.has(event.task_id));
+    const pageMatched = page && event.source_page === page;
+    return taskMatched || pageMatched;
+  }).sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
+}
+function createFleetOperationPolicyRunRows(policyRuns = [], policies = []) {
+  const visiblePolicyIds = new Set(policies.map(policy => policy.fleet_operation_policy_id).filter(Boolean));
+  return (policyRuns || []).filter(run => run.fleet_operation_policy_id && (visiblePolicyIds.size === 0 || visiblePolicyIds.has(run.fleet_operation_policy_id))).sort((left, right) => String(right.started_at || right.created_at || "").localeCompare(String(left.started_at || left.created_at || "")));
 }
 function getFleetOperationTaskActionLabel(page) {
   const labels = {
@@ -6015,21 +6059,18 @@ function renderOperationTags(row) {
 }
 function renderRobotaxiFleetOperationActions(row, actions) {
   const isRetired = row.availability_status === "RETIRED";
-  const hasTask = Boolean(row.current_task_id);
-  const hasOrder = Boolean(row.current_order_id);
-  const isOccupied = hasTask || hasOrder;
   if (isRetired) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
       type: "default",
       onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
     }, "\u67E5\u770B\u8BE6\u60C5");
   }
-  return /*#__PURE__*/React.createElement(RowActionGroup, null, !isOccupied && /*#__PURE__*/React.createElement(RowActionButton, {
+  return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
     onClick: () => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CLEANING)
-  }, "\u6E05\u6D01"), !isOccupied && /*#__PURE__*/React.createElement(RowActionButton, {
+  }, "\u6E05\u6D01"), /*#__PURE__*/React.createElement(RowActionButton, {
     type: "default",
     onClick: () => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.CHARGING)
-  }, "\u5145\u7535"), !isOccupied && /*#__PURE__*/React.createElement(RowActionButton, {
+  }, "\u5145\u7535"), /*#__PURE__*/React.createElement(RowActionButton, {
     type: "default",
     onClick: () => actions.createDirectFleetOperationTaskFromRobotaxi(row, taskTypes.TaskType.MAINTENANCE)
   }, "\u7EF4\u4FEE"), /*#__PURE__*/React.createElement(RowActionButton, {
@@ -6049,14 +6090,6 @@ function renderFleetOperationPolicyActions(row, actions) {
   }, "\u914D\u7F6E"), /*#__PURE__*/React.createElement(RowActionButton, {
     onClick: () => actions.runFleetOperationPolicy(row.target_task_type)
   }, "\u6267\u884C"));
-}
-function renderTaskDispatchStrategyActions(row, actions) {
-  return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
-    onClick: () => actions.runTaskDispatchStrategy(row.task_dispatch_strategy_id)
-  }, "\u6267\u884C"), /*#__PURE__*/React.createElement(RowActionButton, {
-    type: "default",
-    onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
-  }, "\u67E5\u770B\u8BE6\u60C5"));
 }
 function renderRouteExecutionActions(row, actions) {
   if (["WAITING_ROUTE", "ARRIVAL_ABNORMAL"].includes(row.execution_status)) {
@@ -6594,13 +6627,35 @@ function getStatusDisplayValue(key, value, row = null) {
 function isDeploymentLike(row) {
   return row?.status_context === "deployment" || row?.task_type === "DEPLOYMENT" || row?.current_task_type === "DEPLOYMENT" || String(row?.task_id || "").startsWith("TASK-DP-");
 }
-function getColumnWidth(key) {
-  if (key.endsWith("_ids") || key === "cell_ids" || key === "cell_sequence" || key === "road_segment_sequence") return 220;
-  if (key.endsWith("_rule") || key === "route_update_rule") return 260;
-  if (key === "strategy_name") return 220;
-  if (key.includes("name") || key === "rule_name" || key === "description") return 180;
-  if (key === "customer_capabilities" || key === "vehicle_capabilities") return 220;
-  return 128;
+function getColumnWidth(key, rows = []) {
+  const labelLength = estimateCellTextLength(getFieldLabel(key));
+  const sampleRows = Array.isArray(rows) ? rows.slice(0, 80) : [];
+  const contentLength = sampleRows.reduce((max, row) => Math.max(max, estimateCellTextLength(row?.[key])), 0);
+  const estimatedWidth = Math.ceil(Math.max(labelLength, contentLength) * 12) + 36;
+  const [minWidth, maxWidth] = getColumnWidthBounds(key);
+  return clampNumber(estimatedWidth, minWidth, maxWidth);
+}
+function getColumnWidthBounds(key) {
+  if (key === "actions") return [120, 520];
+  if (key.endsWith("_ids") || key === "cell_ids" || key === "cell_sequence" || key === "road_segment_sequence") return [220, 520];
+  if (key.endsWith("_snapshot") || key.endsWith("_detail") || key.endsWith("_parameters") || key === "message") return [260, 560];
+  if (key.endsWith("_rule") || key === "route_update_rule" || key === "candidate_filter_rule") return [240, 460];
+  if (key.includes("description") || key.includes("reason") || key.includes("summary")) return [220, 460];
+  if (key.includes("time") || key.endsWith("_at") || key.endsWith("_date")) return [168, 260];
+  if (key.includes("status") || key.includes("type") || key.includes("result") || key.includes("phase")) return [148, 260];
+  if (key.includes("name") || key === "rule_name" || key === "strategy_name") return [180, 360];
+  if (key.endsWith("_id") || key === "id") return [168, 300];
+  if (key.includes("count") || key.includes("percent") || key.includes("amount") || key.includes("score") || key.includes("distance")) return [132, 240];
+  return [132, 340];
+}
+function estimateCellTextLength(value) {
+  if (value == null || value === "") return 2;
+  if (Array.isArray(value)) return Math.min(80, value.map(item => estimateCellTextLength(item)).reduce((sum, length) => sum + length + 2, 0));
+  if (typeof value === "object") return Math.min(80, Object.entries(value).slice(0, 8).reduce((sum, [entryKey, entryValue]) => sum + String(entryKey).length + estimateCellTextLength(entryValue) + 2, 0));
+  return Math.min(80, String(value).length);
+}
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 function createPlaceTypeByCellId(places) {
   const placeTypeByCellId = new Map();

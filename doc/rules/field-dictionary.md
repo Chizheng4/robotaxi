@@ -95,6 +95,7 @@
 |cost_model_profile_id|成本模型配置编号|持久化字段|使用的成本模型配置|
 |source_object_type|来源对象类型|持久化字段|readinessTask、deploymentTask、routeExecution、serviceOrder、trip|
 |source_object_id|来源对象编号|持久化字段|来源业务对象主键|
+|source_page|来源页面|运行态字段|事件归属页面，用于最近任务事件按表单过滤，不作为业务状态|
 |related_order_id|关联服务订单|持久化字段|关联服务订单编号，可为空|
 |related_trip_id|关联履约行驶记录|持久化字段|关联 Trip 编号，可为空|
 |related_route_execution_id|关联运营行驶记录|持久化字段|关联 RouteExecution 编号，可为空|
@@ -207,10 +208,11 @@
 |---|---|---|---|
 |config_id|配置编号|持久化字段|优先级配置唯一编号|
 |config_status|配置状态|运行态字段|ACTIVE、DISABLED|
-|priority_rank|优先级排序|持久化字段|各任务类型优先级数值映射|
-|interrupt_policy|中断策略|持久化字段|哪些任务类型的中断标记|
-|allow_queuing|允许排队|持久化字段|是否允许任务排队|
-|max_queue_size|最大排队数量|持久化字段|单个 Robotaxi 最大排队任务数|
+|priority_rank|优先级排序|持久化字段|各任务类型优先级数值映射。前端不再单独展示任务优先级配置页，由任务调度策略统一承载|
+|interrupt_policy|中断策略|持久化字段|哪些任务类型的中断标记。来源为任务调度策略|
+|allow_queuing|允许排队|持久化字段|是否允许任务排队。来源为任务调度策略|
+|max_queue_size|最大排队数量|持久化字段|单个 Robotaxi 最大排队任务数。来源为任务调度策略|
+|source_strategy_name|来源策略名称|运行态字段|兼容旧优先级配置读取时记录对应任务调度策略名称|
 
 
 ## 1.2 Operating Metrics：经营指标系统
@@ -759,6 +761,11 @@
 |fleet_operation_priority|运维任务优先级|持久化字段|排队运维任务在释放后调度中的基础优先级|
 |service_order_priority|服务订单优先级|持久化字段|服务订单候选在释放后调度中的基础优先级|
 |deployment_task_priority|投放任务优先级|持久化字段|运营投放任务候选在释放后调度中的基础优先级|
+|priority_rank|优先级排序|持久化字段|各任务类型优先级数值映射，替代独立任务优先级配置页|
+|interrupt_policy|中断策略|持久化字段|哪些任务类型可打断当前低优先级占用|
+|allow_queuing|允许排队|持久化字段|Robotaxi 被订单或更高优先级任务占用时，是否允许任务进入排队|
+|max_queue_size|最大排队数量|持久化字段|单个 Robotaxi 最大排队任务数|
+|invocation_rules|调用规则|持久化字段|DIRECT_ROBOTAXI_OPERATION、FLEET_OPERATION_POLICY、ROBOTAXI_RELEASED 等调用场景下的策略行为|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 |updated_at|更新时间|持久化字段|真实审计更新时间|
 
@@ -803,6 +810,10 @@
 |ALL_ROBOTAXI|全部 Robotaxi|执行范围|
 |FLEET_OPERATION_POLICY|运维策略触发|触发来源|
 |DIRECT_ROBOTAXI_OPERATION|Robotaxi 直接触发|触发来源|
+|ROBOTAXI_RELEASED|Robotaxi 释放后触发|触发来源|
+|APPLY_PRIORITY_AND_QUEUE|应用优先级并允许排队|任务调度策略调用规则|
+|SELECT_NEXT_CANDIDATE|选择下一候选任务|任务调度策略调用规则|
+|FLEET_OPERATION_POLICY_UPDATED|运维策略配置已更新|任务事件类型|
 |NEAREST_AVAILABLE|最近可用运维中心|调度算法|
 |RELEASED_ROBOTAXI_PRIORITY|释放后优先级调度|任务调度算法|
 |FLEET_OPERATION_TASK|运维任务|任务调度候选类型|
