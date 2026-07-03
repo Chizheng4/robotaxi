@@ -748,7 +748,55 @@
 |reason|原因|运行态字段|调度成功或失败原因|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 
-### 11.8 Fleet Operations 策略枚举中文
+### 11.8 TaskDispatchStrategy：任务调度策略
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|task_dispatch_strategy_id|任务调度策略编号|持久化字段|任务调度策略唯一编号|
+|strategy_name|策略名称|持久化字段|用户可识别的调度策略名称|
+|dispatch_algorithm|调度算法|持久化字段|RELEASED_ROBOTAXI_PRIORITY 等调度算法|
+|strategy_status|策略状态|运行态字段|ACTIVE、DRAFT、ARCHIVED|
+|fleet_operation_priority|运维任务优先级|持久化字段|排队运维任务在释放后调度中的基础优先级|
+|service_order_priority|服务订单优先级|持久化字段|服务订单候选在释放后调度中的基础优先级|
+|deployment_task_priority|投放任务优先级|持久化字段|运营投放任务候选在释放后调度中的基础优先级|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+|updated_at|更新时间|持久化字段|真实审计更新时间|
+
+### 11.9 TaskDispatchRun：任务调度执行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|task_dispatch_run_id|任务调度执行编号|持久化字段|任务调度执行记录唯一编号|
+|task_dispatch_strategy_id|任务调度策略编号|持久化字段|来源任务调度策略|
+|strategy_name|策略名称|运行态字段|执行时的策略名称|
+|robotaxi_id|Robotaxi 编号|持久化字段|本次调度对应的释放车辆|
+|trigger_object_type|触发对象类型|运行态字段|触发本次调度的对象类型|
+|trigger_object_id|触发对象编号|运行态字段|触发本次调度的对象编号|
+|run_status|执行状态|运行态字段|SUCCEEDED、NO_ACTION、FAILED|
+|candidate_count|候选数量|运行态字段|本次参与调度的候选对象数量|
+|selected_candidate_type|选中候选类型|运行态字段|FLEET_OPERATION_TASK、SERVICE_ORDER、DEPLOYMENT_TASK|
+|selected_object_id|选中对象编号|运行态字段|被策略选中的候选对象编号|
+|no_action_reason|无动作原因|运行态字段|未产生选择时的原因|
+|strategy_snapshot|策略快照|持久化字段|执行时使用的策略参数快照|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### 11.10 TaskDispatchResult：任务调度结果
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|task_dispatch_result_id|任务调度结果编号|持久化字段|任务调度结果唯一编号|
+|task_dispatch_run_id|任务调度执行编号|持久化字段|来源任务调度执行|
+|task_dispatch_strategy_id|任务调度策略编号|持久化字段|来源任务调度策略|
+|robotaxi_id|Robotaxi 编号|持久化字段|本条结果对应的车辆|
+|candidate_type|候选类型|运行态字段|FLEET_OPERATION_TASK、SERVICE_ORDER、DEPLOYMENT_TASK|
+|candidate_object_id|候选对象编号|运行态字段|候选业务对象编号|
+|candidate_status|候选状态|运行态字段|候选对象当时状态|
+|candidate_priority|候选优先级|运行态字段|策略计算后的候选优先级|
+|decision_result|决策结果|运行态字段|SELECTED、SKIPPED、NO_CANDIDATE|
+|decision_reason|决策说明|运行态字段|选择、跳过或无候选原因|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### 11.11 Fleet Operations 策略枚举中文
 
 |英文值|中文名|用途|
 |---|---|---|
@@ -756,6 +804,12 @@
 |FLEET_OPERATION_POLICY|运维策略触发|触发来源|
 |DIRECT_ROBOTAXI_OPERATION|Robotaxi 直接触发|触发来源|
 |NEAREST_AVAILABLE|最近可用运维中心|调度算法|
+|RELEASED_ROBOTAXI_PRIORITY|释放后优先级调度|任务调度算法|
+|FLEET_OPERATION_TASK|运维任务|任务调度候选类型|
+|SERVICE_ORDER|服务订单|任务调度候选类型|
+|DEPLOYMENT_TASK|运营投放任务|任务调度候选类型|
+|SELECTED|已选中|任务调度结果|
+|NO_CANDIDATE|无候选对象|任务调度结果|
 |DISPATCHED|已调度|调度结果|
 |NO_CAPACITY|无可用容量|调度结果|
 |NO_MATCHING_CAPABILITY|无匹配能力|调度结果|

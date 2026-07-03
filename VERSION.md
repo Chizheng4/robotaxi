@@ -1,6 +1,17 @@
 
 
 
+## v040.9
+
+核心：收敛 Robotaxi 分配边界并新增任务调度策略。
+
+- 新增 `TaskDispatchStrategy / TaskDispatchRun / TaskDispatchResult`，在前端提供“任务调度策略、执行、结果”页面和执行入口。
+- Robotaxi 订单匹配和运营投放候选统一回到 `availability_status`、`available_for_dispatch`、`current_order_id`、`current_task_id`，排队运维任务不再作为隐式硬阻塞。
+- 服务订单支付只负责订单完成和释放当前服务占用，不再自动激活排队运维任务。
+- 运维任务排队创建保留任务单和 Robotaxi 队列引用，但不把 Robotaxi 直接改为不可运营；真正接管任务时仍由任务服务设置 current task 和不可调度。
+- 订单匹配引擎和路径规划供给计数移除局部 Fleet Operation blocker，避免形成第二套候选规则。
+- 更新字段字典、迭代方案文档和 v040.9 边界验证脚本，并纳入提交前检查。
+
 ## v040.8
 
 核心：修复 Fleet Operations 运维任务单生命周期闭环。

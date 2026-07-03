@@ -146,10 +146,10 @@ export function createFleetOperationTask({
         ...getTagUpdatesForTaskType(taskType),
         pending_fleet_task_type: taskType,
         pending_fleet_task_id: task.task_id,
-        availability_status: taskType === TaskType.RETIREMENT ? "RETIRED" : "UNAVAILABLE",
-        available_for_dispatch: false,
+        availability_status: taskType === TaskType.RETIREMENT ? "RETIRED" : robotaxi.availability_status,
+        available_for_dispatch: taskType === TaskType.RETIREMENT ? false : robotaxi.available_for_dispatch,
         fleet_operation_status: "WAITING_SERVICE_COMPLETION",
-        operation_blocking_reason: taskType,
+        operation_blocking_reason: taskType === TaskType.RETIREMENT ? "RETIREMENT" : robotaxi.operation_blocking_reason || null,
         updated_at: now,
       },
     };
@@ -511,10 +511,10 @@ export function applyFleetOperationTaskReference(robotaxi, { task, shouldWait, n
       ...getTagUpdatesForTaskType(task.task_type),
       pending_fleet_task_type: task.task_type,
       pending_fleet_task_id: task.task_id,
-      availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : "UNAVAILABLE",
-      available_for_dispatch: false,
+      availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : robotaxi.availability_status,
+      available_for_dispatch: task.task_type === TaskType.RETIREMENT ? false : robotaxi.available_for_dispatch,
       fleet_operation_status: "WAITING_SERVICE_COMPLETION",
-      operation_blocking_reason: task.task_type,
+      operation_blocking_reason: task.task_type === TaskType.RETIREMENT ? "RETIREMENT" : robotaxi.operation_blocking_reason || null,
       updated_at: now || robotaxi.updated_at,
     };
   }

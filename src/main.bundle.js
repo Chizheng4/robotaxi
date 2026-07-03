@@ -68,6 +68,7 @@ let fleetOperationTaskService;
 let robotaxiTaskPriorityService;
 let fleetOperationPolicyService;
 let fleetOperationDispatchService;
+let taskDispatchStrategyService;
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
 let fleetOperationPolicyRunSequence = 0;
@@ -75,6 +76,8 @@ let fleetOperationPolicyResultSequence = 0;
 // taskPriorityConfig has no sequence counter
 let fleetOperationDispatchRunSequence = 0;
 let fleetOperationDispatchDecisionSequence = 0;
+let taskDispatchRunSequence = 0;
+let taskDispatchResultSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
@@ -263,6 +266,15 @@ const pageGroups = [{
     }, {
       key: "fleetOperationDispatchDecisions",
       label: "运维调度结果"
+    }, {
+      key: "taskDispatchStrategies",
+      label: "任务调度策略"
+    }, {
+      key: "taskDispatchRuns",
+      label: "任务调度执行"
+    }, {
+      key: "taskDispatchResults",
+      label: "任务调度结果"
     }, {
       key: "taskPriorityConfig",
       label: "任务优先级调度配置"
@@ -478,6 +490,21 @@ const tableConfig = {
     description: "记录每次运维调度的目标选择、距离和失败原因。",
     columns: ["fleet_operation_dispatch_decision_id", "fleet_operation_dispatch_run_id", "fleet_operation_dispatch_strategy_id", "task_id", "task_type", "robotaxi_id", "selected_ops_center_id", "target_cell_id", "decision_result", "distance_m", "total_distance_km", "reason", "created_at"]
   },
+  taskDispatchStrategies: {
+    title: "任务调度策略",
+    description: "配置 Robotaxi 释放后的订单、投放任务和排队运维任务选择规则。",
+    columns: ["task_dispatch_strategy_id", "strategy_name", "dispatch_algorithm", "strategy_status", "fleet_operation_priority", "service_order_priority", "deployment_task_priority", "created_at", "updated_at"]
+  },
+  taskDispatchRuns: {
+    title: "任务调度执行",
+    description: "记录每次任务调度策略执行过程和选中候选。",
+    columns: ["task_dispatch_run_id", "task_dispatch_strategy_id", "strategy_name", "robotaxi_id", "trigger_object_type", "trigger_object_id", "run_status", "candidate_count", "selected_candidate_type", "selected_object_id", "no_action_reason", "created_at"]
+  },
+  taskDispatchResults: {
+    title: "任务调度结果",
+    description: "按候选对象记录任务调度策略的选择、跳过和无候选原因。",
+    columns: ["task_dispatch_result_id", "task_dispatch_run_id", "task_dispatch_strategy_id", "robotaxi_id", "candidate_type", "candidate_object_id", "candidate_status", "candidate_priority", "decision_result", "decision_reason", "created_at"]
+  },
   taskPriorityConfig: {
     title: "任务优先级调度配置",
     description: "配置 Robotaxi 运维任务之间的优先级、中断和排队策略。",
@@ -673,6 +700,9 @@ const pageObjectType = {
   fleetOperationDispatchStrategies: "fleetOperationDispatchStrategy",
   fleetOperationDispatchRuns: "fleetOperationDispatchRun",
   fleetOperationDispatchDecisions: "fleetOperationDispatchDecision",
+  taskDispatchStrategies: "taskDispatchStrategy",
+  taskDispatchRuns: "taskDispatchRun",
+  taskDispatchResults: "taskDispatchResult",
   taskPriorityConfig: "taskPriorityConfig",
   deploymentTasks: "deploymentTask",
   routeExecutions: "routeExecution",
@@ -736,6 +766,9 @@ const idFieldByType = {
   fleetOperationDispatchStrategy: "fleet_operation_dispatch_strategy_id",
   fleetOperationDispatchRun: "fleet_operation_dispatch_run_id",
   fleetOperationDispatchDecision: "fleet_operation_dispatch_decision_id",
+  taskDispatchStrategy: "task_dispatch_strategy_id",
+  taskDispatchRun: "task_dispatch_run_id",
+  taskDispatchResult: "task_dispatch_result_id",
   taskPriorityConfig: "config_id",
   deploymentTask: "task_id",
   routeExecution: "route_execution_id",
@@ -788,6 +821,9 @@ const statusFieldByPage = {
   fleetOperationDispatchStrategies: "strategy_status",
   fleetOperationDispatchRuns: "run_status",
   fleetOperationDispatchDecisions: "decision_result",
+  taskDispatchStrategies: "strategy_status",
+  taskDispatchRuns: "run_status",
+  taskDispatchResults: "decision_result",
   taskPriorityConfig: "config_status",
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
@@ -892,6 +928,9 @@ function App() {
   const [fleetOperationDispatchStrategies, setFleetOperationDispatchStrategies] = useState(initialRuntime.fleetOperationDispatchStrategies);
   const [fleetOperationDispatchRuns, setFleetOperationDispatchRuns] = useState(initialRuntime.fleetOperationDispatchRuns);
   const [fleetOperationDispatchDecisions, setFleetOperationDispatchDecisions] = useState(initialRuntime.fleetOperationDispatchDecisions);
+  const [taskDispatchStrategies, setTaskDispatchStrategies] = useState(initialRuntime.taskDispatchStrategies);
+  const [taskDispatchRuns, setTaskDispatchRuns] = useState(initialRuntime.taskDispatchRuns);
+  const [taskDispatchResults, setTaskDispatchResults] = useState(initialRuntime.taskDispatchResults);
   const [taskPriorityConfigs, setTaskPriorityConfigs] = useState(initialRuntime.taskPriorityConfigs);
   const [deploymentTasks, setDeploymentTasks] = useState(initialRuntime.deploymentTasks);
   const [routeExecutions, setRouteExecutions] = useState(initialRuntime.routeExecutions);
@@ -946,9 +985,12 @@ function App() {
     pricingDecisions,
     orderMatchingRuns,
     orderMatchingDecisions,
+    taskDispatchStrategies,
+    taskDispatchRuns,
+    taskDispatchResults,
     trips,
     taskEventLogs
-  }), [chargingTasks, cleaningTasks, demandSimulationRuns, deploymentTasks, failureHandlingTasks, maintenanceTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips]);
+  }), [chargingTasks, cleaningTasks, demandSimulationRuns, deploymentTasks, failureHandlingTasks, maintenanceTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips]);
   const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateServiceOrders(data), ...validatePricing(data), ...validateOrderMatching(data), ...validateTrips(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
   const metricDisplayRows = useMemo(() => createMetricDisplayRows(metricObservations, metricDefinitions, simulationRuns), [metricDefinitions, metricObservations, simulationRuns]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
@@ -993,6 +1035,9 @@ function App() {
       setFleetOperationDispatchStrategies(Array.isArray(snapshot.fleetOperationDispatchStrategies) && snapshot.fleetOperationDispatchStrategies.length ? snapshot.fleetOperationDispatchStrategies : fleetOperationDispatchService.initializeDefaultFleetOperationDispatchStrategies());
       setFleetOperationDispatchRuns(Array.isArray(snapshot.fleetOperationDispatchRuns) ? snapshot.fleetOperationDispatchRuns : []);
       setFleetOperationDispatchDecisions(Array.isArray(snapshot.fleetOperationDispatchDecisions) ? snapshot.fleetOperationDispatchDecisions : []);
+      setTaskDispatchStrategies(Array.isArray(snapshot.taskDispatchStrategies) && snapshot.taskDispatchStrategies.length ? snapshot.taskDispatchStrategies : taskDispatchStrategyService.initializeDefaultTaskDispatchStrategies());
+      setTaskDispatchRuns(Array.isArray(snapshot.taskDispatchRuns) ? snapshot.taskDispatchRuns : []);
+      setTaskDispatchResults(Array.isArray(snapshot.taskDispatchResults) ? snapshot.taskDispatchResults : []);
       setDeploymentTasks(normalizeRouteStrategyReferences(snapshot.deploymentTasks || []));
       setRouteExecutions(normalizeRouteStrategyReferences(snapshot.routeExecutions || []));
       setRoutePlanningRuns(normalizeRouteStrategyReferences(snapshot.routePlanningRuns || []));
@@ -1067,6 +1112,9 @@ function App() {
     fleetOperationDispatchStrategies,
     fleetOperationDispatchRuns,
     fleetOperationDispatchDecisions,
+    taskDispatchStrategies,
+    taskDispatchRuns,
+    taskDispatchResults,
     taskPriorityConfig: taskPriorityConfigs,
     deploymentTasks: deploymentTasks.map(task => attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions)),
     routeExecutions: routeExecutions.map(execution => attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords)),
@@ -1111,7 +1159,7 @@ function App() {
     simulationEvents,
     timedOperations,
     validations
-  }), [chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
+  }), [chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -1184,6 +1232,9 @@ function App() {
       fleetOperationDispatchStrategy: rowsByPage.fleetOperationDispatchStrategies,
       fleetOperationDispatchRun: rowsByPage.fleetOperationDispatchRuns,
       fleetOperationDispatchDecision: rowsByPage.fleetOperationDispatchDecisions,
+      taskDispatchStrategy: rowsByPage.taskDispatchStrategies,
+      taskDispatchRun: rowsByPage.taskDispatchRuns,
+      taskDispatchResult: rowsByPage.taskDispatchResults,
       taskPriorityConfig: rowsByPage.taskPriorityConfig,
       taskEventLog: taskEventLogs,
       validation: validations
@@ -1236,6 +1287,9 @@ function App() {
         fleetOperationDispatchStrategies,
         fleetOperationDispatchRuns,
         fleetOperationDispatchDecisions,
+        taskDispatchStrategies,
+        taskDispatchRuns,
+        taskDispatchResults,
         deploymentTasks,
         routeExecutions,
         routePlanningRuns,
@@ -1271,7 +1325,7 @@ function App() {
       persistSimulationEvents(simulationEvents);
     }, debounceMs);
     return () => window.clearTimeout(timerId);
-  }, [activePage, businessTimingCalculationRuns, chargingTasks, cleaningTasks, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
+  }, [activePage, businessTimingCalculationRuns, chargingTasks, cleaningTasks, costCalculationRuns, costModelProfiles, costRecords, demandSimulationRuns, deploymentTasks, detailCollapsedByPage, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData, orderMatchingDecisions, orderMatchingRuns, pageSelections, pageUiState, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, revenueCalculationRuns, revenueRecords, routeExecutions, routePlanningRuns, runtimeHydrated, serviceOrders, simulationEvents, simulationPolicies, simulationRuns, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, timedOperations, trips, workflowTimingProfiles, workspacePages]);
 
   // ===== Simulation 控制 =====
   const getBusinessData = () => {
@@ -1287,6 +1341,9 @@ function App() {
       fleetOperationPolicies,
       fleetOperationPolicyRuns,
       fleetOperationPolicyResults,
+      taskDispatchStrategies,
+      taskDispatchRuns,
+      taskDispatchResults,
       deploymentTasks,
       routeExecutions,
       routes: data.routes,
@@ -1319,6 +1376,9 @@ function App() {
         maintenanceTasks: businessData.maintenanceTasks,
         failureHandlingTasks: businessData.failureHandlingTasks,
         retirementTasks: businessData.retirementTasks,
+        taskDispatchStrategies: businessData.taskDispatchStrategies,
+        taskDispatchRuns: businessData.taskDispatchRuns,
+        taskDispatchResults: businessData.taskDispatchResults,
         deploymentTasks: businessData.deploymentTasks,
         routeExecutions: businessData.routeExecutions,
         routes: businessData.routes,
@@ -1355,6 +1415,8 @@ function App() {
     businessData.setPricingDecisions = bindSetter("pricingDecisions", setPricingDecisions);
     businessData.setOrderMatchingRuns = bindSetter("orderMatchingRuns", setOrderMatchingRuns);
     businessData.setOrderMatchingDecisions = bindSetter("orderMatchingDecisions", setOrderMatchingDecisions);
+    businessData.setTaskDispatchRuns = bindSetter("taskDispatchRuns", setTaskDispatchRuns);
+    businessData.setTaskDispatchResults = bindSetter("taskDispatchResults", setTaskDispatchResults);
     businessData.setTaskEventLogs = bindSetter("taskEventLogs", setTaskEventLogs);
     businessData.setTimedOperations = bindSetter("timedOperations", setTimedOperations);
     businessData.setRobotaxis = updater => {
@@ -1917,6 +1979,7 @@ function App() {
       runAutoReadinessCheck,
       runFleetOperationPolicyForPage,
       runFleetOperationPolicy,
+      runTaskDispatchStrategy,
       createDirectFleetOperationTaskFromRobotaxi,
       confirmRetirement,
       dispatchFleetOperationTaskDestination,
@@ -1951,6 +2014,8 @@ function App() {
       submitAbnormalArrival,
       data,
       taskEventLogs,
+      taskDispatchRuns,
+      taskDispatchResults,
       fleetOperationPolicyRuns,
       fleetOperationPolicyResults,
       routePlanningRuns: rowsByPage.routePlanningRuns,
@@ -3369,12 +3434,11 @@ function App() {
       tripTypes
     });
     if (!result.success) return;
-    const nextRobotaxis = activateQueuedFleetOperationTasks(result.robotaxis);
     setServiceOrders(items => items.map(order => order.service_order_id === serviceOrderId ? result.serviceOrder : order));
     setTrips(result.trips);
     setOperationalData(current => ({
       ...current,
-      robotaxis: nextRobotaxis
+      robotaxis: result.robotaxis
     }));
     addServiceOrderEvent({
       service_order_id: serviceOrderId,
@@ -3385,32 +3449,30 @@ function App() {
     });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
-  function activateQueuedFleetOperationTasks(robotaxis = []) {
-    if (!fleetOperationTaskService) return robotaxis;
-    return robotaxis.map(robotaxi => {
-      const queuedTaskId = robotaxi.pending_fleet_task_id || robotaxi.pending_task_queue?.[0]?.task_id || null;
-      if (!queuedTaskId || robotaxi.current_order_id || robotaxi.current_task_id) return robotaxi;
-      const task = [...cleaningTasks, ...chargingTasks, ...maintenanceTasks, ...failureHandlingTasks, ...retirementTasks].find(item => item.task_id === queuedTaskId);
-      if (!task) return robotaxi;
-      const result = fleetOperationTaskService.activateQueuedFleetOperationTask({
-        task,
-        robotaxi,
-        opsCenters: data.opsCenters,
-        context: {
-          now
-        }
-      });
-      if (!result.succeeded) return robotaxi;
-      updateFleetOperationTask(result.task);
-      setTaskEventLogs(logs => [createEventLog({
-        event_type: taskTypes.TaskEventType.TASK_CREATED,
-        event_result: taskTypes.TaskEventResult.SUCCESS,
-        task_id: result.task.task_id,
-        robotaxi_id: result.task.robotaxi_id,
-        message: "Robotaxi 已接管排队运维任务"
-      }), ...logs]);
-      return result.robotaxi;
-    });
+  function runTaskDispatchStrategy(strategyId = null) {
+    if (!taskDispatchStrategyService) return;
+    const strategy = taskDispatchStrategies.find(item => item.task_dispatch_strategy_id === strategyId) || taskDispatchStrategies.find(item => item.strategy_status === "ACTIVE") || taskDispatchStrategies[0];
+    if (!strategy) return;
+    const fleetTasks = [...cleaningTasks, ...chargingTasks, ...maintenanceTasks, ...failureHandlingTasks, ...retirementTasks];
+    const releasedRobotaxis = (data.robotaxis || []).filter(robotaxi => robotaxi.availability_status === "AVAILABLE" && robotaxi.available_for_dispatch !== false && !robotaxi.current_order_id && !robotaxi.current_task_id);
+    const executions = releasedRobotaxis.length ? releasedRobotaxis : [null];
+    const results = executions.map(robotaxi => taskDispatchStrategyService.executeTaskDispatchStrategy({
+      strategy,
+      robotaxi,
+      pendingFleetTasks: fleetTasks,
+      serviceOrders,
+      deploymentTasks,
+      context: {
+        now,
+        nextTaskDispatchRunId,
+        nextTaskDispatchResultId,
+        trigger_object_type: "taskDispatchStrategy",
+        trigger_object_id: strategy.task_dispatch_strategy_id
+      }
+    }));
+    setTaskDispatchRuns(items => [...results.map(item => item.run).filter(Boolean), ...items]);
+    setTaskDispatchResults(items => [...results.flatMap(item => item.results || []), ...items]);
+    selectForPage("taskDispatchStrategies", "taskDispatchStrategy", strategy.task_dispatch_strategy_id);
   }
   function viewTripForServiceOrder(serviceOrder) {
     const trip = trips.find(item => item.trip_id === serviceOrder.trip_id || item.service_order_id === serviceOrder.service_order_id);
@@ -4186,6 +4248,7 @@ function RecordTable({
   const isReadinessPage = page === "readinessTasks";
   const isFleetOperationTaskPage = ["cleaningTasks", "chargingTasks", "maintenanceTasks", "failureHandlingTasks", "retirementTasks"].includes(page);
   const isFleetOperationPolicyPage = page === "fleetOperationPolicies";
+  const isTaskDispatchStrategyPage = page === "taskDispatchStrategies";
   const isRobotaxiPage = page === "robotaxis";
   const isDeploymentPage = page === "deploymentTasks";
   const isRouteExecutionPage = page === "routeExecutions";
@@ -4206,7 +4269,7 @@ function RecordTable({
   const isTimedOperationPage = page === "timedOperations";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
-  const hasEventPanel = isTaskOperationPage || isFleetOperationPolicyPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
+  const hasEventPanel = isTaskOperationPage || isFleetOperationPolicyPage || isTaskDispatchStrategyPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   const idField = idFieldByType[objectType];
@@ -4241,10 +4304,10 @@ function RecordTable({
   }));
   const actionColumn = getActionColumn();
   const finalColumns = actionColumn ? [...columns, actionColumn] : columns;
-  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isFleetOperationPolicyPage ? actions.fleetOperationPolicyRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isFleetOperationPolicyPage ? actions.fleetOperationPolicyRuns : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const visibleEventRows = eventRows.slice(0, 300);
-  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   useEffect(() => {
     const node = tableSectionRef.current;
     if (!node) return undefined;
@@ -4372,7 +4435,13 @@ function RecordTable({
     size: "small",
     type: "primary",
     onClick: () => actions.runFleetOperationPolicyForPage(page)
-  }, getFleetOperationTaskActionLabel(page))), isServiceOrderPage && /*#__PURE__*/React.createElement("div", {
+  }, getFleetOperationTaskActionLabel(page))), isTaskDispatchStrategyPage && /*#__PURE__*/React.createElement("div", {
+    className: "list-action-bar"
+  }, /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    type: "primary",
+    onClick: () => actions.runTaskDispatchStrategy()
+  }, "\u6267\u884C\u4EFB\u52A1\u8C03\u5EA6")), isServiceOrderPage && /*#__PURE__*/React.createElement("div", {
     className: "list-action-bar"
   }, /*#__PURE__*/React.createElement(Button, {
     size: "small",
@@ -4461,7 +4530,7 @@ function RecordTable({
     title: "\u62D6\u52A8\u8C03\u6574\u4E8B\u4EF6\u533A\u9AD8\u5EA6"
   }), /*#__PURE__*/React.createElement("div", {
     className: "event-log-title"
-  }, isTripPage ? "履约行驶事件" : isServiceOrderPage ? "最近事件记录" : isSimulationRunPage ? "模拟运行事件" : isFleetOperationPolicyPage ? "最近策略执行" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
+  }, isTripPage ? "履约行驶事件" : isServiceOrderPage ? "最近事件记录" : isSimulationRunPage ? "模拟运行事件" : isFleetOperationPolicyPage || isTaskDispatchStrategyPage ? "最近策略执行" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"), /*#__PURE__*/React.createElement(Table, {
     size: "small",
     rowKey: eventRowKey,
     columns: eventColumns.map(key => ({
@@ -4703,6 +4772,20 @@ function RecordTable({
         fixed: "right",
         width: 150,
         render: (_, row) => renderActionCell(row, renderFleetOperationPolicyActions(row, {
+          ...actions,
+          page,
+          objectType,
+          idField
+        }))
+      };
+    }
+    if (isTaskDispatchStrategyPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 150,
+        render: (_, row) => renderActionCell(row, renderTaskDispatchStrategyActions(row, {
           ...actions,
           page,
           objectType,
@@ -5949,6 +6032,14 @@ function renderFleetOperationPolicyActions(row, actions) {
     onClick: () => actions.runFleetOperationPolicy(row.target_task_type)
   }, "\u6267\u884C"));
 }
+function renderTaskDispatchStrategyActions(row, actions) {
+  return /*#__PURE__*/React.createElement(RowActionGroup, null, /*#__PURE__*/React.createElement(RowActionButton, {
+    onClick: () => actions.runTaskDispatchStrategy(row.task_dispatch_strategy_id)
+  }, "\u6267\u884C"), /*#__PURE__*/React.createElement(RowActionButton, {
+    type: "default",
+    onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
+  }, "\u67E5\u770B\u8BE6\u60C5"));
+}
 function renderRouteExecutionActions(row, actions) {
   if (["WAITING_ROUTE", "ARRIVAL_ABNORMAL"].includes(row.execution_status)) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
@@ -6521,7 +6612,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule, taskDispatchStrategyServiceModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"), import("./services/taskDispatchStrategyService.js?v=20260703-v040-9")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -6571,6 +6662,7 @@ async function bootstrap() {
   fleetOperationTaskService = fleetOperationTaskServiceModule;
   fleetOperationPolicyService = fleetOperationPolicyServiceModule;
   fleetOperationDispatchService = fleetOperationDispatchServiceModule;
+  taskDispatchStrategyService = taskDispatchStrategyServiceModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -7600,6 +7692,14 @@ function nextFleetOperationDispatchDecisionId() {
   fleetOperationDispatchDecisionSequence += 1;
   return `FODD-${String(fleetOperationDispatchDecisionSequence).padStart(4, "0")}`;
 }
+function nextTaskDispatchRunId() {
+  taskDispatchRunSequence += 1;
+  return `TDR-${String(taskDispatchRunSequence).padStart(4, "0")}`;
+}
+function nextTaskDispatchResultId() {
+  taskDispatchResultSequence += 1;
+  return `TDRS-${String(taskDispatchResultSequence).padStart(4, "0")}`;
+}
 function createDefaultPageUiState() {
   return {
     filters: {
@@ -7717,6 +7817,9 @@ function loadRuntimeSnapshot(initialData) {
     fleetOperationDispatchStrategies: fleetOperationDispatchService.initializeDefaultFleetOperationDispatchStrategies(),
     fleetOperationDispatchRuns: [],
     fleetOperationDispatchDecisions: [],
+    taskDispatchStrategies: taskDispatchStrategyService.initializeDefaultTaskDispatchStrategies(),
+    taskDispatchRuns: [],
+    taskDispatchResults: [],
     taskPriorityConfigs: [robotaxiTaskPriorityService?.initializeDefaultPriorityConfig() || {}],
     deploymentTasks: [],
     routeExecutions: [],
@@ -7777,6 +7880,9 @@ function loadRuntimeSnapshot(initialData) {
     const fleetOperationDispatchStrategies = Array.isArray(snapshot.fleetOperationDispatchStrategies) && snapshot.fleetOperationDispatchStrategies.length ? snapshot.fleetOperationDispatchStrategies : fleetOperationDispatchService.initializeDefaultFleetOperationDispatchStrategies();
     const fleetOperationDispatchRuns = Array.isArray(snapshot.fleetOperationDispatchRuns) ? snapshot.fleetOperationDispatchRuns : [];
     const fleetOperationDispatchDecisions = Array.isArray(snapshot.fleetOperationDispatchDecisions) ? snapshot.fleetOperationDispatchDecisions : [];
+    const taskDispatchStrategies = Array.isArray(snapshot.taskDispatchStrategies) && snapshot.taskDispatchStrategies.length ? snapshot.taskDispatchStrategies : taskDispatchStrategyService.initializeDefaultTaskDispatchStrategies();
+    const taskDispatchRuns = Array.isArray(snapshot.taskDispatchRuns) ? snapshot.taskDispatchRuns : [];
+    const taskDispatchResults = Array.isArray(snapshot.taskDispatchResults) ? snapshot.taskDispatchResults : [];
     const deploymentTasks = normalizeRouteStrategyReferences(Array.isArray(snapshot.deploymentTasks) ? snapshot.deploymentTasks : []);
     const routeExecutions = normalizeRouteStrategyReferences(Array.isArray(snapshot.routeExecutions) ? snapshot.routeExecutions : []);
     const routePlanningRuns = normalizeRouteStrategyReferences(Array.isArray(snapshot.routePlanningRuns) ? snapshot.routePlanningRuns : []);
@@ -7811,6 +7917,8 @@ function loadRuntimeSnapshot(initialData) {
     fleetOperationPolicyResultSequence = deriveSequence(fleetOperationPolicyResults, "fleet_operation_policy_result_id", "FOP-RESULT-");
     fleetOperationDispatchRunSequence = deriveSequence(fleetOperationDispatchRuns, "fleet_operation_dispatch_run_id", "FODR-");
     fleetOperationDispatchDecisionSequence = deriveSequence(fleetOperationDispatchDecisions, "fleet_operation_dispatch_decision_id", "FODD-");
+    taskDispatchRunSequence = deriveSequence(taskDispatchRuns, "task_dispatch_run_id", "TDR-");
+    taskDispatchResultSequence = deriveSequence(taskDispatchResults, "task_dispatch_result_id", "TDRS-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
     routePlanningRunSequence = deriveSequence(routePlanningRuns, "route_planning_run_id", "RPR-");
@@ -7839,6 +7947,9 @@ function loadRuntimeSnapshot(initialData) {
       fleetOperationDispatchStrategies,
       fleetOperationDispatchRuns,
       fleetOperationDispatchDecisions,
+      taskDispatchStrategies,
+      taskDispatchRuns,
+      taskDispatchResults,
       taskPriorityConfigs,
       deploymentTasks,
       routeExecutions,
@@ -7940,6 +8051,8 @@ function saveRuntimeSnapshot(snapshot) {
     orderMatchingDecisionSequence,
     tripSequence,
     eventSequence,
+    taskDispatchRunSequence,
+    taskDispatchResultSequence,
     fleetOperationPolicies: snapshot.fleetOperationPolicies || [],
     fleetOperationPolicyRuns: snapshot.fleetOperationPolicyRuns || [],
     fleetOperationPolicyResults: snapshot.fleetOperationPolicyResults || [],
@@ -7947,6 +8060,9 @@ function saveRuntimeSnapshot(snapshot) {
     fleetOperationDispatchRuns: snapshot.fleetOperationDispatchRuns || [],
     taskPriorityConfigs: snapshot.taskPriorityConfigs || [],
     fleetOperationDispatchDecisions: snapshot.fleetOperationDispatchDecisions || [],
+    taskDispatchStrategies: snapshot.taskDispatchStrategies || [],
+    taskDispatchRuns: snapshot.taskDispatchRuns || [],
+    taskDispatchResults: snapshot.taskDispatchResults || [],
     simulationPolicies: snapshot.simulationPolicies || [],
     workflowTimingProfiles: snapshot.workflowTimingProfiles || [],
     businessTimingCalculationRuns: snapshot.businessTimingCalculationRuns || [],
@@ -7975,6 +8091,9 @@ function saveRuntimeSnapshot(snapshot) {
       fleetOperationDispatchStrategies: [],
       fleetOperationDispatchRuns: [],
       fleetOperationDispatchDecisions: [],
+      taskDispatchStrategies: [],
+      taskDispatchRuns: [],
+      taskDispatchResults: [],
       simulationPolicies: [],
       simulationRuns: [],
       simulationEvents: [],
@@ -8139,6 +8258,8 @@ function restoreRuntimeSequences(snapshot) {
   fleetOperationPolicyResultSequence = deriveSequence(snapshot.fleetOperationPolicyResults || [], "fleet_operation_policy_result_id", "FOP-RESULT-");
   fleetOperationDispatchRunSequence = deriveSequence(snapshot.fleetOperationDispatchRuns || [], "fleet_operation_dispatch_run_id", "FODR-");
   fleetOperationDispatchDecisionSequence = deriveSequence(snapshot.fleetOperationDispatchDecisions || [], "fleet_operation_dispatch_decision_id", "FODD-");
+  taskDispatchRunSequence = deriveSequence(snapshot.taskDispatchRuns || [], "task_dispatch_run_id", "TDR-");
+  taskDispatchResultSequence = deriveSequence(snapshot.taskDispatchResults || [], "task_dispatch_result_id", "TDRS-");
   deploymentTaskSequence = deriveSequence(snapshot.deploymentTasks || [], "task_id", "TASK-DP-");
   routeExecutionSequence = deriveSequence(snapshot.routeExecutions || [], "route_execution_id", "REX-");
   routePlanningRunSequence = deriveSequence(snapshot.routePlanningRuns || [], "route_planning_run_id", "RPR-");

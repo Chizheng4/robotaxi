@@ -152,16 +152,16 @@ export function payServiceOrder({
   } : trip);
   const nextRobotaxis = robotaxis.map((robotaxi) => {
     if (robotaxi.current_order_id !== serviceOrder.service_order_id) return robotaxi;
-    const hasPendingFleetOperation = Boolean(robotaxi.pending_fleet_task_id)
-      || (Array.isArray(robotaxi.pending_task_queue) && robotaxi.pending_task_queue.length > 0)
-      || (robotaxi.fleet_operation_status && robotaxi.fleet_operation_status !== "NONE");
+    const isRetired = robotaxi.retirement_status === "RETIRED" || robotaxi.availability_status === "RETIRED";
+    const isBroken = robotaxi.failure_status === "BROKEN";
+    const canReturnToDispatchPool = !isRetired && !isBroken && !robotaxi.current_task_id;
     return {
       ...robotaxi,
       current_order_id: null,
       current_route_id: null,
-      availability_status: hasPendingFleetOperation ? "UNAVAILABLE" : "AVAILABLE",
+      availability_status: isRetired ? "RETIRED" : canReturnToDispatchPool ? "AVAILABLE" : robotaxi.availability_status,
       motion_status: "STOPPED",
-      available_for_dispatch: !hasPendingFleetOperation,
+      available_for_dispatch: canReturnToDispatchPool,
     };
   });
   return {

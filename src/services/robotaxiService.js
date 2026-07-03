@@ -31,15 +31,13 @@ export function getOperationalHealth(robotaxi, context = {}) {
 export function canAcceptServiceOrder(robotaxi) {
   return isAvailableBase(robotaxi)
     && !robotaxi.current_order_id
-    && !robotaxi.current_task_id
-    && !hasFleetOperationBlocker(robotaxi);
+    && !robotaxi.current_task_id;
 }
 
 export function canAcceptDeploymentTask(robotaxi) {
   return isAvailableBase(robotaxi)
     && !robotaxi.current_order_id
-    && !robotaxi.current_task_id
-    && !hasFleetOperationBlocker(robotaxi);
+    && !robotaxi.current_task_id;
 }
 
 export function canAcceptSupplyRebalance(robotaxi, context) {
@@ -170,15 +168,6 @@ export function markRetired(robotaxi, reason = null, occurredAt = null) {
 function isAvailableBase(robotaxi) {
   return robotaxi?.availability_status === "AVAILABLE"
     && robotaxi?.retirement_status !== RetirementStatus.RETIRED
-    && robotaxi?.failure_status !== FailureStatus.BROKEN;
-}
-
-function hasFleetOperationBlocker(robotaxi) {
-  const fleetStatus = robotaxi?.fleet_operation_status || FleetOperationStatus.NONE;
-  return fleetStatus !== FleetOperationStatus.NONE
-    || robotaxi?.pending_fleet_task_id
-    || robotaxi?.cleanliness_status === CleanlinessStatus.NEEDS_CLEANING
-    || [BatteryOperationStatus.LOW, BatteryOperationStatus.CRITICAL].includes(robotaxi?.battery_operation_status)
-    || [MaintenanceStatus.DUE, MaintenanceStatus.IN_MAINTENANCE].includes(robotaxi?.maintenance_status)
-    || [FailureStatus.ALERTED, FailureStatus.REMOTE_HANDLING, FailureStatus.BROKEN].includes(robotaxi?.failure_status);
+    && robotaxi?.failure_status !== FailureStatus.BROKEN
+    && robotaxi?.available_for_dispatch !== false;
 }
