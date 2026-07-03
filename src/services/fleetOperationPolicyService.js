@@ -168,14 +168,15 @@ export function executeFleetOperationPolicy({
       snapshot: createRobotaxiSnapshot(robotaxi),
       occurredAt: startedAt,
     }));
-    if (result.created && result.robotaxi) {
+    if (result.robotaxi) {
       updatedRobotaxis = updatedRobotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item);
     }
   }
 
   const generatedTasks = taskResults.filter((item) => item.created).map((item) => item.task);
+  const queuedCount = taskResults.filter((item) => item.queued).length;
   const skippedCount = taskResults.filter((item) => !item.created).length;
-  const runStatus = resolveRunStatus({ candidates, generatedTasks, skippedCount });
+  const runStatus = resolveRunStatus({ candidates, generatedTasks, queuedCount, skippedCount });
   const completedAt = resolveNow(context);
   const run = createFleetOperationPolicyRun({
     runId,
@@ -188,7 +189,7 @@ export function executeFleetOperationPolicy({
     candidateRobotaxiIds: candidates.map((item) => item.robotaxi_id),
     generatedTaskIds: generatedTasks.map((task) => task.task_id),
     noActionReason: candidates.length ? null : "NO_CANDIDATE_ROBOTAXI",
-    resultSummary: createResultSummary({ policy, candidates, generatedTasks, skippedCount }),
+    resultSummary: createResultSummary({ policy, candidates, generatedTasks, queuedCount, skippedCount }),
   });
 
   return {
@@ -426,16 +427,18 @@ function resolveTaskPriority(taskType) {
   return TaskPriority.NORMAL;
 }
 
-function resolveRunStatus({ candidates, generatedTasks, skippedCount }) {
+function resolveRunStatus({ candidates, generatedTasks, queuedCount = 0, skippedCount }) {
   if (!candidates.length) return FleetOperationPolicyRunStatus.NO_ACTION;
+  if (queuedCount && generatedTasks.length) return FleetOperationPolicyRunStatus.PARTIALLY_SUCCEEDED;
+  if (queuedCount) return FleetOperationPolicyRunStatus.PARTIALLY_SUCCEEDED;
   if (generatedTasks.length && skippedCount) return FleetOperationPolicyRunStatus.PARTIALLY_SUCCEEDED;
   if (generatedTasks.length) return FleetOperationPolicyRunStatus.SUCCEEDED;
   return FleetOperationPolicyRunStatus.NO_ACTION;
 }
 
-function createResultSummary({ policy, candidates, generatedTasks, skippedCount }) {
+function createResultSummary({ policy, candidates, generatedTasks, queuedCount = 0, skippedCount }) {
   if (!candidates.length) return `未发现需要${policy.target_task_type}的 Robotaxi`;
-  return `发现 ${candidates.length} 台候选 Robotaxi，生成 ${generatedTasks.length} 个任务，跳过 ${skippedCount} 个`;
+  return `发现 ${candidates.length} 台候选 Robotaxi，生成 ${generatedTasks.length} 个任务，排队 ${queuedCount} 个，跳过 ${Math.max(0, skippedCount - queuedCount)} 个`;
 }
 
 function resolveRunId(context) {

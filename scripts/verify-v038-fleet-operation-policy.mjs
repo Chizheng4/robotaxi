@@ -8,6 +8,10 @@ import {
   executeFleetOperationPolicy,
   initializeDefaultFleetOperationPolicies,
 } from "../src/services/fleetOperationPolicyService.js";
+import {
+  dispatchFleetOperationDestination,
+  initializeDefaultFleetOperationDispatchStrategies,
+} from "../src/services/fleetOperationDispatchService.js";
 
 const policies = initializeDefaultFleetOperationPolicies("2026-07-02T00:00:00.000Z");
 assert.equal(policies.length, 5, "应初始化五类运维策略");
@@ -68,6 +72,57 @@ assert.equal(directResult.created, true);
 assert.equal(directResult.task.trigger_source, "DIRECT_ROBOTAXI_OPERATION");
 assert.equal(directResult.task.trigger_object_type, "robotaxi");
 assert.equal(directResult.task.trigger_object_id, "RT-DIRECT-CLEAN");
+
+const queuedDirectResult = createDirectFleetOperationTask({
+  taskType: TaskType.CLEANING,
+  robotaxi: createRobotaxi({ robotaxi_id: "RT-IN-SERVICE", current_order_id: "SO-001" }),
+  existingTasks: [],
+  taskFields: {
+    trigger_object_type: "robotaxi",
+    trigger_object_id: "RT-IN-SERVICE",
+  },
+  context: createContext(),
+});
+assert.equal(queuedDirectResult.created, false);
+assert.equal(queuedDirectResult.queued, true);
+assert.equal(queuedDirectResult.robotaxi.pending_task_queue.length, 1);
+assert.equal(queuedDirectResult.robotaxi.pending_task_queue[0].task_type, TaskType.CLEANING);
+
+const dispatchStrategy = initializeDefaultFleetOperationDispatchStrategies()[0];
+let dispatchRunSequence = 0;
+let dispatchDecisionSequence = 0;
+const dispatchContext = {
+  now: () => "2026-07-02T00:00:00.000Z",
+  nextDispatchRunId: () => `FODR-${String(++dispatchRunSequence).padStart(4, "0")}`,
+  nextDispatchDecisionId: () => `FODD-${String(++dispatchDecisionSequence).padStart(4, "0")}`,
+};
+const dispatchResult = dispatchFleetOperationDestination({
+  task: { task_id: "TASK-CLN-9999", task_type: TaskType.CLEANING },
+  robotaxi: { robotaxi_id: "RT-DISPATCH", current_cell_id: "C-00-00" },
+  strategy: dispatchStrategy,
+  cells: [
+    { cell_id: "C-00-00", row: 0, col: 0 },
+    { cell_id: "C-01-00", row: 1, col: 0 },
+    { cell_id: "C-09-09", row: 9, col: 9 },
+  ],
+  opsCenters: [
+    { ops_center_id: "OC-FAR", cell_ids: ["C-09-09"], can_clean_robotaxi: true },
+    { ops_center_id: "OC-NEAR", cell_ids: ["C-01-00"], can_clean_robotaxi: true },
+  ],
+  context: dispatchContext,
+});
+assert.equal(dispatchResult.targetOpsCenterId, "OC-NEAR", "NEAREST_AVAILABLE 应选择距离最近的具备能力运营中心");
+assert.equal(dispatchResult.decision.distance_m, 50, "调度结果应记录可解释距离");
+
+const failedDispatch = dispatchFleetOperationDestination({
+  task: { task_id: "TASK-CLN-0000", task_type: TaskType.CLEANING },
+  robotaxi: { robotaxi_id: "RT-NO-CENTER", current_cell_id: "C-00-00" },
+  strategy: dispatchStrategy,
+  opsCenters: [],
+  context: dispatchContext,
+});
+assert.match(failedDispatch.run.fleet_operation_dispatch_run_id, /^FODR-\d{4}$/);
+assert.match(failedDispatch.decision.fleet_operation_dispatch_decision_id, /^FODD-\d{4}$/);
 
 console.log("v038 Fleet Operations 运维策略服务合同验证通过");
 

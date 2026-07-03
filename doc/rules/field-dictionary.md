@@ -588,6 +588,7 @@
 |current_route_execution_id|当前行驶记录|聚合展示字段|当前关联 RouteExecution，可为空，展示推导字段|
 |location_summary|位置摘要|聚合展示字段|由 current_cell_id 通过 CellContext 推导|
 |fleet_operation_status|车队运维状态|运行态字段|Robotaxi 当前车队运维恢复状态|
+|operation_tags|运维标记|聚合展示字段|由清洁、充电、维修、故障等运维状态字段生成的前端标记展示|
 |needs_cleaning|需要清洁标记|运行态字段|Robotaxi 运维容器：是否需要清洁|
 |needs_charging|需要充电标记|运行态字段|Robotaxi 运维容器：是否需要充电|
 |needs_maintenance|需要维修标记|运行态字段|Robotaxi 运维容器：是否需要维修|
@@ -704,19 +705,74 @@
 |robotaxi_snapshot|Robotaxi 快照|持久化字段|策略执行时该车辆的关键状态快照|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 
-### 11.5 Fleet Operations 策略枚举中文
+### 11.5 FleetOperationDispatchStrategy：运维调度策略
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|fleet_operation_dispatch_strategy_id|运维调度策略编号|持久化字段|运维调度策略唯一编号|
+|strategy_name|策略名称|持久化字段|用户可识别的调度策略名称|
+|dispatch_algorithm|调度算法|持久化字段|NEAREST_AVAILABLE 等调度算法|
+|strategy_status|策略状态|运行态字段|ACTIVE、DRAFT、ARCHIVED|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+|updated_at|更新时间|持久化字段|真实审计更新时间|
+
+### 11.6 FleetOperationDispatchRun：运维调度执行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|fleet_operation_dispatch_run_id|运维调度执行编号|持久化字段|运维调度执行记录唯一编号|
+|fleet_operation_dispatch_strategy_id|运维调度策略编号|持久化字段|来源运维调度策略|
+|task_id|任务编号|持久化字段|本次调度对应的运维任务|
+|task_type|任务类型|持久化字段|本次调度对应的任务类型|
+|robotaxi_id|Robotaxi 编号|持久化字段|本次调度对应的车辆|
+|origin_cell_id|起点网格|持久化字段|调度时 Robotaxi 所在 Cell|
+|run_status|执行状态|运行态字段|SUCCEEDED、NO_ELIGIBLE_CENTER、FAILED|
+|decision_count|调度决策数|运行态字段|本次生成的调度结果数量|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### 11.7 FleetOperationDispatchDecision：运维调度结果
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|fleet_operation_dispatch_decision_id|运维调度结果编号|持久化字段|运维调度结果唯一编号|
+|fleet_operation_dispatch_run_id|运维调度执行编号|持久化字段|来源运维调度执行|
+|fleet_operation_dispatch_strategy_id|运维调度策略编号|持久化字段|来源运维调度策略|
+|task_id|任务编号|持久化字段|本次调度对应的运维任务|
+|task_type|任务类型|持久化字段|本次调度对应的任务类型|
+|robotaxi_id|Robotaxi 编号|持久化字段|本次调度对应的车辆|
+|selected_ops_center_id|选中运营中心|运行态字段|调度选中的目标运营中心，可为空|
+|target_cell_id|当前目标位置|运行态字段|调度选中的目标 Cell，可为空|
+|decision_result|决策结果|运行态字段|DISPATCHED、NO_CAPACITY、NO_MATCHING_CAPABILITY|
+|distance_m|距离（米）|运行态字段|Robotaxi 当前位置到目标运营中心 Cell 的估算距离|
+|total_distance_km|总距离（公里）|运行态字段|调度距离的公里展示|
+|reason|原因|运行态字段|调度成功或失败原因|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### 11.8 Fleet Operations 策略枚举中文
 
 |英文值|中文名|用途|
 |---|---|---|
 |ALL_ROBOTAXI|全部 Robotaxi|执行范围|
 |FLEET_OPERATION_POLICY|运维策略触发|触发来源|
 |DIRECT_ROBOTAXI_OPERATION|Robotaxi 直接触发|触发来源|
+|NEAREST_AVAILABLE|最近可用运维中心|调度算法|
+|DISPATCHED|已调度|调度结果|
+|NO_CAPACITY|无可用容量|调度结果|
+|NO_MATCHING_CAPABILITY|无匹配能力|调度结果|
+|NO_ELIGIBLE_CENTER|无可用运维中心|调度执行状态|
+|INVALID_DISPATCH_INPUT|调度输入无效|调度失败原因|
+|UNKNOWN_TASK_TYPE_FOR_DISPATCH|未知运维任务类型|调度失败原因|
 |NO_ACTION|未发现符合车辆|策略执行结果|
 |INVALID_FLEET_OPERATION_POLICY|运维策略无效|无动作或失败原因|
 |ROBOTAXI_ALREADY_HAS_OPEN_FLEET_OPERATION_TASK|Robotaxi 已有未完成运维任务|任务创建跳过原因|
+|ROBOTAXI_ALREADY_RETIRED|Robotaxi 已退役|任务创建拒绝原因|
+|QUEUE_FULL|任务队列已满|任务创建拒绝原因|
+|WAIT_CURRENT_SERVICE_COMPLETION|等待当前服务完成|任务排队原因|
+|WAIT_CURRENT_TASK_COMPLETION|等待当前任务完成|任务排队原因|
+|FLEET_OPERATION_TASK_QUEUED|运维任务已排队|任务创建结果|
 |TASK_CREATED|任务已生成|策略结果状态|
 
-### 11.6 Fleet Operations 任务触发来源字段
+### 11.9 Fleet Operations 任务触发来源字段
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|

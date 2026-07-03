@@ -18,6 +18,7 @@ import {
   createRetirementTask,
 } from "../domain/taskTypes.js";
 import * as routePlanningService from "./routePlanningService.js";
+import * as robotaxiTaskPriorityService from "./robotaxiTaskPriorityService.js";
 
 const TASK_CONFIG = {
   [TaskType.CLEANING]: {
@@ -91,13 +92,43 @@ export function createFleetOperationTask({
     return { created: false, reason: "ROBOTAXI_ALREADY_HAS_OPEN_FLEET_OPERATION_TASK" };
   }
 
-  const taskId = resolveNextId(context, config.idPrefix);
-  const taskPriorityLevel = resolvePriorityLevel(trigger.task_priority || TaskPriority.NORMAL);
-  const isOccupied = Boolean(robotaxi.current_order_id || robotaxi.current_task_id);
-  const canInterrupt = isOccupied && taskPriorityLevel >= resolvePriorityLevel(TaskPriority.HIGH);
-  const shouldWait = isOccupied && !canInterrupt;
-  const isAtOpsCenterWithCapability = !isOccupied && isRobotaxiAtMatchingOpsCenter(robotaxi, taskType, context.opsCenters);
   const now = resolveNow(context);
+  const decision = robotaxiTaskPriorityService.resolveTaskDecision({
+    robotaxi,
+    newTaskType: taskType,
+    config: context.taskPriorityConfig,
+  });
+  if (decision.decision === robotaxiTaskPriorityService.DECISION.REJECTED) {
+    return { created: false, reason: decision.reason };
+  }
+  if (decision.decision === robotaxiTaskPriorityService.DECISION.QUEUE_AFTER_CURRENT) {
+    const robotaxiWithQueue = robotaxiTaskPriorityService.enqueueTask(robotaxi, {
+      ...(decision.queue_entry || {}),
+      task_type: taskType,
+      trigger_type: trigger.trigger_type || TriggerType.TASK_RESULT,
+      trigger_source: trigger.trigger_source || null,
+      trigger_object_type: trigger.task_fields?.trigger_object_type || null,
+      trigger_object_id: trigger.task_fields?.trigger_object_id || null,
+      queued_at: now,
+    });
+    return {
+      created: false,
+      queued: true,
+      reason: decision.reason || "FLEET_OPERATION_TASK_QUEUED",
+      robotaxi: {
+        ...robotaxiWithQueue,
+        pending_fleet_task_type: taskType,
+        fleet_operation_status: "WAITING_SERVICE_COMPLETION",
+        operation_blocking_reason: taskType,
+        updated_at: now,
+      },
+    };
+  }
+
+  const taskId = resolveNextId(context, config.idPrefix);
+  const shouldWait = false;
+  const isOccupied = Boolean(robotaxi.current_order_id || robotaxi.current_task_id);
+  const isAtOpsCenterWithCapability = !isOccupied && isRobotaxiAtMatchingOpsCenter(robotaxi, taskType, context.opsCenters);
   const task = config.factory({
     task_id: taskId,
     task_type: taskType,
@@ -330,7 +361,8 @@ export function applyFleetOperationTaskReference(robotaxi, { task, shouldWait, n
     current_task_id: task.task_id,
     current_task_type: task.task_type,
     current_task_status: task.task_status,
-    availability_status: "UNAVAILABLE",
+    availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : "UNAVAILABLE",
+    retirement_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : robotaxi.retirement_status,
     available_for_dispatch: false,
     fleet_operation_status: resolveFleetOperationStatusForTask(task.task_type),
     operation_blocking_reason: task.task_type,

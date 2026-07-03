@@ -1,6 +1,17 @@
 
 
 
+## v040.7
+
+核心：修复 v039/v040 Fleet Operations 架构合同半接入问题。
+
+- 补齐 Robotaxi 运维标记字段字典，并让 Robotaxi 表格真实渲染清洁/充电/维修/故障 tag。
+- 补齐运维调度结果页面、对象映射、字段字典和运行态合同。
+- 运维调度失败也生成稳定 run / decision 编号，NEAREST_AVAILABLE 按 Cell 距离选择最近运营中心。
+- Fleet Operation 任务创建接入任务优先级服务，占用时按配置进入 pending_task_queue。
+- 修复退役按钮缺少确认动作入口的问题。
+- 扩展 v037/v038/v039 合同验证；提交前检查通过。真实浏览器脚本受当前环境 Chrome / 本地端口限制未完成，已完成本地资源加载验证。
+
 ## v040.6
 
 核心：Robotaxi 管理页 UX 优化与字段字典补齐。

@@ -189,6 +189,7 @@ const pageGroups = [
           { key: "fleetOperationPolicyResults", label: "运维策略结果" },
           { key: "fleetOperationDispatchStrategies", label: "运维调度策略" },
           { key: "fleetOperationDispatchRuns", label: "运维调度执行" },
+          { key: "fleetOperationDispatchDecisions", label: "运维调度结果" },
           { key: "taskPriorityConfig", label: "任务优先级调度配置" },
         ],
       },
@@ -374,6 +375,16 @@ const tableConfig = {
     title: "运维调度执行",
     description: "记录每次运维调度策略的执行过程。",
     columns: ["fleet_operation_dispatch_run_id", "fleet_operation_dispatch_strategy_id", "task_id", "task_type", "robotaxi_id", "origin_cell_id", "run_status", "decision_count", "created_at"],
+  },
+  fleetOperationDispatchDecisions: {
+    title: "运维调度结果",
+    description: "记录每次运维调度的目标选择、距离和失败原因。",
+    columns: ["fleet_operation_dispatch_decision_id", "fleet_operation_dispatch_run_id", "fleet_operation_dispatch_strategy_id", "task_id", "task_type", "robotaxi_id", "selected_ops_center_id", "target_cell_id", "decision_result", "distance_m", "total_distance_km", "reason", "created_at"],
+  },
+  taskPriorityConfig: {
+    title: "任务优先级调度配置",
+    description: "配置 Robotaxi 运维任务之间的优先级、中断和排队策略。",
+    columns: ["config_id", "config_status", "priority_rank", "interrupt_policy", "allow_queuing", "max_queue_size"],
   },
   deploymentTasks: {
     title: "运营投放任务",
@@ -565,6 +576,7 @@ const pageObjectType = {
   fleetOperationPolicyResults: "fleetOperationPolicyResult",
   fleetOperationDispatchStrategies: "fleetOperationDispatchStrategy",
   fleetOperationDispatchRuns: "fleetOperationDispatchRun",
+  fleetOperationDispatchDecisions: "fleetOperationDispatchDecision",
   taskPriorityConfig: "taskPriorityConfig",
   deploymentTasks: "deploymentTask",
   routeExecutions: "routeExecution",
@@ -628,6 +640,7 @@ const idFieldByType = {
   fleetOperationPolicyResult: "fleet_operation_policy_result_id",
   fleetOperationDispatchStrategy: "fleet_operation_dispatch_strategy_id",
   fleetOperationDispatchRun: "fleet_operation_dispatch_run_id",
+  fleetOperationDispatchDecision: "fleet_operation_dispatch_decision_id",
   taskPriorityConfig: "config_id",
   deploymentTask: "task_id",
   routeExecution: "route_execution_id",
@@ -680,6 +693,7 @@ const statusFieldByPage = {
   fleetOperationPolicyResults: "result_status",
   fleetOperationDispatchStrategies: "strategy_status",
   fleetOperationDispatchRuns: "run_status",
+  fleetOperationDispatchDecisions: "decision_result",
   taskPriorityConfig: "config_status",
   deploymentTasks: "task_status",
   routeExecutions: "execution_status",
@@ -981,6 +995,7 @@ function App() {
     fleetOperationDispatchStrategies,
     fleetOperationDispatchRuns,
     fleetOperationDispatchDecisions,
+    taskPriorityConfig: taskPriorityConfigs,
     deploymentTasks: deploymentTasks.map((task) => attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions)),
     routeExecutions: routeExecutions.map((execution) => attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords)),
     taskEventLogs,
@@ -1024,7 +1039,7 @@ function App() {
     simulationEvents,
     timedOperations,
     validations,
-  }), [chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
+  }), [chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, routeExecutions, routePlanningRuns, serviceOrders, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -1102,6 +1117,8 @@ function App() {
       fleetOperationPolicyResult: rowsByPage.fleetOperationPolicyResults,
       fleetOperationDispatchStrategy: rowsByPage.fleetOperationDispatchStrategies,
       fleetOperationDispatchRun: rowsByPage.fleetOperationDispatchRuns,
+      fleetOperationDispatchDecision: rowsByPage.fleetOperationDispatchDecisions,
+      taskPriorityConfig: rowsByPage.taskPriorityConfig,
       taskEventLog: taskEventLogs,
       validation: validations,
     };
@@ -1820,6 +1837,7 @@ function App() {
                   runFleetOperationPolicyForPage,
                   runFleetOperationPolicy,
                   createDirectFleetOperationTaskFromRobotaxi,
+                  confirmRetirement,
                   dispatchFleetOperationTaskDestination,
                   planFleetOperationRoute,
                   advanceFleetOperationRouteExecution,
@@ -2348,6 +2366,7 @@ function App() {
         nextRunId: nextFleetOperationPolicyRunId,
         nextResultId: nextFleetOperationPolicyResultId,
         opsCenters: data.opsCenters,
+        taskPriorityConfig: taskPriorityConfigs[0],
       },
     });
 
@@ -2405,10 +2424,31 @@ function App() {
         now,
         nextId: nextFleetOperationTaskId,
         opsCenters: data.opsCenters,
+        taskPriorityConfig: taskPriorityConfigs[0],
       },
     });
 
     if (!result.created) {
+      if (result.robotaxi) {
+        setOperationalData((current) => ({
+          ...current,
+          robotaxis: current.robotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+        }));
+      }
+      if (result.queued) {
+        setTaskEventLogs((logs) => [
+          createEventLog({
+            event_type: taskTypes.TaskEventType.TASK_CREATED,
+            event_result: taskTypes.TaskEventResult.SKIPPED,
+            robotaxi_id: robotaxi.robotaxi_id,
+            trigger_type: taskTypes.TriggerType.MANUAL,
+            message: `${getDisplayValue(taskType)}任务已进入待执行队列`,
+          }),
+          ...logs,
+        ]);
+        antd.message.info(`${getDisplayValue(taskType)}任务已排队`);
+        return;
+      }
       antd.message.warning(getDisplayValue(result.reason, "result_reason") || "当前 Robotaxi 暂不能生成运维任务");
       return;
     }
@@ -2431,6 +2471,18 @@ function App() {
     ]);
     selectForPage(collectionKey, pageObjectType[collectionKey], result.task.task_id);
     antd.message.success(`${getDisplayValue(taskType)}任务已生成`);
+  }
+
+  function confirmRetirement(robotaxi) {
+    if (!robotaxi?.robotaxi_id) return;
+    Modal.confirm({
+      title: "确认退役 Robotaxi",
+      content: `${robotaxi.robotaxi_id} 退役后将不再参与投放和服务匹配。`,
+      okText: "确认退役",
+      cancelText: "取消",
+      okButtonProps: { danger: true },
+      onOk: () => createDirectFleetOperationTaskFromRobotaxi(robotaxi, taskTypes.TaskType.RETIREMENT),
+    });
   }
 
   function editFleetOperationPolicy(policy) {
@@ -2613,6 +2665,7 @@ function App() {
       task,
       robotaxi,
       opsCenters: data.opsCenters,
+      cells: data.cells,
       strategy,
       context: {
         now,
@@ -5119,6 +5172,7 @@ function renderCellValue(key, row) {
   if (key === "cell_count") return row.cell_ids?.length ?? 0;
   if (key === "covered_cell_count") return (row.cell_ids || row.covered_cell_ids)?.length ?? 0;
   if (key === "route_step_count") return getMovementStepCount(row);
+  if (key === "operation_tags") return renderOperationTags(row);
   if (key === "result") {
     const passed = row[key] === "PASS";
     return <Tag color={passed ? "success" : "error"}>{getDisplayValue(row[key])}</Tag>;
@@ -7390,7 +7444,6 @@ function loadRuntimeSnapshot(initialData) {
     fleetOperationDispatchStrategies: fleetOperationDispatchService.initializeDefaultFleetOperationDispatchStrategies(),
     fleetOperationDispatchRuns: [],
     fleetOperationDispatchDecisions: [],
-      taskPriorityConfigs: [robotaxiTaskPriorityService?.initializeDefaultPriorityConfig() || {}],
     taskPriorityConfigs: [robotaxiTaskPriorityService?.initializeDefaultPriorityConfig() || {}],
     deploymentTasks: [],
     routeExecutions: [],

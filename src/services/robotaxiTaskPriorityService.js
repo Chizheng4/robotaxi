@@ -24,6 +24,7 @@ const DEFAULT_INTERRUPT_POLICY = {
 export function initializeDefaultPriorityConfig() {
   return {
     config_id: "ROBOTAXI_TASK_PRIORITY_DEFAULT",
+    config_status: "ACTIVE",
     priority_rank: { ...DEFAULT_PRIORITY_RANK },
     interrupt_policy: { ...DEFAULT_INTERRUPT_POLICY },
     allow_queuing: true,
