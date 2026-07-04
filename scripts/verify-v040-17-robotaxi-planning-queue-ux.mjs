@@ -7,13 +7,14 @@ const planningTypes = fs.readFileSync("src/domain/robotaxiTaskPlanningTypes.js",
 const fieldDictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 const fieldContract = fs.readFileSync("scripts/verify-field-display-contract.mjs", "utf8");
 
-assertIncludes(main, "robotaxi-selected-summary", "Robotaxi 当前选中信息必须使用统一概览结构，避免独立卡片化");
-assertIncludes(main, "<span>当前位置</span>", "Robotaxi 顶部概览必须展示当前位置");
-assertIncludes(main, "<span>当前可触发运维</span>", "Robotaxi 顶部概览必须展示当前可触发运维");
+assertIncludes(main, "robotaxi-selected-card", "Robotaxi 当前选中信息必须使用统一摘要结构，避免碎片化键值格");
+assertIncludes(main, "label=\"当前位置\"", "Robotaxi 顶部概览必须展示当前位置");
+assertIncludes(main, "RobotaxiLocationPopover", "Robotaxi 顶部当前位置必须支持悬浮查看完整信息");
+assertIncludes(main, "当前可触发运维", "Robotaxi 顶部概览必须展示当前可触发运维");
 assertIncludes(main, "pending_task_queue", "Robotaxi 详情必须展示待执行任务队列");
 assertIncludes(main, "queue_sequence", "任务规划结果表必须展示排队序号");
 assertIncludes(main, "const sequence = item.queue_sequence || index + 1", "Robotaxi 队列展示必须优先读取任务规划排队序号并兼容旧数据");
-assertIncludes(styles, ".robotaxi-context-grid > div", "Robotaxi 顶部键值信息必须使用一致化分组布局");
+assertIncludes(styles, ".robotaxi-selected-meta-scroll", "Robotaxi 顶部摘要必须支持横向滚动以适配详情展开");
 assertNotIncludes(styles, ".robotaxi-focus-block", "Robotaxi 顶部不应继续使用旧卡片式焦点块");
 assertIncludes(planningService, "queue_sequence: resolveQueueSequence(queue, priority)", "任务规划策略排队结果必须生成排队序号");
 assertIncludes(planningTypes, "queue_sequence: result.queue_sequence || result.queue_entry?.queue_sequence || null", "任务规划结果对象必须持久展示排队序号");

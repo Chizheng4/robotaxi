@@ -141,6 +141,7 @@ export function createFleetOperationTask({
       trigger_source: trigger.trigger_source || null,
       source_task_id: trigger.source_task_id || null,
       robotaxi_id: robotaxi.robotaxi_id,
+      origin_cell_id: robotaxi.current_cell_id || null,
       target_ops_center_id: null,
       target_cell_id: null,
       route_execution_id: null,
@@ -197,6 +198,7 @@ export function createFleetOperationTask({
     trigger_source: trigger.trigger_source || null,
     source_task_id: trigger.source_task_id || null,
     robotaxi_id: robotaxi.robotaxi_id,
+    origin_cell_id: robotaxi.current_cell_id || null,
     target_ops_center_id: null,
     target_cell_id: null,
     route_execution_id: null,
@@ -409,6 +411,7 @@ export function planFleetOperationRoute({
     task: {
       ...task,
       task_status: movingStatus,
+      origin_cell_id: originCellId,
       route_execution_id: routeExecutionId,
       route_id: route.route_id,
       route_strategy_id: route.route_strategy_id,
@@ -435,8 +438,9 @@ export function advanceFleetOperationRouteExecution({ execution, task, route, ro
   if (!step) return { succeeded: false, reason: "FLEET_OPERATION_ROUTE_STEP_UNAVAILABLE" };
   const now = resolveNow(context);
   const arrived = step.execution.execution_status === "ARRIVED";
-  const arrivedStatus = getFleetOperationArrivedStatus(task?.task_type);
+  const afterArrivalStatus = getFleetOperationAfterArrivalStatus(task?.task_type);
   const movingStatus = getFleetOperationMovingStatus(task?.task_type);
+  const nextTaskStatus = arrived ? afterArrivalStatus : movingStatus;
   return {
     succeeded: true,
     routeExecution: {
@@ -445,12 +449,15 @@ export function advanceFleetOperationRouteExecution({ execution, task, route, ro
     },
     task: task ? {
       ...task,
-      task_status: arrived ? arrivedStatus : movingStatus,
+      task_status: nextTaskStatus,
+      arrival_confirmed_at: arrived ? now : task.arrival_confirmed_at || null,
+      actual_target_cell_id: arrived ? step.execution.current_cell_id : task.actual_target_cell_id || null,
+      actual_target_service_area_id: arrived ? step.execution.target_service_area_id || step.execution.current_target_service_area_id || null : task.actual_target_service_area_id || null,
       updated_at: now,
     } : null,
     robotaxi: step.robotaxi ? {
       ...step.robotaxi,
-      current_task_status: arrived ? arrivedStatus : movingStatus,
+      current_task_status: nextTaskStatus,
       updated_at: now,
     } : null,
     arrived,
@@ -492,6 +499,46 @@ export function confirmFleetOperationArrival({ execution, task, robotaxi, contex
       motion_status: "PARKED",
       updated_at: now,
     } : null,
+  };
+}
+
+export function assignFleetOperationWorker({ task, robotaxi, workers = [], context = {} } = {}) {
+  if (!task?.task_id || !robotaxi?.robotaxi_id) return { succeeded: false, reason: "INVALID_FLEET_OPERATION_WORKER_INPUT" };
+  if (!isFleetOperationWaitingWorkerStatus(task)) return { succeeded: false, reason: "FLEET_OPERATION_WORKER_NOT_READY" };
+  const now = resolveNow(context);
+  const worker = (workers || []).find((item) =>
+    item.worker_status === "IDLE"
+    && item.current_task_id == null
+    && (!task.target_ops_center_id || item.ops_center_id === task.target_ops_center_id)
+  );
+  if (!worker) return { succeeded: false, reason: "NO_IDLE_WORKER" };
+  const nextStatus = getFleetOperationReadyToStartStatus(task);
+  return {
+    succeeded: true,
+    worker,
+    task: {
+      ...task,
+      worker_id: worker.worker_id,
+      assigned_worker_id: worker.worker_id,
+      task_status: nextStatus,
+      assigned_at: now,
+      updated_at: now,
+    },
+    robotaxi: {
+      ...robotaxi,
+      current_task_id: task.task_id,
+      current_task_type: task.task_type,
+      current_task_status: nextStatus,
+      updated_at: now,
+    },
+    workerRecord: {
+      ...worker,
+      worker_status: "BUSY",
+      current_task_id: task.task_id,
+      current_task_type: task.task_type,
+      current_task_status: nextStatus,
+      updated_at: now,
+    },
   };
 }
 
@@ -616,13 +663,13 @@ function getWaitingRouteStatus() {
 }
 
 function getFleetOperationWorkStatus(task) {
-  if (task.task_type === TaskType.CLEANING && task.task_status === FleetOperationTaskStatus.WAITING_WORKER_ASSIGNMENT) {
+  if (task.task_type === TaskType.CLEANING && task.task_status === FleetOperationTaskStatus.READY_TO_START) {
     return FleetOperationTaskStatus.CLEANING_IN_PROGRESS;
   }
-  if (task.task_type === TaskType.MAINTENANCE && task.task_status === MaintenanceTaskStatus.WAITING_RESOURCE_ASSIGNMENT) {
+  if (task.task_type === TaskType.MAINTENANCE && task.task_status === MaintenanceTaskStatus.READY_TO_START) {
     return MaintenanceTaskStatus.MAINTENANCE_IN_PROGRESS;
   }
-  if (task.task_type === TaskType.CHARGING && task.task_status === ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT) {
+  if (task.task_type === TaskType.CHARGING && task.task_status === ChargingTaskStatus.READY_TO_CHARGE) {
     return task.charging_phase === "DISCONNECT_REQUIRED"
       ? ChargingTaskStatus.DISCONNECTING_CHARGER
       : ChargingTaskStatus.CONNECTING_CHARGER;
@@ -634,6 +681,23 @@ function getFleetOperationWorkStatus(task) {
     return RetirementTaskStatus.PROCESSING_RETIREMENT;
   }
   return null;
+}
+
+function isFleetOperationWaitingWorkerStatus(task) {
+  return [
+    FleetOperationTaskStatus.WAITING_WORKER_ASSIGNMENT,
+    FleetOperationTaskStatus.WAITING_RESOURCE_ASSIGNMENT,
+    ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
+    MaintenanceTaskStatus.WAITING_RESOURCE_ASSIGNMENT,
+    FailureHandlingTaskStatus.WAITING_DIAGNOSIS_ASSIGNMENT,
+  ].includes(task.task_status);
+}
+
+function getFleetOperationReadyToStartStatus(task) {
+  if (task.task_type === TaskType.CHARGING) return ChargingTaskStatus.READY_TO_CHARGE;
+  if (task.task_type === TaskType.MAINTENANCE) return MaintenanceTaskStatus.READY_TO_START;
+  if (task.task_type === TaskType.FAILURE_HANDLING) return FailureHandlingTaskStatus.DIAGNOSING;
+  return FleetOperationTaskStatus.READY_TO_START;
 }
 
 function getFleetOperationInProgressStatus(taskType, fallback) {
@@ -659,6 +723,8 @@ function completeChargingWork({ task, robotaxi, now }) {
       task: {
         ...task,
         task_status: ChargingTaskStatus.CHARGING,
+        worker_id: null,
+        assigned_worker_id: null,
         charging_phase: "CHARGING",
         charging_started_at: now,
         updated_at: now,
@@ -670,6 +736,14 @@ function completeChargingWork({ task, robotaxi, now }) {
         fleet_operation_status: "IN_CHARGING",
         updated_at: now,
       },
+      worker: task.worker_id ? {
+        worker_id: task.worker_id,
+        worker_status: "IDLE",
+        current_task_id: null,
+        current_task_type: null,
+        current_task_status: null,
+        updated_at: now,
+      } : null,
     };
   }
   if (task.task_status === ChargingTaskStatus.CHARGING) {
@@ -678,6 +752,8 @@ function completeChargingWork({ task, robotaxi, now }) {
       task: {
         ...task,
         task_status: ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
+        worker_id: null,
+        assigned_worker_id: null,
         charging_phase: "DISCONNECT_REQUIRED",
         charging_completed_at: now,
         updated_at: now,
@@ -708,6 +784,14 @@ function completeFleetOperationTask({ task, robotaxi, now }) {
       updated_at: now,
     },
     robotaxi: restoreRobotaxiAfterFleetOperation(robotaxi, task, now),
+    worker: task.worker_id ? {
+      worker_id: task.worker_id,
+      worker_status: "IDLE",
+      current_task_id: null,
+      current_task_type: null,
+      current_task_status: null,
+      updated_at: now,
+    } : null,
   };
 }
 

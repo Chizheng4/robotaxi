@@ -12,6 +12,7 @@ const {
   Layout,
   Menu,
   Modal,
+  Popover,
   Select,
   Space,
   Table,
@@ -438,27 +439,27 @@ const tableConfig = {
   cleaningTasks: {
     title: "清洁任务",
     description: "用于将 Robotaxi 从需要清洁状态恢复到可运营状态。",
-    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "worker_id", "clean_level_before", "clean_level_after", "pending_since_at", "operation_created_at", "operation_completed_at"]
+    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "clean_level_before", "clean_level_after", "pending_since_at", "operation_created_at", "operation_completed_at"]
   },
   chargingTasks: {
     title: "充电任务",
     description: "用于将 Robotaxi 从低电量或计划补能状态恢复到可运营电量状态。",
-    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "charger_id", "battery_percent_before", "target_battery_percent", "battery_percent_after", "charging_started_at", "charging_completed_at"]
+    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "charger_id", "battery_percent_before", "target_battery_percent", "battery_percent_after", "charging_started_at", "charging_completed_at"]
   },
   maintenanceTasks: {
     title: "维修任务",
     description: "用于处理 Robotaxi 硬件、软件、传感器、电池、轮胎等维修事项。",
-    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "maintenance_type", "target_ops_center_id", "target_cell_id", "target_location_summary", "worker_id", "repair_result", "requires_readiness_check", "pending_since_at", "operation_completed_at"]
+    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "maintenance_type", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "repair_result", "requires_readiness_check", "pending_since_at", "operation_completed_at"]
   },
   failureHandlingTasks: {
     title: "故障处理任务",
     description: "用于确认、分级和处置 Robotaxi 故障事件。",
-    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "failure_type", "failure_severity", "allow_current_service_completion", "diagnosis_result", "disposition_result", "maintenance_task_id", "retirement_task_id"]
+    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "failure_type", "failure_severity", "allow_current_service_completion", "diagnosis_result", "disposition_result", "maintenance_task_id", "retirement_task_id"]
   },
   retirementTasks: {
     title: "退役任务",
     description: "用于将 Robotaxi 从运营系统中永久移除并沉淀资产退出结果。",
-    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "retirement_reason", "approval_status", "target_ops_center_id", "target_cell_id", "target_location_summary", "asset_exit_result", "operation_created_at", "operation_completed_at"]
+    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "retirement_reason", "approval_status", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "asset_exit_result", "operation_created_at", "operation_completed_at"]
   },
   fleetOperationPolicies: {
     title: "运维策略配置",
@@ -2047,6 +2048,7 @@ function App() {
       planFleetOperationRoute,
       advanceFleetOperationRouteExecution,
       confirmFleetOperationArrival,
+      assignFleetOperationWorker,
       startFleetOperationWork,
       completeFleetOperationWork,
       editFleetOperationPolicy,
@@ -3157,7 +3159,11 @@ function App() {
     updateFleetOperationTask(result.task);
     setOperationalData(current => ({
       ...current,
-      robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item)
+      robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+      workers: result.worker ? current.workers.map(item => item.worker_id === result.worker.worker_id ? {
+        ...item,
+        ...result.worker
+      } : item) : current.workers
     }));
     setTaskEventLogs(logs => [createEventLog({
       event_type: result.task.task_status === "COMPLETED" ? taskTypes.TaskEventType.ROBOTAXI_MARKED_AVAILABLE : taskTypes.TaskEventType.CHECK_SUBMITTED,
@@ -3168,6 +3174,46 @@ function App() {
       robotaxi_id: result.task.robotaxi_id,
       message: result.task.task_status === "COMPLETED" ? "运维任务已完成，Robotaxi 恢复可运营" : `${getDisplayValue(result.task.task_status)}已完成`
     }), ...logs]);
+  }
+  function assignFleetOperationWorker(task) {
+    if (!task?.task_id || !fleetOperationTaskService) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
+    const robotaxi = operationalData.robotaxis?.find(r => r.robotaxi_id === task.robotaxi_id);
+    if (!robotaxi) return;
+    const result = fleetOperationTaskService.assignFleetOperationWorker({
+      task,
+      robotaxi,
+      workers: data.workers,
+      context: {
+        now
+      }
+    });
+    if (!result.succeeded) {
+      appendFleetOperationPageEvent(collectionKey, {
+        event_type: taskTypes.TaskEventType.NO_IDLE_WORKER,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        task_type: task.task_type,
+        robotaxi_id: task.robotaxi_id,
+        message: "没有可分配的空闲作业人员"
+      });
+      return;
+    }
+    updateFleetOperationTask(result.task);
+    setOperationalData(current => ({
+      ...current,
+      robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+      workers: current.workers.map(item => item.worker_id === result.workerRecord.worker_id ? result.workerRecord : item)
+    }));
+    appendFleetOperationPageEvent(collectionKey, {
+      event_type: taskTypes.TaskEventType.WORKER_ASSIGNED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: result.task.task_id,
+      task_type: result.task.task_type,
+      robotaxi_id: result.task.robotaxi_id,
+      worker_id: result.worker.worker_id,
+      message: `${result.worker.worker_id} 已分配到 ${result.task.task_id}`
+    });
   }
   function assignWorker(taskId) {
     const task = readinessTasks.find(item => item.task_id === taskId);
@@ -5488,7 +5534,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "location",
       label: "位置与行驶",
-      keys: ["robotaxi_current_cell_id", "robotaxi_current_location_summary", "robotaxi_current_location_detail", "target_ops_center_id", "target_cell_id", "target_location_summary", "target_location_detail", "route_execution_id", "route_id", "route_strategy_id"]
+      keys: ["robotaxi_current_cell_id", "robotaxi_current_location_summary", "robotaxi_current_location_detail", "origin_cell_id", "origin_location_summary", "origin_location_detail", "target_ops_center_id", "target_cell_id", "target_location_summary", "target_location_detail", "route_execution_id", "route_id", "route_strategy_id"]
     }, {
       key: "work",
       label: "作业信息",
@@ -6245,38 +6291,154 @@ function RobotaxiOperationPanel({
   const occupiedCount = rows.filter(row => row.current_task_id || row.current_order_id).length;
   const availableActions = activeRow ? actionMap.get(activeRow.robotaxi_id) || [] : [];
   const queueItems = activeRow?.pending_task_queue || [];
+  const selectActiveRow = () => {
+    if (activeRow) onSelect(activeRow);
+  };
   return /*#__PURE__*/React.createElement("div", {
     className: "robotaxi-operation-panel"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "robotaxi-status-strip"
+    className: "robotaxi-fleet-summary-scroll",
+    "aria-label": "\u8F66\u961F\u72B6\u6001\u6458\u8981"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "robotaxi-status-metric"
-  }, /*#__PURE__*/React.createElement("span", null, "\u53EF\u8FD0\u8425"), /*#__PURE__*/React.createElement("strong", null, availableCount)), /*#__PURE__*/React.createElement("div", {
-    className: "robotaxi-status-metric"
-  }, /*#__PURE__*/React.createElement("span", null, "\u4E0D\u53EF\u8FD0\u8425"), /*#__PURE__*/React.createElement("strong", null, unavailableCount)), /*#__PURE__*/React.createElement("div", {
-    className: "robotaxi-status-metric"
-  }, /*#__PURE__*/React.createElement("span", null, "\u6267\u884C\u4E2D"), /*#__PURE__*/React.createElement("strong", null, occupiedCount)), /*#__PURE__*/React.createElement("div", {
-    className: "robotaxi-status-metric"
-  }, /*#__PURE__*/React.createElement("span", null, "\u6709\u6392\u961F\u4EFB\u52A1"), /*#__PURE__*/React.createElement("strong", null, queuedCount))), /*#__PURE__*/React.createElement("div", {
-    className: "robotaxi-live-summary"
-  }, activeRow ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    className: "robotaxi-selected-summary",
-    type: "button",
-    onClick: () => onSelect(activeRow)
-  }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u9009\u4E2D"), /*#__PURE__*/React.createElement("strong", null, activeRow.robotaxi_id), /*#__PURE__*/React.createElement("small", null, getFieldDisplayValue("availability_status", activeRow.availability_status), " \xB7 ", getFieldDisplayValue("motion_status", activeRow.motion_status))), /*#__PURE__*/React.createElement("div", {
-    className: "robotaxi-context-grid"
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u4F4D\u7F6E"), /*#__PURE__*/React.createElement("strong", null, activeRow.location_summary || activeRow.current_cell_id || "未知位置")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u5360\u7528"), /*#__PURE__*/React.createElement("strong", null, activeRow.current_order_id || activeRow.current_task_id || "无执行任务")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u8FD0\u7EF4\u72B6\u6001"), /*#__PURE__*/React.createElement("strong", null, getDisplayValue(activeRow.fleet_operation_status) || "无")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u6392\u961F\u4EFB\u52A1"), /*#__PURE__*/React.createElement("strong", null, formatRobotaxiQueueItems(queueItems))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u53EF\u89E6\u53D1\u8FD0\u7EF4"), /*#__PURE__*/React.createElement("strong", null, availableActions.length ? availableActions.map(item => getDisplayValue(item.task_type)).join(" / ") : "无可触发任务")))) : /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-fleet-summary"
+  }, /*#__PURE__*/React.createElement(RobotaxiSummaryMetric, {
+    label: "\u53EF\u8FD0\u8425",
+    value: availableCount
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryMetric, {
+    label: "\u4E0D\u53EF\u8FD0\u8425",
+    value: unavailableCount
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryMetric, {
+    label: "\u6267\u884C\u4E2D",
+    value: occupiedCount
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryMetric, {
+    label: "\u6709\u6392\u961F\u4EFB\u52A1",
+    value: queuedCount
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-selected-card"
+  }, activeRow ? /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-selected-card-inner",
+    role: "button",
+    tabIndex: 0,
+    onClick: selectActiveRow,
+    onKeyDown: event => {
+      if (event.key === "Enter" || event.key === " ") selectActiveRow();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-selected-card-head"
+  }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D Robotaxi"), /*#__PURE__*/React.createElement("strong", null, activeRow.robotaxi_id), /*#__PURE__*/React.createElement("small", null, getFieldDisplayValue("availability_status", activeRow.availability_status), " \xB7 ", getFieldDisplayValue("motion_status", activeRow.motion_status))), /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-selected-meta-scroll",
+    "aria-label": "\u5F53\u524D Robotaxi \u6458\u8981"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-selected-meta"
+  }, /*#__PURE__*/React.createElement(RobotaxiSummaryItem, {
+    label: "\u5F53\u524D\u4F4D\u7F6E",
+    value: activeRow.location_summary || activeRow.current_cell_id || "未知位置",
+    popoverTitle: "\u5F53\u524D\u4F4D\u7F6E\u8BE6\u60C5",
+    popoverContent: /*#__PURE__*/React.createElement(RobotaxiLocationPopover, {
+      row: activeRow
+    })
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryItem, {
+    label: "\u5F53\u524D\u5360\u7528",
+    value: activeRow.current_order_id || activeRow.current_task_id || "无执行任务"
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryItem, {
+    label: "\u8FD0\u7EF4\u72B6\u6001",
+    value: getDisplayValue(activeRow.fleet_operation_status) || "无"
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryItem, {
+    label: "\u6392\u961F",
+    value: formatRobotaxiQueueSummary(queueItems),
+    popoverTitle: "\u5F85\u6267\u884C\u4EFB\u52A1\u961F\u5217",
+    popoverContent: /*#__PURE__*/React.createElement(RobotaxiQueuePopover, {
+      queueItems: queueItems
+    })
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryItem, {
+    label: "\u53EF\u89E6\u53D1",
+    value: formatRobotaxiActionSummary(availableActions),
+    popoverTitle: "\u5F53\u524D\u53EF\u89E6\u53D1\u8FD0\u7EF4",
+    popoverContent: /*#__PURE__*/React.createElement(RobotaxiActionsPopover, {
+      actions: availableActions
+    })
+  })))) : /*#__PURE__*/React.createElement("div", {
     className: "robotaxi-empty-summary"
   }, "\u6682\u65E0\u7B26\u5408\u7B5B\u9009\u6761\u4EF6\u7684 Robotaxi\u3002")));
 }
+function RobotaxiSummaryMetric({
+  label,
+  value
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-summary-metric"
+  }, /*#__PURE__*/React.createElement("span", null, label), /*#__PURE__*/React.createElement("strong", null, value));
+}
+function RobotaxiSummaryItem({
+  label,
+  value,
+  popoverTitle = null,
+  popoverContent = null
+}) {
+  const content = /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-summary-item"
+  }, /*#__PURE__*/React.createElement("span", null, label), /*#__PURE__*/React.createElement("strong", null, value || "无"));
+  if (!popoverContent) return content;
+  return /*#__PURE__*/React.createElement(Popover, {
+    title: popoverTitle,
+    content: popoverContent,
+    placement: "bottomLeft",
+    trigger: "hover"
+  }, content);
+}
+function RobotaxiLocationPopover({
+  row
+}) {
+  if (row?.location_context) return /*#__PURE__*/React.createElement(CompactLocationDetail, {
+    value: row.location_context
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-popover-list"
+  }, /*#__PURE__*/React.createElement("span", null, row?.location_summary || row?.current_cell_id || "未知位置"));
+}
+function RobotaxiQueuePopover({
+  queueItems = []
+}) {
+  if (!queueItems.length) return /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-popover-list"
+  }, /*#__PURE__*/React.createElement("span", null, "\u65E0\u6392\u961F\u4EFB\u52A1"));
+  return /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-popover-list"
+  }, queueItems.map((item, index) => /*#__PURE__*/React.createElement("span", {
+    key: `${item.task_id || item.task_type}-${index}`
+  }, formatRobotaxiQueueItem(item, index))));
+}
+function RobotaxiActionsPopover({
+  actions = []
+}) {
+  if (!actions.length) return /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-popover-list"
+  }, /*#__PURE__*/React.createElement("span", null, "\u65E0\u53EF\u89E6\u53D1\u4EFB\u52A1"));
+  return /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-popover-list"
+  }, actions.map(item => /*#__PURE__*/React.createElement("span", {
+    key: item.task_type
+  }, getDisplayValue(item.task_type), "\uFF1A\u53EF\u521B\u5EFA")));
+}
+function formatRobotaxiQueueItem(item, index) {
+  const sequence = item.queue_sequence || index + 1;
+  const priority = item.priority !== undefined && item.priority !== null ? `，优先级 ${item.priority}` : "";
+  const taskId = item.task_id ? `，${item.task_id}` : "";
+  return `${sequence}. ${getDisplayValue(item.task_type)}${taskId}${priority}`;
+}
+function formatRobotaxiQueueSummary(queueItems = []) {
+  if (!queueItems.length) return "无";
+  const visible = queueItems.slice(0, 2).map((item, index) => formatRobotaxiQueueItem(item, index));
+  return queueItems.length > 2 ? `${visible.join(" / ")} / +${queueItems.length - 2}` : visible.join(" / ");
+}
+function formatRobotaxiActionSummary(actions = []) {
+  if (!actions.length) return "无可触发任务";
+  const labels = actions.slice(0, 3).map(item => getDisplayValue(item.task_type));
+  return actions.length > 3 ? `${labels.join(" / ")} / +${actions.length - 3}` : labels.join(" / ");
+}
 function formatRobotaxiQueueItems(queueItems = []) {
   if (!queueItems.length) return "无";
-  return queueItems.map((item, index) => {
-    const sequence = item.queue_sequence || index + 1;
-    const priority = item.priority !== undefined && item.priority !== null ? `，优先级 ${item.priority}` : "";
-    const taskId = item.task_id ? `，${item.task_id}` : "";
-    return `${sequence}. ${getDisplayValue(item.task_type)}${taskId}${priority}`;
-  }).join(" / ");
+  return queueItems.map((item, index) => formatRobotaxiQueueItem(item, index)).join(" / ");
 }
 function renderViewDetailAction(row, actions) {
   return /*#__PURE__*/React.createElement(RowActionButton, {
@@ -6322,12 +6484,17 @@ function renderFleetOperationTaskActions(row, actions) {
       onClick: () => actions.dispatchFleetOperationTaskDestination(row)
     }, dispatchLabel);
   }
-  if (status && status.includes("WAITING_ROUTE")) {
+  if (isFleetOperationRouteRecordStatus(row)) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.viewRouteExecutionForDeployment(row)
     }, "\u67E5\u770B\u884C\u9A76\u8BB0\u5F55");
   }
-  if (isFleetOperationWorkReadyStatus(row)) {
+  if (isFleetOperationWorkerAssignmentStatus(row)) {
+    return /*#__PURE__*/React.createElement(RowActionButton, {
+      onClick: () => actions.assignFleetOperationWorker(row)
+    }, "\u5206\u914D\u4F5C\u4E1A\u4EBA\u5458");
+  }
+  if (isFleetOperationReadyToStartStatus(row)) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.startFleetOperationWork(row)
     }, getFleetOperationStartWorkLabel(row));
@@ -6342,17 +6509,24 @@ function renderFleetOperationTaskActions(row, actions) {
     onClick: () => actions.viewRecordDetail(actions.page, actions.objectType, row[actions.idField])
   }, "\u67E5\u770B\u8BE6\u60C5");
 }
+function isFleetOperationRouteRecordStatus(row) {
+  if (!row?.route_execution_id) return false;
+  return ["WAITING_ROUTE", "MOVING_TO_OPS_CENTER", "MOVING_TO_CHARGER", "MOVING_TO_MAINTENANCE_CENTER", "MOVING_TO_RETIREMENT_CENTER"].includes(row.task_status);
+}
 function isFleetOperationDestinationStatus(status) {
   return ["WAITING_DESTINATION_ASSIGNMENT", "WAITING_CHARGING_DESTINATION_ASSIGNMENT", "WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT"].includes(status);
 }
-function isFleetOperationWorkReadyStatus(row) {
+function isFleetOperationWorkerAssignmentStatus(row) {
   if (!row?.task_status) return false;
   if (row.task_status === "WAITING_WORKER_ASSIGNMENT") return true;
   if (row.task_status === "WAITING_RESOURCE_ASSIGNMENT") return true;
   if (row.task_status === "WAITING_CHARGER_ASSIGNMENT") return true;
-  if (row.task_status === "PROCESSING_RETIREMENT") return true;
   if (row.task_status === "WAITING_DIAGNOSIS_ASSIGNMENT") return true;
+  if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER"].includes(row.task_status)) return true;
   return false;
+}
+function isFleetOperationReadyToStartStatus(row) {
+  return ["READY_TO_START", "READY_TO_CHARGE", "PROCESSING_RETIREMENT"].includes(row?.task_status);
 }
 function isFleetOperationWorkActiveStatus(row) {
   return ["CLEANING_IN_PROGRESS", "MAINTENANCE_IN_PROGRESS", "CONNECTING_CHARGER", "CHARGING", "DISCONNECTING_CHARGER", "DIAGNOSING"].includes(row?.task_status);
@@ -7011,8 +7185,7 @@ function getFleetOperationStatusDisplay(taskType, status) {
   if (status === "WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT" && taskType === "MAINTENANCE") return "待分配维修站";
   if (status === "WAITING_ROUTE") return "待行驶";
   if (["MOVING_TO_OPS_CENTER", "MOVING_TO_CHARGER", "MOVING_TO_MAINTENANCE_CENTER"].includes(status)) return "前往目的地";
-  if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER"].includes(status)) return "已到达目的地";
-  if (["WAITING_WORKER_ASSIGNMENT", "WAITING_RESOURCE_ASSIGNMENT", "WAITING_CHARGER_ASSIGNMENT"].includes(status)) return "待分配作业人员";
+  if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER", "WAITING_WORKER_ASSIGNMENT", "WAITING_RESOURCE_ASSIGNMENT", "WAITING_CHARGER_ASSIGNMENT"].includes(status)) return "待分配作业人员";
   if (status === "CLEANING_IN_PROGRESS") return "清洁中";
   if (status === "MAINTENANCE_IN_PROGRESS") return "维修中";
   if (status === "CONNECTING_CHARGER") return "接入充电中";
@@ -7617,12 +7790,15 @@ function enrichDeploymentTaskForDisplay(task, data) {
 function enrichFleetOperationTaskForDisplay(task, data) {
   const robotaxi = data.robotaxis.find(item => item.robotaxi_id === task.robotaxi_id);
   const robotaxiLocation = getLocationInfo(robotaxi?.current_cell_id || task.origin_cell_id || null, data);
+  const originLocation = getLocationInfo(task.origin_cell_id || null, data);
   const targetLocation = getLocationInfo(task.target_cell_id || task.actual_target_cell_id || null, data);
   return {
     ...task,
     robotaxi_current_cell_id: robotaxi?.current_cell_id || null,
     robotaxi_current_location_summary: robotaxiLocation.summary,
     robotaxi_current_location_detail: robotaxiLocation.detail,
+    origin_location_summary: originLocation.summary,
+    origin_location_detail: originLocation.detail,
     target_location_summary: targetLocation.summary,
     target_location_detail: targetLocation.detail
   };

@@ -17,10 +17,11 @@
 
 ## 当前输入
 
-无。
+暂无。
 
 ## 最近完成
 
+- `v040.18`：运维任务行驶 / 作业人员闭环与 Robotaxi 摘要体验修复小迭代，已归档到 `doc/common/iteration-history/minor/v040.18-fleet-operation-worker-summary.md`。
 - `v040.17`：Robotaxi 管理顶部体验一致化与任务规划排队序号小迭代，已归档到 `doc/common/iteration-history/minor/v040.17-robotaxi-planning-queue-ux.md`。
 - `v040.16`：Robotaxi 管理层级、任务规划中文展示和运维行驶记录闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.16-fleet-route-display-closure.md`。
 - `v040.15`：经营分析指标池、Robotaxi 管理体验和运维状态展示修复小迭代，已归档到 `doc/common/iteration-history/minor/v040.15-metric-robotaxi-fleet-ui.md`。

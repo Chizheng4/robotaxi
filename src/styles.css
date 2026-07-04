@@ -1619,74 +1619,93 @@ body {
 .robotaxi-operation-panel {
   display: grid;
   flex: none;
-  grid-template-columns: minmax(320px, 0.78fr) minmax(560px, 1.35fr);
-  gap: 12px;
-  padding: 10px 12px;
+  grid-template-rows: auto auto;
+  gap: 8px;
+  max-height: 132px;
+  padding: 8px 12px 10px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--surface);
-}
-
-.robotaxi-status-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(72px, 1fr));
-  gap: 8px;
-  min-width: 0;
-}
-
-.robotaxi-status-metric,
-.robotaxi-selected-summary {
-  display: grid;
-  min-width: 0;
-  padding: 4px 0 4px 10px;
-  border-left: 1px solid var(--line-soft);
-  border-radius: 0;
-  color: var(--text);
-  background: transparent;
-  text-align: left;
-}
-
-.robotaxi-selected-summary {
-  cursor: pointer;
-}
-
-.robotaxi-status-metric span,
-.robotaxi-selected-summary span,
-.robotaxi-selected-summary small,
-.robotaxi-context-grid span,
-.robotaxi-context-grid strong {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.robotaxi-status-metric span,
-.robotaxi-context-grid span,
-.robotaxi-selected-summary span,
-.robotaxi-selected-summary small {
+.robotaxi-fleet-summary-scroll,
+.robotaxi-selected-meta-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.robotaxi-fleet-summary-scroll::-webkit-scrollbar,
+.robotaxi-selected-meta-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.robotaxi-fleet-summary,
+.robotaxi-selected-meta {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: max-content;
+  min-width: 0;
+}
+
+.robotaxi-summary-metric {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 112px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.robotaxi-summary-metric span,
+.robotaxi-summary-item span,
+.robotaxi-selected-card-head span,
+.robotaxi-selected-card-head small {
   color: var(--muted);
   font-size: var(--font-xs);
 }
 
-.robotaxi-status-metric strong {
-  margin-top: 4px;
-  font-size: 18px;
+.robotaxi-summary-metric strong {
+  font-size: 16px;
   font-weight: 650;
   line-height: 1;
 }
 
-.robotaxi-live-summary {
+.robotaxi-selected-card {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: #fbfcfe;
+}
+
+.robotaxi-selected-card-inner {
   display: grid;
-  grid-template-columns: minmax(128px, 0.28fr) minmax(420px, 1fr);
-  align-items: stretch;
-  gap: 12px;
+  grid-template-columns: minmax(132px, 0.2fr) minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.robotaxi-selected-card-inner:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: -2px;
+}
+
+.robotaxi-selected-card-head {
+  display: grid;
+  align-content: center;
+  gap: 3px;
   min-width: 0;
 }
 
-.robotaxi-selected-summary {
-  gap: 5px;
-}
-
-.robotaxi-selected-summary strong {
+.robotaxi-selected-card-head strong {
   overflow: hidden;
   font-size: 14px;
   font-weight: 650;
@@ -1694,26 +1713,32 @@ body {
   white-space: nowrap;
 }
 
-.robotaxi-context-grid {
+.robotaxi-summary-item {
   display: grid;
-  grid-template-columns: repeat(5, minmax(116px, 1fr));
-  gap: 8px;
+  align-content: center;
+  gap: 3px;
+  width: 176px;
   min-width: 0;
-  padding: 0;
+  padding: 2px 10px;
+  border-left: 1px solid var(--line-soft);
   background: transparent;
 }
 
-.robotaxi-context-grid > div {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-  padding-left: 10px;
-  border-left: 1px solid var(--line-soft);
-}
-
-.robotaxi-context-grid strong {
+.robotaxi-summary-item strong {
+  overflow: hidden;
+  color: var(--text);
   font-size: var(--font-xs);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.robotaxi-popover-list {
+  display: grid;
+  gap: 4px;
+  max-width: 360px;
+  color: var(--text);
+  font-size: var(--font-xs);
 }
 
 .robotaxi-empty-summary {
@@ -2163,13 +2188,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .robotaxi-operation-panel,
-  .robotaxi-live-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .robotaxi-status-strip {
-    grid-template-columns: repeat(2, minmax(96px, 1fr));
+  .robotaxi-selected-card-inner {
+    grid-template-columns: minmax(120px, 0.24fr) minmax(0, 1fr);
   }
 
   .metric-table-disclosure {

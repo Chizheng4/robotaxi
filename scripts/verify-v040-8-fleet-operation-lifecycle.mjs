@@ -6,6 +6,7 @@ import {
   TaskType,
 } from "../src/domain/taskTypes.js";
 import {
+  assignFleetOperationWorker,
   completeFleetOperationWork,
   createFleetOperationTask,
   dispatchFleetOperationTaskDestination,
@@ -27,6 +28,15 @@ const opsCenters = [
     can_charge_robotaxi: true,
     can_repair_robotaxi: true,
     can_receive_robotaxi: true,
+  },
+];
+
+const workers = [
+  {
+    worker_id: "WK-V0408-001",
+    ops_center_id: "OPS-CLEAN-001",
+    worker_status: "IDLE",
+    current_task_id: null,
   },
 ];
 
@@ -96,9 +106,19 @@ const directWork = createFleetOperationTask({
 });
 assert.equal(directWork.task.task_status, "WAITING_WORKER_ASSIGNMENT");
 
-const cleaningStarted = startFleetOperationWork({
+const directWorker = assignFleetOperationWorker({
   task: directWork.task,
   robotaxi: directWork.robotaxi,
+  workers,
+  context: fixedContext(),
+});
+assert.equal(directWorker.succeeded, true);
+assert.equal(directWorker.task.task_status, "READY_TO_START");
+assert.equal(directWorker.workerRecord.worker_status, "BUSY");
+
+const cleaningStarted = startFleetOperationWork({
+  task: directWorker.task,
+  robotaxi: directWorker.robotaxi,
   context: { ...fixedContext(), opsCenters },
 });
 assert.equal(cleaningStarted.succeeded, true);
@@ -115,6 +135,7 @@ assert.equal(cleaningCompleted.robotaxi.availability_status, "AVAILABLE");
 assert.equal(cleaningCompleted.robotaxi.available_for_dispatch, true);
 assert.equal(cleaningCompleted.robotaxi.needs_cleaning, false);
 assert.equal(cleaningCompleted.robotaxi.cleanliness_status, CleanlinessStatus.CLEAN);
+assert.equal(cleaningCompleted.worker.worker_status, "IDLE");
 
 const chargingTask = createFleetOperationTask({
   robotaxi: {
@@ -131,9 +152,18 @@ const chargingTask = createFleetOperationTask({
 });
 assert.equal(chargingTask.task.task_status, "WAITING_CHARGER_ASSIGNMENT");
 
-const connecting = startFleetOperationWork({
+const chargingWorker = assignFleetOperationWorker({
   task: chargingTask.task,
   robotaxi: chargingTask.robotaxi,
+  workers,
+  context: fixedContext(),
+});
+assert.equal(chargingWorker.succeeded, true);
+assert.equal(chargingWorker.task.task_status, "READY_TO_CHARGE");
+
+const connecting = startFleetOperationWork({
+  task: chargingWorker.task,
+  robotaxi: chargingWorker.robotaxi,
   context: fixedContext(),
 });
 assert.equal(connecting.task.task_status, "CONNECTING_CHARGER");
@@ -145,6 +175,7 @@ const charging = completeFleetOperationWork({
 });
 assert.equal(charging.task.task_status, "CHARGING");
 assert.equal(charging.robotaxi.battery_operation_status, BatteryOperationStatus.CHARGING);
+assert.equal(charging.worker.worker_status, "IDLE");
 
 const waitDisconnect = completeFleetOperationWork({
   task: charging.task,
@@ -154,9 +185,18 @@ const waitDisconnect = completeFleetOperationWork({
 assert.equal(waitDisconnect.task.task_status, "WAITING_CHARGER_ASSIGNMENT");
 assert.equal(waitDisconnect.task.charging_phase, "DISCONNECT_REQUIRED");
 
-const disconnecting = startFleetOperationWork({
+const disconnectWorker = assignFleetOperationWorker({
   task: waitDisconnect.task,
   robotaxi: waitDisconnect.robotaxi,
+  workers,
+  context: fixedContext(),
+});
+assert.equal(disconnectWorker.succeeded, true);
+assert.equal(disconnectWorker.task.task_status, "READY_TO_CHARGE");
+
+const disconnecting = startFleetOperationWork({
+  task: disconnectWorker.task,
+  robotaxi: disconnectWorker.robotaxi,
   context: fixedContext(),
 });
 assert.equal(disconnecting.task.task_status, "DISCONNECTING_CHARGER");
