@@ -208,26 +208,26 @@
 |---|---|---|---|
 |config_id|配置编号|持久化字段|优先级配置唯一编号|
 |config_status|配置状态|运行态字段|ACTIVE、DISABLED|
-|priority_rank|优先级排序|持久化字段|各任务类型优先级数值映射。前端不再单独展示任务优先级配置页，由任务调度策略统一承载|
-|interrupt_policy|中断策略|持久化字段|哪些任务类型的中断标记。来源为任务调度策略|
-|allow_queuing|允许排队|持久化字段|是否允许任务排队。来源为任务调度策略|
-|max_queue_size|最大排队数量|持久化字段|单个 Robotaxi 最大排队任务数。来源为任务调度策略|
-|source_strategy_name|来源策略名称|运行态字段|兼容旧优先级配置读取时记录对应任务调度策略名称|
+|priority_rank|优先级排序|持久化字段|各任务类型优先级数值映射。前端不再单独展示任务优先级配置页，由任务规划策略统一承载|
+|interrupt_policy|中断策略|持久化字段|哪些任务类型的中断标记。来源为任务规划策略|
+|allow_queuing|允许排队|持久化字段|是否允许任务排队。来源为任务规划策略|
+|max_queue_size|最大排队数量|持久化字段|单个 Robotaxi 最大排队任务数。来源为任务规划策略|
+|source_strategy_name|来源策略名称|运行态字段|兼容旧优先级配置读取时记录对应任务规划策略名称|
 
-## 1.1.10 RobotaxiTaskPlanningStrategy：Robotaxi 任务规划策略
+## 1.1.10 RobotaxiTaskPlanningStrategy：任务规划策略
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
-|robotaxi_task_planning_strategy_id|Robotaxi 任务规划策略编号|持久化字段|策略唯一编号|
+|robotaxi_task_planning_strategy_id|任务规划策略编号|持久化字段|策略唯一编号|
 |strategy_name|策略名称|持久化字段|用户可识别的策略名称|
 |strategy_status|策略状态|运行态字段|ACTIVE、DRAFT、ARCHIVED|
 |planning_algorithm|规划算法|持久化字段|ROBOTAXI_STATE_TASK_PLANNING|
-|priority_rank|优先级排序|持久化字段|各任务类型进入 Robotaxi 队列时的优先级|
-|queue_policy|排队策略|持久化字段|订单、投放、运维占用中是否允许内部任务排队及最大队列长度|
+|priority_rank|优先级排序|持久化字段|各任务类型进入 Robotaxi 队列时的优先级；空闲 Robotaxi 视为当前队列长度为 0，同样由本策略裁决|
+|queue_policy|排队策略|持久化字段|订单、投放、运维占用中是否允许内部任务排队及最大队列长度；当前无任务和有排队任务属于同一规划策略输入|
 |phase_rules|阶段规则|持久化字段|FIRST_ADMISSION、ADMISSION_REMEDIATION、READY_NOT_DEPLOYED、ACTIVE_OPERATION、RETIRED 各阶段允许的任务类型|
 |compatibility_rules|兼容规则|持久化字段|同一 Robotaxi 已有未完成运维任务时，新任务类型是否可共存|
 |failure_trigger_policy|故障触发策略|持久化字段|故障任务触发限制，如 MOVING_ONLY|
-|external_assignment_queue_policy|外部分配队列策略|持久化字段|外部订单/投放分配是否必须让 Robotaxi 内部任务队列优先|
+|external_assignment_queue_policy|外部分配队列策略|持久化字段|外部订单/投放分配必须通过任务规划策略裁决，不能由独立任务调度策略再次决定|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 |updated_at|更新时间|持久化字段|真实审计更新时间|
 

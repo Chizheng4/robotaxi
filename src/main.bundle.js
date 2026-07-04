@@ -269,16 +269,7 @@ const pageGroups = [{
       label: "运维调度结果"
     }, {
       key: "robotaxiTaskPlanningStrategies",
-      label: "Robotaxi 任务规划策略"
-    }, {
-      key: "taskDispatchStrategies",
-      label: "任务调度策略"
-    }, {
-      key: "taskDispatchRuns",
-      label: "任务调度执行"
-    }, {
-      key: "taskDispatchResults",
-      label: "任务调度结果"
+      label: "任务规划策略"
     }]
   }, {
     key: "opsCenters",
@@ -349,7 +340,7 @@ const pageGroups = [{
     label: "时间作业"
   }]
 }];
-const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles", "taskPriorityConfig"]);
+const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles", "taskPriorityConfig", "taskDispatchStrategies", "taskDispatchRuns", "taskDispatchResults"]);
 const tableConfig = {
   maps: {
     title: "地图管理",
@@ -497,7 +488,7 @@ const tableConfig = {
     columns: ["task_dispatch_strategy_id", "strategy_name", "dispatch_algorithm", "strategy_status", "fleet_operation_priority", "service_order_priority", "deployment_task_priority", "created_at", "updated_at"]
   },
   robotaxiTaskPlanningStrategies: {
-    title: "Robotaxi 任务规划策略",
+    title: "任务规划策略",
     description: "配置单台 Robotaxi 在不同综合状态下能否接收、排队、拒绝或执行任务。",
     columns: ["robotaxi_task_planning_strategy_id", "strategy_name", "planning_algorithm", "strategy_status", "priority_rank", "queue_policy", "phase_rules", "compatibility_rules", "failure_trigger_policy", "external_assignment_queue_policy", "created_at", "updated_at"]
   },
@@ -1028,6 +1019,7 @@ function App() {
   const [metricPeriodType, setMetricPeriodType] = useState(initialRuntime.metricPeriodType || "ALL");
   const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
+  const autoMetricCalculationRunIdsRef = useRef(new Set());
   useEffect(() => {
     let cancelled = false;
     loadPersistedRuntimeSnapshot().then(snapshot => {
@@ -1485,7 +1477,7 @@ function App() {
   }, []);
   useEffect(() => {
     simulationRuns.filter(run => run.simulation_status === "COMPLETED").filter(run => !autoFinanceCalculationRunIdsRef.current.has(run.simulation_run_id)).filter(run => run.cost_calculation_status !== "CALCULATING" && run.revenue_calculation_status !== "CALCULATING").forEach(run => {
-      // 锁已移至成功分支末尾
+      autoFinanceCalculationRunIdsRef.current.add(run.simulation_run_id);
       window.setTimeout(() => {
         runCostCalculation(run.simulation_run_id, {
           automatic: true
@@ -1496,6 +1488,17 @@ function App() {
       }, 0);
     });
   }, [simulationRuns]);
+  useEffect(() => {
+    if (metricCalculationInProgress) return;
+    const eligibleRuns = simulationRuns.filter(run => run.simulation_status === "COMPLETED").filter(run => !autoMetricCalculationRunIdsRef.current.has(run.simulation_run_id)).filter(run => isFinanceCalculationTerminal(run.cost_calculation_status)).filter(run => isFinanceCalculationTerminal(run.revenue_calculation_status));
+    if (!eligibleRuns.length) return;
+    eligibleRuns.forEach(run => autoMetricCalculationRunIdsRef.current.add(run.simulation_run_id));
+    window.setTimeout(() => {
+      runMetricCalculation(metricPeriodType, {
+        automatic: true
+      });
+    }, 0);
+  }, [simulationRuns, costRecords, revenueRecords, metricPeriodType, metricCalculationInProgress]);
   function requestBusinessTimingCalculation(runId) {
     const run = simulationRuns.find(item => item.simulation_run_id === runId);
     if (!run) return;
@@ -1723,7 +1726,6 @@ function App() {
           }
         }), ...current]);
         if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营成本计算完成" : "运营成本计算完成，存在待检查项");
-        autoFinanceCalculationRunIdsRef.current.add(runId);
       } catch (error) {
         setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
           ...item,
@@ -1838,7 +1840,6 @@ function App() {
           revenue_calculation_errors: result.calculationRun.calculation_errors
         } : item));
         if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "收入记录生成完成" : "收入记录生成完成，存在待检查项");
-        autoFinanceCalculationRunIdsRef.current.add(runId);
       } catch (error) {
         setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
           ...item,
@@ -2261,6 +2262,7 @@ function App() {
     eventSequence = 0;
     simActionsRef.current?.cleanup?.();
     autoFinanceCalculationRunIdsRef.current.clear();
+    autoMetricCalculationRunIdsRef.current.clear();
     simulationEngine?.resetSimulationCounters?.();
     const nextSelection = {
       type: "map",
@@ -2581,7 +2583,7 @@ function App() {
     return taskDispatchStrategies.find(item => item.strategy_status === "ACTIVE") || taskDispatchStrategies[0] || null;
   }
   function getActiveTaskPriorityConfig() {
-    return taskDispatchStrategyService?.resolveTaskPriorityConfig(getActiveTaskDispatchStrategy()) || taskPriorityConfigs[0] || robotaxiTaskPriorityService.initializeDefaultPriorityConfig();
+    return robotaxiTaskPlanningService?.resolveTaskPriorityConfig(getActiveRobotaxiTaskPlanningStrategy()) || taskPriorityConfigs[0] || robotaxiTaskPriorityService.initializeDefaultPriorityConfig();
   }
   function getActiveRobotaxiTaskPlanningStrategy() {
     return robotaxiTaskPlanningService?.getActiveRobotaxiTaskPlanningStrategy(robotaxiTaskPlanningStrategies) || null;
@@ -6770,7 +6772,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule, taskDispatchStrategyServiceModule, robotaxiTaskPlanningServiceModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"), import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"), import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-12")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule, taskDispatchStrategyServiceModule, robotaxiTaskPlanningServiceModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"), import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"), import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-13")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -8498,6 +8500,9 @@ function filterMetricRowsForPage(metricRows = [], page, periodType = "ALL") {
   if (page === "serviceMetrics") return pickLatestMetricRows(sourceRows, serviceMetricIds);
   if (page === "processDiagnostics") return pickLatestMetricRows(sourceRows, diagnosticMetricIds);
   return metricRows;
+}
+function isFinanceCalculationTerminal(status) {
+  return ["SUCCEEDED", "PARTIALLY_SUCCEEDED", "FAILED"].includes(status);
 }
 function getLatestMetricCalculationRun(metricCalculationRuns = [], periodType = "ALL") {
   return (metricCalculationRuns || []).find(run => run.metric_scope_type === "OPERATING_PERIOD" && run.metric_period_type === periodType) || null;

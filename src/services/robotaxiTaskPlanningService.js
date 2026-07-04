@@ -27,6 +27,21 @@ export function getActiveRobotaxiTaskPlanningStrategy(strategies = []) {
     || initializeDefaultRobotaxiTaskPlanningStrategies()[0];
 }
 
+export function resolveTaskPriorityConfig(strategy = null) {
+  const activeStrategy = strategy || getActiveRobotaxiTaskPlanningStrategy();
+  return {
+    config_id: activeStrategy.robotaxi_task_planning_strategy_id || "RTPS-STANDARD-001",
+    config_status: activeStrategy.strategy_status || "ACTIVE",
+    priority_rank: { ...(activeStrategy.priority_rank || {}) },
+    interrupt_policy: { FAILURE_HANDLING: true },
+    allow_queuing: activeStrategy.queue_policy?.allow_queue_when_service_order_active !== false
+      || activeStrategy.queue_policy?.allow_queue_when_deployment_active !== false
+      || activeStrategy.queue_policy?.allow_queue_when_fleet_operation_active !== false,
+    max_queue_size: Number(activeStrategy.queue_policy?.max_queue_size || 5),
+    source_strategy_name: activeStrategy.strategy_name || null,
+  };
+}
+
 export function resolveRobotaxiCompositeState({
   robotaxi,
   readinessTasks = [],

@@ -194,10 +194,7 @@ const pageGroups = [
           { key: "fleetOperationDispatchStrategies", label: "运维调度策略" },
           { key: "fleetOperationDispatchRuns", label: "运维调度执行" },
           { key: "fleetOperationDispatchDecisions", label: "运维调度结果" },
-          { key: "robotaxiTaskPlanningStrategies", label: "Robotaxi 任务规划策略" },
-          { key: "taskDispatchStrategies", label: "任务调度策略" },
-          { key: "taskDispatchRuns", label: "任务调度执行" },
-          { key: "taskDispatchResults", label: "任务调度结果" },
+          { key: "robotaxiTaskPlanningStrategies", label: "任务规划策略" },
         ],
       },
       { key: "opsCenters", label: "运营中心列表" },
@@ -245,7 +242,16 @@ const pageGroups = [
   },
 ];
 
-const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles", "taskPriorityConfig"]);
+const hiddenWorkspacePages = new Set([
+  "simulationEvents",
+  "costCalculationRuns",
+  "revenueCalculationRuns",
+  "costModelProfiles",
+  "taskPriorityConfig",
+  "taskDispatchStrategies",
+  "taskDispatchRuns",
+  "taskDispatchResults",
+]);
 
 const tableConfig = {
   maps: {
@@ -394,7 +400,7 @@ const tableConfig = {
     columns: ["task_dispatch_strategy_id", "strategy_name", "dispatch_algorithm", "strategy_status", "fleet_operation_priority", "service_order_priority", "deployment_task_priority", "created_at", "updated_at"],
   },
   robotaxiTaskPlanningStrategies: {
-    title: "Robotaxi 任务规划策略",
+    title: "任务规划策略",
     description: "配置单台 Robotaxi 在不同综合状态下能否接收、排队、拒绝或执行任务。",
     columns: ["robotaxi_task_planning_strategy_id", "strategy_name", "planning_algorithm", "strategy_status", "priority_rank", "queue_policy", "phase_rules", "compatibility_rules", "failure_trigger_policy", "external_assignment_queue_policy", "created_at", "updated_at"],
   },
@@ -947,6 +953,7 @@ function App() {
   const [metricPeriodType, setMetricPeriodType] = useState(initialRuntime.metricPeriodType || "ALL");
   const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
+  const autoMetricCalculationRunIdsRef = useRef(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -1417,13 +1424,27 @@ function App() {
       .filter((run) => !autoFinanceCalculationRunIdsRef.current.has(run.simulation_run_id))
       .filter((run) => run.cost_calculation_status !== "CALCULATING" && run.revenue_calculation_status !== "CALCULATING")
       .forEach((run) => {
-// 锁已移至成功分支末尾
+        autoFinanceCalculationRunIdsRef.current.add(run.simulation_run_id);
         window.setTimeout(() => {
           runCostCalculation(run.simulation_run_id, { automatic: true });
           runRevenueCalculation(run.simulation_run_id, { automatic: true });
         }, 0);
       });
   }, [simulationRuns]);
+
+  useEffect(() => {
+    if (metricCalculationInProgress) return;
+    const eligibleRuns = simulationRuns
+      .filter((run) => run.simulation_status === "COMPLETED")
+      .filter((run) => !autoMetricCalculationRunIdsRef.current.has(run.simulation_run_id))
+      .filter((run) => isFinanceCalculationTerminal(run.cost_calculation_status))
+      .filter((run) => isFinanceCalculationTerminal(run.revenue_calculation_status));
+    if (!eligibleRuns.length) return;
+    eligibleRuns.forEach((run) => autoMetricCalculationRunIdsRef.current.add(run.simulation_run_id));
+    window.setTimeout(() => {
+      runMetricCalculation(metricPeriodType, { automatic: true });
+    }, 0);
+  }, [simulationRuns, costRecords, revenueRecords, metricPeriodType, metricCalculationInProgress]);
 
   function requestBusinessTimingCalculation(runId) {
     const run = simulationRuns.find((item) => item.simulation_run_id === runId);
@@ -1657,7 +1678,6 @@ function App() {
           },
         }), ...current]);
         if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "运营成本计算完成" : "运营成本计算完成，存在待检查项");
-        autoFinanceCalculationRunIdsRef.current.add(runId);
       } catch (error) {
         setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
           ...item,
@@ -1770,7 +1790,6 @@ function App() {
           revenue_calculation_errors: result.calculationRun.calculation_errors,
         } : item));
         if (!automatic) antd.message.success(result.calculationRun.calculation_status === "SUCCEEDED" ? "收入记录生成完成" : "收入记录生成完成，存在待检查项");
-        autoFinanceCalculationRunIdsRef.current.add(runId);
       } catch (error) {
         setSimulationRuns((current) => current.map((item) => item.simulation_run_id === runId ? {
           ...item,
@@ -2162,6 +2181,7 @@ function App() {
     eventSequence = 0;
     simActionsRef.current?.cleanup?.();
     autoFinanceCalculationRunIdsRef.current.clear();
+    autoMetricCalculationRunIdsRef.current.clear();
     simulationEngine?.resetSimulationCounters?.();
     const nextSelection = { type: "map", id: initialData.maps[0].map_id };
     setOperationalData(initialData);
@@ -2462,7 +2482,7 @@ function App() {
   }
 
   function getActiveTaskPriorityConfig() {
-    return taskDispatchStrategyService?.resolveTaskPriorityConfig(getActiveTaskDispatchStrategy())
+    return robotaxiTaskPlanningService?.resolveTaskPriorityConfig(getActiveRobotaxiTaskPlanningStrategy())
       || taskPriorityConfigs[0]
       || robotaxiTaskPriorityService.initializeDefaultPriorityConfig();
   }
@@ -6598,7 +6618,7 @@ async function bootstrap() {
 		    import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"),
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
-		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-12"),
+		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-13"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -8496,6 +8516,10 @@ function filterMetricRowsForPage(metricRows = [], page, periodType = "ALL") {
   if (page === "serviceMetrics") return pickLatestMetricRows(sourceRows, serviceMetricIds);
   if (page === "processDiagnostics") return pickLatestMetricRows(sourceRows, diagnosticMetricIds);
   return metricRows;
+}
+
+function isFinanceCalculationTerminal(status) {
+  return ["SUCCEEDED", "PARTIALLY_SUCCEEDED", "FAILED"].includes(status);
 }
 
 function getLatestMetricCalculationRun(metricCalculationRuns = [], periodType = "ALL") {

@@ -21,6 +21,9 @@
 
 ## 最近完成
 
+- `v040.13`：任务规划策略边界收敛与经营数据自动刷新小迭代，已归档到 `doc/common/iteration-history/minor/v040.13-planning-boundary-and-metric-refresh.md`。
+- `v040.12`：Robotaxi 任务规划策略小迭代，已归档到 `doc/common/iteration-history/minor/v040.12-robotaxi-task-planning-strategy.md`。
+- `v040.11`：运维任务事件反馈与调度 UI 边界小迭代，已归档到 `doc/common/iteration-history/minor/v040.11-fleet-operation-event-and-dispatch-ui.md`。
 - `v040.8`：Fleet Operations 生命周期闭环修复小迭代，已归档到 `doc/common/iteration-history/minor/v040.8-fleet-operation-lifecycle-contract.md`。
 - `v040.7`：Fleet Operations 架构合同止血修复小迭代，已归档到 `doc/common/iteration-history/minor/v040.7-fleet-operation-contract-remediation.md`。
 - `v039.7`：运营行驶记录服务化边界与模拟隔离小迭代，已归档到 `doc/common/iteration-history/minor/v039.7-serviceized-route-execution-boundary.md`。

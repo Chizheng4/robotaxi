@@ -11,6 +11,7 @@ const resetBody = source.slice(resetStart, resetEnd);
 [
   "simActionsRef.current?.cleanup?.()",
   "autoFinanceCalculationRunIdsRef.current.clear()",
+  "autoMetricCalculationRunIdsRef.current.clear()",
   "setMetricCalculationRuns([])",
   "setMetricObservations([])",
   "setMetricPeriodType(\"ALL\")",
