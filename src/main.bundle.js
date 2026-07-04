@@ -1023,6 +1023,7 @@ function App() {
   }), [chargingTasks, cleaningTasks, demandSimulationRuns, deploymentTasks, failureHandlingTasks, maintenanceTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips]);
   const validations = useMemo(() => [...initialValidations, ...validateDemandSimulation(data), ...validateServiceOrders(data), ...validatePricing(data), ...validateOrderMatching(data), ...validateTrips(data), ...validateReadinessCheckTasks(data), ...validateDeploymentTasks(data)], [data, initialValidations]);
   const metricDisplayRows = useMemo(() => createMetricDisplayRows(metricObservations, metricDefinitions, simulationRuns), [metricDefinitions, metricObservations, simulationRuns]);
+  const allFleetOperationTasks = useMemo(() => [...cleaningTasks, ...chargingTasks, ...maintenanceTasks, ...failureHandlingTasks, ...retirementTasks], [chargingTasks, cleaningTasks, failureHandlingTasks, maintenanceTasks, retirementTasks]);
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
@@ -2639,7 +2640,7 @@ function App() {
     return robotaxiTaskPlanningService?.getActiveRobotaxiTaskPlanningStrategy(robotaxiTaskPlanningStrategies) || null;
   }
   function getAllFleetOperationTasks() {
-    return [...cleaningTasks, ...chargingTasks, ...maintenanceTasks, ...failureHandlingTasks, ...retirementTasks];
+    return allFleetOperationTasks;
   }
   function createRobotaxiPlanningData() {
     return {
@@ -4532,6 +4533,10 @@ function RecordTable({
   const displayRows = useMemo(() => {
     return filterRecordRows(rows, config.columns, statusField, appliedFilters);
   }, [appliedFilters, config.columns, rows, statusField]);
+  const robotaxiOperationActionMap = useMemo(() => {
+    if (!isRobotaxiPage || !actions.getRobotaxiFleetOperationActions) return new Map();
+    return new Map(displayRows.map(row => [row.robotaxi_id, actions.getRobotaxiFleetOperationActions(row)]));
+  }, [actions.getRobotaxiFleetOperationActions, displayRows, isRobotaxiPage]);
   const maxPage = Math.max(1, Math.ceil(displayRows.length / pageSize));
   const currentPage = Math.min(uiState.pagination?.current || 1, maxPage);
   const orderedStatusValues = getOrderedStatusValues(page);
@@ -4724,9 +4729,14 @@ function RecordTable({
   }, createMetricDataPoolState(actions.metricCalculationRuns, actions.metricPeriodType))), isMetricAnalysisPage && /*#__PURE__*/React.createElement(MetricExperiencePanel, {
     page: page,
     rows: displayRows,
-    allRows: rows,
+    allRows: actions.metricObservations || rows,
     metricCalculationRuns: actions.metricCalculationRuns,
     metricPeriodType: actions.metricPeriodType,
+    onSelect: row => onSelect(objectType, row[idField])
+  }), isRobotaxiPage && /*#__PURE__*/React.createElement(RobotaxiOperationPanel, {
+    rows: displayRows,
+    selectedRow: selected?.type === objectType ? displayRows.find(row => row[idField] === selected.id) : null,
+    actionMap: robotaxiOperationActionMap,
     onSelect: row => onSelect(objectType, row[idField])
   }), isMetricAnalysisPage && /*#__PURE__*/React.createElement("div", {
     className: "metric-table-disclosure"
@@ -4985,7 +4995,8 @@ function RecordTable({
           ...actions,
           page,
           objectType,
-          idField
+          idField,
+          robotaxiOperationActionMap
         }))
       };
     }
@@ -6045,11 +6056,12 @@ function MetricExperiencePanel({
   onSelect
 }) {
   const latestRows = createLatestMetricRows(rows);
+  const insightSourceRows = allRows.filter(row => row.metric_scope_type === "OPERATING_PERIOD" && row.metric_period_type === metricPeriodType);
   const overviewRows = page === "operatingMetricsOverview" ? overviewMetricIds.map(id => latestRows.find(row => row.metric_definition_id === id)).filter(Boolean) : latestRows.slice(0, 6);
-  const warningRows = allRows.filter(row => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
+  const warningRows = insightSourceRows.filter(row => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
   const latestCalculationRun = getLatestMetricCalculationRun(metricCalculationRuns, metricPeriodType);
   const periodLabel = latestRows[0]?.metric_period_label || latestCalculationRun?.metric_period_label || "尚未更新";
-  const metricById = new Map(createLatestMetricRows(allRows).map(row => [row.metric_definition_id, row]));
+  const metricById = new Map(createLatestMetricRows(insightSourceRows).map(row => [row.metric_definition_id, row]));
   const sourceRecordCount = latestRows.reduce((total, row) => total + Number(row.source_record_count || 0), 0);
   const qualityMetric = metricById.get("QUALITY-DATA-001");
   const qualitySummary = qualityMetric ? `${qualityMetric.metric_name_cn} ${formatMetricDisplayValue(qualityMetric)}` : "等待数据质量结果";
@@ -6089,6 +6101,43 @@ function MetricExperiencePanel({
   }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primary ? `${group.primary.metric_name_cn} ${formatMetricDisplayValue(group.primary)}` : "暂无数据"), /*#__PURE__*/React.createElement("small", null, group.secondary.length ? group.secondary.map(item => `${item.metric_name_cn} ${formatMetricDisplayValue(item)}`).join(" / ") : "等待周期计算结果"), /*#__PURE__*/React.createElement("em", null, group.description)))), /*#__PURE__*/React.createElement("div", {
     className: "metric-quality-strip"
   }, /*#__PURE__*/React.createElement("span", null, "\u6570\u636E\u6C60\uFF1A", calculationSummary), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7EDF\u8BA1\u5468\u671F\uFF1A", periodLabel), /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u7ED3\u679C ", latestRows.length), /*#__PURE__*/React.createElement("span", null, "\u6765\u6E90\u8BB0\u5F55 ", sourceRecordCount), /*#__PURE__*/React.createElement("span", null, qualitySummary), /*#__PURE__*/React.createElement("span", null, warningRows[0] ? `${warningRows[0].metric_name_cn}：${warningRows[0].quality_reason}` : "暂无质量提示")));
+}
+function RobotaxiOperationPanel({
+  rows = [],
+  selectedRow = null,
+  actionMap = new Map(),
+  onSelect
+}) {
+  const activeRow = selectedRow || rows[0] || null;
+  const availableCount = rows.filter(row => row.availability_status === "AVAILABLE").length;
+  const unavailableCount = rows.filter(row => row.availability_status === "UNAVAILABLE").length;
+  const queuedCount = rows.filter(row => Array.isArray(row.pending_task_queue) && row.pending_task_queue.length > 0).length;
+  const occupiedCount = rows.filter(row => row.current_task_id || row.current_order_id).length;
+  const availableActions = activeRow ? actionMap.get(activeRow.robotaxi_id) || [] : [];
+  const queueItems = activeRow?.pending_task_queue || [];
+  return /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-operation-panel"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-status-strip"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-status-metric"
+  }, /*#__PURE__*/React.createElement("span", null, "\u53EF\u8FD0\u8425"), /*#__PURE__*/React.createElement("strong", null, availableCount)), /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-status-metric"
+  }, /*#__PURE__*/React.createElement("span", null, "\u4E0D\u53EF\u8FD0\u8425"), /*#__PURE__*/React.createElement("strong", null, unavailableCount)), /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-status-metric"
+  }, /*#__PURE__*/React.createElement("span", null, "\u6267\u884C\u4E2D"), /*#__PURE__*/React.createElement("strong", null, occupiedCount)), /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-status-metric"
+  }, /*#__PURE__*/React.createElement("span", null, "\u6709\u6392\u961F\u4EFB\u52A1"), /*#__PURE__*/React.createElement("strong", null, queuedCount))), /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-live-summary"
+  }, activeRow ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    className: "robotaxi-focus-block",
+    type: "button",
+    onClick: () => onSelect(activeRow)
+  }, /*#__PURE__*/React.createElement("span", null, activeRow.robotaxi_id), /*#__PURE__*/React.createElement("strong", null, getDisplayValue(activeRow.availability_status), " \xB7 ", getDisplayValue(activeRow.motion_status)), /*#__PURE__*/React.createElement("small", null, activeRow.location_summary || activeRow.current_cell_id || "未知位置")), /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-context-grid"
+  }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u5360\u7528"), /*#__PURE__*/React.createElement("strong", null, activeRow.current_order_id || activeRow.current_task_id || "无执行任务"), /*#__PURE__*/React.createElement("span", null, "\u8FD0\u7EF4\u72B6\u6001"), /*#__PURE__*/React.createElement("strong", null, getDisplayValue(activeRow.fleet_operation_status) || "无"), /*#__PURE__*/React.createElement("span", null, "\u6392\u961F\u4EFB\u52A1"), /*#__PURE__*/React.createElement("strong", null, queueItems.length ? queueItems.map(item => getDisplayValue(item.task_type)).join(" / ") : "无"), /*#__PURE__*/React.createElement("span", null, "\u53EF\u64CD\u4F5C\u4EFB\u52A1"), /*#__PURE__*/React.createElement("strong", null, availableActions.length ? availableActions.map(item => getDisplayValue(item.task_type)).join(" / ") : "暂无"))) : /*#__PURE__*/React.createElement("div", {
+    className: "robotaxi-empty-summary"
+  }, "\u6682\u65E0\u7B26\u5408\u7B5B\u9009\u6761\u4EF6\u7684 Robotaxi\u3002")));
 }
 function renderViewDetailAction(row, actions) {
   return /*#__PURE__*/React.createElement(RowActionButton, {
@@ -6233,7 +6282,7 @@ function renderOperationTags(row) {
 }
 function renderRobotaxiFleetOperationActions(row, actions) {
   const isRetired = row.availability_status === "RETIRED";
-  const availableActions = actions.getRobotaxiFleetOperationActions ? actions.getRobotaxiFleetOperationActions(row) : [];
+  const availableActions = actions.robotaxiOperationActionMap?.get(row.robotaxi_id) || (actions.getRobotaxiFleetOperationActions ? actions.getRobotaxiFleetOperationActions(row) : []);
   const can = taskType => availableActions.some(action => action.task_type === taskType);
   if (isRetired) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
@@ -6788,6 +6837,10 @@ function isStatusField(key) {
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";
+  if (key === "task_status" || key === "current_task_status") {
+    const fleetTaskLabel = getFleetOperationStatusDisplay(row?.task_type || row?.current_task_type, value);
+    if (fleetTaskLabel) return fleetTaskLabel;
+  }
   if (key === "customer_status" && value === "ACTIVE") return "可参与订单模拟";
   if (key === "customer_status" && value === "TEST_ONLY") return "仅测试使用";
   if (key === "customer_status" && value === "INACTIVE") return "不参与订单模拟";
@@ -6798,6 +6851,22 @@ function getStatusDisplayValue(key, value, row = null) {
   if (value === "WAITING_START" && isDeploymentLike(row)) return "待行驶";
   if (value === "MOVING" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution" || isDeploymentLike(row))) return "行驶中";
   return getDisplayValue(value, key);
+}
+function getFleetOperationStatusDisplay(taskType, status) {
+  if (status === "WAITING_ROBOTAXI_AVAILABLE") return "任务排队中";
+  if (status === "WAITING_DESTINATION_ASSIGNMENT" && taskType === "CLEANING") return "待分配清洁站";
+  if (status === "WAITING_CHARGING_DESTINATION_ASSIGNMENT" && taskType === "CHARGING") return "待分配充电站";
+  if (status === "WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT" && taskType === "MAINTENANCE") return "待分配维修站";
+  if (status === "WAITING_ROUTE") return "待行驶";
+  if (["MOVING_TO_OPS_CENTER", "MOVING_TO_CHARGER", "MOVING_TO_MAINTENANCE_CENTER"].includes(status)) return "前往目的地";
+  if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER"].includes(status)) return "已到达目的地";
+  if (["WAITING_WORKER_ASSIGNMENT", "WAITING_RESOURCE_ASSIGNMENT", "WAITING_CHARGER_ASSIGNMENT"].includes(status)) return "待分配作业人员";
+  if (status === "CLEANING_IN_PROGRESS") return "清洁中";
+  if (status === "MAINTENANCE_IN_PROGRESS") return "维修中";
+  if (status === "CONNECTING_CHARGER") return "接入充电中";
+  if (status === "CHARGING") return "充电中";
+  if (status === "DISCONNECTING_CHARGER") return "断开充电中";
+  return null;
 }
 function isDeploymentLike(row) {
   return row?.status_context === "deployment" || row?.task_type === "DEPLOYMENT" || row?.current_task_type === "DEPLOYMENT" || String(row?.task_id || "").startsWith("TASK-DP-");

@@ -1616,6 +1616,107 @@ body {
   white-space: nowrap;
 }
 
+.robotaxi-operation-panel {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.4fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #fbfcfe;
+}
+
+.robotaxi-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.robotaxi-status-metric,
+.robotaxi-focus-block {
+  display: grid;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface);
+  text-align: left;
+}
+
+.robotaxi-focus-block {
+  cursor: pointer;
+}
+
+.robotaxi-status-metric span,
+.robotaxi-focus-block span,
+.robotaxi-focus-block small,
+.robotaxi-context-grid span,
+.robotaxi-context-grid strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.robotaxi-status-metric span,
+.robotaxi-context-grid span,
+.robotaxi-focus-block small {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.robotaxi-status-metric strong {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.robotaxi-live-summary {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.72fr) minmax(260px, 1.28fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.robotaxi-focus-block {
+  gap: 5px;
+}
+
+.robotaxi-focus-block strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.robotaxi-context-grid {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 5px 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+
+.robotaxi-context-grid strong {
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+
+.robotaxi-empty-summary {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: var(--font-xs);
+}
+
 .metric-table-disclosure {
   display: flex;
   flex: none;
@@ -2051,6 +2152,15 @@ body {
 
   .metric-insight-lanes {
     grid-template-columns: 1fr;
+  }
+
+  .robotaxi-operation-panel,
+  .robotaxi-live-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .robotaxi-status-strip {
+    grid-template-columns: repeat(2, minmax(96px, 1fr));
   }
 
   .metric-table-disclosure {
