@@ -1623,7 +1623,7 @@ body {
   gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--line-soft);
-  background: #fbfcfe;
+  background: var(--surface);
 }
 
 .robotaxi-status-strip {
@@ -1637,11 +1637,11 @@ body {
 .robotaxi-focus-block {
   display: grid;
   min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  padding: 4px 0 4px 10px;
+  border-left: 1px solid var(--line-soft);
+  border-radius: 0;
   color: var(--text);
-  background: var(--surface);
+  background: transparent;
   text-align: left;
 }
 
@@ -1697,9 +1697,9 @@ body {
   grid-template-columns: 76px minmax(0, 1fr);
   gap: 5px 8px;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 4px 10px;
   border-top: 1px solid var(--line-soft);
-  background: var(--surface);
+  background: transparent;
 }
 
 .robotaxi-context-grid strong {

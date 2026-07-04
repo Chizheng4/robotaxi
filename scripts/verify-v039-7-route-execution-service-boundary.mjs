@@ -47,12 +47,15 @@ assert.equal(typeof advanceFleetOperationRouteExecution, "function", "Fleet Oper
 assert.equal(typeof confirmFleetOperationArrival, "function", "Fleet Operation 到达确认必须由服务层提供");
 
 const mainSource = fs.readFileSync("src/main.jsx", "utf8");
+const helperStart = mainSource.indexOf("function createFleetOperationRouteExecution(task");
 const planStart = mainSource.indexOf("function planFleetOperationRoute(task)");
 const planEnd = mainSource.indexOf("function advanceFleetOperationRouteExecution(execution)");
-assert(planStart > 0 && planEnd > planStart, "缺少 Fleet Operation 页面动作函数");
+assert(helperStart > 0 && planStart > helperStart && planEnd > planStart, "缺少 Fleet Operation 页面动作函数");
+const helperBody = mainSource.slice(helperStart, planStart);
 const planBody = mainSource.slice(planStart, planEnd);
-assert.match(planBody, /fleetOperationTaskService\.planFleetOperationRoute/, "页面路径规划必须调用 Fleet Operation 服务");
-assert.doesNotMatch(planBody, /const\s+execution\s*=\s*\{/, "页面层不得拼装 routeExecution 对象");
-assert.doesNotMatch(planBody, /setRouteExecutions\(\(r\)\s*=>\s*\[execution,/, "页面层不得直接插入手写行驶记录");
+assert.match(helperBody, /fleetOperationTaskService\.planFleetOperationRoute/, "页面路径规划必须通过共用函数调用 Fleet Operation 服务");
+assert.match(planBody, /createFleetOperationRouteExecution/, "页面路径规划动作必须复用共用行驶记录创建函数");
+assert.doesNotMatch(helperBody + planBody, /const\s+execution\s*=\s*\{/, "页面层不得拼装 routeExecution 对象");
+assert.doesNotMatch(helperBody + planBody, /setRouteExecutions\(\(r\)\s*=>\s*\[execution,/, "页面层不得直接插入手写行驶记录");
 
 console.log("v039.7 route execution service boundary verified");

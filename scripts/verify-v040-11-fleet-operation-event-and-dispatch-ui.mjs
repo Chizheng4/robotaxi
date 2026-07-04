@@ -8,7 +8,6 @@ const dispatchService = fs.readFileSync(new URL("../src/services/taskDispatchStr
 [
   "runFleetOperationPolicy",
   "createDirectFleetOperationTaskFromRobotaxi",
-  "planFleetOperationRoute",
   "dispatchFleetOperationTaskDestination",
   "startFleetOperationWork",
   "completeFleetOperationWork",
@@ -17,6 +16,11 @@ const dispatchService = fs.readFileSync(new URL("../src/services/taskDispatchStr
   assert.doesNotMatch(body, /antd\.message/, `${name} 不能使用弹出提示承载运维单据操作结果`);
   assert.match(body, /task_type|source_page|appendFleetOperationPageEvent/, `${name} 应写入可归属的任务事件`);
 });
+
+const planBody = getFunctionBody(source, "planFleetOperationRoute");
+const routeCreateBody = getFunctionBody(source, "createFleetOperationRouteExecution");
+assert.doesNotMatch(planBody + routeCreateBody, /antd\.message/, "planFleetOperationRoute 不能使用弹出提示承载运维单据操作结果");
+assert.match(routeCreateBody, /task_type|source_page|appendFleetOperationPageEvent/, "planFleetOperationRoute 应通过共用行驶记录创建函数写入可归属的任务事件");
 
 assert.match(source, /function appendFleetOperationPageEvent/, "缺少运维页面事件写入入口");
 assert.match(source, /function createFleetTaskEventRows\(eventLogs = \[\], tasks = \[\], page = null\)/, "最近任务事件必须支持按页面过滤");

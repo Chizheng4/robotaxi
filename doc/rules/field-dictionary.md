@@ -224,6 +224,9 @@
 |planning_algorithm|规划算法|持久化字段|ROBOTAXI_STATE_TASK_PLANNING|
 |priority_rank|优先级排序|持久化字段|各任务类型进入 Robotaxi 队列时的优先级；空闲 Robotaxi 视为当前队列长度为 0，同样由本策略裁决|
 |queue_policy|排队策略|持久化字段|订单、投放、运维占用中是否允许内部任务排队及最大队列长度；当前无任务和有排队任务属于同一规划策略输入|
+|allow_queue_when_service_order_active|服务订单中允许排队|持久化字段|Robotaxi 当前执行服务订单时是否允许内部运维任务排队|
+|allow_queue_when_deployment_active|投放任务中允许排队|持久化字段|Robotaxi 当前执行投放任务时是否允许内部运维任务排队|
+|allow_queue_when_fleet_operation_active|运维任务中允许排队|持久化字段|Robotaxi 当前执行运维任务时是否允许其他兼容运维任务排队|
 |phase_rules|阶段规则|持久化字段|FIRST_ADMISSION、ADMISSION_REMEDIATION、READY_NOT_DEPLOYED、ACTIVE_OPERATION、RETIRED 各阶段允许的任务类型|
 |compatibility_rules|兼容规则|持久化字段|同一 Robotaxi 已有未完成运维任务时，新任务类型是否可共存|
 |failure_trigger_policy|故障触发策略|持久化字段|故障任务触发限制，如 MOVING_ONLY|
@@ -286,6 +289,10 @@
 |pending_queue_size|待执行队列数量|运行态字段|该 Robotaxi pending_task_queue 中的任务数量|
 |composite_state|综合状态|运行态字段|任务规划策略裁决时使用的综合状态快照|
 |planning_decision|规划决策|运行态字段|任务规划策略输出的决策|
+|allowed|是否允许|运行态字段|任务规划策略是否允许本次分配|
+|decision|决策|运行态字段|任务规划策略输出决策|
+|reason|原因|运行态字段|任务规划策略输出原因|
+|priority|优先级|运行态字段|进入 Robotaxi 队列时使用的任务优先级|
 
 ### Robotaxi 任务规划枚举中文
 
@@ -298,6 +305,8 @@
 |ADMISSION_REMEDIATION|准入修复阶段|运营阶段|
 |READY_NOT_DEPLOYED|准入后待投放|运营阶段|
 |ACTIVE_OPERATION|持续运营阶段|运营阶段|
+|UNKNOWN|未知|车辆空间状态|
+|NONE|无占用|当前占用状态|
 |READINESS_TASK|运营准入任务|当前占用状态 / 分配类型|
 |SERVICE_ORDER|服务订单|当前占用状态 / 分配类型|
 |DEPLOYMENT_TASK|运营投放任务|当前占用状态 / 分配类型|
@@ -310,11 +319,37 @@
 |PLANNING_QUEUED|已进入队列|任务规划结果|
 |PLANNING_REJECTED|已拒绝|任务规划结果|
 |PLANNING_FAILED|规划失败|任务规划结果|
+|SUCCEEDED|规划成功|任务规划执行状态|
+|REJECTED|规划拒绝|任务规划执行状态|
 |MERGE|合并|规划决策|
 |UPGRADE|升级|规划决策|
 |INTERRUPT|中断当前任务|规划决策|
 |MOVING_ONLY|仅行驶或运营异常触发|故障触发策略|
 |INTERNAL_QUEUE_FIRST|内部任务队列优先|外部分配队列策略|
+|WAIT_CURRENT_ASSIGNMENT_COMPLETION|等待当前任务完成|任务规划原因|
+|ROBOTAXI_READY_FOR_FLEET_OPERATION_TASK|允许创建并执行运维任务|任务规划原因|
+|ROBOTAXI_READY_FOR_EXTERNAL_ASSIGNMENT|允许分配外部运营任务|任务规划原因|
+|FIRST_ADMISSION_ALLOWED|允许创建运营准入任务|任务规划原因|
+|ROBOTAXI_RETIRED|Robotaxi 已退役|任务规划原因|
+|RETIREMENT_IS_LIFECYCLE_ACTION|退役属于生命周期动作|任务规划原因|
+|UNKNOWN_ASSIGNMENT_TYPE|未知分配类型|任务规划原因|
+|INVALID_ROBOTAXI|Robotaxi 不存在|任务规划原因|
+|ROBOTAXI_ALREADY_HAS_READINESS_TASK|Robotaxi 已有准入任务|任务规划原因|
+|ROBOTAXI_NOT_IN_ADMISSION_PHASE|Robotaxi 不在准入阶段|任务规划原因|
+|ROBOTAXI_NOT_OPERATIONALLY_AVAILABLE|Robotaxi 当前不可运营|任务规划原因|
+|ROBOTAXI_ALREADY_ASSIGNED|Robotaxi 当前已有执行任务|任务规划原因|
+|ROBOTAXI_INTERNAL_TASK_QUEUE_FIRST|内部任务队列优先|任务规划原因|
+|ROBOTAXI_NEEDS_CLEANING|Robotaxi 需要清洁|任务规划原因|
+|ROBOTAXI_NEEDS_CHARGING|Robotaxi 需要充电|任务规划原因|
+|ROBOTAXI_NEEDS_MAINTENANCE|Robotaxi 需要维修|任务规划原因|
+|ROBOTAXI_HAS_FAILURE|Robotaxi 存在故障|任务规划原因|
+|ROBOTAXI_NOT_ADMITTED_FOR_SERVICE_ORDER|Robotaxi 尚未完成准入|任务规划原因|
+|MISSING_FLEET_OPERATION_TASK_TYPE|缺少运维任务类型|任务规划原因|
+|FIRST_ADMISSION_ONLY_ALLOWS_READINESS|首次准入阶段仅允许准入任务|任务规划原因|
+|READY_NOT_DEPLOYED_HAS_NO_FLEET_OPERATION_NEED|准入后未投放车辆无需普通运维|任务规划原因|
+|TASK_TYPE_NOT_ALLOWED_IN_PHASE|当前阶段不允许该任务类型|任务规划原因|
+|FAILURE_HANDLING_REQUIRES_ACTIVE_OPERATION_EXCEPTION|故障处理需要行驶或运营异常触发|任务规划原因|
+|INCOMPATIBLE_FLEET_OPERATION_TASK_EXISTS|存在不兼容运维任务|任务规划原因|
 
 
 ## 1.2 Operating Metrics：经营指标系统
@@ -723,6 +758,7 @@
 |pending_since_at|开始等待时间|运行态字段|任务开始等待 Robotaxi 可执行的时间|
 |operation_created_at|业务创建时间|持久化字段|任务业务创建时间|
 |operation_completed_at|业务完成时间|运行态字段|任务业务完成时间|
+|work_started_at|作业开始时间|运行态字段|作业人员开始处理运维任务的时间|
 |clean_level_before|清洁前等级|持久化字段|清洁任务执行前的脏污等级|
 |clean_level_after|清洁后等级|运行态字段|清洁任务执行后的清洁等级|
 |battery_percent_before|充电前电量（%）|持久化字段|充电开始前电量|

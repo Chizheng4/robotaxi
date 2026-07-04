@@ -2008,6 +2008,7 @@ function App() {
                   viewRouteExecutionForDeployment,
                   startRouteExecution,
                   advanceRouteExecution,
+                  completeRouteExecutionTravelNow,
                   submitNormalArrival,
                   submitAbnormalArrival,
                   data,
@@ -2343,6 +2344,11 @@ function App() {
       item.robotaxi_id === task.robotaxi_id
     );
     if (!execution) {
+      const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
+      if (collectionKey) {
+        viewRecordDetail(collectionKey, pageObjectType[collectionKey], task.task_id);
+        return;
+      }
       viewRecordDetail("deploymentTasks", "deploymentTask", task.task_id);
       return;
     }
@@ -2850,10 +2856,10 @@ function App() {
     if (collectionKey === "retirementTasks") setRetirementTasks(updater);
   }
 
-  function planFleetOperationRoute(task) {
-    if (!task?.task_id || !task.robotaxi_id || !task.target_cell_id || !fleetOperationTaskService) return;
+  function createFleetOperationRouteExecution(task, robotaxiOverride = null) {
+    if (!task?.task_id || !task.robotaxi_id || !task.target_cell_id || !fleetOperationTaskService) return null;
     const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
-    const robotaxi = operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
+    const robotaxi = robotaxiOverride || operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi || !routePlanningService) return;
     const result = fleetOperationTaskService.planFleetOperationRoute({
       task,
@@ -2900,6 +2906,14 @@ function App() {
         robotaxi_id: task.robotaxi_id,
         message: "路径规划失败",
       });
+    }
+    return result;
+  }
+
+  function planFleetOperationRoute(task) {
+    const result = createFleetOperationRouteExecution(task);
+    if (result?.succeeded) {
+      selectForPage("routeExecutions", "routeExecution", result.routeExecution.route_execution_id);
     }
   }
 
@@ -3005,6 +3019,10 @@ function App() {
         }),
         ...logs,
       ]);
+      const routeResult = createFleetOperationRouteExecution(result.task, result.robotaxi);
+      if (routeResult?.succeeded) {
+        selectForPage("routeExecutions", "routeExecution", routeResult.routeExecution.route_execution_id);
+      }
     } else {
       setTaskEventLogs((logs) => [
         createEventLog({
@@ -4238,6 +4256,71 @@ function App() {
     focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.MOVING);
   }
 
+  function completeRouteExecutionTravelNow(routeExecutionId) {
+    const execution = routeExecutions.find((item) => item.route_execution_id === routeExecutionId);
+    if (!execution || execution.execution_status !== taskTypes.RouteExecutionStatus.MOVING) return;
+    const route = data.routes.find((item) => item.route_id === execution.route_id);
+    if (!route) return;
+    if (execution.task_type && execution.task_type !== taskTypes.TaskType.DEPLOYMENT) {
+      let nextExecution = execution;
+      let nextTask = findFleetOperationTaskByExecution(execution);
+      let nextRobotaxi = operationalData.robotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id);
+      if (!nextTask || !nextRobotaxi || !fleetOperationTaskService) return;
+      for (let index = Number(nextExecution.current_step_index || 0); index < Number(nextExecution.total_step_count || 0); index += 1) {
+        const result = fleetOperationTaskService.advanceFleetOperationRouteExecution({
+          execution: nextExecution,
+          task: nextTask,
+          route,
+          robotaxi: nextRobotaxi,
+          context: { now },
+        });
+        if (!result.succeeded) return;
+        nextExecution = result.routeExecution;
+        nextTask = result.task || nextTask;
+        nextRobotaxi = result.robotaxi || nextRobotaxi;
+        if (nextExecution.execution_status === taskTypes.RouteExecutionStatus.ARRIVED) break;
+      }
+      setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? nextExecution : item));
+      if (nextTask) updateFleetOperationTask(nextTask);
+      if (nextRobotaxi) {
+        setOperationalData((current) => ({
+          ...current,
+          robotaxis: current.robotaxis.map((item) => item.robotaxi_id === nextRobotaxi.robotaxi_id ? nextRobotaxi : item),
+        }));
+      }
+      addLog({
+        event_type: taskTypes.TaskEventType.ROUTE_EXECUTION_ARRIVED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        task_id: nextExecution.task_id,
+        robotaxi_id: nextExecution.robotaxi_id,
+        route_execution_id: nextExecution.route_execution_id,
+        message: `${nextExecution.robotaxi_id} 已按自动行驶到达目的地，等待到达确认`,
+      });
+      focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVED);
+      return;
+    }
+
+    const task = deploymentTasks.find((item) => item.task_id === execution.task_id);
+    const robotaxi = operationalData.robotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id);
+    if (!task || !robotaxi) return;
+    const completed = routePlanningService.completeRouteExecutionTravel({ execution, task, route, robotaxi });
+    setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? completed.execution : item));
+    setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? completed.task : item));
+    setOperationalData((current) => ({
+      ...current,
+      robotaxis: current.robotaxis.map((item) => item.robotaxi_id === robotaxi.robotaxi_id ? completed.robotaxi : item),
+    }));
+    addLog({
+      event_type: taskTypes.TaskEventType.ROUTE_EXECUTION_ARRIVED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: execution.task_id,
+      robotaxi_id: execution.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      message: `${execution.robotaxi_id} 已按自动行驶到达目的地，等待到达确认`,
+    });
+    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVED);
+  }
+
   function submitNormalArrival(routeExecutionId) {
     const execution = routeExecutions.find((item) => item.route_execution_id === routeExecutionId);
     if (execution?.task_type && execution.task_type !== taskTypes.TaskType.DEPLOYMENT) {
@@ -4597,6 +4680,14 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
 
   return (
     <section className={isReadinessPage ? "record-page-new readiness-page" : "record-page-new"}>
+      {isRobotaxiPage && (
+        <RobotaxiOperationPanel
+          rows={displayRows}
+          selectedRow={selected?.type === objectType ? displayRows.find((row) => row[idField] === selected.id) : null}
+          actionMap={robotaxiOperationActionMap}
+          onSelect={(row) => onSelect(objectType, row[idField])}
+        />
+      )}
       {!isMetricAnalysisPage && statusOptions.length > 0 && (
         <div className="status-segment-bar">
           <Button
@@ -4739,14 +4830,6 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           allRows={actions.metricObservations || rows}
           metricCalculationRuns={actions.metricCalculationRuns}
           metricPeriodType={actions.metricPeriodType}
-          onSelect={(row) => onSelect(objectType, row[idField])}
-        />
-      )}
-      {isRobotaxiPage && (
-        <RobotaxiOperationPanel
-          rows={displayRows}
-          selectedRow={selected?.type === objectType ? displayRows.find((row) => row[idField] === selected.id) : null}
-          actionMap={robotaxiOperationActionMap}
           onSelect={(row) => onSelect(objectType, row[idField])}
         />
       )}
@@ -4965,6 +5048,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderActionCell(row, renderFleetOperationTaskActions(row, { ...actions, page, objectType, idField })),
       };
     }
+    if (isRouteExecutionPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 260,
+        render: (_, row) => renderActionCell(row, renderRouteExecutionActions(row, { ...actions, page, objectType, idField })),
+      };
+    }
     if (isFleetOperationPolicyPage) {
       return {
         key: "actions",
@@ -5180,7 +5272,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -5256,6 +5348,16 @@ function getDetailTabs(selectedType) {
       { key: "location", label: "目标位置", keys: ["origin_cell_id", "origin_location_summary", "origin_location_detail", "planned_target_cell_id", "planned_target_service_area_id", "target_cell_id", "target_location_summary", "target_location_detail", "target_service_area_id", "actual_target_cell_id", "actual_target_service_area_id", "target_zone_id"] },
       { key: "rebalance", label: "再平衡", keys: ["deployment_target_model", "rebalance_reason", "service_area_vehicle_count", "estimated_distance_steps"] },
       { key: "time", label: "时间与来源", keys: ["created_at", "simulation_created_at", "record_source", "simulation_run_id", "simulation_global_tick", "started_at", "completed_at", "simulation_completed_at", "failure_reason"] },
+      { key: "cost", label: "成本", cost: true, keys: [] },
+      { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
+    ];
+  }
+  if (["cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask"].includes(selectedType)) {
+    return [
+      { key: "basic", label: "任务信息", keys: ["task_id", "task_type", "task_status", "task_priority", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id"] },
+      { key: "location", label: "位置与行驶", keys: ["robotaxi_current_cell_id", "robotaxi_current_location_summary", "robotaxi_current_location_detail", "target_ops_center_id", "target_cell_id", "target_location_summary", "target_location_detail", "route_execution_id", "route_id", "route_strategy_id"] },
+      { key: "work", label: "作业信息", keys: ["worker_id", "charger_id", "maintenance_type", "clean_level_before", "clean_level_after", "battery_percent_before", "target_battery_percent", "battery_percent_after", "failure_type", "failure_severity", "diagnosis_result", "disposition_result", "repair_result", "requires_readiness_check", "retirement_reason", "approval_status", "asset_exit_result"] },
+      { key: "time", label: "时间与来源", keys: ["pending_since_at", "operation_created_at", "created_at", "started_at", "work_started_at", "charging_started_at", "charging_completed_at", "operation_completed_at", "completed_at", "simulation_created_at", "simulation_completed_at", "failure_reason"] },
       { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
     ];
@@ -5842,7 +5944,7 @@ function RobotaxiOperationPanel({ rows = [], selectedRow = null, actionMap = new
           <>
             <button className="robotaxi-focus-block" type="button" onClick={() => onSelect(activeRow)}>
               <span>{activeRow.robotaxi_id}</span>
-              <strong>{getDisplayValue(activeRow.availability_status)} · {getDisplayValue(activeRow.motion_status)}</strong>
+              <strong>{getFieldDisplayValue("availability_status", activeRow.availability_status)} · {getFieldDisplayValue("motion_status", activeRow.motion_status)}</strong>
               <small>{activeRow.location_summary || activeRow.current_cell_id || "未知位置"}</small>
             </button>
             <div className="robotaxi-context-grid">
@@ -5851,9 +5953,9 @@ function RobotaxiOperationPanel({ rows = [], selectedRow = null, actionMap = new
               <span>运维状态</span>
               <strong>{getDisplayValue(activeRow.fleet_operation_status) || "无"}</strong>
               <span>排队任务</span>
-              <strong>{queueItems.length ? queueItems.map((item) => getDisplayValue(item.task_type)).join(" / ") : "无"}</strong>
-              <span>可操作任务</span>
-              <strong>{availableActions.length ? availableActions.map((item) => getDisplayValue(item.task_type)).join(" / ") : "暂无"}</strong>
+              <strong>{formatRobotaxiQueueItems(queueItems)}</strong>
+              <span>当前可触发运维</span>
+              <strong>{availableActions.length ? availableActions.map((item) => getDisplayValue(item.task_type)).join(" / ") : "无可触发任务"}</strong>
             </div>
           </>
         ) : (
@@ -5862,6 +5964,14 @@ function RobotaxiOperationPanel({ rows = [], selectedRow = null, actionMap = new
       </div>
     </div>
   );
+}
+
+function formatRobotaxiQueueItems(queueItems = []) {
+  if (!queueItems.length) return "无";
+  return queueItems.map((item, index) => {
+    const priority = item.priority !== undefined && item.priority !== null ? `，优先级 ${item.priority}` : "";
+    return `${index + 1}. ${getDisplayValue(item.task_type)}${priority}`;
+  }).join(" / ");
 }
 
 function renderViewDetailAction(row, actions) {
@@ -5907,7 +6017,7 @@ function renderFleetOperationTaskActions(row, actions) {
     return <RowActionButton onClick={() => actions.dispatchFleetOperationTaskDestination(row)}>{dispatchLabel}</RowActionButton>;
   }
   if (status && status.includes("WAITING_ROUTE")) {
-    return <RowActionButton onClick={() => actions.planFleetOperationRoute(row)}>生成行驶记录</RowActionButton>;
+    return <RowActionButton onClick={() => actions.viewRouteExecutionForDeployment(row)}>查看行驶记录</RowActionButton>;
   }
   if (isFleetOperationWorkReadyStatus(row)) {
     return <RowActionButton onClick={() => actions.startFleetOperationWork(row)}>{getFleetOperationStartWorkLabel(row)}</RowActionButton>;
@@ -6023,7 +6133,12 @@ function renderRouteExecutionActions(row, actions) {
     return <RowActionButton onClick={() => actions.startRouteExecution(row.route_execution_id)}>开始行驶</RowActionButton>;
   }
   if (row.execution_status === "MOVING") {
-    return <RowActionButton onClick={() => actions.advanceRouteExecution(row.route_execution_id)}>继续行驶</RowActionButton>;
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => actions.advanceRouteExecution(row.route_execution_id)}>继续行驶</RowActionButton>
+        <RowActionButton type="default" onClick={() => actions.completeRouteExecutionTravelNow(row.route_execution_id)}>自动到达</RowActionButton>
+      </RowActionGroup>
+    );
   }
   if (row.execution_status === "ARRIVED") {
     return (
@@ -6240,6 +6355,9 @@ function renderDetailValue(key, value, row = null) {
   if (key === "result") {
     const passed = value === "PASS";
     return <Tag color={passed ? "success" : "error"}>{getDisplayValue(value)}</Tag>;
+  }
+  if (key === "pending_task_queue" && Array.isArray(value)) {
+    return <Text className="detail-value">{formatRobotaxiQueueItems(value)}</Text>;
   }
   if (isStatusField(key)) {
     return <StatusValue value={value} label={getFieldDisplayValue(key, value ?? "", row)} />;
@@ -6609,6 +6727,11 @@ function getStatusDisplayValue(key, value, row = null) {
   if (key === "customer_status" && value === "BLOCKED") return "被限制下单";
   if (key === "order_status" && value === "FAILED") return "订单失败";
   if (key === "payment_status" && value === "FAILED") return "支付失败";
+  if (key === "run_status" && row?.robotaxi_task_planning_run_id) {
+    if (value === "SUCCEEDED") return "规划成功";
+    if (value === "REJECTED") return "规划拒绝";
+    if (value === "FAILED") return "规划失败";
+  }
   if (value === "WAITING_START" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution")) return "待行驶";
   if (value === "WAITING_START" && isDeploymentLike(row)) return "待行驶";
   if (value === "MOVING" && (key === "execution_status" || key === "current_execution_status" || row?.status_context === "routeExecution" || isDeploymentLike(row))) return "行驶中";
