@@ -127,6 +127,7 @@ export function createRobotaxiTaskPlanningResult(result = {}) {
     planning_decision: result.planning_decision || null,
     decision_reason: result.decision_reason || null,
     message: result.message || null,
+    queue_sequence: result.queue_sequence || result.queue_entry?.queue_sequence || null,
     queue_entry: result.queue_entry || null,
     composite_state: result.composite_state || null,
     created_at: result.created_at || null,

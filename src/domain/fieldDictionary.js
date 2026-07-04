@@ -315,6 +315,7 @@ export const fieldDictionary = {
   input_snapshot: "输入快照",
   output_snapshot: "输出快照",
   queue_entry: "队列项",
+  queue_sequence: "排队序号",
   planning_algorithm: "规划算法",
   queue_policy: "排队策略",
   allow_queue_when_service_order_active: "服务订单中允许排队",

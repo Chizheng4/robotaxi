@@ -185,6 +185,7 @@ export function executeRobotaxiTaskPlanning({
     planning_decision: decision.decision,
     decision_reason: decision.reason,
     message: decision.message,
+    queue_sequence: decision.queue_entry?.queue_sequence || null,
     queue_entry: decision.queue_entry || null,
     composite_state: decision.composite_state,
     created_at: now,
@@ -272,14 +273,21 @@ function planFleetOperationTask({ robotaxi, requestedTaskType, triggerSource, co
     const queue = Array.isArray(robotaxi.pending_task_queue) ? robotaxi.pending_task_queue : [];
     const maxQueueSize = Number(strategy.queue_policy?.max_queue_size || 5);
     if (queue.length >= maxQueueSize) return reject("QUEUE_FULL", "Robotaxi 待执行任务队列已满", compositeState, strategy);
+    const priority = Number(strategy.priority_rank?.[requestedTaskType] || 0);
     return allow(TaskPlanningDecision.QUEUE, "WAIT_CURRENT_ASSIGNMENT_COMPLETION", "允许进入 Robotaxi 待执行任务队列", compositeState, strategy, {
       queue_entry: {
+        queue_sequence: resolveQueueSequence(queue, priority),
         task_type: requestedTaskType,
-        priority: Number(strategy.priority_rank?.[requestedTaskType] || 0),
+        priority,
       },
     });
   }
   return allow(TaskPlanningDecision.CREATE_NOW, "ROBOTAXI_READY_FOR_FLEET_OPERATION_TASK", "允许创建并执行运维任务", compositeState, strategy);
+}
+
+function resolveQueueSequence(queue = [], priority = 0) {
+  const precedingCount = queue.filter((item) => Number(item.priority || 0) >= priority).length;
+  return precedingCount + 1;
 }
 
 function resolveCurrentAssignmentState(robotaxi) {

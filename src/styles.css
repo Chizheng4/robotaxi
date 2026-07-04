@@ -1619,8 +1619,8 @@ body {
 .robotaxi-operation-panel {
   display: grid;
   flex: none;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.4fr);
-  gap: 10px;
+  grid-template-columns: minmax(320px, 0.78fr) minmax(560px, 1.35fr);
+  gap: 12px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--surface);
@@ -1634,7 +1634,7 @@ body {
 }
 
 .robotaxi-status-metric,
-.robotaxi-focus-block {
+.robotaxi-selected-summary {
   display: grid;
   min-width: 0;
   padding: 4px 0 4px 10px;
@@ -1645,13 +1645,13 @@ body {
   text-align: left;
 }
 
-.robotaxi-focus-block {
+.robotaxi-selected-summary {
   cursor: pointer;
 }
 
 .robotaxi-status-metric span,
-.robotaxi-focus-block span,
-.robotaxi-focus-block small,
+.robotaxi-selected-summary span,
+.robotaxi-selected-summary small,
 .robotaxi-context-grid span,
 .robotaxi-context-grid strong {
   overflow: hidden;
@@ -1661,7 +1661,8 @@ body {
 
 .robotaxi-status-metric span,
 .robotaxi-context-grid span,
-.robotaxi-focus-block small {
+.robotaxi-selected-summary span,
+.robotaxi-selected-summary small {
   color: var(--muted);
   font-size: var(--font-xs);
 }
@@ -1675,16 +1676,17 @@ body {
 
 .robotaxi-live-summary {
   display: grid;
-  grid-template-columns: minmax(160px, 0.72fr) minmax(260px, 1.28fr);
-  gap: 8px;
+  grid-template-columns: minmax(128px, 0.28fr) minmax(420px, 1fr);
+  align-items: stretch;
+  gap: 12px;
   min-width: 0;
 }
 
-.robotaxi-focus-block {
+.robotaxi-selected-summary {
   gap: 5px;
 }
 
-.robotaxi-focus-block strong {
+.robotaxi-selected-summary strong {
   overflow: hidden;
   font-size: 14px;
   font-weight: 650;
@@ -1694,12 +1696,19 @@ body {
 
 .robotaxi-context-grid {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
-  gap: 5px 8px;
+  grid-template-columns: repeat(5, minmax(116px, 1fr));
+  gap: 8px;
   min-width: 0;
-  padding: 4px 10px;
-  border-top: 1px solid var(--line-soft);
+  padding: 0;
   background: transparent;
+}
+
+.robotaxi-context-grid > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line-soft);
 }
 
 .robotaxi-context-grid strong {

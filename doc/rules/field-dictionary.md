@@ -270,6 +270,7 @@
 |planning_decision|规划决策|运行态字段|CREATE_NOW、QUEUE、REJECT 等|
 |decision_reason|决策原因|运行态字段|本次规划裁决原因|
 |message|消息|运行态字段|面向运营人员的裁决说明|
+|queue_sequence|排队序号|运行态字段|任务进入 Robotaxi 待执行队列后的序号，按策略优先级和已有队列计算|
 |queue_entry|队列项|运行态字段|进入队列时的队列项快照|
 |composite_state|综合状态|持久化字段|本次规划使用的 Robotaxi 综合状态快照|
 |created_at|创建时间|持久化字段|真实审计创建时间|

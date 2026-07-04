@@ -411,12 +411,12 @@ const tableConfig = {
   robotaxiTaskPlanningRuns: {
     title: "任务规划执行",
     description: "记录真实业务触发时任务规划策略的执行过程；页面刷新和按钮预览不生成执行记录。",
-    columns: ["robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "strategy_name", "robotaxi_id", "requested_assignment_type", "requested_task_type", "trigger_source", "trigger_object_type", "trigger_object_id", "run_status", "planning_decision", "decision_reason", "created_at"],
+    columns: ["robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "strategy_name", "robotaxi_id", "requested_assignment_type", "requested_task_type", "trigger_source", "trigger_object_type", "trigger_object_id", "run_status", "planning_decision", "decision_reason", "output_snapshot", "created_at"],
   },
   robotaxiTaskPlanningResults: {
     title: "任务规划结果",
     description: "记录任务规划策略对单次 Robotaxi 候选的允许、排队或拒绝结果。",
-    columns: ["robotaxi_task_planning_result_id", "robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "robotaxi_id", "requested_assignment_type", "requested_task_type", "decision_result", "planning_decision", "decision_reason", "message", "created_at"],
+    columns: ["robotaxi_task_planning_result_id", "robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "robotaxi_id", "requested_assignment_type", "requested_task_type", "decision_result", "planning_decision", "decision_reason", "queue_sequence", "queue_entry", "message", "created_at"],
   },
   taskDispatchRuns: {
     title: "任务调度执行",
@@ -5311,7 +5311,7 @@ function getDetailTabs(selectedType) {
   if (selectedType === "robotaxi") {
     return [
       { key: "basic", label: "基础信息", keys: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "unavailable_reason"] },
-      { key: "task", label: "任务状态", keys: ["current_task_id", "current_task_type", "current_task_status", "current_order_id", "current_route_id"] },
+      { key: "task", label: "任务状态", keys: ["current_task_id", "current_task_type", "current_task_status", "current_order_id", "current_order_status", "current_route_id", "pending_task_queue", "pending_fleet_task_type", "pending_fleet_task_id"] },
       { key: "location", label: "位置上下文", keys: ["current_cell_id", "location_summary", "location_context"] },
       { key: "execution", label: "行驶记录", keys: ["current_route_execution_id", "current_execution_status", "current_route_step"] },
     ];
@@ -5942,20 +5942,32 @@ function RobotaxiOperationPanel({ rows = [], selectedRow = null, actionMap = new
       <div className="robotaxi-live-summary">
         {activeRow ? (
           <>
-            <button className="robotaxi-focus-block" type="button" onClick={() => onSelect(activeRow)}>
-              <span>{activeRow.robotaxi_id}</span>
-              <strong>{getFieldDisplayValue("availability_status", activeRow.availability_status)} · {getFieldDisplayValue("motion_status", activeRow.motion_status)}</strong>
-              <small>{activeRow.location_summary || activeRow.current_cell_id || "未知位置"}</small>
+            <button className="robotaxi-selected-summary" type="button" onClick={() => onSelect(activeRow)}>
+              <span>当前选中</span>
+              <strong>{activeRow.robotaxi_id}</strong>
+              <small>{getFieldDisplayValue("availability_status", activeRow.availability_status)} · {getFieldDisplayValue("motion_status", activeRow.motion_status)}</small>
             </button>
             <div className="robotaxi-context-grid">
-              <span>当前占用</span>
-              <strong>{activeRow.current_order_id || activeRow.current_task_id || "无执行任务"}</strong>
-              <span>运维状态</span>
-              <strong>{getDisplayValue(activeRow.fleet_operation_status) || "无"}</strong>
-              <span>排队任务</span>
-              <strong>{formatRobotaxiQueueItems(queueItems)}</strong>
-              <span>当前可触发运维</span>
-              <strong>{availableActions.length ? availableActions.map((item) => getDisplayValue(item.task_type)).join(" / ") : "无可触发任务"}</strong>
+              <div>
+                <span>当前位置</span>
+                <strong>{activeRow.location_summary || activeRow.current_cell_id || "未知位置"}</strong>
+              </div>
+              <div>
+                <span>当前占用</span>
+                <strong>{activeRow.current_order_id || activeRow.current_task_id || "无执行任务"}</strong>
+              </div>
+              <div>
+                <span>运维状态</span>
+                <strong>{getDisplayValue(activeRow.fleet_operation_status) || "无"}</strong>
+              </div>
+              <div>
+                <span>排队任务</span>
+                <strong>{formatRobotaxiQueueItems(queueItems)}</strong>
+              </div>
+              <div>
+                <span>当前可触发运维</span>
+                <strong>{availableActions.length ? availableActions.map((item) => getDisplayValue(item.task_type)).join(" / ") : "无可触发任务"}</strong>
+              </div>
             </div>
           </>
         ) : (
@@ -5969,8 +5981,10 @@ function RobotaxiOperationPanel({ rows = [], selectedRow = null, actionMap = new
 function formatRobotaxiQueueItems(queueItems = []) {
   if (!queueItems.length) return "无";
   return queueItems.map((item, index) => {
+    const sequence = item.queue_sequence || index + 1;
     const priority = item.priority !== undefined && item.priority !== null ? `，优先级 ${item.priority}` : "";
-    return `${index + 1}. ${getDisplayValue(item.task_type)}${priority}`;
+    const taskId = item.task_id ? `，${item.task_id}` : "";
+    return `${sequence}. ${getDisplayValue(item.task_type)}${taskId}${priority}`;
   }).join(" / ");
 }
 

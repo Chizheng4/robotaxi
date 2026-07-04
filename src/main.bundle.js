@@ -503,12 +503,12 @@ const tableConfig = {
   robotaxiTaskPlanningRuns: {
     title: "任务规划执行",
     description: "记录真实业务触发时任务规划策略的执行过程；页面刷新和按钮预览不生成执行记录。",
-    columns: ["robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "strategy_name", "robotaxi_id", "requested_assignment_type", "requested_task_type", "trigger_source", "trigger_object_type", "trigger_object_id", "run_status", "planning_decision", "decision_reason", "created_at"]
+    columns: ["robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "strategy_name", "robotaxi_id", "requested_assignment_type", "requested_task_type", "trigger_source", "trigger_object_type", "trigger_object_id", "run_status", "planning_decision", "decision_reason", "output_snapshot", "created_at"]
   },
   robotaxiTaskPlanningResults: {
     title: "任务规划结果",
     description: "记录任务规划策略对单次 Robotaxi 候选的允许、排队或拒绝结果。",
-    columns: ["robotaxi_task_planning_result_id", "robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "robotaxi_id", "requested_assignment_type", "requested_task_type", "decision_result", "planning_decision", "decision_reason", "message", "created_at"]
+    columns: ["robotaxi_task_planning_result_id", "robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "robotaxi_id", "requested_assignment_type", "requested_task_type", "decision_result", "planning_decision", "decision_reason", "queue_sequence", "queue_entry", "message", "created_at"]
   },
   taskDispatchRuns: {
     title: "任务调度执行",
@@ -5373,7 +5373,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "task",
       label: "任务状态",
-      keys: ["current_task_id", "current_task_type", "current_task_status", "current_order_id", "current_route_id"]
+      keys: ["current_task_id", "current_task_type", "current_task_status", "current_order_id", "current_order_status", "current_route_id", "pending_task_queue", "pending_fleet_task_type", "pending_fleet_task_id"]
     }, {
       key: "location",
       label: "位置上下文",
@@ -6260,20 +6260,22 @@ function RobotaxiOperationPanel({
   }, /*#__PURE__*/React.createElement("span", null, "\u6709\u6392\u961F\u4EFB\u52A1"), /*#__PURE__*/React.createElement("strong", null, queuedCount))), /*#__PURE__*/React.createElement("div", {
     className: "robotaxi-live-summary"
   }, activeRow ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-    className: "robotaxi-focus-block",
+    className: "robotaxi-selected-summary",
     type: "button",
     onClick: () => onSelect(activeRow)
-  }, /*#__PURE__*/React.createElement("span", null, activeRow.robotaxi_id), /*#__PURE__*/React.createElement("strong", null, getFieldDisplayValue("availability_status", activeRow.availability_status), " \xB7 ", getFieldDisplayValue("motion_status", activeRow.motion_status)), /*#__PURE__*/React.createElement("small", null, activeRow.location_summary || activeRow.current_cell_id || "未知位置")), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u9009\u4E2D"), /*#__PURE__*/React.createElement("strong", null, activeRow.robotaxi_id), /*#__PURE__*/React.createElement("small", null, getFieldDisplayValue("availability_status", activeRow.availability_status), " \xB7 ", getFieldDisplayValue("motion_status", activeRow.motion_status))), /*#__PURE__*/React.createElement("div", {
     className: "robotaxi-context-grid"
-  }, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u5360\u7528"), /*#__PURE__*/React.createElement("strong", null, activeRow.current_order_id || activeRow.current_task_id || "无执行任务"), /*#__PURE__*/React.createElement("span", null, "\u8FD0\u7EF4\u72B6\u6001"), /*#__PURE__*/React.createElement("strong", null, getDisplayValue(activeRow.fleet_operation_status) || "无"), /*#__PURE__*/React.createElement("span", null, "\u6392\u961F\u4EFB\u52A1"), /*#__PURE__*/React.createElement("strong", null, formatRobotaxiQueueItems(queueItems)), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u53EF\u89E6\u53D1\u8FD0\u7EF4"), /*#__PURE__*/React.createElement("strong", null, availableActions.length ? availableActions.map(item => getDisplayValue(item.task_type)).join(" / ") : "无可触发任务"))) : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u4F4D\u7F6E"), /*#__PURE__*/React.createElement("strong", null, activeRow.location_summary || activeRow.current_cell_id || "未知位置")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u5360\u7528"), /*#__PURE__*/React.createElement("strong", null, activeRow.current_order_id || activeRow.current_task_id || "无执行任务")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u8FD0\u7EF4\u72B6\u6001"), /*#__PURE__*/React.createElement("strong", null, getDisplayValue(activeRow.fleet_operation_status) || "无")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u6392\u961F\u4EFB\u52A1"), /*#__PURE__*/React.createElement("strong", null, formatRobotaxiQueueItems(queueItems))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u53EF\u89E6\u53D1\u8FD0\u7EF4"), /*#__PURE__*/React.createElement("strong", null, availableActions.length ? availableActions.map(item => getDisplayValue(item.task_type)).join(" / ") : "无可触发任务")))) : /*#__PURE__*/React.createElement("div", {
     className: "robotaxi-empty-summary"
   }, "\u6682\u65E0\u7B26\u5408\u7B5B\u9009\u6761\u4EF6\u7684 Robotaxi\u3002")));
 }
 function formatRobotaxiQueueItems(queueItems = []) {
   if (!queueItems.length) return "无";
   return queueItems.map((item, index) => {
+    const sequence = item.queue_sequence || index + 1;
     const priority = item.priority !== undefined && item.priority !== null ? `，优先级 ${item.priority}` : "";
-    return `${index + 1}. ${getDisplayValue(item.task_type)}${priority}`;
+    const taskId = item.task_id ? `，${item.task_id}` : "";
+    return `${sequence}. ${getDisplayValue(item.task_type)}${taskId}${priority}`;
   }).join(" / ");
 }
 function renderViewDetailAction(row, actions) {

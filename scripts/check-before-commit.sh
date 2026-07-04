@@ -117,6 +117,8 @@ node scripts/verify-v040-13-planning-and-metric-refresh.mjs
 node scripts/verify-v040-14-task-planning-run-result.mjs
 node scripts/verify-v040-15-metric-robotaxi-fleet-ui.mjs
 node scripts/verify-v040-16-fleet-route-display-closure.mjs
+node scripts/verify-v040-17-robotaxi-planning-queue-ux.mjs
+node --check scripts/verify-v040-17-robotaxi-layout-browser.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then
