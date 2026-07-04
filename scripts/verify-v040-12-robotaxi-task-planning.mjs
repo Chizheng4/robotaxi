@@ -23,7 +23,7 @@ assert.match(businessActionService, /requestedAssignmentType:\s*robotaxiTaskPlan
 assert.match(main, /robotaxiTaskPlanningStrategies/, "主页面缺少 Robotaxi 任务规划策略运行态集合");
 assert.match(main, /getRobotaxiFleetOperationActions/, "Robotaxi 页面动作必须由任务规划策略预判");
 assert.match(main, /robotaxiTaskPlanningService\.getAvailableRobotaxiActions/, "Robotaxi 页面动作必须调用任务规划服务");
-assert.match(main, /import\("\.\/services\/robotaxiTaskPlanningService\.js\?v=20260704-v040-13"\)/, "任务规划服务必须纳入 bootstrap 等待链");
+assert.match(main, /import\("\.\/services\/robotaxiTaskPlanningService\.js\?v=20260704-v040-14"\)/, "任务规划服务必须纳入 bootstrap 等待链");
 assert.doesNotMatch(getFunctionBody(main, "renderRobotaxiFleetOperationActions"), /TaskType\.RETIREMENT/, "退役不能作为普通 Robotaxi 运维按钮");
 
 console.log("v040.12 Robotaxi 任务规划策略合同验证通过");

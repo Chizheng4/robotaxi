@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v040.14`：任务规划执行结果与策略页展示规范小迭代，已归档到 `doc/common/iteration-history/minor/v040.14-task-planning-run-result.md`。
 - `v040.13`：任务规划策略边界收敛与经营数据自动刷新小迭代，已归档到 `doc/common/iteration-history/minor/v040.13-planning-boundary-and-metric-refresh.md`。
 - `v040.12`：Robotaxi 任务规划策略小迭代，已归档到 `doc/common/iteration-history/minor/v040.12-robotaxi-task-planning-strategy.md`。
 - `v040.11`：运维任务事件反馈与调度 UI 边界小迭代，已归档到 `doc/common/iteration-history/minor/v040.11-fleet-operation-event-and-dispatch-ui.md`。

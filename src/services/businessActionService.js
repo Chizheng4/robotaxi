@@ -136,19 +136,25 @@ export function createDeploymentTask({ state, runtime }) {
   }
   const appData = dataView(state);
   const planningStrategy = robotaxiTaskPlanningService.getActiveRobotaxiTaskPlanningStrategy(appData.robotaxiTaskPlanningStrategies || []);
-  const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi) =>
-    robotaxiTaskPlanningService.planRobotaxiTask({
-      robotaxi,
-      requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.DEPLOYMENT_TASK,
-      requestedTaskType: taskTypes.TaskType.DEPLOYMENT,
-      triggerSource: "DEPLOYMENT_TASK_CREATE",
-      readinessTasks: appData.readinessTasks || [],
-      deploymentTasks: state.deploymentTasks || [],
-      serviceOrders: appData.serviceOrders || [],
-      fleetOperationTasks: appData.fleetOperationTasks || [],
-      strategy: planningStrategy,
-    }).allowed
-  );
+  const planningResults = (state.robotaxis || appData.robotaxis || []).map((robotaxi) => robotaxiTaskPlanningService.executeRobotaxiTaskPlanning({
+    robotaxi,
+    requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.DEPLOYMENT_TASK,
+    requestedTaskType: taskTypes.TaskType.DEPLOYMENT,
+    triggerSource: "DEPLOYMENT_TASK_CREATE",
+    readinessTasks: appData.readinessTasks || [],
+    deploymentTasks: state.deploymentTasks || [],
+    serviceOrders: appData.serviceOrders || [],
+    fleetOperationTasks: appData.fleetOperationTasks || [],
+    strategy: planningStrategy,
+    context: {
+      now: runtime.now(),
+      nextTaskPlanningRunId: () => runtime.nextId("TPR"),
+      nextTaskPlanningResultId: () => runtime.nextId("TPRS"),
+      trigger_object_type: "deploymentTask",
+      trigger_object_id: null,
+    },
+  }));
+  const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi, index) => planningResults[index]?.allowed);
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "投放任务创建失败：无可投放 Robotaxi", "deploymentTask", null, "无可投放 Robotaxi");
   const target = routePlanningService.getRandomDeploymentTarget(appData, {
     originCellId: candidate.current_cell_id,
@@ -221,6 +227,8 @@ export function createDeploymentTask({ state, runtime }) {
   }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: null, toStatus: taskTypes.RouteExecutionStatus.WAITING_ROUTE, actionType: "ROUTEEXECUTION_CREATE", resultType: "ROUTE_EXECUTION_CREATED" });
   return success("DEPLOYMENT_CREATED", `投放任务 ${taskId} 已创建，关联 RouteExecution ${executionId}`, { objectType: "deploymentTask", objectId: taskId, routeExecutionId: executionId }, {
     deploymentTasks: [task, ...(state.deploymentTasks || [])],
+    robotaxiTaskPlanningRuns: [...planningResults.map((item) => item.planningRun).filter(Boolean), ...(state.robotaxiTaskPlanningRuns || [])],
+    robotaxiTaskPlanningResults: [...planningResults.map((item) => item.planningResult).filter(Boolean), ...(state.robotaxiTaskPlanningResults || [])],
     routeExecutions: [execution, ...(state.routeExecutions || [])],
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", candidate.robotaxi_id, (robotaxi) => ({
       ...robotaxi,
@@ -553,6 +561,8 @@ export function advanceOrderAutoAssignment({ state, objectId, runtime }) {
     data: appData,
     orderMatchingRunId: runtime.nextId("OMR"),
     orderMatchingDecisionId: runtime.nextId("OMD"),
+    nextTaskPlanningRunId: () => runtime.nextId("TPR"),
+    nextTaskPlanningResultId: () => runtime.nextId("TPRS"),
     createdAt: runtime.now(),
   });
   const attemptCount = Number(order.assignment_attempt_count || order.matching_attempt_count || 0) + 1;
@@ -686,6 +696,8 @@ export function executeOrderMatching({ state, objectId, runtime }) {
       {
         orderMatchingRuns: matchingResult.run ? [{ ...matchingResult.run, ...runtime.audit({ created: true }) }, ...(state.orderMatchingRuns || [])] : state.orderMatchingRuns,
         orderMatchingDecisions: matchingResult.decision ? [{ ...matchingResult.decision, ...runtime.audit({ created: true }) }, ...(state.orderMatchingDecisions || [])] : state.orderMatchingDecisions,
+        robotaxiTaskPlanningRuns: [...(matchingResult.taskPlanningRuns || []), ...(state.robotaxiTaskPlanningRuns || [])],
+        robotaxiTaskPlanningResults: [...(matchingResult.taskPlanningResults || []), ...(state.robotaxiTaskPlanningResults || [])],
         serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, {
           ...order,
           order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT,
@@ -714,6 +726,8 @@ export function executeOrderMatching({ state, objectId, runtime }) {
   return success("MATCHING_COMPLETED", `服务订单 ${objectId} 匹配成功，Robotaxi: ${robotaxiId}`, { objectType: "serviceOrder", objectId, robotaxiId, tripId: trip.trip_id }, {
     orderMatchingRuns: [{ ...matchingResult.run, ...runtime.audit({ created: true }) }, ...(state.orderMatchingRuns || [])],
     orderMatchingDecisions: [{ ...matchingResult.decision, ...runtime.audit({ created: true }) }, ...(state.orderMatchingDecisions || [])],
+    robotaxiTaskPlanningRuns: [...(matchingResult.taskPlanningRuns || []), ...(state.robotaxiTaskPlanningRuns || [])],
+    robotaxiTaskPlanningResults: [...(matchingResult.taskPlanningResults || []), ...(state.robotaxiTaskPlanningResults || [])],
     trips: [trip, ...(state.trips || [])],
     serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({
       ...order,

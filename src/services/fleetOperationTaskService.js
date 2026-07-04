@@ -98,7 +98,7 @@ export function createFleetOperationTask({
   }
 
   const now = resolveNow(context);
-  const planningDecision = robotaxiTaskPlanningService.planRobotaxiTask({
+  const planningInput = {
     robotaxi,
     requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.FLEET_OPERATION_TASK,
     requestedTaskType: taskType,
@@ -108,9 +108,27 @@ export function createFleetOperationTask({
     serviceOrders: context.serviceOrders || [],
     fleetOperationTasks: existingTasks,
     strategy: context.robotaxiTaskPlanningStrategy,
-  });
+  };
+  const planningDecision = context.recordTaskPlanningAudit
+    ? robotaxiTaskPlanningService.executeRobotaxiTaskPlanning({
+      ...planningInput,
+      context: {
+        now,
+        nextTaskPlanningRunId: context.nextTaskPlanningRunId,
+        nextTaskPlanningResultId: context.nextTaskPlanningResultId,
+        trigger_object_type: trigger.task_fields?.trigger_object_type || null,
+        trigger_object_id: trigger.task_fields?.trigger_object_id || null,
+      },
+    })
+    : robotaxiTaskPlanningService.planRobotaxiTask(planningInput);
   if (!planningDecision.allowed) {
-    return { created: false, reason: planningDecision.reason, planningDecision };
+    return {
+      created: false,
+      reason: planningDecision.reason,
+      planningDecision,
+      planningRun: planningDecision.planningRun || null,
+      planningResult: planningDecision.planningResult || null,
+    };
   }
   if (planningDecision.decision === robotaxiTaskPlanningService.TaskPlanningDecision.QUEUE) {
     const taskId = resolveNextId(context, config.idPrefix);
@@ -147,6 +165,8 @@ export function createFleetOperationTask({
       queued: true,
       reason: planningDecision.reason || "FLEET_OPERATION_TASK_QUEUED",
       planningDecision,
+      planningRun: planningDecision.planningRun || null,
+      planningResult: planningDecision.planningResult || null,
       task,
       collectionKey: config.collectionKey,
       robotaxi: {
@@ -190,6 +210,8 @@ export function createFleetOperationTask({
   return {
     created: true,
     planningDecision,
+    planningRun: planningDecision.planningRun || null,
+    planningResult: planningDecision.planningResult || null,
     task,
     collectionKey: config.collectionKey,
     robotaxi: applyFleetOperationTaskReference(robotaxi, { task, shouldWait: false, now }),

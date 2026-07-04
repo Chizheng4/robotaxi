@@ -85,6 +85,8 @@ export function executeOrderMatching({
   data,
   orderMatchingRunId,
   orderMatchingDecisionId,
+  nextTaskPlanningRunId,
+  nextTaskPlanningResultId,
   createdAt,
 }) {
   const result = runOrderMatching({
@@ -93,6 +95,8 @@ export function executeOrderMatching({
     data,
     orderMatchingRunId,
     orderMatchingDecisionId,
+    nextTaskPlanningRunId,
+    nextTaskPlanningResultId,
     createdAt,
   });
 
@@ -101,6 +105,8 @@ export function executeOrderMatching({
       success: false,
       run: result.run,
       decision: result.decision,
+      taskPlanningRuns: result.taskPlanningRuns || [],
+      taskPlanningResults: result.taskPlanningResults || [],
       failureReason: result.run?.failure_reason || "订单匹配失败",
     };
   }
@@ -109,6 +115,8 @@ export function executeOrderMatching({
     success: true,
     decision: result.decision,
     run: result.run,
+    taskPlanningRuns: result.taskPlanningRuns || [],
+    taskPlanningResults: result.taskPlanningResults || [],
   };
 }
 

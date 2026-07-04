@@ -131,6 +131,8 @@ export function executeFleetOperationPolicy({
   const candidates = findFleetOperationPolicyCandidates(policy, robotaxis);
   const taskResults = [];
   const policyResults = [];
+  const taskPlanningRuns = [];
+  const taskPlanningResults = [];
   let updatedRobotaxis = robotaxis;
   const runId = resolveRunId(context);
 
@@ -157,6 +159,8 @@ export function executeFleetOperationPolicy({
       context,
     });
     taskResults.push(result);
+    if (result.planningRun) taskPlanningRuns.push(result.planningRun);
+    if (result.planningResult) taskPlanningResults.push(result.planningResult);
     policyResults.push(createFleetOperationPolicyResult({
       resultId: resolveResultId(context),
       runId,
@@ -196,6 +200,8 @@ export function executeFleetOperationPolicy({
     run,
     policyResults,
     tasks: generatedTasks,
+    taskPlanningRuns,
+    taskPlanningResults,
     collectionKey: getFleetOperationCollectionKey(policy.target_task_type),
     robotaxis: updatedRobotaxis,
     policy_snapshot: policySnapshot,

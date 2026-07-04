@@ -231,6 +231,46 @@
 |created_at|创建时间|持久化字段|真实审计创建时间|
 |updated_at|更新时间|持久化字段|真实审计更新时间|
 
+### RobotaxiTaskPlanningRun：任务规划执行
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|robotaxi_task_planning_run_id|任务规划执行编号|持久化字段|任务规划执行唯一编号|
+|robotaxi_task_planning_strategy_id|任务规划策略编号|持久化字段|来源任务规划策略|
+|strategy_name|策略名称|持久化字段|执行时使用的策略名称|
+|robotaxi_id|Robotaxi 编号|持久化字段|本次规划裁决的 Robotaxi|
+|requested_assignment_type|请求分配类型|持久化字段|SERVICE_ORDER、DEPLOYMENT_TASK、FLEET_OPERATION_TASK 等|
+|requested_task_type|请求任务类型|持久化字段|具体业务任务类型，可为空|
+|trigger_source|触发来源|持久化字段|真实触发本次规划的来源，页面预览不生成执行|
+|trigger_object_type|触发对象类型|持久化字段|触发对象类型，如 serviceOrder、fleetOperationPolicy|
+|trigger_object_id|触发对象编号|持久化字段|触发对象编号|
+|run_status|执行状态|运行态字段|SUCCEEDED、REJECTED、FAILED|
+|planning_decision|规划决策|运行态字段|CREATE_NOW、QUEUE、REJECT 等|
+|decision_reason|决策原因|运行态字段|本次规划裁决原因|
+|composite_state|综合状态|持久化字段|本次规划使用的 Robotaxi 综合状态快照|
+|strategy_snapshot|策略快照|持久化字段|本次执行使用的任务规划策略配置快照|
+|input_snapshot|输入快照|持久化字段|本次执行关键输入|
+|output_snapshot|输出快照|持久化字段|本次执行关键输出|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
+### RobotaxiTaskPlanningResult：任务规划结果
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|robotaxi_task_planning_result_id|任务规划结果编号|持久化字段|任务规划结果唯一编号|
+|robotaxi_task_planning_run_id|任务规划执行编号|持久化字段|来源任务规划执行|
+|robotaxi_task_planning_strategy_id|任务规划策略编号|持久化字段|来源任务规划策略|
+|robotaxi_id|Robotaxi 编号|持久化字段|本次规划裁决的 Robotaxi|
+|requested_assignment_type|请求分配类型|持久化字段|SERVICE_ORDER、DEPLOYMENT_TASK、FLEET_OPERATION_TASK 等|
+|requested_task_type|请求任务类型|持久化字段|具体业务任务类型，可为空|
+|decision_result|决策结果|运行态字段|PLANNING_ALLOWED、PLANNING_QUEUED、PLANNING_REJECTED、PLANNING_FAILED|
+|planning_decision|规划决策|运行态字段|CREATE_NOW、QUEUE、REJECT 等|
+|decision_reason|决策原因|运行态字段|本次规划裁决原因|
+|message|消息|运行态字段|面向运营人员的裁决说明|
+|queue_entry|队列项|运行态字段|进入队列时的队列项快照|
+|composite_state|综合状态|持久化字段|本次规划使用的 Robotaxi 综合状态快照|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+
 ### Robotaxi 综合状态字段
 
 |属性英文名|中文名|字段性质|含义|
@@ -266,6 +306,10 @@
 |CREATE_NOW|立即创建|规划决策|
 |QUEUE|进入队列|规划决策|
 |REJECT|拒绝|规划决策|
+|PLANNING_ALLOWED|允许执行|任务规划结果|
+|PLANNING_QUEUED|已进入队列|任务规划结果|
+|PLANNING_REJECTED|已拒绝|任务规划结果|
+|PLANNING_FAILED|规划失败|任务规划结果|
 |MERGE|合并|规划决策|
 |UPGRADE|升级|规划决策|
 |INTERRUPT|中断当前任务|规划决策|

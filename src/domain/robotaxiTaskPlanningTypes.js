@@ -37,6 +37,19 @@ export const TaskPlanningAssignmentType = {
   RETIREMENT_ACTION: "RETIREMENT_ACTION",
 };
 
+export const TaskPlanningRunStatus = {
+  SUCCEEDED: "SUCCEEDED",
+  REJECTED: "REJECTED",
+  FAILED: "FAILED",
+};
+
+export const TaskPlanningResultStatus = {
+  PLANNING_ALLOWED: "PLANNING_ALLOWED",
+  PLANNING_QUEUED: "PLANNING_QUEUED",
+  PLANNING_REJECTED: "PLANNING_REJECTED",
+  PLANNING_FAILED: "PLANNING_FAILED",
+};
+
 export function createRobotaxiTaskPlanningStrategy(strategy = {}) {
   return {
     robotaxi_task_planning_strategy_id: null,
@@ -77,5 +90,45 @@ export function createRobotaxiTaskPlanningStrategy(strategy = {}) {
     created_at: null,
     updated_at: null,
     ...strategy,
+  };
+}
+
+export function createRobotaxiTaskPlanningRun(run = {}) {
+  return {
+    robotaxi_task_planning_run_id: run.robotaxi_task_planning_run_id || null,
+    robotaxi_task_planning_strategy_id: run.robotaxi_task_planning_strategy_id || null,
+    strategy_name: run.strategy_name || null,
+    robotaxi_id: run.robotaxi_id || null,
+    requested_assignment_type: run.requested_assignment_type || null,
+    requested_task_type: run.requested_task_type || null,
+    trigger_source: run.trigger_source || null,
+    trigger_object_type: run.trigger_object_type || null,
+    trigger_object_id: run.trigger_object_id || null,
+    run_status: run.run_status || TaskPlanningRunStatus.SUCCEEDED,
+    planning_decision: run.planning_decision || null,
+    decision_reason: run.decision_reason || null,
+    composite_state: run.composite_state || null,
+    strategy_snapshot: run.strategy_snapshot || null,
+    input_snapshot: run.input_snapshot || null,
+    output_snapshot: run.output_snapshot || null,
+    created_at: run.created_at || null,
+  };
+}
+
+export function createRobotaxiTaskPlanningResult(result = {}) {
+  return {
+    robotaxi_task_planning_result_id: result.robotaxi_task_planning_result_id || null,
+    robotaxi_task_planning_run_id: result.robotaxi_task_planning_run_id || null,
+    robotaxi_task_planning_strategy_id: result.robotaxi_task_planning_strategy_id || null,
+    robotaxi_id: result.robotaxi_id || null,
+    requested_assignment_type: result.requested_assignment_type || null,
+    requested_task_type: result.requested_task_type || null,
+    decision_result: result.decision_result || TaskPlanningResultStatus.PLANNING_ALLOWED,
+    planning_decision: result.planning_decision || null,
+    decision_reason: result.decision_reason || null,
+    message: result.message || null,
+    queue_entry: result.queue_entry || null,
+    composite_state: result.composite_state || null,
+    created_at: result.created_at || null,
   };
 }

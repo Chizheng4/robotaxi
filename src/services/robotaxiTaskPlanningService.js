@@ -4,6 +4,10 @@ import {
   RobotaxiOperationPhase,
   TaskPlanningAssignmentType,
   TaskPlanningDecision,
+  TaskPlanningResultStatus,
+  TaskPlanningRunStatus,
+  createRobotaxiTaskPlanningResult,
+  createRobotaxiTaskPlanningRun,
   createRobotaxiTaskPlanningStrategy,
 } from "../domain/robotaxiTaskPlanningTypes.js";
 import { TaskType } from "../domain/taskTypes.js";
@@ -123,6 +127,69 @@ export function planRobotaxiTask({
   }
 
   return reject("UNKNOWN_ASSIGNMENT_TYPE", "未知任务分配类型", compositeState, activeStrategy);
+}
+
+export function executeRobotaxiTaskPlanning({
+  context = {},
+  ...planningInput
+} = {}) {
+  const decision = planRobotaxiTask(planningInput);
+  const now = resolveNow(context);
+  const runId = resolveRunId(context);
+  const resultId = resolveResultId(context);
+  const strategySnapshot = decision.strategy_snapshot || createStrategySnapshot(planningInput.strategy || getActiveRobotaxiTaskPlanningStrategy());
+  const requestedAssignmentType = planningInput.requestedAssignmentType || null;
+  const requestedTaskType = planningInput.requestedTaskType || requestedAssignmentType;
+  const runStatus = decision.allowed ? TaskPlanningRunStatus.SUCCEEDED : TaskPlanningRunStatus.REJECTED;
+  const resultStatus = decision.allowed
+    ? decision.decision === TaskPlanningDecision.QUEUE ? TaskPlanningResultStatus.PLANNING_QUEUED : TaskPlanningResultStatus.PLANNING_ALLOWED
+    : TaskPlanningResultStatus.PLANNING_REJECTED;
+  const run = createRobotaxiTaskPlanningRun({
+    robotaxi_task_planning_run_id: runId,
+    robotaxi_task_planning_strategy_id: strategySnapshot?.robotaxi_task_planning_strategy_id || null,
+    strategy_name: strategySnapshot?.strategy_name || null,
+    robotaxi_id: planningInput.robotaxi?.robotaxi_id || null,
+    requested_assignment_type: requestedAssignmentType,
+    requested_task_type: requestedTaskType,
+    trigger_source: planningInput.triggerSource || null,
+    trigger_object_type: context.trigger_object_type || null,
+    trigger_object_id: context.trigger_object_id || null,
+    run_status: runStatus,
+    planning_decision: decision.decision,
+    decision_reason: decision.reason,
+    composite_state: decision.composite_state,
+    strategy_snapshot: strategySnapshot,
+    input_snapshot: {
+      robotaxi_id: planningInput.robotaxi?.robotaxi_id || null,
+      requested_assignment_type: requestedAssignmentType,
+      requested_task_type: requestedTaskType,
+      trigger_source: planningInput.triggerSource || null,
+    },
+    output_snapshot: {
+      allowed: decision.allowed,
+      decision: decision.decision,
+      reason: decision.reason,
+      message: decision.message,
+      queue_entry: decision.queue_entry || null,
+    },
+    created_at: now,
+  });
+  const result = createRobotaxiTaskPlanningResult({
+    robotaxi_task_planning_result_id: resultId,
+    robotaxi_task_planning_run_id: runId,
+    robotaxi_task_planning_strategy_id: strategySnapshot?.robotaxi_task_planning_strategy_id || null,
+    robotaxi_id: planningInput.robotaxi?.robotaxi_id || null,
+    requested_assignment_type: requestedAssignmentType,
+    requested_task_type: requestedTaskType,
+    decision_result: resultStatus,
+    planning_decision: decision.decision,
+    decision_reason: decision.reason,
+    message: decision.message,
+    queue_entry: decision.queue_entry || null,
+    composite_state: decision.composite_state,
+    created_at: now,
+  });
+  return { ...decision, planningRun: run, planningResult: result };
 }
 
 export function getAvailableRobotaxiActions(params = {}) {
@@ -287,10 +354,27 @@ function defaultNow() {
   return new Date().toISOString();
 }
 
+function resolveNow(context = {}) {
+  if (typeof context.now === "function") return context.now();
+  return context.now || defaultNow();
+}
+
+function resolveRunId(context = {}) {
+  if (typeof context.nextTaskPlanningRunId === "function") return context.nextTaskPlanningRunId();
+  return `TPR-${String(Date.now()).slice(-6)}`;
+}
+
+function resolveResultId(context = {}) {
+  if (typeof context.nextTaskPlanningResultId === "function") return context.nextTaskPlanningResultId();
+  return `TPRS-${String(Date.now()).slice(-6)}`;
+}
+
 export {
   RobotaxiAssignmentState,
   RobotaxiLifecycleStage,
   RobotaxiOperationPhase,
   TaskPlanningAssignmentType,
   TaskPlanningDecision,
+  TaskPlanningResultStatus,
+  TaskPlanningRunStatus,
 };
