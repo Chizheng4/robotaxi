@@ -214,6 +214,64 @@
 |max_queue_size|最大排队数量|持久化字段|单个 Robotaxi 最大排队任务数。来源为任务调度策略|
 |source_strategy_name|来源策略名称|运行态字段|兼容旧优先级配置读取时记录对应任务调度策略名称|
 
+## 1.1.10 RobotaxiTaskPlanningStrategy：Robotaxi 任务规划策略
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|robotaxi_task_planning_strategy_id|Robotaxi 任务规划策略编号|持久化字段|策略唯一编号|
+|strategy_name|策略名称|持久化字段|用户可识别的策略名称|
+|strategy_status|策略状态|运行态字段|ACTIVE、DRAFT、ARCHIVED|
+|planning_algorithm|规划算法|持久化字段|ROBOTAXI_STATE_TASK_PLANNING|
+|priority_rank|优先级排序|持久化字段|各任务类型进入 Robotaxi 队列时的优先级|
+|queue_policy|排队策略|持久化字段|订单、投放、运维占用中是否允许内部任务排队及最大队列长度|
+|phase_rules|阶段规则|持久化字段|FIRST_ADMISSION、ADMISSION_REMEDIATION、READY_NOT_DEPLOYED、ACTIVE_OPERATION、RETIRED 各阶段允许的任务类型|
+|compatibility_rules|兼容规则|持久化字段|同一 Robotaxi 已有未完成运维任务时，新任务类型是否可共存|
+|failure_trigger_policy|故障触发策略|持久化字段|故障任务触发限制，如 MOVING_ONLY|
+|external_assignment_queue_policy|外部分配队列策略|持久化字段|外部订单/投放分配是否必须让 Robotaxi 内部任务队列优先|
+|created_at|创建时间|持久化字段|真实审计创建时间|
+|updated_at|更新时间|持久化字段|真实审计更新时间|
+
+### Robotaxi 综合状态字段
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|lifecycle_stage|生命周期阶段|运行态字段|PRE_OPERATION、IN_OPERATION、RETIRED|
+|operation_phase|运营阶段|运行态字段|FIRST_ADMISSION、ADMISSION_REMEDIATION、READY_NOT_DEPLOYED、ACTIVE_OPERATION、RETIRED|
+|operation_status|运营状态|运行态字段|面向运营分配的可运营/不可运营门槛|
+|vehicle_motion_state|车辆空间状态|运行态字段|车辆物理空间状态，如停车中、临停中、行驶中|
+|current_assignment_state|当前占用状态|运行态字段|NONE、READINESS_TASK、DEPLOYMENT_TASK、SERVICE_ORDER、FLEET_OPERATION_TASK|
+|has_operational_history|已有运营历史|运行态字段|是否已经有过投放或服务订单运营历史|
+|has_readiness_history|已有准入历史|运行态字段|是否已经有过运营准入任务|
+|open_fleet_task_count|未完成运维任务数|运行态字段|该 Robotaxi 当前未终态运维任务数量|
+|pending_queue_size|待执行队列数量|运行态字段|该 Robotaxi pending_task_queue 中的任务数量|
+|composite_state|综合状态|运行态字段|任务规划策略裁决时使用的综合状态快照|
+|planning_decision|规划决策|运行态字段|任务规划策略输出的决策|
+
+### Robotaxi 任务规划枚举中文
+
+|英文值|中文名|用途|
+|---|---|---|
+|ROBOTAXI_STATE_TASK_PLANNING|Robotaxi 综合状态任务规划|规划算法|
+|PRE_OPERATION|运营预备阶段|生命周期阶段|
+|IN_OPERATION|运营阶段|生命周期阶段|
+|FIRST_ADMISSION|首次准入阶段|运营阶段|
+|ADMISSION_REMEDIATION|准入修复阶段|运营阶段|
+|READY_NOT_DEPLOYED|准入后待投放|运营阶段|
+|ACTIVE_OPERATION|持续运营阶段|运营阶段|
+|READINESS_TASK|运营准入任务|当前占用状态 / 分配类型|
+|SERVICE_ORDER|服务订单|当前占用状态 / 分配类型|
+|DEPLOYMENT_TASK|运营投放任务|当前占用状态 / 分配类型|
+|FLEET_OPERATION_TASK|运维任务|当前占用状态 / 分配类型|
+|RETIREMENT_ACTION|退役生命周期动作|分配类型|
+|CREATE_NOW|立即创建|规划决策|
+|QUEUE|进入队列|规划决策|
+|REJECT|拒绝|规划决策|
+|MERGE|合并|规划决策|
+|UPGRADE|升级|规划决策|
+|INTERRUPT|中断当前任务|规划决策|
+|MOVING_ONLY|仅行驶或运营异常触发|故障触发策略|
+|INTERNAL_QUEUE_FIRST|内部任务队列优先|外部分配队列策略|
+
 
 ## 1.2 Operating Metrics：经营指标系统
 

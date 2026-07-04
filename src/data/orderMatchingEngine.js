@@ -4,18 +4,24 @@ import {
   createOrderMatchingDecision,
   createOrderMatchingRun,
 } from "../domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching";
+import * as robotaxiTaskPlanningService from "../services/robotaxiTaskPlanningService.js";
 
 export function runOrderMatching({ strategy, serviceOrder, data, orderMatchingRunId, orderMatchingDecisionId, createdAt }) {
   if (!strategy || strategy.strategy_status !== "ACTIVE") {
     return createFailedResult({ strategy, serviceOrder, orderMatchingRunId, orderMatchingDecisionId, createdAt, failureReason: OrderMatchingFailureReason.NO_AVAILABLE_ROBOTAXI });
   }
 
-  const candidates = (data.robotaxis || []).filter((robotaxi) =>
-    robotaxi.availability_status === "AVAILABLE" &&
-    !robotaxi.current_order_id &&
-    !robotaxi.current_task_id &&
-    robotaxi.available_for_dispatch !== false
-  );
+  const planningStrategy = robotaxiTaskPlanningService.getActiveRobotaxiTaskPlanningStrategy(data.robotaxiTaskPlanningStrategies || []);
+  const candidates = (data.robotaxis || []).filter((robotaxi) => robotaxiTaskPlanningService.planRobotaxiTask({
+    robotaxi,
+    requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.SERVICE_ORDER,
+    triggerSource: "ORDER_MATCHING",
+    readinessTasks: data.readinessTasks || [],
+    deploymentTasks: data.deploymentTasks || [],
+    serviceOrders: data.serviceOrders || [],
+    fleetOperationTasks: data.fleetOperationTasks || [],
+    strategy: planningStrategy,
+  }).allowed);
   const eligible = candidates
     .filter((robotaxi) => Number(robotaxi.battery_percent) >= Number(strategy.min_battery_threshold || 20))
     .map((robotaxi) => createCandidateScore(robotaxi, serviceOrder, data))

@@ -23,6 +23,7 @@ import {
 import * as routePlanningService from "./routePlanningService.js";
 import * as robotaxiTaskPriorityService from "./robotaxiTaskPriorityService.js";
 import * as fleetOperationDispatchService from "./fleetOperationDispatchService.js";
+import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
 
 const TASK_CONFIG = {
   [TaskType.CLEANING]: {
@@ -97,15 +98,21 @@ export function createFleetOperationTask({
   }
 
   const now = resolveNow(context);
-  const decision = robotaxiTaskPriorityService.resolveTaskDecision({
+  const planningDecision = robotaxiTaskPlanningService.planRobotaxiTask({
     robotaxi,
-    newTaskType: taskType,
-    config: context.taskPriorityConfig,
+    requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.FLEET_OPERATION_TASK,
+    requestedTaskType: taskType,
+    triggerSource: trigger.trigger_source,
+    readinessTasks: context.readinessTasks || [],
+    deploymentTasks: context.deploymentTasks || [],
+    serviceOrders: context.serviceOrders || [],
+    fleetOperationTasks: existingTasks,
+    strategy: context.robotaxiTaskPlanningStrategy,
   });
-  if (decision.decision === robotaxiTaskPriorityService.DECISION.REJECTED) {
-    return { created: false, reason: decision.reason };
+  if (!planningDecision.allowed) {
+    return { created: false, reason: planningDecision.reason, planningDecision };
   }
-  if (decision.decision === robotaxiTaskPriorityService.DECISION.QUEUE_AFTER_CURRENT) {
+  if (planningDecision.decision === robotaxiTaskPlanningService.TaskPlanningDecision.QUEUE) {
     const taskId = resolveNextId(context, config.idPrefix);
     const task = config.factory({
       task_id: taskId,
@@ -126,7 +133,7 @@ export function createFleetOperationTask({
       ...resolveAudit(context, { created: true }),
     });
     const robotaxiWithQueue = robotaxiTaskPriorityService.enqueueTask(robotaxi, {
-      ...(decision.queue_entry || {}),
+      ...(planningDecision.queue_entry || {}),
       task_id: task.task_id,
       task_type: taskType,
       trigger_type: trigger.trigger_type || TriggerType.TASK_RESULT,
@@ -138,7 +145,8 @@ export function createFleetOperationTask({
     return {
       created: true,
       queued: true,
-      reason: decision.reason || "FLEET_OPERATION_TASK_QUEUED",
+      reason: planningDecision.reason || "FLEET_OPERATION_TASK_QUEUED",
+      planningDecision,
       task,
       collectionKey: config.collectionKey,
       robotaxi: {
@@ -181,6 +189,7 @@ export function createFleetOperationTask({
 
   return {
     created: true,
+    planningDecision,
     task,
     collectionKey: config.collectionKey,
     robotaxi: applyFleetOperationTaskReference(robotaxi, { task, shouldWait: false, now }),

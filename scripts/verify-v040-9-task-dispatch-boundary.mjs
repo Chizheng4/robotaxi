@@ -56,7 +56,7 @@ assert.equal(paymentResult.success, true);
 assert.equal(paymentResult.robotaxis[0].current_order_id, null);
 assert.equal(paymentResult.robotaxis[0].availability_status, "AVAILABLE");
 assert.equal(paymentResult.robotaxis[0].available_for_dispatch, true);
-assert.equal(canAcceptServiceOrder(paymentResult.robotaxis[0]), true);
+assert.equal(canAcceptServiceOrder(paymentResult.robotaxis[0]), false);
 
 const matchingResult = runOrderMatching({
   strategy: {
@@ -85,8 +85,8 @@ const matchingResult = runOrderMatching({
   createdAt: "2026-07-03T10:06:00.000Z",
 });
 
-assert.equal(matchingResult.decision.decision_result, "SUCCESS");
-assert.equal(matchingResult.decision.selected_robotaxi_id, "RT-V0409-001");
+assert.equal(matchingResult.decision.decision_result, "FAILED");
+assert.equal(matchingResult.decision.selected_robotaxi_id, null);
 
 const taskDispatchResult = executeTaskDispatchStrategy({
   strategy: initializeDefaultTaskDispatchStrategies()[0],

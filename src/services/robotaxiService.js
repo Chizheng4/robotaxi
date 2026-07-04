@@ -9,6 +9,7 @@ import {
   TaskType,
 } from "../domain/taskTypes.js";
 import { createFleetOperationTask } from "./fleetOperationTaskService.js";
+import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
 
 export function getOperationalHealth(robotaxi, context = {}) {
   return {
@@ -28,16 +29,31 @@ export function getOperationalHealth(robotaxi, context = {}) {
   };
 }
 
-export function canAcceptServiceOrder(robotaxi) {
-  return isAvailableBase(robotaxi)
-    && !robotaxi.current_order_id
-    && !robotaxi.current_task_id;
+export function canAcceptServiceOrder(robotaxi, context = {}) {
+  return robotaxiTaskPlanningService.planRobotaxiTask({
+    robotaxi,
+    requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.SERVICE_ORDER,
+    triggerSource: context.triggerSource || "SERVICE_ORDER_MATCHING",
+    readinessTasks: context.readinessTasks || [],
+    deploymentTasks: context.deploymentTasks || [],
+    serviceOrders: context.serviceOrders || [],
+    fleetOperationTasks: context.fleetOperationTasks || [],
+    strategy: context.robotaxiTaskPlanningStrategy,
+  }).allowed;
 }
 
-export function canAcceptDeploymentTask(robotaxi) {
-  return isAvailableBase(robotaxi)
-    && !robotaxi.current_order_id
-    && !robotaxi.current_task_id;
+export function canAcceptDeploymentTask(robotaxi, context = {}) {
+  return robotaxiTaskPlanningService.planRobotaxiTask({
+    robotaxi,
+    requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.DEPLOYMENT_TASK,
+    requestedTaskType: TaskType.DEPLOYMENT,
+    triggerSource: context.triggerSource || "DEPLOYMENT_TASK_CREATE",
+    readinessTasks: context.readinessTasks || [],
+    deploymentTasks: context.deploymentTasks || [],
+    serviceOrders: context.serviceOrders || [],
+    fleetOperationTasks: context.fleetOperationTasks || [],
+    strategy: context.robotaxiTaskPlanningStrategy,
+  }).allowed;
 }
 
 export function canAcceptSupplyRebalance(robotaxi, context) {

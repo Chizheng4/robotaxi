@@ -159,5 +159,11 @@ function createContext() {
       return `FOP-RUN-${String(runSequence).padStart(4, "0")}`;
     },
     nextResultId: () => `FOP-RESULT-${String(runSequence + taskSequence + 1).padStart(4, "0")}`,
+    serviceOrders: [
+      { service_order_id: "SO-HISTORY-1", matched_robotaxi_id: "RT-CLEAN-NEED" },
+      { service_order_id: "SO-HISTORY-2", matched_robotaxi_id: "RT-LOW-BATTERY" },
+      { service_order_id: "SO-HISTORY-3", matched_robotaxi_id: "RT-DIRECT-CLEAN" },
+      { service_order_id: "SO-001", matched_robotaxi_id: "RT-IN-SERVICE" },
+    ],
   };
 }

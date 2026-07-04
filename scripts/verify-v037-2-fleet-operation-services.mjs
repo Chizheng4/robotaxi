@@ -36,14 +36,14 @@ const dirtyRobotaxi = {
   cleanliness_status: CleanlinessStatus.NEEDS_CLEANING,
 };
 assert.equal(needsCleaning(dirtyRobotaxi), true);
-assert.equal(canAcceptServiceOrder(dirtyRobotaxi), true);
+assert.equal(canAcceptServiceOrder(dirtyRobotaxi), false);
 
 const lowBatteryRobotaxi = {
   ...availableRobotaxi,
   battery_operation_status: BatteryOperationStatus.LOW,
 };
 assert.equal(needsCharging(lowBatteryRobotaxi), true);
-assert.equal(canAcceptDeploymentTask(lowBatteryRobotaxi), true);
+assert.equal(canAcceptDeploymentTask(lowBatteryRobotaxi), false);
 
 const waitingResult = createFleetOperationTask({
   robotaxi: { ...dirtyRobotaxi, current_order_id: "SO-V037-001" },
@@ -97,5 +97,6 @@ function fixedContext() {
     now: () => "2026-06-30T10:00:00.000Z",
     nextId: (prefix) => `${prefix}-V037`,
     audit: () => ({ record_source: "TEST" }),
+    serviceOrders: [{ service_order_id: "SO-HISTORY", matched_robotaxi_id: "RT-V037-001" }],
   };
 }

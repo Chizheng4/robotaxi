@@ -180,5 +180,10 @@ function fixedContext() {
     nextDispatchRunId: () => "FODR-V0408",
     nextDispatchDecisionId: () => "FODD-V0408",
     audit: () => ({ record_source: "TEST" }),
+    serviceOrders: [
+      { service_order_id: "SO-HISTORY-1", matched_robotaxi_id: "RT-V0408-001" },
+      { service_order_id: "SO-HISTORY-2", matched_robotaxi_id: "RT-V0408-002" },
+      { service_order_id: "SO-HISTORY-3", matched_robotaxi_id: "RT-V0408-003" },
+    ],
   };
 }

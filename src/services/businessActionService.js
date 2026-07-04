@@ -5,7 +5,7 @@ import * as tripTypes from "../domain/tripTypes.js";
 import { runDemandSimulation } from "../data/demandSimulationEngine.js";
 import * as serviceOrderSettlement from "../domain/serviceOrderSettlement.js";
 import * as routePlanningService from "./routePlanningService.js";
-import * as robotaxiService from "./robotaxiService.js";
+import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
 import * as serviceOrderService from "./serviceOrderService.js";
 import * as tripService from "./tripService.js";
 import { TimedOperationStatus, TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
@@ -135,8 +135,19 @@ export function createDeploymentTask({ state, runtime }) {
     return success("DEPLOYMENT_SKIPPED_OUT_OF_WORK_TIME", "未到作业人员工作时间，跳过运营投放任务创建", { objectType: "deploymentTask", objectId: null }, {});
   }
   const appData = dataView(state);
+  const planningStrategy = robotaxiTaskPlanningService.getActiveRobotaxiTaskPlanningStrategy(appData.robotaxiTaskPlanningStrategies || []);
   const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi) =>
-    robotaxiService.canAcceptDeploymentTask(robotaxi)
+    robotaxiTaskPlanningService.planRobotaxiTask({
+      robotaxi,
+      requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.DEPLOYMENT_TASK,
+      requestedTaskType: taskTypes.TaskType.DEPLOYMENT,
+      triggerSource: "DEPLOYMENT_TASK_CREATE",
+      readinessTasks: appData.readinessTasks || [],
+      deploymentTasks: state.deploymentTasks || [],
+      serviceOrders: appData.serviceOrders || [],
+      fleetOperationTasks: appData.fleetOperationTasks || [],
+      strategy: planningStrategy,
+    }).allowed
   );
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "投放任务创建失败：无可投放 Robotaxi", "deploymentTask", null, "无可投放 Robotaxi");
   const target = routePlanningService.getRandomDeploymentTarget(appData, {
@@ -1166,6 +1177,15 @@ function dataView(state) {
     serviceOrders: state.serviceOrders || state.data?.serviceOrders || [],
     trips: state.trips || state.data?.trips || [],
     deploymentTasks: state.deploymentTasks || state.data?.deploymentTasks || [],
+    fleetOperationTasks: [
+      ...(state.cleaningTasks || []),
+      ...(state.chargingTasks || []),
+      ...(state.maintenanceTasks || []),
+      ...(state.failureHandlingTasks || []),
+      ...(state.retirementTasks || []),
+      ...(state.data?.fleetOperationTasks || []),
+    ],
+    robotaxiTaskPlanningStrategies: state.robotaxiTaskPlanningStrategies || state.data?.robotaxiTaskPlanningStrategies || [],
     routeExecutions: state.routeExecutions || state.data?.routeExecutions || [],
     readinessTasks: state.readinessTasks || state.data?.readinessTasks || [],
     routes: state.routes || state.data?.routes || [],
