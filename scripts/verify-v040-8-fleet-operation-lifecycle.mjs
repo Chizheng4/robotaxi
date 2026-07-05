@@ -166,13 +166,11 @@ const connecting = startFleetOperationWork({
   robotaxi: chargingWorker.robotaxi,
   context: fixedContext(),
 });
-assert.equal(connecting.task.task_status, "CONNECTING_CHARGER");
+assert.equal(connecting.task.task_status, "CHARGING");
+assert.equal(connecting.robotaxi.battery_operation_status, BatteryOperationStatus.CHARGING);
+assert.equal(connecting.worker.worker_status, "IDLE");
 
-const charging = completeFleetOperationWork({
-  task: connecting.task,
-  robotaxi: connecting.robotaxi,
-  context: fixedContext(),
-});
+const charging = connecting;
 assert.equal(charging.task.task_status, "CHARGING");
 assert.equal(charging.robotaxi.battery_operation_status, BatteryOperationStatus.CHARGING);
 assert.equal(charging.worker.worker_status, "IDLE");
@@ -192,23 +190,17 @@ const disconnectWorker = assignFleetOperationWorker({
   context: fixedContext(),
 });
 assert.equal(disconnectWorker.succeeded, true);
-assert.equal(disconnectWorker.task.task_status, "READY_TO_CHARGE");
-
-const disconnecting = startFleetOperationWork({
-  task: disconnectWorker.task,
-  robotaxi: disconnectWorker.robotaxi,
-  context: fixedContext(),
-});
-assert.equal(disconnecting.task.task_status, "DISCONNECTING_CHARGER");
+assert.equal(disconnectWorker.task.task_status, "READY_TO_DISCONNECT");
 
 const charged = completeFleetOperationWork({
-  task: disconnecting.task,
-  robotaxi: disconnecting.robotaxi,
+  task: disconnectWorker.task,
+  robotaxi: disconnectWorker.robotaxi,
   context: fixedContext(),
 });
 assert.equal(charged.task.task_status, "COMPLETED");
 assert.equal(charged.robotaxi.availability_status, "AVAILABLE");
 assert.equal(charged.robotaxi.needs_charging, false);
+assert.equal(charged.robotaxi.battery_percent, 100);
 assert.equal(charged.robotaxi.battery_operation_status, BatteryOperationStatus.ENOUGH);
 
 console.log("v040.8 Fleet Operations 生命周期合同验证通过");

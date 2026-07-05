@@ -372,10 +372,10 @@
 |calculation_formula|计算公式|持久化字段|使用正式字段描述的计算公式|
 |source_objects|来源对象|持久化字段|指标消费的业务对象或事实对象|
 |source_fields|来源字段|持久化字段|指标消费的正式字段|
-|time_basis|时间口径|持久化字段|SIMULATION_TIME|
-|default_time_window|默认时间窗|持久化字段|SIMULATION_RUN、DAY、HOUR、10_MINUTE|
+|time_basis|时间口径|持久化字段|SIMULATION_TIME（模拟时间）|
+|default_time_window|默认时间窗|持久化字段|SIMULATION_RUN（单次模拟运行）、DAY、HOUR、10_MINUTE|
+|zero_denominator_rule|零分母规则|持久化字段|NULL_WITH_REASON（按原因置空）|
 |supported_dimensions|支持维度|持久化字段|simulation_run_id、service_area_id 等|
-|zero_denominator_rule|零分母规则|持久化字段|分母为 0 时的处理方式|
 |data_readiness|数据就绪度|持久化字段|READY、DERIVABLE、MISSING_DATA|
 |display_unit|展示单位|持久化字段|currency、percent、count、second、km|
 |higher_is_better|越高越好|持久化字段|指标趋势解释方向|
@@ -739,7 +739,7 @@
 |pending_task_queue|待执行任务队列|运行态字段|Robotaxi 运维任务排队列表|
 |cleanliness_status|清洁状态|运行态字段|车辆是否需要清洁或正在清洁|
 |battery_operation_status|电量运营状态|运行态字段|电量是否满足运营、是否低电或充电中|
-|maintenance_status|维护状态|运行态字段|车辆维护周期和维修状态|
+|maintenance_status|维修状态|运行态字段|车辆维修周期和维修状态|
 |failure_status|故障状态|运行态字段|车辆故障报警和处置状态|
 |retirement_status|退役状态|运行态字段|车辆是否运营中、待退役评估或已退役|
 |operation_blocking_reason|运营阻塞原因|运行态字段|车辆不可运营的业务原因|
@@ -1496,8 +1496,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |LOW|低|
 |CRITICAL|严重|
 |NORMAL|普通|
-|DUE_SOON|即将维护|
-|DUE|需要维护|
+|DUE_SOON|即将维修|
+|DUE|需要维修|
 |IN_MAINTENANCE|维修中|
 |NONE|无|
 |ALERTED|已报警|
@@ -1539,15 +1539,16 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ARRIVED_OPS_CENTER|已到达目的地|
 |WAITING_RESOURCE_ASSIGNMENT|待分配 Worker|
 |WAITING_WORKER_ASSIGNMENT|待分配 Worker|
-|READY_TO_START|待开始作业|
+|READY_TO_START|待作业|
 |CLEANING_IN_PROGRESS|清洁中|
-|IN_PROGRESS|作业中|
+|IN_PROGRESS|兼容作业中|
 |MOVING_TO_CHARGER|前往目的地|
 |ARRIVED_CHARGER|已到达目的地|
 |WAITING_CHARGER_ASSIGNMENT|待分配 Worker|
-|CONNECTING_CHARGER|接入充电中|
-|READY_TO_CHARGE|待开始充电|
-|DISCONNECTING_CHARGER|断开充电中|
+|CONNECTING_CHARGER|接入充电中（兼容）|
+|READY_TO_CHARGE|待充电|
+|READY_TO_DISCONNECT|待拔充电头|
+|DISCONNECTING_CHARGER|断开充电中（兼容）|
 |MOVING_TO_MAINTENANCE_CENTER|前往目的地|
 |ARRIVED_MAINTENANCE_CENTER|已到达目的地|
 |MAINTENANCE_IN_PROGRESS|维修中|

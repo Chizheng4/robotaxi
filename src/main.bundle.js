@@ -2957,7 +2957,7 @@ function App() {
         routes: [result.route, ...current.routes],
         robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item)
       }));
-      setRouteExecutions(items => [result.routeExecution, ...items]);
+      setRouteExecutions(items => items.some(item => item.route_execution_id === result.routeExecution.route_execution_id) ? items.map(item => item.route_execution_id === result.routeExecution.route_execution_id ? result.routeExecution : item) : [result.routeExecution, ...items]);
       updateFleetOperationTask(result.task);
       setTaskEventLogs(logs => [createEventLog({
         event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
@@ -2987,6 +2987,106 @@ function App() {
     if (result?.succeeded) {
       selectForPage("routeExecutions", "routeExecution", result.routeExecution.route_execution_id);
     }
+  }
+  function planFleetOperationRouteExecutionRecord(execution) {
+    if (!execution || !fleetOperationTaskService) return;
+    const task = findFleetOperationTaskByExecution(execution);
+    if (!task) return;
+    if (execution.execution_status === taskTypes.RouteExecutionStatus.WAITING_ROUTE) {
+      planFleetOperationRoute(task);
+      return;
+    }
+    if (execution.execution_status !== taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
+    const robotaxi = operationalData.robotaxis.find(item => item.robotaxi_id === execution.robotaxi_id);
+    if (!robotaxi) return;
+    const result = fleetOperationTaskService.replanFleetOperationRouteAfterAbnormalArrival({
+      execution,
+      task,
+      robotaxi,
+      data,
+      context: {
+        now,
+        nextId: prefix => {
+          if (prefix === "RPR") return nextRoutePlanningRunId();
+          return nextDeploymentRouteId();
+        }
+      }
+    });
+    if (result.routePlanningRun) setRoutePlanningRuns(items => [result.routePlanningRun, ...items]);
+    if (result.succeeded) {
+      setOperationalData(current => ({
+        ...current,
+        routes: [result.route, ...current.routes],
+        robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item)
+      }));
+      setRouteExecutions(items => items.map(item => item.route_execution_id === execution.route_execution_id ? result.routeExecution : item));
+      updateFleetOperationTask(result.task);
+      appendFleetOperationPageEvent(collectionKey, {
+        event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        task_id: result.task.task_id,
+        task_type: result.task.task_type,
+        robotaxi_id: result.task.robotaxi_id,
+        route_execution_id: result.routeExecution.route_execution_id,
+        message: "异常到达后已重新规划行驶路径"
+      });
+      focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.MOVING);
+      selectForPage("routeExecutions", "routeExecution", result.routeExecution.route_execution_id);
+      return;
+    }
+    if (result.task) updateFleetOperationTask(result.task);
+    appendFleetOperationPageEvent(collectionKey, {
+      event_type: taskTypes.TaskEventType.ROUTE_PLANNING_FAILED,
+      event_result: taskTypes.TaskEventResult.FAILED,
+      task_id: task.task_id,
+      task_type: task.task_type,
+      robotaxi_id: task.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      message: `异常到达后路径规划失败：${getDisplayValue(result.reason)}`
+    });
+  }
+  function startFleetOperationRouteExecutionRecord(execution) {
+    if (!execution || execution.execution_status !== taskTypes.RouteExecutionStatus.WAITING_START) return;
+    const task = findFleetOperationTaskByExecution(execution);
+    const route = data.routes.find(item => item.route_id === execution.route_id);
+    const robotaxi = operationalData.robotaxis.find(item => item.robotaxi_id === execution.robotaxi_id);
+    if (!task || !route || !robotaxi) return;
+    const movingStatus = fleetOperationTaskService.getFleetOperationMovingStatus(task.task_type);
+    setRouteExecutions(items => items.map(item => item.route_execution_id === execution.route_execution_id ? {
+      ...item,
+      execution_status: taskTypes.RouteExecutionStatus.MOVING,
+      started_at: now(),
+      updated_at: now()
+    } : item));
+    updateFleetOperationTask({
+      ...task,
+      task_status: movingStatus,
+      started_at: now(),
+      updated_at: now()
+    });
+    setOperationalData(current => ({
+      ...current,
+      robotaxis: current.robotaxis.map(item => item.robotaxi_id === robotaxi.robotaxi_id ? {
+        ...item,
+        motion_status: "MOVING",
+        current_route_id: route.route_id,
+        current_route_execution_id: execution.route_execution_id,
+        current_task_id: task.task_id,
+        current_task_type: task.task_type,
+        current_task_status: movingStatus,
+        updated_at: now()
+      } : item)
+    }));
+    appendFleetOperationPageEvent(getFleetOperationTaskCollectionKey(task.task_type), {
+      event_type: taskTypes.TaskEventType.DEPLOYMENT_STARTED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: task.task_id,
+      task_type: task.task_type,
+      robotaxi_id: task.robotaxi_id,
+      route_execution_id: execution.route_execution_id,
+      message: "Robotaxi 开始前往目的地"
+    });
   }
   function advanceFleetOperationRouteExecution(execution) {
     if (!execution || !fleetOperationTaskService) return;
@@ -3164,7 +3264,11 @@ function App() {
     updateFleetOperationTask(result.task);
     setOperationalData(current => ({
       ...current,
-      robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item)
+      robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+      workers: result.worker ? current.workers.map(item => item.worker_id === result.worker.worker_id ? {
+        ...item,
+        ...result.worker
+      } : item) : current.workers
     }));
     setTaskEventLogs(logs => [createEventLog({
       event_type: taskTypes.TaskEventType.CHECK_STARTED,
@@ -3990,6 +4094,10 @@ function App() {
   }
   function planRouteExecutionRoute(routeExecutionId) {
     const execution = routeExecutions.find(item => item.route_execution_id === routeExecutionId);
+    if (execution?.task_type && execution.task_type !== taskTypes.TaskType.DEPLOYMENT) {
+      planFleetOperationRouteExecutionRecord(execution);
+      return;
+    }
     const task = deploymentTasks.find(item => item.task_id === execution?.task_id);
     if (!execution || !task) return;
     if (execution.execution_status === taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL) {
@@ -4258,6 +4366,10 @@ function App() {
   }
   function startRouteExecution(routeExecutionId) {
     const execution = routeExecutions.find(item => item.route_execution_id === routeExecutionId);
+    if (execution?.task_type && execution.task_type !== taskTypes.TaskType.DEPLOYMENT) {
+      startFleetOperationRouteExecutionRecord(execution);
+      return;
+    }
     const task = deploymentTasks.find(item => item.task_id === execution?.task_id);
     const route = data.routes.find(item => item.route_id === execution?.route_id);
     if (!task || !route || !execution || execution.execution_status !== taskTypes.RouteExecutionStatus.WAITING_START) return;
@@ -6238,7 +6350,7 @@ function renderCellValue(key, row) {
       label: getFieldDisplayValue(key, row[key] ?? "", row)
     });
   }
-  if (Array.isArray(row[key])) return row[key].join(" / ");
+  if (Array.isArray(row[key])) return row[key].map(item => formatDetailValue(item, key, row)).join(" / ");
   if (typeof row[key] === "boolean") return row[key] ? "是" : "否";
   if (typeof row[key] === "object" && row[key] !== null) return summarizeObject(row[key]);
   return getFieldDisplayValue(key, row[key] ?? "", row);
@@ -6304,7 +6416,7 @@ function MetricExperiencePanel({
   const metricById = new Map(createLatestMetricRows(insightSourceRows).map(row => [row.metric_definition_id, row]));
   const sourceRecordCount = latestRows.reduce((total, row) => total + Number(row.source_record_count || 0), 0);
   const qualityMetric = metricById.get("QUALITY-DATA-001");
-  const qualitySummary = qualityMetric ? `${qualityMetric.metric_name_cn} ${formatMetricDisplayValue(qualityMetric)}` : "等待数据质量结果";
+  const qualitySummary = qualityMetric ? `${getMetricDisplayName(qualityMetric)} ${formatMetricDisplayValue(qualityMetric)}` : "等待数据质量结果";
   const calculationSummary = latestCalculationRun ? `${latestCalculationRun.metric_calculation_run_id} · ${getDisplayValue(latestCalculationRun.calculation_status, "calculation_status")}` : "暂无更新批次";
   const insightGroups = [createMetricInsightGroup({
     title: "财务结果",
@@ -6340,7 +6452,7 @@ function MetricExperiencePanel({
     onClick: () => group.primary?.row && onSelect(group.primary.row)
   }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primaryText), /*#__PURE__*/React.createElement("small", null, group.secondaryText), /*#__PURE__*/React.createElement("em", null, group.description)))), /*#__PURE__*/React.createElement("div", {
     className: "metric-quality-strip"
-  }, /*#__PURE__*/React.createElement("span", null, "\u6570\u636E\u6C60\uFF1A", calculationSummary), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7EDF\u8BA1\u5468\u671F\uFF1A", periodLabel), /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u7ED3\u679C ", latestRows.length), /*#__PURE__*/React.createElement("span", null, "\u6765\u6E90\u8BB0\u5F55 ", sourceRecordCount), /*#__PURE__*/React.createElement("span", null, qualitySummary), /*#__PURE__*/React.createElement("span", null, warningRows[0] ? `${warningRows[0].metric_name_cn}：${warningRows[0].quality_reason}` : "暂无质量提示")));
+  }, /*#__PURE__*/React.createElement("span", null, "\u6570\u636E\u6C60\uFF1A", calculationSummary), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7EDF\u8BA1\u5468\u671F\uFF1A", periodLabel), /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u7ED3\u679C ", latestRows.length), /*#__PURE__*/React.createElement("span", null, "\u6765\u6E90\u8BB0\u5F55 ", sourceRecordCount), /*#__PURE__*/React.createElement("span", null, qualitySummary), /*#__PURE__*/React.createElement("span", null, warningRows[0] ? `${getMetricDisplayName(warningRows[0])}：${warningRows[0].quality_reason || "存在质量提示"}` : "暂无质量提示")));
 }
 function RobotaxiOperationPanel({
   rows = [],
@@ -6402,11 +6514,11 @@ function RobotaxiOperationPanel({
       row: activeRow
     })
   }), /*#__PURE__*/React.createElement(RobotaxiSummaryItem, {
-    label: "\u5F53\u524D\u5360\u7528",
-    value: activeRow.current_order_id || activeRow.current_task_id || "无执行任务"
+    label: "\u5F53\u524D\u4EFB\u52A1",
+    value: formatRobotaxiCurrentTask(activeRow)
   }), /*#__PURE__*/React.createElement(RobotaxiSummaryItem, {
-    label: "\u8FD0\u7EF4\u72B6\u6001",
-    value: getDisplayValue(activeRow.fleet_operation_status) || "无"
+    label: "\u5F85\u5904\u7406",
+    value: formatRobotaxiOperationNeedSummary(activeRow)
   }), /*#__PURE__*/React.createElement(RobotaxiSummaryItem, {
     label: "\u6392\u961F",
     value: formatRobotaxiQueueSummary(queueItems),
@@ -6483,6 +6595,23 @@ function RobotaxiActionsPopover({
   }, actions.map(item => /*#__PURE__*/React.createElement("span", {
     key: item.task_type
   }, getDisplayValue(item.task_type), "\uFF1A\u53EF\u521B\u5EFA")));
+}
+function formatRobotaxiCurrentTask(row) {
+  if (!row) return "空闲";
+  if (row.current_order_id) return `服务订单 ${row.current_order_id}`;
+  if (row.current_task_id) {
+    const taskTypeText = getDisplayValue(row.current_task_type, "current_task_type") || getDisplayValue(row.current_task_type) || "任务";
+    return `${taskTypeText} ${row.current_task_id}`;
+  }
+  return "空闲";
+}
+function formatRobotaxiOperationNeedSummary(row) {
+  const labels = [];
+  if (row?.needs_cleaning) labels.push("清洁");
+  if (row?.needs_charging) labels.push("充电");
+  if (row?.needs_maintenance) labels.push("维修");
+  if (row?.failure_status && row.failure_status !== "NONE") labels.push("故障");
+  return labels.length ? labels.join(" / ") : "无";
 }
 function formatRobotaxiQueueItem(item, index) {
   const sequence = item.queue_sequence || index + 1;
@@ -6592,23 +6721,21 @@ function isFleetOperationReadyToStartStatus(row) {
   return ["READY_TO_START", "READY_TO_CHARGE", "PROCESSING_RETIREMENT"].includes(row?.task_status);
 }
 function isFleetOperationWorkActiveStatus(row) {
-  return ["CLEANING_IN_PROGRESS", "MAINTENANCE_IN_PROGRESS", "CONNECTING_CHARGER", "CHARGING", "DISCONNECTING_CHARGER", "DIAGNOSING"].includes(row?.task_status);
+  return ["CLEANING_IN_PROGRESS", "MAINTENANCE_IN_PROGRESS", "CHARGING", "READY_TO_DISCONNECT", "DIAGNOSING"].includes(row?.task_status);
 }
 function getFleetOperationStartWorkLabel(row) {
-  if (row.task_type === "CHARGING" && row.charging_phase === "DISCONNECT_REQUIRED") return "断开充电头";
   if (row.task_type === "CHARGING") return "接入充电头";
   if (row.task_type === "CLEANING") return "开始清洁";
-  if (row.task_type === "MAINTENANCE") return "开始维护";
+  if (row.task_type === "MAINTENANCE") return "开始维修";
   if (row.task_type === "FAILURE_HANDLING") return "开始诊断";
   if (row.task_type === "RETIREMENT") return "开始退役";
   return "开始作业";
 }
 function getFleetOperationCompleteWorkLabel(row) {
-  if (row.task_status === "CONNECTING_CHARGER") return "接入完成";
   if (row.task_status === "CHARGING") return "充电完成";
-  if (row.task_status === "DISCONNECTING_CHARGER") return "断开完成";
+  if (row.task_status === "READY_TO_DISCONNECT") return "断开电源";
   if (row.task_type === "CLEANING") return "清洁完成";
-  if (row.task_type === "MAINTENANCE") return "维护完成";
+  if (row.task_type === "MAINTENANCE") return "维修完成";
   if (row.task_type === "FAILURE_HANDLING") return "诊断完成";
   return "完成作业";
 }
@@ -7250,11 +7377,14 @@ function getFleetOperationStatusDisplay(taskType, status) {
   if (["MOVING_TO_OPS_CENTER", "MOVING_TO_CHARGER", "MOVING_TO_MAINTENANCE_CENTER"].includes(status)) return "前往目的地";
   if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER"].includes(status)) return "已到达目的地";
   if (["WAITING_WORKER_ASSIGNMENT", "WAITING_RESOURCE_ASSIGNMENT", "WAITING_CHARGER_ASSIGNMENT", "WAITING_DIAGNOSIS_ASSIGNMENT"].includes(status)) return "待分配 Worker";
+  if (status === "ARRIVAL_ABNORMAL") return "异常到达";
+  if (status === "READY_TO_START" && taskType === "CLEANING") return "待清洁";
+  if (status === "READY_TO_START" && taskType === "MAINTENANCE") return "待维修";
+  if (status === "READY_TO_CHARGE") return "待充电";
+  if (status === "READY_TO_DISCONNECT") return "待拔充电头";
   if (status === "CLEANING_IN_PROGRESS") return "清洁中";
   if (status === "MAINTENANCE_IN_PROGRESS") return "维修中";
-  if (status === "CONNECTING_CHARGER") return "接入充电中";
   if (status === "CHARGING") return "充电中";
-  if (status === "DISCONNECTING_CHARGER") return "断开充电中";
   return null;
 }
 function isDeploymentLike(row) {
@@ -8054,8 +8184,8 @@ function enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTask
   const location = getLocationInfo(robotaxi.current_cell_id, data);
   return {
     ...robotaxi,
-    current_task_type: currentTask?.task_type || null,
-    current_task_status: currentTask?.task_status || null,
+    current_task_type: currentTask?.task_type || robotaxi.current_task_type || null,
+    current_task_status: currentTask?.task_status || robotaxi.current_task_status || null,
     current_route_execution_id: currentRouteExecution?.route_execution_id || null,
     location_summary: location.summary
   };
@@ -8088,8 +8218,9 @@ function summarizeRobotaxiLocation(cellContext) {
 function getLocationInfo(cellId, data) {
   const cell = data.cells.find(item => item.cell_id === cellId);
   const cellContext = cell ? createCellContext(cell, data) : null;
+  const contextSummary = summarizeRobotaxiLocation(cellContext);
   return {
-    summary: summarizeRobotaxiLocation(cellContext),
+    summary: cellId ? `${cellId} · ${contextSummary}` : contextSummary,
     detail: cellContext ? {
       current_cell_id: cellContext.cell_id,
       related_map: cellContext.related_map,
@@ -9125,7 +9256,7 @@ function createMetricPresentation(row) {
     valueText: "暂无数据",
     text: "暂无数据"
   };
-  const label = row.metric_name_cn || row.metric_definition_id || "指标";
+  const label = getMetricDisplayName(row);
   const valueText = formatMetricDisplayValue(row);
   return {
     hasData: Boolean(row.metric_definition_id),
@@ -9134,6 +9265,11 @@ function createMetricPresentation(row) {
     valueText,
     text: `${label} ${valueText}`
   };
+}
+function getMetricDisplayName(row) {
+  const name = row?.metric_name_cn;
+  if (name && name !== "undefined") return name;
+  return row?.metric_definition_id || "指标";
 }
 function formatMetricDisplayValue(row) {
   if (!row || row.metric_value === null || row.metric_value === undefined) return "无数据";

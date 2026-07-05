@@ -459,6 +459,126 @@ export function planFleetOperationRoute({
   };
 }
 
+export function replanFleetOperationRouteAfterAbnormalArrival({
+  execution,
+  task,
+  robotaxi,
+  data = {},
+  context = {},
+} = {}) {
+  if (!execution?.route_execution_id || !task?.task_id || !robotaxi?.robotaxi_id || !task?.target_cell_id) {
+    return { succeeded: false, reason: "INVALID_FLEET_OPERATION_ROUTE_REPLAN_INPUT" };
+  }
+  if (execution.execution_status !== "ARRIVAL_ABNORMAL") {
+    return { succeeded: false, reason: "FLEET_OPERATION_ROUTE_NOT_ABNORMAL" };
+  }
+  const now = resolveNow(context);
+  const routeId = resolveNextId(context, "DRT");
+  const routePlanningRunId = resolveNextId(context, "RPR");
+  const originCellId = execution.current_cell_id || robotaxi.current_cell_id || task.origin_cell_id;
+  const targetCellId = task.target_cell_id;
+  const targetServiceAreaId = task.target_service_area_id || task.planned_target_service_area_id || execution.target_service_area_id || null;
+  const route = routePlanningService.createDeploymentRouteForOperation({
+    task,
+    data,
+    routeId,
+    routePlanningRunId,
+    routeExecutionId: execution.route_execution_id,
+    originCellId,
+    targetCellId,
+    targetServiceAreaId,
+    strategyId: RoutePlanningStrategy.ABNORMAL_SAME_SERVICE_AREA,
+  });
+  const routePlanningRun = routePlanningService.createRoutePlanningRun({
+    routePlanningRunId,
+    routeStrategyId: route.route_strategy_id,
+    planningAlgorithm: route.planning_algorithm,
+    taskId: task.task_id,
+    routeExecutionId: execution.route_execution_id,
+    robotaxiId: task.robotaxi_id,
+    originCellId,
+    targetCellId,
+    resultRouteId: route.route_steps.length > 0 ? route.route_id : null,
+    planningResult: route.route_steps.length > 0 ? RoutePlanningResult.SUCCESS : RoutePlanningResult.FAILED,
+    failureReason: route.route_steps.length > 0 ? RoutePlanningFailureReason.NONE : route.failure_reason,
+    routeStepCount: route.route_step_count,
+    totalDistanceKm: route.total_distance_km,
+    createdAt: now,
+  });
+  if (route.route_steps.length === 0) {
+    return {
+      succeeded: false,
+      reason: route.failure_reason,
+      routePlanningRun,
+      task: {
+        ...task,
+        task_status: "ARRIVAL_ABNORMAL",
+        failure_reason: route.failure_reason,
+        updated_at: now,
+      },
+    };
+  }
+  const routeCellIds = routePlanningService.getRouteExecutionCells(route, data.roadSegments || [], originCellId, targetCellId);
+  const movingStatus = getFleetOperationMovingStatus(task.task_type);
+  const nextExecution = routePlanningService.applyTravelMetrics({
+    record: {
+      ...execution,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      execution_status: "MOVING",
+      origin_cell_id: originCellId,
+      target_cell_id: targetCellId,
+      target_service_area_id: targetServiceAreaId,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
+      current_step_index: 0,
+      total_step_count: Math.max(0, routeCellIds.length - 1),
+      route_cell_ids: routeCellIds,
+      current_target_service_area_id: targetServiceAreaId,
+      route_history: [
+        ...(execution.route_history || []),
+        routePlanningService.createRouteHistoryEntry(route, RouteChangeReason.ABNORMAL_ARRIVAL_REPLAN, execution.arrival_execution_result || task.arrival_execution_result || null),
+      ],
+      time_elapsed: "0",
+      battery_consumed_percent: 0,
+      completed_at: null,
+      failure_reason: null,
+      updated_at: now,
+    },
+    routes: [route],
+    currentRouteId: route.route_id,
+    currentStepIndex: 0,
+  });
+  return {
+    succeeded: true,
+    route,
+    routePlanningRun,
+    routeExecution: nextExecution,
+    task: {
+      ...task,
+      task_status: movingStatus,
+      route_id: route.route_id,
+      route_strategy_id: route.route_strategy_id,
+      actual_target_service_area_id: null,
+      actual_target_cell_id: null,
+      failure_reason: null,
+      updated_at: now,
+    },
+    robotaxi: {
+      ...robotaxi,
+      current_task_id: task.task_id,
+      current_task_type: task.task_type,
+      current_task_status: movingStatus,
+      current_route_id: route.route_id,
+      current_route_execution_id: execution.route_execution_id,
+      motion_status: "MOVING",
+      availability_status: "UNAVAILABLE",
+      available_for_dispatch: false,
+      updated_at: now,
+    },
+  };
+}
+
 export function advanceFleetOperationRouteExecution({ execution, task, route, robotaxi, context = {} } = {}) {
   const step = routePlanningService.advanceRouteExecution({ execution, task, route, robotaxi });
   if (!step) return { succeeded: false, reason: "FLEET_OPERATION_ROUTE_STEP_UNAVAILABLE" };
@@ -637,6 +757,9 @@ export function assignFleetOperationWorker({ task, robotaxi, workers = [], conte
 export function startFleetOperationWork({ task, robotaxi, context = {} } = {}) {
   if (!task?.task_id || !robotaxi?.robotaxi_id) return { succeeded: false, reason: "INVALID_FLEET_OPERATION_WORK_INPUT" };
   const now = resolveNow(context);
+  if (task.task_type === TaskType.CHARGING && task.task_status === ChargingTaskStatus.READY_TO_CHARGE) {
+    return completeChargingWork({ task, robotaxi, now });
+  }
   const nextStatus = getFleetOperationWorkStatus(task);
   if (!nextStatus) return { succeeded: false, reason: "FLEET_OPERATION_WORK_NOT_READY" };
   return {
@@ -762,9 +885,7 @@ function getFleetOperationWorkStatus(task) {
     return MaintenanceTaskStatus.MAINTENANCE_IN_PROGRESS;
   }
   if (task.task_type === TaskType.CHARGING && task.task_status === ChargingTaskStatus.READY_TO_CHARGE) {
-    return task.charging_phase === "DISCONNECT_REQUIRED"
-      ? ChargingTaskStatus.DISCONNECTING_CHARGER
-      : ChargingTaskStatus.CONNECTING_CHARGER;
+    return ChargingTaskStatus.CHARGING;
   }
   if (task.task_type === TaskType.FAILURE_HANDLING && task.task_status === FailureHandlingTaskStatus.WAITING_DIAGNOSIS_ASSIGNMENT) {
     return FailureHandlingTaskStatus.DIAGNOSING;
@@ -786,6 +907,7 @@ function isFleetOperationWaitingWorkerStatus(task) {
 }
 
 function getFleetOperationReadyToStartStatus(task) {
+  if (task.task_type === TaskType.CHARGING && task.charging_phase === "DISCONNECT_REQUIRED") return ChargingTaskStatus.READY_TO_DISCONNECT;
   if (task.task_type === TaskType.CHARGING) return ChargingTaskStatus.READY_TO_CHARGE;
   if (task.task_type === TaskType.MAINTENANCE) return MaintenanceTaskStatus.READY_TO_START;
   if (task.task_type === TaskType.FAILURE_HANDLING) return FailureHandlingTaskStatus.DIAGNOSING;
@@ -809,7 +931,7 @@ function isCompletableWorkStatus(task) {
 }
 
 function completeChargingWork({ task, robotaxi, now }) {
-  if (task.task_status === ChargingTaskStatus.CONNECTING_CHARGER) {
+  if (task.task_status === ChargingTaskStatus.READY_TO_CHARGE) {
     return {
       succeeded: true,
       task: {
@@ -853,13 +975,14 @@ function completeChargingWork({ task, robotaxi, now }) {
       robotaxi: {
         ...robotaxi,
         current_task_status: ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
-        battery_percent: Number(task.target_battery_percent || 90),
+        battery_percent: 100,
+        estimated_range_km: Number(robotaxi.max_range_km || robotaxi.estimated_range_km || 0),
         battery_operation_status: BatteryOperationStatus.ENOUGH,
         updated_at: now,
       },
     };
   }
-  if (task.task_status === ChargingTaskStatus.DISCONNECTING_CHARGER) {
+  if (task.task_status === ChargingTaskStatus.READY_TO_DISCONNECT) {
     return completeFleetOperationTask({ task, robotaxi, now });
   }
   return { succeeded: false, reason: "CHARGING_WORK_NOT_COMPLETABLE" };
@@ -911,7 +1034,8 @@ function restoreRobotaxiAfterFleetOperation(robotaxi, task, now) {
     return {
       ...restored,
       needs_charging: false,
-      battery_percent: Number(task.target_battery_percent || robotaxi.battery_percent || 90),
+      battery_percent: 100,
+      estimated_range_km: Number(robotaxi.max_range_km || robotaxi.estimated_range_km || 0),
       battery_operation_status: BatteryOperationStatus.ENOUGH,
     };
   }
