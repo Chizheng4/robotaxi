@@ -92,13 +92,26 @@ export function resolveTaskDecision({ robotaxi, newTaskType, config, context = {
 }
 
 export function getQueuedTasksSorted(queue = []) {
-  return [...queue].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  return normalizeQueuedTasks(queue);
+}
+
+export function normalizeQueuedTasks(queue = []) {
+  return [...queue]
+    .sort((a, b) => {
+      const priorityDiff = Number(b.priority || 0) - Number(a.priority || 0);
+      if (priorityDiff !== 0) return priorityDiff;
+      return String(a.queued_at || a.created_at || "").localeCompare(String(b.queued_at || b.created_at || ""));
+    })
+    .map((item, index) => ({
+      ...item,
+      queue_sequence: index + 1,
+    }));
 }
 
 export function enqueueTask(robotaxi, taskEntry) {
   const queue = Array.isArray(robotaxi?.pending_task_queue) ? [...robotaxi.pending_task_queue] : [];
   queue.push(taskEntry);
-  return { ...robotaxi, pending_task_queue: getQueuedTasksSorted(queue) };
+  return { ...robotaxi, pending_task_queue: normalizeQueuedTasks(queue) };
 }
 
 export function dequeueNextTask(robotaxi) {
@@ -106,7 +119,7 @@ export function dequeueNextTask(robotaxi) {
   if (queue.length === 0) return { robotaxi, nextTask: null };
   const sorted = getQueuedTasksSorted(queue);
   const nextTask = sorted[0];
-  const remaining = sorted.slice(1);
+  const remaining = normalizeQueuedTasks(sorted.slice(1));
   return {
     robotaxi: { ...robotaxi, pending_task_queue: remaining },
     nextTask,

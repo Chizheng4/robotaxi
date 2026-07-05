@@ -11,6 +11,7 @@ import {
   createRobotaxiTaskPlanningStrategy,
 } from "../domain/robotaxiTaskPlanningTypes.js";
 import { TaskType } from "../domain/taskTypes.js";
+import { normalizeQueuedTasks } from "./robotaxiTaskPriorityService.js";
 
 const TERMINAL_STATUSES = new Set(["COMPLETED", "CANCELLED", "FAILED"]);
 
@@ -52,6 +53,7 @@ export function resolveRobotaxiCompositeState({
   deploymentTasks = [],
   serviceOrders = [],
   fleetOperationTasks = [],
+  strategy = null,
 } = {}) {
   const hasDeploymentHistory = (deploymentTasks || []).some((task) => task.robotaxi_id === robotaxi?.robotaxi_id);
   const hasServiceHistory = (serviceOrders || []).some((order) =>
@@ -67,6 +69,9 @@ export function resolveRobotaxiCompositeState({
   const openFleetTaskCount = (fleetOperationTasks || []).filter((task) =>
     task.robotaxi_id === robotaxi?.robotaxi_id && !TERMINAL_STATUSES.has(task.task_status)
   ).length;
+  const priorityRank = (strategy || getActiveRobotaxiTaskPlanningStrategy())?.priority_rank || {};
+  const pendingQueue = normalizeQueuedTasks(robotaxi?.pending_task_queue || []);
+  const currentTaskType = robotaxi?.current_task_type || (robotaxi?.current_order_id ? "SERVICE_ORDER" : null);
 
   return {
     lifecycle_stage: lifecycleStage,
@@ -77,7 +82,16 @@ export function resolveRobotaxiCompositeState({
     has_operational_history: hasOperationalHistory,
     has_readiness_history: hasReadinessHistory,
     open_fleet_task_count: openFleetTaskCount,
-    pending_queue_size: Array.isArray(robotaxi?.pending_task_queue) ? robotaxi.pending_task_queue.length : 0,
+    current_assignment: {
+      current_order_id: robotaxi?.current_order_id || null,
+      current_task_id: robotaxi?.current_task_id || null,
+      current_task_type: currentTaskType,
+      current_task_status: robotaxi?.current_task_status || robotaxi?.current_order_status || null,
+      current_task_priority: Number(priorityRank[currentTaskType] || 0),
+    },
+    pending_task_queue: pendingQueue,
+    pending_queue_size: pendingQueue.length,
+    next_pending_task: pendingQueue[0] || null,
   };
 }
 
@@ -100,6 +114,7 @@ export function planRobotaxiTask({
     deploymentTasks,
     serviceOrders,
     fleetOperationTasks,
+    strategy: activeStrategy,
   });
   const taskType = requestedTaskType || requestedAssignmentType;
   const openFleetTasks = (fleetOperationTasks || []).filter((task) =>
@@ -171,6 +186,7 @@ export function executeRobotaxiTaskPlanning({
       reason: decision.reason,
       message: decision.message,
       queue_entry: decision.queue_entry || null,
+      queue_snapshot: decision.queue_snapshot || null,
     },
     created_at: now,
   });
@@ -187,6 +203,7 @@ export function executeRobotaxiTaskPlanning({
     message: decision.message,
     queue_sequence: decision.queue_entry?.queue_sequence || null,
     queue_entry: decision.queue_entry || null,
+    queue_snapshot: decision.queue_snapshot || null,
     composite_state: decision.composite_state,
     created_at: now,
   });
@@ -274,20 +291,21 @@ function planFleetOperationTask({ robotaxi, requestedTaskType, triggerSource, co
     const maxQueueSize = Number(strategy.queue_policy?.max_queue_size || 5);
     if (queue.length >= maxQueueSize) return reject("QUEUE_FULL", "Robotaxi 待执行任务队列已满", compositeState, strategy);
     const priority = Number(strategy.priority_rank?.[requestedTaskType] || 0);
-    return allow(TaskPlanningDecision.QUEUE, "WAIT_CURRENT_ASSIGNMENT_COMPLETION", "允许进入 Robotaxi 待执行任务队列", compositeState, strategy, {
-      queue_entry: {
-        queue_sequence: resolveQueueSequence(queue, priority),
+    const queueSnapshot = normalizeQueuedTasks([
+      ...queue,
+      {
         task_type: requestedTaskType,
         priority,
       },
+    ]);
+    const queueEntry = queueSnapshot.find((item) => item.task_type === requestedTaskType && !item.task_id) || queueSnapshot[queueSnapshot.length - 1];
+    return allow(TaskPlanningDecision.QUEUE, "WAIT_CURRENT_ASSIGNMENT_COMPLETION", "允许进入 Robotaxi 待执行任务队列", compositeState, strategy, {
+      queue_entry: queueEntry,
+      queue_snapshot: queueSnapshot,
+      queue_reorder_reason: "PRIORITY_REORDER",
     });
   }
   return allow(TaskPlanningDecision.CREATE_NOW, "ROBOTAXI_READY_FOR_FLEET_OPERATION_TASK", "允许创建并执行运维任务", compositeState, strategy);
-}
-
-function resolveQueueSequence(queue = [], priority = 0) {
-  const precedingCount = queue.filter((item) => Number(item.priority || 0) >= priority).length;
-  return precedingCount + 1;
 }
 
 function resolveCurrentAssignmentState(robotaxi) {

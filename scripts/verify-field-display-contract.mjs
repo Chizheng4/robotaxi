@@ -316,6 +316,7 @@ function createSampleBusinessData() {
         decision: "QUEUE",
         reason: "WAIT_CURRENT_ASSIGNMENT_COMPLETION",
         queue_entry: { queue_sequence: 1, task_type: "CLEANING", priority: 60 },
+        queue_snapshot: [{ queue_sequence: 1, task_type: "CLEANING", priority: 60 }],
       },
     }],
     robotaxiTaskPlanningResults: [{
@@ -330,12 +331,16 @@ function createSampleBusinessData() {
       decision_reason: "WAIT_CURRENT_ASSIGNMENT_COMPLETION",
       queue_sequence: 1,
       queue_entry: { queue_sequence: 1, task_type: "CLEANING", priority: 60 },
+      queue_snapshot: [{ queue_sequence: 1, task_type: "CLEANING", priority: 60 }],
       composite_state: {
         lifecycle_stage: "IN_OPERATION",
         operation_phase: "ACTIVE_OPERATION",
         operation_status: "UNAVAILABLE",
         vehicle_motion_state: "MOVING",
         current_assignment_state: "SERVICE_ORDER",
+        current_assignment: { current_order_id: "SO-DISPLAY", current_task_id: null, current_task_type: "SERVICE_ORDER", current_task_priority: 0 },
+        pending_task_queue: [{ queue_sequence: 1, task_type: "CLEANING", priority: 60 }],
+        next_pending_task: { queue_sequence: 1, task_type: "CLEANING", priority: 60 },
       },
     }],
   };

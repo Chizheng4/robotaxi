@@ -509,7 +509,7 @@ const tableConfig = {
   robotaxiTaskPlanningResults: {
     title: "任务规划结果",
     description: "记录任务规划策略对单次 Robotaxi 候选的允许、排队或拒绝结果。",
-    columns: ["robotaxi_task_planning_result_id", "robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "robotaxi_id", "requested_assignment_type", "requested_task_type", "decision_result", "planning_decision", "decision_reason", "queue_sequence", "queue_entry", "message", "created_at"]
+    columns: ["robotaxi_task_planning_result_id", "robotaxi_task_planning_run_id", "robotaxi_task_planning_strategy_id", "robotaxi_id", "requested_assignment_type", "requested_task_type", "decision_result", "planning_decision", "decision_reason", "queue_sequence", "queue_entry", "queue_snapshot", "message", "created_at"]
   },
   taskDispatchRuns: {
     title: "任务调度执行",
@@ -2899,6 +2899,15 @@ function App() {
     };
     return map[collectionKey] || [];
   }
+  function getFleetOperationTasksByType() {
+    return {
+      cleaningTasks,
+      chargingTasks,
+      maintenanceTasks,
+      failureHandlingTasks,
+      retirementTasks
+    };
+  }
   function findFleetOperationTaskByExecution(execution) {
     if (!execution?.task_id || execution.task_type === taskTypes.TaskType.DEPLOYMENT) return null;
     const collectionKey = getFleetOperationTaskCollectionKey(execution.task_type);
@@ -3042,6 +3051,40 @@ function App() {
     });
     focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.COMPLETED);
   }
+  function submitFleetOperationAbnormalArrival(execution, arrivalResult) {
+    if (!execution || !fleetOperationTaskService) return;
+    const task = findFleetOperationTaskByExecution(execution);
+    const collectionKey = getFleetOperationTaskCollectionKey(task?.task_type);
+    const robotaxi = operationalData.robotaxis.find(item => item.robotaxi_id === execution.robotaxi_id);
+    const result = fleetOperationTaskService.confirmFleetOperationAbnormalArrival({
+      execution,
+      task,
+      robotaxi,
+      arrivalResult,
+      context: {
+        now
+      }
+    });
+    if (!result.succeeded) return;
+    setRouteExecutions(items => items.map(item => item.route_execution_id === execution.route_execution_id ? result.routeExecution : item));
+    updateFleetOperationTask(result.task);
+    if (result.robotaxi) {
+      setOperationalData(current => ({
+        ...current,
+        robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item)
+      }));
+    }
+    appendFleetOperationPageEvent(collectionKey, {
+      event_type: taskTypes.TaskEventType.ARRIVAL_ABNORMAL,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: result.task.task_id,
+      task_type: result.task.task_type,
+      robotaxi_id: result.task.robotaxi_id,
+      route_execution_id: result.routeExecution.route_execution_id,
+      message: `运维行驶异常到达：${getDisplayValue(arrivalResult)}`
+    });
+    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL);
+  }
   function dispatchFleetOperationTaskDestination(task) {
     if (!task?.task_id || !fleetOperationTaskService) return;
     const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
@@ -3157,9 +3200,18 @@ function App() {
       return;
     }
     updateFleetOperationTask(result.task);
+    const activation = result.task.task_status === "COMPLETED" ? fleetOperationTaskService.activateNextQueuedFleetOperationTask({
+      robotaxi: result.robotaxi,
+      tasksByType: getFleetOperationTasksByType(),
+      opsCenters: data.opsCenters,
+      context: {
+        now
+      }
+    }) : null;
+    if (activation?.activated && activation.task) updateFleetOperationTask(activation.task);
     setOperationalData(current => ({
       ...current,
-      robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+      robotaxis: current.robotaxis.map(item => item.robotaxi_id === result.robotaxi.robotaxi_id ? activation?.robotaxi || result.robotaxi : item),
       workers: result.worker ? current.workers.map(item => item.worker_id === result.worker.worker_id ? {
         ...item,
         ...result.worker
@@ -3172,8 +3224,16 @@ function App() {
       task_type: result.task.task_type,
       source_page: collectionKey,
       robotaxi_id: result.task.robotaxi_id,
-      message: result.task.task_status === "COMPLETED" ? "运维任务已完成，Robotaxi 恢复可运营" : `${getDisplayValue(result.task.task_status)}已完成`
-    }), ...logs]);
+      message: result.task.task_status === "COMPLETED" ? activation?.activated ? "运维任务已完成，Robotaxi 已激活下一排队任务" : "运维任务已完成，Robotaxi 恢复可运营" : `${getDisplayValue(result.task.task_status)}已完成`
+    }), ...(activation?.activated ? [createEventLog({
+      event_type: taskTypes.TaskEventType.TASK_ASSIGNED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: activation.task.task_id,
+      task_type: activation.task.task_type,
+      source_page: getFleetOperationTaskCollectionKey(activation.task.task_type),
+      robotaxi_id: activation.task.robotaxi_id,
+      message: `已按排队序号激活下一运维任务 ${activation.task.task_id}`
+    })] : []), ...logs]);
   }
   function assignFleetOperationWorker(task) {
     if (!task?.task_id || !fleetOperationTaskService) return;
@@ -4423,6 +4483,10 @@ function App() {
   }
   function submitAbnormalArrival(routeExecutionId, arrivalResult) {
     const execution = routeExecutions.find(item => item.route_execution_id === routeExecutionId);
+    if (execution?.task_type && execution.task_type !== taskTypes.TaskType.DEPLOYMENT) {
+      submitFleetOperationAbnormalArrival(execution, arrivalResult);
+      return;
+    }
     const task = deploymentTasks.find(item => item.task_id === execution?.task_id);
     if (!execution || !task || execution.execution_status !== taskTypes.RouteExecutionStatus.ARRIVED) return;
     setRouteExecutions(items => items.map(item => item.route_execution_id === routeExecutionId ? {
@@ -6242,22 +6306,22 @@ function MetricExperiencePanel({
   const qualityMetric = metricById.get("QUALITY-DATA-001");
   const qualitySummary = qualityMetric ? `${qualityMetric.metric_name_cn} ${formatMetricDisplayValue(qualityMetric)}` : "等待数据质量结果";
   const calculationSummary = latestCalculationRun ? `${latestCalculationRun.metric_calculation_run_id} · ${getDisplayValue(latestCalculationRun.calculation_status, "calculation_status")}` : "暂无更新批次";
-  const insightGroups = [{
+  const insightGroups = [createMetricInsightGroup({
     title: "财务结果",
     description: "收入、成本和利润形成经营结果判断。",
     primary: metricById.get("OUTCOME-FIN-005"),
-    secondary: [metricById.get("OUTCOME-FIN-002"), metricById.get("OUTCOME-FIN-004")].filter(Boolean)
-  }, {
+    secondary: [metricById.get("OUTCOME-FIN-002"), metricById.get("OUTCOME-FIN-004")]
+  }), createMetricInsightGroup({
     title: "服务效率",
     description: "订单规模和履约效率决定收入质量。",
     primary: metricById.get("OUTCOME-SERVICE-003"),
-    secondary: [metricById.get("OUTCOME-SERVICE-002"), metricById.get("OUTCOME-EFF-002")].filter(Boolean)
-  }, {
+    secondary: [metricById.get("OUTCOME-SERVICE-002"), metricById.get("OUTCOME-EFF-002")]
+  }), createMetricInsightGroup({
     title: "过程质量",
     description: "匹配、路径和数据质量解释异常来源。",
     primary: metricById.get("PROCESS-MATCH-001") || metricById.get("PROCESS-ROUTE-001"),
-    secondary: [metricById.get("PROCESS-ROUTE-001"), metricById.get("QUALITY-DATA-001")].filter(Boolean)
-  }];
+    secondary: [metricById.get("PROCESS-ROUTE-001"), metricById.get("QUALITY-DATA-001")]
+  })];
   return /*#__PURE__*/React.createElement("div", {
     className: "metric-experience-panel"
   }, /*#__PURE__*/React.createElement("div", {
@@ -6273,8 +6337,8 @@ function MetricExperiencePanel({
   }, insightGroups.map(group => /*#__PURE__*/React.createElement("button", {
     key: group.title,
     className: "metric-insight-lane",
-    onClick: () => group.primary && onSelect(group.primary)
-  }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primary ? `${group.primary.metric_name_cn} ${formatMetricDisplayValue(group.primary)}` : "暂无数据"), /*#__PURE__*/React.createElement("small", null, group.secondary.length ? group.secondary.map(item => `${item.metric_name_cn} ${formatMetricDisplayValue(item)}`).join(" / ") : "等待周期计算结果"), /*#__PURE__*/React.createElement("em", null, group.description)))), /*#__PURE__*/React.createElement("div", {
+    onClick: () => group.primary?.row && onSelect(group.primary.row)
+  }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primaryText), /*#__PURE__*/React.createElement("small", null, group.secondaryText), /*#__PURE__*/React.createElement("em", null, group.description)))), /*#__PURE__*/React.createElement("div", {
     className: "metric-quality-strip"
   }, /*#__PURE__*/React.createElement("span", null, "\u6570\u636E\u6C60\uFF1A", calculationSummary), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7EDF\u8BA1\u5468\u671F\uFF1A", periodLabel), /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u7ED3\u679C ", latestRows.length), /*#__PURE__*/React.createElement("span", null, "\u6765\u6E90\u8BB0\u5F55 ", sourceRecordCount), /*#__PURE__*/React.createElement("span", null, qualitySummary), /*#__PURE__*/React.createElement("span", null, warningRows[0] ? `${warningRows[0].metric_name_cn}：${warningRows[0].quality_reason}` : "暂无质量提示")));
 }
@@ -6492,7 +6556,7 @@ function renderFleetOperationTaskActions(row, actions) {
   if (isFleetOperationWorkerAssignmentStatus(row)) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
       onClick: () => actions.assignFleetOperationWorker(row)
-    }, "\u5206\u914D\u4F5C\u4E1A\u4EBA\u5458");
+    }, "\u5206\u914D Worker");
   }
   if (isFleetOperationReadyToStartStatus(row)) {
     return /*#__PURE__*/React.createElement(RowActionButton, {
@@ -6511,7 +6575,7 @@ function renderFleetOperationTaskActions(row, actions) {
 }
 function isFleetOperationRouteRecordStatus(row) {
   if (!row?.route_execution_id) return false;
-  return ["WAITING_ROUTE", "MOVING_TO_OPS_CENTER", "MOVING_TO_CHARGER", "MOVING_TO_MAINTENANCE_CENTER", "MOVING_TO_RETIREMENT_CENTER"].includes(row.task_status);
+  return ["WAITING_ROUTE", "MOVING_TO_OPS_CENTER", "MOVING_TO_CHARGER", "MOVING_TO_MAINTENANCE_CENTER", "MOVING_TO_RETIREMENT_CENTER", "ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER", "ARRIVED_RETIREMENT_CENTER", "ARRIVAL_ABNORMAL"].includes(row.task_status);
 }
 function isFleetOperationDestinationStatus(status) {
   return ["WAITING_DESTINATION_ASSIGNMENT", "WAITING_CHARGING_DESTINATION_ASSIGNMENT", "WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT"].includes(status);
@@ -6522,7 +6586,6 @@ function isFleetOperationWorkerAssignmentStatus(row) {
   if (row.task_status === "WAITING_RESOURCE_ASSIGNMENT") return true;
   if (row.task_status === "WAITING_CHARGER_ASSIGNMENT") return true;
   if (row.task_status === "WAITING_DIAGNOSIS_ASSIGNMENT") return true;
-  if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER"].includes(row.task_status)) return true;
   return false;
 }
 function isFleetOperationReadyToStartStatus(row) {
@@ -7185,7 +7248,8 @@ function getFleetOperationStatusDisplay(taskType, status) {
   if (status === "WAITING_MAINTENANCE_DESTINATION_ASSIGNMENT" && taskType === "MAINTENANCE") return "待分配维修站";
   if (status === "WAITING_ROUTE") return "待行驶";
   if (["MOVING_TO_OPS_CENTER", "MOVING_TO_CHARGER", "MOVING_TO_MAINTENANCE_CENTER"].includes(status)) return "前往目的地";
-  if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER", "WAITING_WORKER_ASSIGNMENT", "WAITING_RESOURCE_ASSIGNMENT", "WAITING_CHARGER_ASSIGNMENT"].includes(status)) return "待分配作业人员";
+  if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER"].includes(status)) return "已到达目的地";
+  if (["WAITING_WORKER_ASSIGNMENT", "WAITING_RESOURCE_ASSIGNMENT", "WAITING_CHARGER_ASSIGNMENT", "WAITING_DIAGNOSIS_ASSIGNMENT"].includes(status)) return "待分配 Worker";
   if (status === "CLEANING_IN_PROGRESS") return "清洁中";
   if (status === "MAINTENANCE_IN_PROGRESS") return "维修中";
   if (status === "CONNECTING_CHARGER") return "接入充电中";
@@ -9036,6 +9100,40 @@ function createLatestMetricRows(rows = []) {
     if (!latestByMetricId.has(row.metric_definition_id)) latestByMetricId.set(row.metric_definition_id, row);
   });
   return [...latestByMetricId.values()];
+}
+function createMetricInsightGroup({
+  title,
+  description,
+  primary,
+  secondary = []
+}) {
+  const primaryPresentation = createMetricPresentation(primary);
+  const secondaryPresentations = (secondary || []).map(createMetricPresentation).filter(item => item.hasData);
+  return {
+    title,
+    description,
+    primary: primaryPresentation,
+    primaryText: primaryPresentation.text,
+    secondaryText: secondaryPresentations.length ? secondaryPresentations.map(item => item.text).join(" / ") : "等待周期计算结果"
+  };
+}
+function createMetricPresentation(row) {
+  if (!row) return {
+    hasData: false,
+    row: null,
+    label: "指标",
+    valueText: "暂无数据",
+    text: "暂无数据"
+  };
+  const label = row.metric_name_cn || row.metric_definition_id || "指标";
+  const valueText = formatMetricDisplayValue(row);
+  return {
+    hasData: Boolean(row.metric_definition_id),
+    row,
+    label,
+    valueText,
+    text: `${label} ${valueText}`
+  };
 }
 function formatMetricDisplayValue(row) {
   if (!row || row.metric_value === null || row.metric_value === undefined) return "无数据";

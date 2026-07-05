@@ -82,6 +82,17 @@ export function hasOpenFleetOperationTask({ robotaxiId, taskType, existingTasks 
   );
 }
 
+function findFleetOperationTask(tasksByType = {}, taskId) {
+  if (!taskId) return null;
+  return [
+    ...(tasksByType.cleaningTasks || []),
+    ...(tasksByType.chargingTasks || []),
+    ...(tasksByType.maintenanceTasks || []),
+    ...(tasksByType.failureHandlingTasks || []),
+    ...(tasksByType.retirementTasks || []),
+  ].find((task) => task.task_id === taskId) || null;
+}
+
 export function createFleetOperationTask({
   robotaxi,
   taskType,
@@ -161,13 +172,28 @@ export function createFleetOperationTask({
       trigger_object_id: trigger.task_fields?.trigger_object_id || null,
       queued_at: now,
     });
+    const queuedEntry = (robotaxiWithQueue.pending_task_queue || []).find((item) => item.task_id === task.task_id) || null;
+    const planningResult = planningDecision.planningResult ? {
+      ...planningDecision.planningResult,
+      queue_sequence: queuedEntry?.queue_sequence || planningDecision.planningResult.queue_sequence || null,
+      queue_entry: queuedEntry,
+      queue_snapshot: robotaxiWithQueue.pending_task_queue || [],
+    } : null;
+    const planningRun = planningDecision.planningRun ? {
+      ...planningDecision.planningRun,
+      output_snapshot: {
+        ...(planningDecision.planningRun.output_snapshot || {}),
+        queue_entry: queuedEntry,
+        queue_snapshot: robotaxiWithQueue.pending_task_queue || [],
+      },
+    } : null;
     return {
       created: true,
       queued: true,
       reason: planningDecision.reason || "FLEET_OPERATION_TASK_QUEUED",
       planningDecision,
-      planningRun: planningDecision.planningRun || null,
-      planningResult: planningDecision.planningResult || null,
+      planningRun,
+      planningResult,
       task,
       collectionKey: config.collectionKey,
       robotaxi: {
@@ -239,7 +265,7 @@ export function activateQueuedFleetOperationTask({ task, robotaxi, opsCenters = 
     },
     robotaxi: {
       ...applyFleetOperationTaskReference(robotaxi, { task: { ...task, task_status: nextStatus }, shouldWait: false, now }),
-      pending_task_queue: (robotaxi.pending_task_queue || []).filter((item) => item.task_id !== task.task_id),
+      pending_task_queue: robotaxiTaskPriorityService.getQueuedTasksSorted((robotaxi.pending_task_queue || []).filter((item) => item.task_id !== task.task_id)),
       pending_fleet_task_id: robotaxi.pending_fleet_task_id === task.task_id ? null : robotaxi.pending_fleet_task_id,
       pending_fleet_task_type: robotaxi.pending_fleet_task_id === task.task_id ? null : robotaxi.pending_fleet_task_type,
     },
@@ -438,9 +464,9 @@ export function advanceFleetOperationRouteExecution({ execution, task, route, ro
   if (!step) return { succeeded: false, reason: "FLEET_OPERATION_ROUTE_STEP_UNAVAILABLE" };
   const now = resolveNow(context);
   const arrived = step.execution.execution_status === "ARRIVED";
-  const afterArrivalStatus = getFleetOperationAfterArrivalStatus(task?.task_type);
+  const arrivedStatus = getFleetOperationArrivedStatus(task?.task_type);
   const movingStatus = getFleetOperationMovingStatus(task?.task_type);
-  const nextTaskStatus = arrived ? afterArrivalStatus : movingStatus;
+  const nextTaskStatus = arrived ? arrivedStatus : movingStatus;
   return {
     succeeded: true,
     routeExecution: {
@@ -499,6 +525,72 @@ export function confirmFleetOperationArrival({ execution, task, robotaxi, contex
       motion_status: "PARKED",
       updated_at: now,
     } : null,
+  };
+}
+
+export function confirmFleetOperationAbnormalArrival({ execution, task, robotaxi, arrivalResult, context = {} } = {}) {
+  if (!execution || !task || execution.execution_status !== "ARRIVED") {
+    return { succeeded: false, reason: "FLEET_OPERATION_ABNORMAL_ARRIVAL_NOT_READY" };
+  }
+  const now = resolveNow(context);
+  return {
+    succeeded: true,
+    routeExecution: {
+      ...execution,
+      execution_status: "ARRIVAL_ABNORMAL",
+      arrival_execution_result: arrivalResult || "ARRIVED_WITH_TARGET_OCCUPIED",
+      actual_target_cell_id: execution.current_cell_id,
+      actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id || null,
+      failure_reason: arrivalResult || "ARRIVED_WITH_TARGET_OCCUPIED",
+      updated_at: now,
+    },
+    task: {
+      ...task,
+      task_status: "ARRIVAL_ABNORMAL",
+      arrival_execution_result: arrivalResult || "ARRIVED_WITH_TARGET_OCCUPIED",
+      actual_target_cell_id: execution.current_cell_id,
+      actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id || null,
+      failure_reason: arrivalResult || "ARRIVED_WITH_TARGET_OCCUPIED",
+      updated_at: now,
+    },
+    robotaxi: robotaxi ? {
+      ...robotaxi,
+      current_cell_id: execution.current_cell_id,
+      current_route_id: null,
+      current_route_execution_id: null,
+      current_task_status: "ARRIVAL_ABNORMAL",
+      motion_status: "PARKED",
+      updated_at: now,
+    } : null,
+  };
+}
+
+export function activateNextQueuedFleetOperationTask({ robotaxi, tasksByType = {}, opsCenters = [], context = {} } = {}) {
+  const queue = robotaxiTaskPriorityService.getQueuedTasksSorted(robotaxi?.pending_task_queue || []);
+  if (!robotaxi?.robotaxi_id || queue.length === 0) return { activated: false, robotaxi, task: null };
+  const nextEntry = queue[0];
+  const task = findFleetOperationTask(tasksByType, nextEntry.task_id);
+  if (!task) {
+    return {
+      activated: false,
+      reason: "QUEUED_TASK_NOT_FOUND",
+      missingTaskId: nextEntry.task_id || null,
+      robotaxi: {
+        ...robotaxi,
+        pending_task_queue: robotaxiTaskPriorityService.getQueuedTasksSorted(queue.slice(1)),
+      },
+      task: null,
+    };
+  }
+  const activation = activateQueuedFleetOperationTask({ task, robotaxi, opsCenters, context });
+  if (!activation.succeeded) return { activated: false, reason: activation.reason, robotaxi, task: null };
+  return {
+    activated: true,
+    task: activation.task,
+    robotaxi: {
+      ...activation.robotaxi,
+      pending_task_queue: robotaxiTaskPriorityService.getQueuedTasksSorted(activation.robotaxi.pending_task_queue || []),
+    },
   };
 }
 

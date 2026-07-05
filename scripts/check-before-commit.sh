@@ -120,6 +120,7 @@ node scripts/verify-v040-16-fleet-route-display-closure.mjs
 node scripts/verify-v040-17-robotaxi-planning-queue-ux.mjs
 node --check scripts/verify-v040-17-robotaxi-layout-browser.mjs
 node scripts/verify-v040-18-fleet-operation-worker-summary.mjs
+node scripts/verify-v040-19-metric-queue-arrival.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

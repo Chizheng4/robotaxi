@@ -272,6 +272,7 @@
 |message|消息|运行态字段|面向运营人员的裁决说明|
 |queue_sequence|排队序号|运行态字段|任务进入 Robotaxi 待执行队列后的序号，按策略优先级和已有队列计算|
 |queue_entry|队列项|运行态字段|进入队列时的队列项快照|
+|queue_snapshot|队列快照|运行态字段|本次任务规划后完整重排队列快照，队列序号必须唯一连续|
 |composite_state|综合状态|持久化字段|本次规划使用的 Robotaxi 综合状态快照|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 
@@ -284,10 +285,13 @@
 |operation_status|运营状态|运行态字段|面向运营分配的可运营/不可运营门槛|
 |vehicle_motion_state|车辆空间状态|运行态字段|车辆物理空间状态，如停车中、临停中、行驶中|
 |current_assignment_state|当前占用状态|运行态字段|NONE、READINESS_TASK、DEPLOYMENT_TASK、SERVICE_ORDER、FLEET_OPERATION_TASK|
+|current_assignment|当前占用对象|运行态字段|当前绑定的订单或任务对象摘要|
+|current_task_priority|当前任务优先级|运行态字段|当前执行任务在任务规划策略中的优先级|
 |has_operational_history|已有运营历史|运行态字段|是否已经有过投放或服务订单运营历史|
 |has_readiness_history|已有准入历史|运行态字段|是否已经有过运营准入任务|
 |open_fleet_task_count|未完成运维任务数|运行态字段|该 Robotaxi 当前未终态运维任务数量|
 |pending_queue_size|待执行队列数量|运行态字段|该 Robotaxi pending_task_queue 中的任务数量|
+|next_pending_task|下一排队任务|运行态字段|按 queue_sequence 排序后的下一个待执行任务|
 |composite_state|综合状态|运行态字段|任务规划策略裁决时使用的综合状态快照|
 |planning_decision|规划决策|运行态字段|任务规划策略输出的决策|
 |allowed|是否允许|运行态字段|任务规划策略是否允许本次分配|
@@ -1533,21 +1537,21 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |WAITING_ROUTE|待行驶|
 |WAITING_START|待行驶|
 |ARRIVED_OPS_CENTER|已到达目的地|
-|WAITING_RESOURCE_ASSIGNMENT|待分配作业人员|
-|WAITING_WORKER_ASSIGNMENT|待分配作业人员|
+|WAITING_RESOURCE_ASSIGNMENT|待分配 Worker|
+|WAITING_WORKER_ASSIGNMENT|待分配 Worker|
 |READY_TO_START|待开始作业|
 |CLEANING_IN_PROGRESS|清洁中|
 |IN_PROGRESS|作业中|
 |MOVING_TO_CHARGER|前往目的地|
 |ARRIVED_CHARGER|已到达目的地|
-|WAITING_CHARGER_ASSIGNMENT|待分配作业人员|
+|WAITING_CHARGER_ASSIGNMENT|待分配 Worker|
 |CONNECTING_CHARGER|接入充电中|
 |READY_TO_CHARGE|待开始充电|
 |DISCONNECTING_CHARGER|断开充电中|
 |MOVING_TO_MAINTENANCE_CENTER|前往目的地|
 |ARRIVED_MAINTENANCE_CENTER|已到达目的地|
 |MAINTENANCE_IN_PROGRESS|维修中|
-|WAITING_DIAGNOSIS_ASSIGNMENT|待分配诊断人员|
+|WAITING_DIAGNOSIS_ASSIGNMENT|待分配 Worker|
 |DIAGNOSING|诊断中|
 |WAITING_DISPOSITION|待处置决策|
 |TRANSFERRED_TO_MAINTENANCE|已转维修|

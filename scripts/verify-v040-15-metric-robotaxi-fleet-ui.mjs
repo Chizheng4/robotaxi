@@ -42,8 +42,8 @@ assertIncludes(
   "Robotaxi 运营体验面板缺少样式定义",
 );
 assertIncludes(dictionary, 'WAITING_ROBOTAXI_AVAILABLE: "任务排队中"', "字段字典缺少任务排队中文展示");
-assertIncludes(dictionary, 'WAITING_RESOURCE_ASSIGNMENT: "待分配作业人员"', "字段字典缺少作业人员分配中文展示");
+assertIncludes(dictionary, 'WAITING_RESOURCE_ASSIGNMENT: "待分配 Worker"', "字段字典缺少 Worker 分配中文展示");
 assertIncludes(dictionaryDoc, "|WAITING_ROBOTAXI_AVAILABLE|任务排队中|", "文档字段字典缺少任务排队中文展示");
-assertIncludes(dictionaryDoc, "|WAITING_RESOURCE_ASSIGNMENT|待分配作业人员|", "文档字段字典缺少作业人员分配中文展示");
+assertIncludes(dictionaryDoc, "|WAITING_RESOURCE_ASSIGNMENT|待分配 Worker|", "文档字段字典缺少 Worker 分配中文展示");
 
 console.log("v040.15 经营分析、Robotaxi 管理和运维状态展示合同通过");
