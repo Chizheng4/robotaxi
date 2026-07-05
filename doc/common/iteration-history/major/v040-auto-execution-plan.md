@@ -4,7 +4,7 @@
 
 ## 方案文档
 
-`doc/v040-robotaxi-operation-state-governance-plan.md`
+`doc/common/iteration-history/major/v040-robotaxi-operation-state-governance-plan.md`
 
 ## 子版本
 
