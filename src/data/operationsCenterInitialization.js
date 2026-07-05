@@ -22,6 +22,13 @@ export function initializeOperationsCenter() {
     map_id: "M-001",
     cell_ids: ["C-34-32", "C-34-33", "C-35-32", "C-35-33"],
     service_area_ids: ["SA-006"],
+    operation_capability_zones: [
+      createOperationCapabilityZone("CLEANING", ["C-34-32", "C-34-33"], ["C-34-32"]),
+      createOperationCapabilityZone("CHARGING", ["C-35-32"], ["C-35-32"]),
+      createOperationCapabilityZone("MAINTENANCE", ["C-35-33"], ["C-35-33"]),
+      createOperationCapabilityZone("FAILURE_HANDLING", ["C-35-33"], ["C-35-33"]),
+      createOperationCapabilityZone("RETIREMENT", ["C-34-33"], ["C-34-33"]),
+    ],
     capacity: 20,
     ops_center_status: OpsCenterStatus.ACTIVE,
     can_receive_robotaxi: true,
@@ -37,6 +44,18 @@ export function initializeOperationsCenter() {
     opsCenters: [opsCenter],
     robotaxis: createRobotaxis(opsCenter),
     workers: createWorkers(opsCenter),
+  };
+}
+
+function createOperationCapabilityZone(taskType, workCellIds, dispatchTargetCellIds) {
+  return {
+    task_type: taskType,
+    capability_type: taskType,
+    work_cell_ids: workCellIds,
+    parking_cell_ids: workCellIds,
+    standby_cell_ids: ["C-35-28", "C-35-29", "C-35-30"],
+    access_cell_ids: ["C-35-31"],
+    dispatch_target_cell_ids: dispatchTargetCellIds,
   };
 }
 

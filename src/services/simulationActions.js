@@ -325,6 +325,8 @@ export function createBufferedBusinessData(source = {}) {
     "timedOperations",
     "robotaxis",
     "routes",
+    "costRecords",
+    "revenueRecords",
   ];
 
   const refreshContextData = () => {
@@ -346,6 +348,8 @@ export function createBufferedBusinessData(source = {}) {
       robotaxis: buffered.robotaxis,
       routes: buffered.routes,
       workflowTimingProfiles: buffered.workflowTimingProfiles,
+      costRecords: buffered.costRecords,
+      revenueRecords: buffered.revenueRecords,
     };
   };
 

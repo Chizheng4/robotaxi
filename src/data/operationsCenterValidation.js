@@ -24,6 +24,21 @@ export function validateOperationsCenter(data) {
     check("OPS_CENTER_PLACE_REF", "运营中心必须关联有效地点", Boolean(opsCenterPlace)),
     check("OPS_CENTER_PLACE_TYPE", "运营中心关联地点必须为运营中心类型", opsCenterPlace?.place_type === PlaceType.OPS_CENTER),
     check("OPS_CENTER_PLACE_CELLS_MATCH", "运营中心覆盖网格必须与关联地点一致", sameItems(opsCenter?.cell_ids || [], opsCenterPlace?.cell_ids || [])),
+    check(
+      "OPS_CENTER_OPERATION_ZONE_TARGETS",
+      "运营中心职能区域目的网格必须属于运营中心内部网格",
+      (opsCenter?.operation_capability_zones || []).every((zone) =>
+        (zone.dispatch_target_cell_ids || []).every((cellId) => opsCenterCellIds.has(cellId))
+          && !(zone.dispatch_target_cell_ids || []).some((cellId) => isRoadCell(cellById.get(cellId)))
+      ),
+    ),
+    check(
+      "OPS_CENTER_OPERATION_ACCESS_ROAD",
+      "运营中心接入道路不得作为作业目的地",
+      (opsCenter?.operation_capability_zones || []).every((zone) =>
+        !(zone.dispatch_target_cell_ids || []).some((cellId) => (zone.access_cell_ids || []).includes(cellId))
+      ),
+    ),
     check("OPS_CENTER_CAPACITY", "运营中心容量必须大于等于初始化 Robotaxi 数量", opsCenter?.capacity >= data.robotaxis.length),
     check(
       "OPS_CENTER_REQUIRED_CAPABILITIES",
@@ -66,6 +81,10 @@ export function validateOperationsCenter(data) {
     check("WORKER_DAILY_CAPACITY", "每个 Worker 每天最多处理 5 台 Robotaxi", (data.workers || []).every((worker) => worker.max_robotaxi_per_day === 5)),
     check("WORKER_NO_ROBOTAXI_BINDING", "Worker 不直接绑定 Robotaxi", (data.workers || []).every((worker) => !("robotaxi_id" in worker))),
   ];
+}
+
+function isRoadCell(cell) {
+  return cell?.base_cell_type === "ROAD";
 }
 
 function sameItems(left, right) {

@@ -24,6 +24,7 @@ import * as routePlanningService from "./routePlanningService.js";
 import * as robotaxiTaskPriorityService from "./robotaxiTaskPriorityService.js";
 import * as fleetOperationDispatchService from "./fleetOperationDispatchService.js";
 import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
+import * as costModelCalculator from "../data/costModelCalculator.js";
 
 const TASK_CONFIG = {
   [TaskType.CLEANING]: {
@@ -835,11 +836,17 @@ export function startFleetOperationWork({ task, robotaxi, context = {} } = {}) {
 export function completeFleetOperationWork({ task, robotaxi, context = {} } = {}) {
   if (!task?.task_id || !robotaxi?.robotaxi_id) return { succeeded: false, reason: "INVALID_FLEET_OPERATION_WORK_INPUT" };
   const now = resolveNow(context);
+  let result = null;
   if (task.task_type === TaskType.CHARGING) {
-    return completeChargingWork({ task, robotaxi, now });
+    result = completeChargingWork({ task, robotaxi, now });
+  } else {
+    if (!isCompletableWorkStatus(task)) return { succeeded: false, reason: "FLEET_OPERATION_WORK_NOT_COMPLETABLE" };
+    result = completeFleetOperationTask({ task, robotaxi, now });
   }
-  if (!isCompletableWorkStatus(task)) return { succeeded: false, reason: "FLEET_OPERATION_WORK_NOT_COMPLETABLE" };
-  return completeFleetOperationTask({ task, robotaxi, now });
+  if (result?.succeeded && result.task?.task_status === "COMPLETED") {
+    return withFleetOperationCostFacts(result, { context, sourceTask: result.task });
+  }
+  return result;
 }
 
 export function applyFleetOperationTaskReference(robotaxi, { task, shouldWait, now } = {}) {
@@ -1056,6 +1063,43 @@ function completeFleetOperationTask({ task, robotaxi, now }) {
   };
 }
 
+function withFleetOperationCostFacts(result, { context = {}, sourceTask } = {}) {
+  const profile = context.costModelProfile || context.costModelProfiles?.find((item) => item.profile_status === "ACTIVE")
+    || costModelCalculator.initializeDefaultCostModelProfile?.();
+  const objectType = getFleetOperationObjectType(sourceTask.task_type);
+  const calculation = costModelCalculator.createIncrementalCostRecords({
+    simulationRun: {
+      simulation_run_id: sourceTask.simulation_run_id || context.simulation_run_id || "BUSINESS-RUNTIME",
+      simulation_timeline_id: sourceTask.simulation_timeline_id || context.simulation_timeline_id || null,
+      simulation_status: "COMPLETED",
+    },
+    profile,
+    businessData: context.businessData || {},
+    sourceObject: sourceTask,
+    sourceObjectType: objectType,
+    calculationRunId: typeof context.nextCostFactRunId === "function"
+      ? context.nextCostFactRunId()
+      : resolveNextId(context, "CFR"),
+  });
+  const previousRecords = context.costRecords || [];
+  return {
+    ...result,
+    costRecords: [
+      ...calculation.costRecords,
+      ...previousRecords.filter((record) => !(record.source_object_type === objectType && record.source_object_id === sourceTask.task_id)),
+    ],
+    generatedCostRecords: calculation.costRecords,
+  };
+}
+
+function getFleetOperationObjectType(taskType) {
+  if (taskType === TaskType.CHARGING) return "chargingTask";
+  if (taskType === TaskType.MAINTENANCE) return "maintenanceTask";
+  if (taskType === TaskType.FAILURE_HANDLING) return "failureHandlingTask";
+  if (taskType === TaskType.RETIREMENT) return "retirementTask";
+  return "cleaningTask";
+}
+
 function restoreRobotaxiAfterFleetOperation(robotaxi, task, now) {
   const restored = {
     ...robotaxi,
@@ -1126,6 +1170,17 @@ function findMatchingOpsCenterForRobotaxiTask(robotaxi, taskType, opsCenters = [
   const capabilityKey = capabilityMap[taskType];
   if (!capabilityKey) return null;
   return opsCenters.find((oc) =>
-    oc.cell_ids?.includes(robotaxi.current_cell_id) && oc[capabilityKey]
+    oc[capabilityKey] && isCellInOperationCapabilityZone(oc, taskType, robotaxi.current_cell_id)
   ) || null;
+}
+
+function isCellInOperationCapabilityZone(opsCenter, taskType, cellId) {
+  const zone = (opsCenter.operation_capability_zones || []).find((item) =>
+    item.task_type === taskType || item.capability_type === taskType
+  );
+  if (!zone) return opsCenter.cell_ids?.includes(cellId);
+  return [
+    ...(zone.work_cell_ids || []),
+    ...(zone.parking_cell_ids || []),
+  ].includes(cellId);
 }

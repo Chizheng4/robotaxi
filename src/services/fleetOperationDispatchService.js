@@ -49,7 +49,7 @@ export function dispatchFleetOperationDestination({
   }
 
   const originCellId = robotaxi.current_cell_id || null;
-  const currentCenter = eligibleCenters.find((center) => center.cell_ids?.includes(originCellId));
+  const currentCenter = eligibleCenters.find((center) => isCellInCapabilityZone(center, task.task_type, originCellId));
   if (currentCenter) {
     return {
       run: null,
@@ -62,11 +62,15 @@ export function dispatchFleetOperationDestination({
     };
   }
 
-  const ranked = eligibleCenters.map((center) => ({
+  const ranked = eligibleCenters.flatMap((center) => getDispatchTargetCellIds(center, task.task_type).map((targetCellId) => ({
     center,
-    targetCellId: center.cell_ids?.[0] || null,
-    distanceM: calculateCellDistanceMeters(originCellId, center.cell_ids?.[0] || null, cells),
-  })).sort((a, b) => a.distanceM - b.distanceM || String(a.center.ops_center_id).localeCompare(String(b.center.ops_center_id)));
+    targetCellId,
+    distanceM: calculateCellDistanceMeters(originCellId, targetCellId, cells),
+  }))).sort((a, b) => a.distanceM - b.distanceM || String(a.center.ops_center_id).localeCompare(String(b.center.ops_center_id)));
+
+  if (!ranked.length) {
+    return createNoEligibleCenterDispatch({ task, robotaxi, strategy, context, reason: "NO_DISPATCH_TARGET_CELL" });
+  }
 
   const best = ranked[0];
   const now = resolveNow(context);
@@ -102,6 +106,28 @@ export function dispatchFleetOperationDestination({
   });
 
   return { run, decision, targetOpsCenterId: best.center.ops_center_id, targetCellId: best.targetCellId };
+}
+
+function getCapabilityZone(center, taskType) {
+  return (center.operation_capability_zones || []).find((zone) =>
+    zone.task_type === taskType || zone.capability_type === taskType
+  ) || null;
+}
+
+function getDispatchTargetCellIds(center, taskType) {
+  const zone = getCapabilityZone(center, taskType);
+  const targetIds = zone?.dispatch_target_cell_ids || zone?.work_cell_ids || [];
+  return targetIds.length ? targetIds : center.cell_ids || [];
+}
+
+function isCellInCapabilityZone(center, taskType, cellId) {
+  if (!cellId) return false;
+  const zone = getCapabilityZone(center, taskType);
+  if (!zone) return (center.cell_ids || []).includes(cellId);
+  return [
+    ...(zone.work_cell_ids || []),
+    ...(zone.parking_cell_ids || []),
+  ].includes(cellId);
 }
 
 function createFailedDispatch({ task = null, robotaxi = null, strategy = null, context = {}, reason }) {

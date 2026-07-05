@@ -112,6 +112,11 @@ export function createCostCalculation({
   const routeExecutions = (runScope.routeExecutions || []).map((item) => calculateRouteExecutionCost(item, context));
   const trips = (runScope.trips || []).map((item) => calculateTripCost(item, context));
   const readinessTasks = (runScope.readinessTasks || []).map((item) => calculateTaskLaborCost(item, "readinessTask", context));
+  const cleaningTasks = (runScope.cleaningTasks || []).map((item) => calculateTaskLaborCost(item, "cleaningTask", context));
+  const chargingTasks = (runScope.chargingTasks || []).map((item) => calculateTaskLaborCost(item, "chargingTask", context));
+  const maintenanceTasks = (runScope.maintenanceTasks || []).map((item) => calculateTaskLaborCost(item, "maintenanceTask", context));
+  const failureHandlingTasks = (runScope.failureHandlingTasks || []).map((item) => calculateTaskLaborCost(item, "failureHandlingTask", context));
+  const retirementTasks = (runScope.retirementTasks || []).map((item) => calculateTaskLaborCost(item, "retirementTask", context));
   const deploymentTasks = (runScope.deploymentTasks || []).map((item) => calculateTaskLaborCost(item, "deploymentTask", context));
   const serviceOrders = (runScope.serviceOrders || []).map((item) => projectCostSummary(item, recordsForServiceOrder(records, item.service_order_id), calculationRunId, startedAt));
   const routeExecutionByTaskId = new Map(routeExecutions.map((item) => [item.task_id, item]));
@@ -128,6 +133,11 @@ export function createCostCalculation({
     ...routeExecutions.map((item) => item.route_execution_id),
     ...trips.map((item) => item.trip_id),
     ...readinessTasks.map((item) => item.task_id),
+    ...cleaningTasks.map((item) => item.task_id),
+    ...chargingTasks.map((item) => item.task_id),
+    ...maintenanceTasks.map((item) => item.task_id),
+    ...failureHandlingTasks.map((item) => item.task_id),
+    ...retirementTasks.map((item) => item.task_id),
     ...deploymentTasks.map((item) => item.task_id),
     ...serviceOrders.map((item) => item.service_order_id),
   ]);
@@ -144,6 +154,11 @@ export function createCostCalculation({
       routeExecutions,
       trips,
       readinessTasks,
+      cleaningTasks,
+      chargingTasks,
+      maintenanceTasks,
+      failureHandlingTasks,
+      retirementTasks,
       deploymentTasks: deploymentTasksWithRouteCost,
       serviceOrders,
     },
@@ -162,6 +177,57 @@ export function createCostCalculation({
       total_cost_amount: roundMoney(records.reduce((sum, record) => sum + Number(record.cost_amount || 0), 0)),
       error_count: errors.length,
       calculation_errors: errors,
+      algorithm_version: algorithmVersion,
+      started_at: startedAt,
+      completed_at: new Date().toISOString(),
+    },
+  };
+}
+
+export function createIncrementalCostRecords({
+  simulationRun,
+  profile,
+  businessData,
+  sourceObject,
+  sourceObjectType,
+  calculationRunId,
+  algorithmVersion = "1.0.0",
+}) {
+  const startedAt = new Date().toISOString();
+  const normalizedProfile = normalizeCostModelProfile(profile);
+  const context = {
+    simulationRun: simulationRun || createRuntimeSimulationRun(sourceObject),
+    profile: normalizedProfile,
+    businessData: businessData || {},
+    calculationRunId,
+    errors: [],
+    records: [],
+    sequence: 1,
+    createdAt: startedAt,
+  };
+
+  let projectedObject = sourceObject;
+  if (sourceObjectType === "routeExecution") projectedObject = calculateRouteExecutionCost(sourceObject, context);
+  if (sourceObjectType === "trip") projectedObject = calculateTripCost(sourceObject, context);
+  if (isLaborCostObject(sourceObjectType)) projectedObject = calculateTaskLaborCost(sourceObject, sourceObjectType, context);
+
+  return {
+    sourceObject: projectedObject,
+    costRecords: context.records,
+    calculationRun: {
+      cost_calculation_run_id: calculationRunId,
+      simulation_run_id: context.simulationRun.simulation_run_id,
+      simulation_timeline_id: context.simulationRun.simulation_timeline_id || null,
+      cost_model_profile_id: normalizedProfile.cost_model_profile_id,
+      cost_model_profile_version: normalizedProfile.profile_version,
+      cost_model_profile_snapshot: clone(normalizedProfile),
+      calculation_status: context.errors.length ? CostCalculationStatus.PARTIALLY_SUCCEEDED : CostCalculationStatus.SUCCEEDED,
+      calculation_progress_percent: 100,
+      processed_object_count: sourceObject ? 1 : 0,
+      generated_cost_record_count: context.records.length,
+      total_cost_amount: roundMoney(context.records.reduce((sum, record) => sum + Number(record.cost_amount || 0), 0)),
+      error_count: context.errors.length,
+      calculation_errors: context.errors,
       algorithm_version: algorithmVersion,
       started_at: startedAt,
       completed_at: new Date().toISOString(),
@@ -397,10 +463,35 @@ function createFallbackScope(simulationRun, businessData) {
     serviceOrders: filterByRun(businessData.serviceOrders),
     trips: filterByRun(businessData.trips),
     readinessTasks: filterByRun(businessData.readinessTasks),
+    cleaningTasks: filterByRun(businessData.cleaningTasks),
+    chargingTasks: filterByRun(businessData.chargingTasks),
+    maintenanceTasks: filterByRun(businessData.maintenanceTasks),
+    failureHandlingTasks: filterByRun(businessData.failureHandlingTasks),
+    retirementTasks: filterByRun(businessData.retirementTasks),
     deploymentTasks: filterByRun(businessData.deploymentTasks),
     routeExecutions: filterByRun(businessData.routeExecutions),
     routes: businessData.routes || [],
   };
+}
+
+function createRuntimeSimulationRun(sourceObject = {}) {
+  return {
+    simulation_run_id: sourceObject.simulation_run_id || "BUSINESS-RUNTIME",
+    simulation_timeline_id: sourceObject.simulation_timeline_id || null,
+    simulation_status: "COMPLETED",
+  };
+}
+
+function isLaborCostObject(sourceObjectType) {
+  return [
+    "readinessTask",
+    "deploymentTask",
+    "cleaningTask",
+    "chargingTask",
+    "maintenanceTask",
+    "failureHandlingTask",
+    "retirementTask",
+  ].includes(sourceObjectType);
 }
 
 function createDefaultCostParameterRules(profile) {

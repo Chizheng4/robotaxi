@@ -8,6 +8,8 @@ import * as routePlanningService from "./routePlanningService.js";
 import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
 import * as serviceOrderService from "./serviceOrderService.js";
 import * as tripService from "./tripService.js";
+import * as costModelCalculator from "../data/costModelCalculator.js";
+import * as revenueCalculator from "../data/revenueCalculator.js";
 import { TimedOperationStatus, TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
 import { formatSimulationTimestamp } from "../domain/simulationTime.js";
 import { resolveTimingRuleDuration, resolveWorkflowRuntimeSeconds } from "../data/workflowRuntimeConfig.js";
@@ -110,14 +112,18 @@ export function startReadinessTask({ state, objectId, runtime }) {
 export function passReadinessTask({ state, objectId, runtime }) {
   const task = (state.readinessTasks || []).find((item) => item.task_id === objectId);
   if (!task) return failure("READINESS_PASS_FAILED", `未找到准入任务 ${objectId}`, "readinessTask", objectId, "未找到准入任务");
-  return success("READINESS_PASSED", `准入任务 ${objectId} 已通过`, { objectType: "readinessTask", objectId, robotaxiId: task.robotaxi_id }, {
-    readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, (item) => withLifecycleStatus({
-      ...item,
-      task_status: taskTypes.ReadinessTaskStatus.COMPLETED,
-      check_result: "PASSED",
-      completed_at: runtime.now(),
-      ...runtime.audit({ completed: true }),
-    }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: item.task_status, toStatus: taskTypes.ReadinessTaskStatus.COMPLETED, actionType: "READINESS_TASK_PASS", resultType: "READINESS_PASSED", durationSeconds: getConfiguredDurationSeconds(runtime, "readiness_check_seconds", 30) })),
+  const completedTask = withLifecycleStatus({
+    ...task,
+    task_status: taskTypes.ReadinessTaskStatus.COMPLETED,
+    check_result: "PASSED",
+    completed_at: runtime.now(),
+    ...runtime.audit({ completed: true }),
+  }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: task.task_status, toStatus: taskTypes.ReadinessTaskStatus.COMPLETED, actionType: "READINESS_TASK_PASS", resultType: "READINESS_PASSED", durationSeconds: getConfiguredDurationSeconds(runtime, "readiness_check_seconds", 30) });
+  const updates = withFinancialFacts({
+    state,
+    runtime,
+    updates: {
+      readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, completedTask),
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", task.robotaxi_id, (robotaxi) => ({
       ...robotaxi,
       availability_status: "AVAILABLE",
@@ -127,7 +133,10 @@ export function passReadinessTask({ state, objectId, runtime }) {
       current_task_status: null,
       ...runtime.audit(),
     })),
+    },
+    costSources: [{ objectType: "readinessTask", object: completedTask }],
   });
+  return success("READINESS_PASSED", `准入任务 ${objectId} 已通过`, { objectType: "readinessTask", objectId, robotaxiId: task.robotaxi_id }, updates);
 }
 
 export function createDeploymentTask({ state, runtime }) {
@@ -349,11 +358,22 @@ export function confirmRouteExecutionArrival({ state, objectId, runtime }) {
   const task = (state.deploymentTasks || []).find((item) => item.task_id === execution.deployment_task_id || item.task_id === execution.task_id);
   const robotaxi = (state.robotaxis || []).find((item) => item.robotaxi_id === execution.robotaxi_id);
   const confirmed = routePlanningService.confirmRouteExecutionArrival({ execution, task, robotaxi });
-  return success("ARRIVAL_CONFIRMED", `行驶执行 ${execution.route_execution_id} 到达确认完成`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task?.task_id }, {
-    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, withLifecycleStatus({ ...confirmed.execution, arrival_confirmed: true, ...runtime.audit({ completed: true }) }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: execution.execution_status, toStatus: confirmed.execution.execution_status, actionType: "ARRIVAL_CONFIRM", resultType: "ARRIVAL_CONFIRMED", durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3) })),
-    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, withLifecycleStatus({ ...confirmed.task, ...runtime.audit({ completed: true }) }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: task.task_status, toStatus: confirmed.task.task_status, actionType: "ARRIVAL_CONFIRM", resultType: "ARRIVAL_CONFIRMED", durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3) })),
-    robotaxis: confirmed.robotaxi ? replaceById(state.robotaxis || [], "robotaxi_id", robotaxi.robotaxi_id, { ...confirmed.robotaxi, ...runtime.audit() }) : state.robotaxis,
+  const completedExecution = withLifecycleStatus({ ...confirmed.execution, arrival_confirmed: true, ...runtime.audit({ completed: true }) }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: execution.execution_status, toStatus: confirmed.execution.execution_status, actionType: "ARRIVAL_CONFIRM", resultType: "ARRIVAL_CONFIRMED", durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3) });
+  const completedTask = withLifecycleStatus({ ...confirmed.task, ...runtime.audit({ completed: true }) }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: task.task_status, toStatus: confirmed.task.task_status, actionType: "ARRIVAL_CONFIRM", resultType: "ARRIVAL_CONFIRMED", durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3) });
+  const updates = withFinancialFacts({
+    state,
+    runtime,
+    updates: {
+      routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, completedExecution),
+      deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, completedTask),
+      robotaxis: confirmed.robotaxi ? replaceById(state.robotaxis || [], "robotaxi_id", robotaxi.robotaxi_id, { ...confirmed.robotaxi, ...runtime.audit() }) : state.robotaxis,
+    },
+    costSources: [
+      { objectType: "routeExecution", object: completedExecution },
+      { objectType: "deploymentTask", object: completedTask },
+    ],
   });
+  return success("ARRIVAL_CONFIRMED", `行驶执行 ${execution.route_execution_id} 到达确认完成`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task?.task_id }, updates);
 }
 
 export function createServiceOrder({ state, runtime }) {
@@ -932,11 +952,19 @@ export function payServiceOrder({ state, objectId, runtime }) {
     motion_status: robotaxi.motion_status === "STOPPED" ? "PARKED" : robotaxi.motion_status,
     ...runtime.audit(),
   }));
-  return success("PAYMENT_COMPLETED", `服务订单 ${objectId} 支付完成`, { objectType: "serviceOrder", objectId }, {
-    serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, withLifecycleStatus({ ...result.serviceOrder, simulation_payment_completed_at: runtime.simulationTime(), ...runtime.audit({ completed: true }) }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: result.serviceOrder.order_status, actionType: "PAYMENT_EXECUTE", resultType: "PAYMENT_COMPLETED" })),
-    trips: result.trips.map((trip) => trip.service_order_id === objectId ? withLifecycleStatus({ ...trip, ...runtime.audit({ completed: true }) }, { runtime, objectType: "trip", statusField: "trip_status", fromStatus: trip.trip_status, toStatus: trip.trip_status, actionType: "PAYMENT_EXECUTE", resultType: "PAYMENT_COMPLETED" }) : trip),
-    robotaxis: nextRobotaxis,
+  const completedOrder = withLifecycleStatus({ ...result.serviceOrder, simulation_payment_completed_at: runtime.simulationTime(), ...runtime.audit({ completed: true }) }, { runtime, objectType: "serviceOrder", statusField: "order_status", fromStatus: order.order_status, toStatus: result.serviceOrder.order_status, actionType: "PAYMENT_EXECUTE", resultType: "PAYMENT_COMPLETED" });
+  const nextTrips = result.trips.map((trip) => trip.service_order_id === objectId ? withLifecycleStatus({ ...trip, ...runtime.audit({ completed: true }) }, { runtime, objectType: "trip", statusField: "trip_status", fromStatus: trip.trip_status, toStatus: trip.trip_status, actionType: "PAYMENT_EXECUTE", resultType: "PAYMENT_COMPLETED" }) : trip);
+  const updates = withFinancialFacts({
+    state,
+    runtime,
+    updates: {
+      serviceOrders: replaceById(state.serviceOrders || [], "service_order_id", objectId, completedOrder),
+      trips: nextTrips,
+      robotaxis: nextRobotaxis,
+    },
+    revenueSources: [completedOrder],
   });
+  return success("PAYMENT_COMPLETED", `服务订单 ${objectId} 支付完成`, { objectType: "serviceOrder", objectId }, updates);
 }
 
 function executePriceRoutePlanning({ state, order, runtime }) {
@@ -1077,17 +1105,25 @@ function tripUpdateResult({ state, order, trip, runtime, resultType, message, ex
     movementStepCount,
     secondsPerCell: tripSecondsPerCell,
   });
-  return {
-    success: successValue,
-    resultType,
-    message,
-    data: { objectType: "trip", objectId: trip.trip_id, serviceOrderId: order.service_order_id },
+  const updates = withFinancialFacts({
+    state,
+    runtime,
     updates: {
       trips: replaceById(state.trips || [], "trip_id", trip.trip_id, nextTrip),
       serviceOrders: syncServiceOrderFromTrip(state.serviceOrders || [], order.service_order_id, nextTrip, runtime, { actionType, resultType, movementStepCount, secondsPerCell: tripSecondsPerCell }),
       robotaxis: updateRobotaxiFromTrip(state.robotaxis || [], nextTrip, runtime),
       ...extraUpdates,
     },
+    costSources: nextTrip.trip_status === tripTypes.TripStatus.COMPLETED
+      ? [{ objectType: "trip", object: nextTrip }]
+      : [],
+  });
+  return {
+    success: successValue,
+    resultType,
+    message,
+    data: { objectType: "trip", objectId: trip.trip_id, serviceOrderId: order.service_order_id },
+    updates,
   };
 }
 
@@ -1202,10 +1238,82 @@ function dataView(state) {
     robotaxiTaskPlanningStrategies: state.robotaxiTaskPlanningStrategies || state.data?.robotaxiTaskPlanningStrategies || [],
     routeExecutions: state.routeExecutions || state.data?.routeExecutions || [],
     readinessTasks: state.readinessTasks || state.data?.readinessTasks || [],
+    costModelProfiles: state.costModelProfiles || state.data?.costModelProfiles || [],
+    costRecords: state.costRecords || state.data?.costRecords || [],
+    revenueRecords: state.revenueRecords || state.data?.revenueRecords || [],
     routes: state.routes || state.data?.routes || [],
     routePlanningRuns: state.routePlanningRuns || state.data?.routePlanningRuns || [],
     robotaxis: state.robotaxis || state.data?.robotaxis || [],
   };
+}
+
+function withFinancialFacts({ state, runtime, updates = {}, costSources = [], revenueSources = [] }) {
+  const appData = { ...dataView(state), ...updates };
+  let nextUpdates = { ...updates };
+  if (costSources.length) {
+    const profile = (appData.costModelProfiles || []).find((item) => item.profile_status === "ACTIVE")
+      || costModelCalculator.initializeDefaultCostModelProfile?.();
+    let nextCostRecords = appData.costRecords || [];
+    costSources.forEach(({ objectType, object }) => {
+      if (!object?.[getObjectIdField(objectType)]) return;
+      const result = costModelCalculator.createIncrementalCostRecords({
+        simulationRun: createFactSimulationRun(runtime, object),
+        profile,
+        businessData: appData,
+        sourceObject: object,
+        sourceObjectType: objectType,
+        calculationRunId: runtime.nextId ? runtime.nextId("CFR") : `CFR-${Date.now()}`,
+      });
+      nextCostRecords = [
+        ...result.costRecords,
+        ...nextCostRecords.filter((record) => !(record.source_object_type === objectType && record.source_object_id === object[getObjectIdField(objectType)])),
+      ];
+    });
+    nextUpdates.costRecords = nextCostRecords;
+  }
+  if (revenueSources.length) {
+    let nextRevenueRecords = appData.revenueRecords || [];
+    revenueSources.forEach((order) => {
+      if (!order?.service_order_id) return;
+      const result = revenueCalculator.createIncrementalRevenueRecords({
+        simulationRun: createFactSimulationRun(runtime, order),
+        serviceOrder: order,
+        calculationRunId: runtime.nextId ? runtime.nextId("RFR") : `RFR-${Date.now()}`,
+      });
+      nextRevenueRecords = [
+        ...result.revenueRecords,
+        ...nextRevenueRecords.filter((record) => record.service_order_id !== order.service_order_id),
+      ];
+    });
+    nextUpdates.revenueRecords = nextRevenueRecords;
+  }
+  return nextUpdates;
+}
+
+function createFactSimulationRun(runtime, object = {}) {
+  return {
+    simulation_run_id: runtime?.timeContext?.simulation_run_id || object.simulation_run_id || "BUSINESS-RUNTIME",
+    simulation_timeline_id: runtime?.timeContext?.simulation_timeline_id || object.simulation_timeline_id || null,
+    simulation_status: "COMPLETED",
+  };
+}
+
+function getObjectIdField(objectType) {
+  return {
+    readinessTask: "task_id",
+    deploymentTask: "task_id",
+    cleaningTask: "task_id",
+    chargingTask: "task_id",
+    maintenanceTask: "task_id",
+    failureHandlingTask: "task_id",
+    retirementTask: "task_id",
+    routeExecution: "route_execution_id",
+    trip: "trip_id",
+  }[objectType] || "id";
+}
+
+function objectId(item, objectType) {
+  return item?.[getObjectIdField(objectType)] || null;
 }
 
 function success(resultType, message, data, updates = {}, successValue = true) {
@@ -1241,10 +1349,15 @@ function withLifecycleStatus(item, {
     status_transition_id: runtime?.nextId ? runtime.nextId("ST") : `ST-${String(history.length + 1).padStart(4, "0")}`,
     transition_sequence: history.length + 1,
     business_object_type: objectType || null,
+    business_object_id: objectId(item, objectType),
     from_status: previousStatus,
     action_type: actionType,
     result_type: resultType || null,
     to_status: nextStatus,
+    occurred_at: runtime?.now?.() || new Date().toISOString(),
+    simulation_occurred_at: changedAt,
+    time_mode: runtime?.timeContext?.time_mode || "REAL_TIME",
+    trigger_source: runtime?.context?.action ? "SIMULATION_TIMED_OPERATION" : "MANUAL_OR_SERVICE",
     simulation_action_started_at: startedAt,
     calculated_simulation_action_started_at: startedAt,
     configured_duration_seconds: timing.durationSeconds,

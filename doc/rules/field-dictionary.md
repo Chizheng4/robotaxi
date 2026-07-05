@@ -93,7 +93,7 @@
 |simulation_run_id|模拟运行编号|持久化字段|来源 SimulationRun|
 |cost_calculation_run_id|成本计算运行编号|持久化字段|来源成本计算批次|
 |cost_model_profile_id|成本模型配置编号|持久化字段|使用的成本模型配置|
-|source_object_type|来源对象类型|持久化字段|readinessTask、deploymentTask、routeExecution、serviceOrder、trip|
+|source_object_type|来源对象类型|持久化字段|readinessTask、deploymentTask、cleaningTask、chargingTask、maintenanceTask、failureHandlingTask、retirementTask、routeExecution、serviceOrder、trip|
 |source_object_id|来源对象编号|持久化字段|来源业务对象主键|
 |source_page|来源页面|运行态字段|事件归属页面，用于最近任务事件按表单过滤，不作为业务状态|
 |related_order_id|关联服务订单|持久化字段|关联服务订单编号，可为空|
@@ -201,6 +201,9 @@
 |COST_CALCULATION_FAILED|成本计算失败|成本计算错误|
 |REVENUE_AMOUNT_MISSING|缺少收入金额|收入生成错误|
 |REVENUE_CALCULATION_FAILED|收入生成失败|收入生成错误|
+|REAL_TIME|真实时间|时间模式|
+|SIMULATION_TIMED_OPERATION|模拟时间作业|触发来源|
+|MANUAL_OR_SERVICE|人工或服务触发|触发来源|
 
 ## 1.1.9 任务优先级调度配置
 
@@ -703,6 +706,11 @@
 |can_charge_robotaxi|允许充电|持久化字段|是否可以为车辆充电|
 |can_repair_robotaxi|允许维修|持久化字段|是否可以维修车辆|
 |can_release_robotaxi|允许投放 Robotaxi|持久化字段|是否可以通过运营投放任务将车辆投放进入运营|
+|operation_capability_zones|运维职能区域|持久化字段|按运维任务职能划分的可作业、可停放、待命、接入道路和调度目的 Cell 容器|
+|capability_type|职能类型|持久化字段|区域对应的运维能力类型|
+|work_cell_ids|作业网格|持久化字段|可以执行清洁、充电、维修等作业的内部 Cell|
+|access_cell_ids|接入道路网格|持久化字段|连接运营中心的道路接入 Cell，不得作为作业目的地|
+|dispatch_target_cell_ids|可调度目的网格|持久化字段|运维调度策略允许选择的目的 Cell|
 
 ---
 
@@ -2178,10 +2186,15 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |---|---|---|---|
 |status_transition_id|状态变更编号|运行态字段|状态变更唯一编号|
 |transition_sequence|状态变更顺序|运行态字段|对象内从 1 开始的顺序|
+|business_object_id|业务对象编号|运行态字段|发生状态变更的业务对象主键|
 |from_status|变更前状态|运行态字段|初始记录为空|
 |action_type|动作类型|运行态字段|产生状态变化的功能操作|
 |result_type|执行结果类型|运行态字段|动作结果分支|
 |to_status|变更后状态|运行态字段|本次进入状态|
+|occurred_at|真实发生时间|运行态字段|状态变更事实写入时的真实系统时间|
+|simulation_occurred_at|模拟发生时间|运行态字段|状态变更对应的模拟世界时间，可为空|
+|time_mode|时间模式|运行态字段|REAL_TIME 或 SIMULATION 等时间来源模式|
+|trigger_source|触发来源|运行态字段|人工、服务或模拟时间作业等触发来源|
 |simulation_action_started_at|模拟动作开始时间|运行态字段|业务动作实际开始的模拟时间|
 |simulation_status_changed_at|模拟状态变更时间|运行态字段|业务动作实际进入下一状态的模拟时间|
 |calculated_simulation_action_started_at|计算模拟动作开始时间|运行态字段|动作开始的模拟时间|

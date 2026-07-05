@@ -74,6 +74,9 @@ function createState(data) {
     taskEventLogs: data.taskEventLogs || [],
     timedOperations: data.timedOperations || [],
     workflowTimingProfiles: data.workflowTimingProfiles || [],
+    costModelProfiles: data.costModelProfiles || [],
+    costRecords: data.costRecords || [],
+    revenueRecords: data.revenueRecords || [],
   };
 }
 
@@ -95,6 +98,8 @@ function applyBusinessResult(result, data) {
     orderMatchingDecisions: data.setOrderMatchingDecisions,
     taskEventLogs: data.setTaskEventLogs,
     timedOperations: data.setTimedOperations,
+    costRecords: data.setCostRecords,
+    revenueRecords: data.setRevenueRecords,
   };
   Object.entries(updates).forEach(([key, value]) => {
     if (typeof setters[key] === "function") setters[key](() => value);

@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v040.22`：业务事实、运维区域与模拟运行边界小迭代，已归档到 `doc/common/iteration-history/minor/v040.22-business-facts-and-simulation-boundary.md`。
 - `v040.21`：排队任务接管与经营指标展示闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.21-task-takeover-and-metric-display.md`。
 - `v040.19`：经营分析展示模型、任务规划队列顺序和运维任务到达闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.19-metric-queue-arrival-closure.md`。
 - `v040.18`：运维任务行驶 / 作业人员闭环与 Robotaxi 摘要体验修复小迭代，已归档到 `doc/common/iteration-history/minor/v040.18-fleet-operation-worker-summary.md`。

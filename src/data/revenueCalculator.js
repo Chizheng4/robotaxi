@@ -72,6 +72,25 @@ export function createRevenueCalculation({
   };
 }
 
+export function createIncrementalRevenueRecords({
+  simulationRun,
+  serviceOrder,
+  calculationRunId,
+  algorithmVersion = "1.0.0",
+}) {
+  const result = createRevenueCalculation({
+    simulationRun: simulationRun || {
+      simulation_run_id: serviceOrder?.simulation_run_id || "BUSINESS-RUNTIME",
+      simulation_timeline_id: serviceOrder?.simulation_timeline_id || null,
+      simulation_status: "COMPLETED",
+    },
+    scope: { serviceOrders: serviceOrder ? [serviceOrder] : [] },
+    calculationRunId,
+    algorithmVersion,
+  });
+  return result;
+}
+
 export function summarizeRevenueRecords(records = []) {
   return {
     total_receivable_revenue_amount: sumByType(records, RevenueType.RECEIVABLE_REVENUE),

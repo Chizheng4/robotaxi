@@ -1358,6 +1358,9 @@ function App() {
       taskEventLogs,
       timedOperations,
       workflowTimingProfiles,
+      costModelProfiles,
+      costRecords,
+      revenueRecords,
     };
     const refreshContextData = () => {
       businessData.data = {
@@ -1389,6 +1392,9 @@ function App() {
         taskEventLogs: businessData.taskEventLogs,
         timedOperations: businessData.timedOperations,
         workflowTimingProfiles: businessData.workflowTimingProfiles,
+        costModelProfiles: businessData.costModelProfiles,
+        costRecords: businessData.costRecords,
+        revenueRecords: businessData.revenueRecords,
       };
     };
     const bindSetter = (key, setter) => (updater) => {
@@ -1419,6 +1425,8 @@ function App() {
     businessData.setTaskDispatchResults = bindSetter("taskDispatchResults", setTaskDispatchResults);
     businessData.setTaskEventLogs = bindSetter("taskEventLogs", setTaskEventLogs);
     businessData.setTimedOperations = bindSetter("timedOperations", setTimedOperations);
+    businessData.setCostRecords = bindSetter("costRecords", setCostRecords);
+    businessData.setRevenueRecords = bindSetter("revenueRecords", setRevenueRecords);
     businessData.setRobotaxis = (updater) => {
       const nextRobotaxis = typeof updater === "function" ? updater(businessData.robotaxis) : updater;
       businessData.robotaxis = nextRobotaxis;
@@ -1527,6 +1535,11 @@ function App() {
           businessData: {
             ...data,
             readinessTasks,
+            cleaningTasks,
+            chargingTasks,
+            maintenanceTasks,
+            failureHandlingTasks,
+            retirementTasks,
             deploymentTasks,
             routeExecutions,
             serviceOrders,
@@ -1541,6 +1554,11 @@ function App() {
         });
         const calculated = result.businessData;
         setReadinessTasks((current) => mergeCalculatedObjects(current, calculated.readinessTasks, "task_id"));
+        setCleaningTasks((current) => mergeCalculatedObjects(current, calculated.cleaningTasks, "task_id"));
+        setChargingTasks((current) => mergeCalculatedObjects(current, calculated.chargingTasks, "task_id"));
+        setMaintenanceTasks((current) => mergeCalculatedObjects(current, calculated.maintenanceTasks, "task_id"));
+        setFailureHandlingTasks((current) => mergeCalculatedObjects(current, calculated.failureHandlingTasks, "task_id"));
+        setRetirementTasks((current) => mergeCalculatedObjects(current, calculated.retirementTasks, "task_id"));
         setDeploymentTasks((current) => mergeCalculatedObjects(current, calculated.deploymentTasks, "task_id"));
         setRouteExecutions((current) => mergeCalculatedObjects(current, calculated.routeExecutions, "route_execution_id"));
         setServiceOrders((current) => mergeCalculatedObjects(current, calculated.serviceOrders, "service_order_id"));
@@ -1673,6 +1691,11 @@ function App() {
           businessData: {
             ...data,
             readinessTasks,
+            cleaningTasks,
+            chargingTasks,
+            maintenanceTasks,
+            failureHandlingTasks,
+            retirementTasks,
             deploymentTasks,
             routeExecutions,
             serviceOrders,
@@ -1681,6 +1704,11 @@ function App() {
         });
         const calculated = result.businessData;
         setReadinessTasks((current) => mergeCalculatedObjects(current, calculated.readinessTasks, "task_id"));
+        setCleaningTasks((current) => mergeCalculatedObjects(current, calculated.cleaningTasks, "task_id"));
+        setChargingTasks((current) => mergeCalculatedObjects(current, calculated.chargingTasks, "task_id"));
+        setMaintenanceTasks((current) => mergeCalculatedObjects(current, calculated.maintenanceTasks, "task_id"));
+        setFailureHandlingTasks((current) => mergeCalculatedObjects(current, calculated.failureHandlingTasks, "task_id"));
+        setRetirementTasks((current) => mergeCalculatedObjects(current, calculated.retirementTasks, "task_id"));
         setDeploymentTasks((current) => mergeCalculatedObjects(current, calculated.deploymentTasks, "task_id"));
         setRouteExecutions((current) => mergeCalculatedObjects(current, calculated.routeExecutions, "route_execution_id"));
         setServiceOrders((current) => mergeCalculatedObjects(current, calculated.serviceOrders, "service_order_id"));
@@ -1748,6 +1776,11 @@ function App() {
     return simulationRunBusinessScope.createSimulationRunBusinessScope(run, {
       ...data,
       readinessTasks,
+      cleaningTasks,
+      chargingTasks,
+      maintenanceTasks,
+      failureHandlingTasks,
+      retirementTasks,
       deploymentTasks,
       routeExecutions,
       serviceOrders,
@@ -3237,7 +3270,18 @@ function App() {
     const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
     const robotaxi = operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi) return;
-    const result = fleetOperationTaskService.completeFleetOperationWork({ task, robotaxi, context: { now } });
+    const activeCostProfile = costModelProfiles.find((item) => item.profile_status === "ACTIVE") || costModelProfiles[0] || null;
+    const result = fleetOperationTaskService.completeFleetOperationWork({
+      task,
+      robotaxi,
+      context: {
+        now,
+        costModelProfile: activeCostProfile,
+        costRecords,
+        businessData: { ...data, routeExecutions, routes: data.routes },
+        nextCostFactRunId: () => `CFR-${String(costRecords.length + 1).padStart(4, "0")}`,
+      },
+    });
     if (!result.succeeded) {
       appendFleetOperationPageEvent(collectionKey, {
         event_type: taskTypes.TaskEventType.TASK_FAILED,
@@ -3250,6 +3294,7 @@ function App() {
       return;
     }
     updateFleetOperationTask(result.task);
+    if (Array.isArray(result.costRecords)) setCostRecords(result.costRecords);
     const activation = result.task.task_status === "COMPLETED"
       ? fleetOperationTaskService.activateNextQueuedFleetOperationTask({
         robotaxi: result.robotaxi,
@@ -7866,6 +7911,8 @@ function attachCostRecords(item, objectType, costRecords = [], routeExecutions =
       (record.source_object_type === "deploymentTask" && record.source_object_id === item.task_id) ||
       executionIds.includes(record.source_object_id)
     );
+  } else if (["cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask"].includes(objectType)) {
+    records = costRecords.filter((record) => record.source_object_type === objectType && record.source_object_id === item.task_id);
   }
   return {
     ...item,
