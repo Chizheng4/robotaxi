@@ -212,11 +212,11 @@ export function createFleetOperationTask({
 
   const taskId = resolveNextId(context, config.idPrefix);
   const isOccupied = Boolean(robotaxi.current_order_id || robotaxi.current_task_id);
-  const isAtOpsCenterWithCapability = !isOccupied && isRobotaxiAtMatchingOpsCenter(robotaxi, taskType, context.opsCenters);
+  const currentOpsCenter = !isOccupied ? findMatchingOpsCenterForRobotaxiTask(robotaxi, taskType, context.opsCenters) : null;
   const task = config.factory({
     task_id: taskId,
     task_type: taskType,
-    task_status: isAtOpsCenterWithCapability && config.directAssignmentStatus
+    task_status: currentOpsCenter && config.directAssignmentStatus
         ? config.directAssignmentStatus
         : config.defaultStatus,
     task_priority: trigger.task_priority || TaskPriority.NORMAL,
@@ -225,8 +225,10 @@ export function createFleetOperationTask({
     source_task_id: trigger.source_task_id || null,
     robotaxi_id: robotaxi.robotaxi_id,
     origin_cell_id: robotaxi.current_cell_id || null,
-    target_ops_center_id: null,
-    target_cell_id: null,
+    target_ops_center_id: currentOpsCenter?.ops_center_id || null,
+    target_cell_id: currentOpsCenter ? robotaxi.current_cell_id || null : null,
+    actual_target_cell_id: currentOpsCenter ? robotaxi.current_cell_id || null : null,
+    actual_target_service_area_id: currentOpsCenter?.service_area_ids?.[0] || null,
     route_execution_id: null,
     pending_since_at: null,
     operation_created_at: now,
@@ -251,20 +253,28 @@ export function activateQueuedFleetOperationTask({ task, robotaxi, opsCenters = 
   const config = TASK_CONFIG[task.task_type];
   if (!config) return { succeeded: false, reason: "UNKNOWN_FLEET_OPERATION_TASK_TYPE" };
   const now = resolveNow(context);
-  const isAtOpsCenterWithCapability = isRobotaxiAtMatchingOpsCenter(robotaxi, task.task_type, opsCenters);
-  const nextStatus = isAtOpsCenterWithCapability && config.directAssignmentStatus
+  const currentOpsCenter = findMatchingOpsCenterForRobotaxiTask(robotaxi, task.task_type, opsCenters);
+  const nextStatus = currentOpsCenter && config.directAssignmentStatus
     ? config.directAssignmentStatus
     : config.defaultStatus;
+  const activatedTask = {
+    ...task,
+    task_status: nextStatus,
+    origin_cell_id: robotaxi.current_cell_id || task.origin_cell_id || null,
+    target_ops_center_id: currentOpsCenter?.ops_center_id || (currentOpsCenter ? task.target_ops_center_id || null : null),
+    target_cell_id: currentOpsCenter ? robotaxi.current_cell_id || task.target_cell_id || null : null,
+    actual_target_cell_id: currentOpsCenter ? robotaxi.current_cell_id || task.actual_target_cell_id || null : null,
+    actual_target_service_area_id: currentOpsCenter?.service_area_ids?.[0] || task.actual_target_service_area_id || null,
+    activated_at: now,
+    updated_at: now,
+  };
   return {
     succeeded: true,
-    task: {
-      ...task,
-      task_status: nextStatus,
-      activated_at: now,
-      updated_at: now,
-    },
+    alreadyAtCapableCenter: Boolean(currentOpsCenter),
+    opsCenter: currentOpsCenter,
+    task: activatedTask,
     robotaxi: {
-      ...applyFleetOperationTaskReference(robotaxi, { task: { ...task, task_status: nextStatus }, shouldWait: false, now }),
+      ...applyFleetOperationTaskReference(robotaxi, { task: activatedTask, shouldWait: false, now }),
       pending_task_queue: robotaxiTaskPriorityService.getQueuedTasksSorted((robotaxi.pending_task_queue || []).filter((item) => item.task_id !== task.task_id)),
       pending_fleet_task_id: robotaxi.pending_fleet_task_id === task.task_id ? null : robotaxi.pending_fleet_task_id,
       pending_fleet_task_type: robotaxi.pending_fleet_task_id === task.task_id ? null : robotaxi.pending_fleet_task_type,
@@ -295,6 +305,42 @@ export function dispatchFleetOperationTaskDestination({
   }
   if (!isDestinationAssignmentStatus(task.task_status)) {
     return { succeeded: false, reason: "FLEET_OPERATION_TASK_NOT_READY_FOR_DESTINATION" };
+  }
+  const currentOpsCenter = findMatchingOpsCenterForRobotaxiTask(robotaxi, task.task_type, opsCenters);
+  if (currentOpsCenter && TASK_CONFIG[task.task_type]?.directAssignmentStatus) {
+    const now = resolveNow(context);
+    const nextStatus = TASK_CONFIG[task.task_type].directAssignmentStatus;
+    const nextTask = {
+      ...task,
+      target_ops_center_id: currentOpsCenter.ops_center_id,
+      target_cell_id: robotaxi.current_cell_id || null,
+      actual_target_cell_id: robotaxi.current_cell_id || null,
+      actual_target_service_area_id: currentOpsCenter.service_area_ids?.[0] || task.actual_target_service_area_id || null,
+      task_status: nextStatus,
+      destination_assigned_at: now,
+      updated_at: now,
+    };
+    return {
+      succeeded: true,
+      alreadyAtCapableCenter: true,
+      dispatchSkipped: true,
+      reason: "ROBOTAXI_ALREADY_AT_CAPABLE_OPS_CENTER",
+      targetOpsCenterId: currentOpsCenter.ops_center_id,
+      targetCellId: robotaxi.current_cell_id || null,
+      run: null,
+      decision: null,
+      task: nextTask,
+      robotaxi: {
+        ...robotaxi,
+        current_task_id: task.task_id,
+        current_task_type: task.task_type,
+        current_task_status: nextStatus,
+        current_cell_id: robotaxi.current_cell_id || null,
+        availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : "UNAVAILABLE",
+        available_for_dispatch: false,
+        updated_at: now,
+      },
+    };
   }
   const result = fleetOperationDispatchService.dispatchFleetOperationDestination({
     task,
@@ -1068,8 +1114,8 @@ function resolvePriorityLevel(priority) {
   return 2;
 }
 
-function isRobotaxiAtMatchingOpsCenter(robotaxi, taskType, opsCenters = []) {
-  if (!robotaxi?.current_cell_id || !Array.isArray(opsCenters) || !opsCenters.length) return false;
+function findMatchingOpsCenterForRobotaxiTask(robotaxi, taskType, opsCenters = []) {
+  if (!robotaxi?.current_cell_id || !Array.isArray(opsCenters) || !opsCenters.length) return null;
   const capabilityMap = {
     [TaskType.CLEANING]: "can_clean_robotaxi",
     [TaskType.CHARGING]: "can_charge_robotaxi",
@@ -1078,8 +1124,8 @@ function isRobotaxiAtMatchingOpsCenter(robotaxi, taskType, opsCenters = []) {
     [TaskType.RETIREMENT]: "can_receive_robotaxi",
   };
   const capabilityKey = capabilityMap[taskType];
-  if (!capabilityKey) return false;
-  return opsCenters.some((oc) =>
+  if (!capabilityKey) return null;
+  return opsCenters.find((oc) =>
     oc.cell_ids?.includes(robotaxi.current_cell_id) && oc[capabilityKey]
-  );
+  ) || null;
 }

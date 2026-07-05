@@ -49,6 +49,19 @@ export function dispatchFleetOperationDestination({
   }
 
   const originCellId = robotaxi.current_cell_id || null;
+  const currentCenter = eligibleCenters.find((center) => center.cell_ids?.includes(originCellId));
+  if (currentCenter) {
+    return {
+      run: null,
+      decision: null,
+      targetOpsCenterId: currentCenter.ops_center_id,
+      targetCellId: originCellId,
+      alreadyAtCapableCenter: true,
+      dispatchSkipped: true,
+      reason: "ROBOTAXI_ALREADY_AT_CAPABLE_OPS_CENTER",
+    };
+  }
+
   const ranked = eligibleCenters.map((center) => ({
     center,
     targetCellId: center.cell_ids?.[0] || null,

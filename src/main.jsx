@@ -3165,13 +3165,17 @@ function App() {
           task_type: result.task.task_type,
           source_page: collectionKey,
           robotaxi_id: result.task.robotaxi_id,
-          message: result.alreadyAssigned ? "任务已有目的地，等待行驶" : "已分配目的地，等待行驶",
+          message: result.dispatchSkipped
+            ? "Robotaxi 已在具备能力的运维点，已进入作业分配"
+            : result.alreadyAssigned ? "任务已有目的地，等待行驶" : "已分配目的地，等待行驶",
         }),
         ...logs,
       ]);
-      const routeResult = createFleetOperationRouteExecution(result.task, result.robotaxi);
-      if (routeResult?.succeeded) {
-        selectForPage("routeExecutions", "routeExecution", routeResult.routeExecution.route_execution_id);
+      if (!result.dispatchSkipped) {
+        const routeResult = createFleetOperationRouteExecution(result.task, result.robotaxi);
+        if (routeResult?.succeeded) {
+          selectForPage("routeExecutions", "routeExecution", routeResult.routeExecution.route_execution_id);
+        }
       }
     } else {
       setTaskEventLogs((logs) => [
@@ -6108,7 +6112,7 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
       <div className="metric-card-grid">
         {overviewRows.length > 0 ? overviewRows.map((row) => (
           <button key={row.metric_observation_id} className="metric-summary-card" onClick={() => onSelect(row)}>
-            <span>{row.metric_name_cn}</span>
+            <span>{getMetricDisplayName(row)}</span>
             <strong>{formatMetricDisplayValue(row)}</strong>
             <small>{row.quality_status === "PASS" ? "数据通过" : row.quality_reason || "存在质量提示"}</small>
           </button>
@@ -9176,21 +9180,28 @@ function filterRecordRows(rows, columns, statusField, filters) {
 }
 
 function createMetricDisplayRows(metricObservations = [], metricDefinitions = [], simulationRuns = []) {
-  const definitionById = new Map((metricDefinitions || []).map((definition) => [definition.metric_definition_id, definition]));
+  const defaultDefinitions = typeof metricCalculator?.initializeDefaultMetricDefinitions === "function"
+    ? metricCalculator.initializeDefaultMetricDefinitions()
+    : [];
+  const definitionById = new Map([
+    ...(defaultDefinitions || []),
+    ...(metricDefinitions || []),
+  ].filter((definition) => definition?.metric_definition_id).map((definition) => [definition.metric_definition_id, definition]));
   const runById = new Map((simulationRuns || []).map((run) => [run.simulation_run_id, run]));
   return (metricObservations || []).map((observation) => {
     const definition = definitionById.get(observation.metric_definition_id) || {};
     const run = runById.get(observation.simulation_run_id) || {};
+    const hasDefinition = Boolean(definition.metric_definition_id);
     return {
       ...definition,
       ...observation,
-      metric_name_cn: definition.metric_name_cn || observation.metric_definition_id,
-      metric_name_en: definition.metric_name_en || observation.metric_definition_id,
-      metric_domain: definition.metric_domain || "QUALITY",
-      metric_layer: definition.metric_layer || "QUALITY",
-      calculation_formula: definition.calculation_formula || "无",
-      business_definition: definition.business_definition || "无",
-      display_unit: definition.display_unit || observation.metric_unit,
+      metric_name_cn: hasDefinition ? definition.metric_name_cn : "指标定义缺失",
+      metric_name_en: hasDefinition ? definition.metric_name_en : "Missing Metric Definition",
+      metric_domain: hasDefinition ? definition.metric_domain : "QUALITY",
+      metric_layer: hasDefinition ? definition.metric_layer : "QUALITY",
+      calculation_formula: hasDefinition ? definition.calculation_formula : "缺少指标定义，无法展示计算公式",
+      business_definition: hasDefinition ? definition.business_definition : "缺少指标定义，请检查统一指标定义数据池",
+      display_unit: hasDefinition ? definition.display_unit : observation.metric_unit,
       simulation_name: run.simulation_name,
       completed_time: run.completed_time,
       completed_at: run.completed_at,
@@ -9278,8 +9289,8 @@ function createMetricPresentation(row) {
 
 function getMetricDisplayName(row) {
   const name = row?.metric_name_cn;
-  if (name && name !== "undefined") return name;
-  return row?.metric_definition_id || "指标";
+  if (name && name !== "undefined" && name !== row?.metric_definition_id) return name;
+  return "指标定义缺失";
 }
 
 function formatMetricDisplayValue(row) {
