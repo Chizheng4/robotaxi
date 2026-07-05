@@ -122,11 +122,13 @@ function getDispatchTargetCellIds(center, taskType) {
 
 function isCellInCapabilityZone(center, taskType, cellId) {
   if (!cellId) return false;
+  if ((center.cell_ids || []).includes(cellId)) return true;
   const zone = getCapabilityZone(center, taskType);
   if (!zone) return (center.cell_ids || []).includes(cellId);
   return [
     ...(zone.work_cell_ids || []),
     ...(zone.parking_cell_ids || []),
+    ...(zone.dispatch_target_cell_ids || []),
   ].includes(cellId);
 }
 

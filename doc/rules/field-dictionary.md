@@ -2030,6 +2030,13 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ROUTE_EXECUTION_STEP|推进行驶记录|event_type / action_type|
 |ROUTE_EXECUTION_TRAVEL_COMPLETE|运营行驶时间到达|event_type / action_type|
 |ARRIVAL_CONFIRM|确认到达|event_type / action_type|
+|FLEET_OPERATION_TASK_CREATE|创建运维任务|action_type|
+|FLEET_OPERATION_TASK_ACTIVATE|激活排队运维任务|action_type|
+|FLEET_OPERATION_DESTINATION_ASSIGN|分配运维目的站点|action_type|
+|FLEET_OPERATION_WORKER_ASSIGN|分配 Worker|action_type|
+|FLEET_OPERATION_WORK_START|开始运维作业|action_type|
+|FLEET_OPERATION_WORK_COMPLETE|完成运维作业|action_type|
+|FLEET_OPERATION_CHARGING_COMPLETE|充电完成|action_type|
 |TRIP_TRAVEL_COMPLETE|履约行驶时间到达|event_type / action_type|
 |ORDER_AUTO_ASSIGNMENT|订单自动分配|operation_type|
 |ORDER_ASSIGNMENT_TIMEOUT|订单分配等待超时|operation_type（兼容旧值）|
@@ -2070,6 +2077,14 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |READINESS_PASS_FAILED|准入检查通过失败|result_type|
 |ROUTE_PLANNED|路径生成成功|result_type|
 |ROUTE_PLAN_FAILED|路径规划失败|result_type|
+|FLEET_OPERATION_TASK_CREATED|运维任务已创建|result_type|
+|FLEET_OPERATION_ALREADY_AT_CAPABLE_CENTER|已在具备职能的运营中心|result_type|
+|FLEET_OPERATION_WAITING_DESTINATION|等待分配运维目的站点|result_type|
+|FLEET_OPERATION_DESTINATION_ASSIGNED|运维目的站点已分配|result_type|
+|FLEET_OPERATION_WORKER_ASSIGNED|Worker 已分配|result_type|
+|FLEET_OPERATION_WORK_STARTED|运维作业已开始|result_type|
+|FLEET_OPERATION_WORK_COMPLETED|运维作业已完成|result_type|
+|FLEET_OPERATION_CHARGING_COMPLETED|充电已完成|result_type|
 |ROUTE_STEPPED|行驶记录已步进|result_type|
 |ROUTE_STEP_FAILED|行驶记录步进失败|result_type|
 |ROUTE_TRAVEL_COMPLETED|运营行驶已按时间到达|result_type|

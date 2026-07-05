@@ -3102,15 +3102,23 @@ function App() {
     const task = findFleetOperationTaskByExecution(execution);
     const collectionKey = getFleetOperationTaskCollectionKey(task?.task_type);
     const robotaxi = operationalData.robotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id);
+    const activeCostProfile = costModelProfiles.find((item) => item.profile_status === "ACTIVE") || costModelProfiles[0] || null;
     const result = fleetOperationTaskService.confirmFleetOperationArrival({
       execution,
       task,
       robotaxi,
-      context: { now },
+      context: {
+        now,
+        costModelProfile: activeCostProfile,
+        costRecords,
+        businessData: { ...data, routeExecutions, routes: data.routes },
+        nextCostFactRunId: () => `CFR-${String(costRecords.length + 1).padStart(4, "0")}-${String(Date.now()).slice(-6)}`,
+      },
     });
     if (!result.succeeded) return;
     setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? result.routeExecution : item));
     updateFleetOperationTask(result.task);
+    if (Array.isArray(result.costRecords)) setCostRecords(result.costRecords);
     if (result.robotaxi) {
       setOperationalData((current) => ({
         ...current,
@@ -3279,7 +3287,7 @@ function App() {
         costModelProfile: activeCostProfile,
         costRecords,
         businessData: { ...data, routeExecutions, routes: data.routes },
-        nextCostFactRunId: () => `CFR-${String(costRecords.length + 1).padStart(4, "0")}`,
+        nextCostFactRunId: () => `CFR-${String(costRecords.length + 1).padStart(4, "0")}-${String(Date.now()).slice(-6)}`,
       },
     });
     if (!result.succeeded) {

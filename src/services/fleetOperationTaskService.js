@@ -144,7 +144,7 @@ export function createFleetOperationTask({
   }
   if (planningDecision.decision === robotaxiTaskPlanningService.TaskPlanningDecision.QUEUE) {
     const taskId = resolveNextId(context, config.idPrefix);
-    const task = config.factory({
+    const task = withFleetOperationLifecycleStatus(config.factory({
       task_id: taskId,
       task_type: taskType,
       task_status: config.waitingStatus,
@@ -162,6 +162,14 @@ export function createFleetOperationTask({
       created_at: now,
       ...trigger.task_fields,
       ...resolveAudit(context, { created: true }),
+    }), {
+      context,
+      objectType: getFleetOperationObjectType(taskType),
+      statusField: "task_status",
+      fromStatus: null,
+      toStatus: config.waitingStatus,
+      actionType: "FLEET_OPERATION_TASK_CREATE",
+      resultType: "FLEET_OPERATION_TASK_QUEUED",
     });
     const robotaxiWithQueue = robotaxiTaskPriorityService.enqueueTask(robotaxi, {
       ...(planningDecision.queue_entry || {}),
@@ -214,12 +222,13 @@ export function createFleetOperationTask({
   const taskId = resolveNextId(context, config.idPrefix);
   const isOccupied = Boolean(robotaxi.current_order_id || robotaxi.current_task_id);
   const currentOpsCenter = !isOccupied ? findMatchingOpsCenterForRobotaxiTask(robotaxi, taskType, context.opsCenters) : null;
-  const task = config.factory({
+  const nextTaskStatus = currentOpsCenter && config.directAssignmentStatus
+    ? config.directAssignmentStatus
+    : config.defaultStatus;
+  const task = withFleetOperationLifecycleStatus(config.factory({
     task_id: taskId,
     task_type: taskType,
-    task_status: currentOpsCenter && config.directAssignmentStatus
-        ? config.directAssignmentStatus
-        : config.defaultStatus,
+    task_status: nextTaskStatus,
     task_priority: trigger.task_priority || TaskPriority.NORMAL,
     trigger_type: trigger.trigger_type || TriggerType.TASK_RESULT,
     trigger_source: trigger.trigger_source || null,
@@ -236,6 +245,14 @@ export function createFleetOperationTask({
     created_at: now,
     ...trigger.task_fields,
     ...resolveAudit(context, { created: true }),
+  }), {
+    context,
+    objectType: getFleetOperationObjectType(taskType),
+    statusField: "task_status",
+    fromStatus: null,
+    toStatus: nextTaskStatus,
+    actionType: "FLEET_OPERATION_TASK_CREATE",
+    resultType: currentOpsCenter ? "FLEET_OPERATION_ALREADY_AT_CAPABLE_CENTER" : "FLEET_OPERATION_TASK_CREATED",
   });
 
   return {
@@ -258,7 +275,7 @@ export function activateQueuedFleetOperationTask({ task, robotaxi, opsCenters = 
   const nextStatus = currentOpsCenter && config.directAssignmentStatus
     ? config.directAssignmentStatus
     : config.defaultStatus;
-  const activatedTask = {
+  const activatedTask = withFleetOperationLifecycleStatus({
     ...task,
     task_status: nextStatus,
     origin_cell_id: robotaxi.current_cell_id || task.origin_cell_id || null,
@@ -268,7 +285,15 @@ export function activateQueuedFleetOperationTask({ task, robotaxi, opsCenters = 
     actual_target_service_area_id: currentOpsCenter?.service_area_ids?.[0] || task.actual_target_service_area_id || null,
     activated_at: now,
     updated_at: now,
-  };
+  }, {
+    context,
+    objectType: getFleetOperationObjectType(task.task_type),
+    statusField: "task_status",
+    fromStatus: task.task_status,
+    toStatus: nextStatus,
+    actionType: "FLEET_OPERATION_TASK_ACTIVATE",
+    resultType: currentOpsCenter ? "FLEET_OPERATION_ALREADY_AT_CAPABLE_CENTER" : "FLEET_OPERATION_WAITING_DESTINATION",
+  });
   return {
     succeeded: true,
     alreadyAtCapableCenter: Boolean(currentOpsCenter),
@@ -311,7 +336,7 @@ export function dispatchFleetOperationTaskDestination({
   if (currentOpsCenter && TASK_CONFIG[task.task_type]?.directAssignmentStatus) {
     const now = resolveNow(context);
     const nextStatus = TASK_CONFIG[task.task_type].directAssignmentStatus;
-    const nextTask = {
+    const nextTask = withFleetOperationLifecycleStatus({
       ...task,
       target_ops_center_id: currentOpsCenter.ops_center_id,
       target_cell_id: robotaxi.current_cell_id || null,
@@ -320,7 +345,15 @@ export function dispatchFleetOperationTaskDestination({
       task_status: nextStatus,
       destination_assigned_at: now,
       updated_at: now,
-    };
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: nextStatus,
+      actionType: "FLEET_OPERATION_DESTINATION_ASSIGN",
+      resultType: "FLEET_OPERATION_ALREADY_AT_CAPABLE_CENTER",
+    });
     return {
       succeeded: true,
       alreadyAtCapableCenter: true,
@@ -367,14 +400,22 @@ export function dispatchFleetOperationTaskDestination({
   return {
     ...result,
     succeeded: true,
-    task: {
+    task: withFleetOperationLifecycleStatus({
       ...task,
       target_ops_center_id: result.targetOpsCenterId,
       target_cell_id: result.targetCellId,
       task_status: getWaitingRouteStatus(task.task_type),
       destination_assigned_at: now,
       updated_at: now,
-    },
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: getWaitingRouteStatus(task.task_type),
+      actionType: "FLEET_OPERATION_DESTINATION_ASSIGN",
+      resultType: "FLEET_OPERATION_DESTINATION_ASSIGNED",
+    }),
     robotaxi: {
       ...robotaxi,
       current_task_id: task.task_id,
@@ -435,17 +476,25 @@ export function planFleetOperationRoute({
       succeeded: false,
       reason: route.failure_reason,
       routePlanningRun,
-      task: {
+      task: withFleetOperationLifecycleStatus({
         ...task,
         task_status: "FAILED",
         failure_reason: route.failure_reason,
         updated_at: now,
-      },
+      }, {
+        context,
+        objectType: getFleetOperationObjectType(task.task_type),
+        statusField: "task_status",
+        fromStatus: task.task_status,
+        toStatus: "FAILED",
+        actionType: "ROUTE_PLAN",
+        resultType: "ROUTE_PLAN_FAILED",
+      }),
     };
   }
   const routeCellIds = routePlanningService.getRouteExecutionCells(route, data.roadSegments || [], originCellId, targetCellId);
   const movingStatus = getFleetOperationMovingStatus(task.task_type);
-  const execution = routePlanningService.applyTravelMetrics({
+  const execution = withFleetOperationLifecycleStatus(routePlanningService.applyTravelMetrics({
     record: {
       route_execution_id: routeExecutionId,
       task_id: task.task_id,
@@ -475,13 +524,21 @@ export function planFleetOperationRoute({
     routes: [route],
     currentRouteId: route.route_id,
     currentStepIndex: 0,
+  }), {
+    context,
+    objectType: "routeExecution",
+    statusField: "execution_status",
+    fromStatus: null,
+    toStatus: "MOVING",
+    actionType: "ROUTE_EXECUTION_CREATE",
+    resultType: "ROUTE_EXECUTION_TRIGGERED",
   });
   return {
     succeeded: true,
     route,
     routePlanningRun,
     routeExecution: execution,
-    task: {
+    task: withFleetOperationLifecycleStatus({
       ...task,
       task_status: movingStatus,
       origin_cell_id: originCellId,
@@ -490,7 +547,15 @@ export function planFleetOperationRoute({
       route_strategy_id: route.route_strategy_id,
       started_at: now,
       updated_at: now,
-    },
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: movingStatus,
+      actionType: "ROUTE_PLAN",
+      resultType: "ROUTE_PLANNED",
+    }),
     robotaxi: {
       ...robotaxi,
       current_task_id: task.task_id,
@@ -557,17 +622,25 @@ export function replanFleetOperationRouteAfterAbnormalArrival({
       succeeded: false,
       reason: route.failure_reason,
       routePlanningRun,
-      task: {
+      task: withFleetOperationLifecycleStatus({
         ...task,
         task_status: "ARRIVAL_ABNORMAL",
         failure_reason: route.failure_reason,
         updated_at: now,
-      },
+      }, {
+        context,
+        objectType: getFleetOperationObjectType(task.task_type),
+        statusField: "task_status",
+        fromStatus: task.task_status,
+        toStatus: "ARRIVAL_ABNORMAL",
+        actionType: "ROUTE_PLAN",
+        resultType: "ROUTE_PLAN_FAILED",
+      }),
     };
   }
   const routeCellIds = routePlanningService.getRouteExecutionCells(route, data.roadSegments || [], originCellId, targetCellId);
   const movingStatus = getFleetOperationMovingStatus(task.task_type);
-  const nextExecution = routePlanningService.applyTravelMetrics({
+  const nextExecution = withFleetOperationLifecycleStatus(routePlanningService.applyTravelMetrics({
     record: {
       ...execution,
       route_id: route.route_id,
@@ -595,13 +668,21 @@ export function replanFleetOperationRouteAfterAbnormalArrival({
     routes: [route],
     currentRouteId: route.route_id,
     currentStepIndex: 0,
+  }), {
+    context,
+    objectType: "routeExecution",
+    statusField: "execution_status",
+    fromStatus: execution.execution_status,
+    toStatus: "MOVING",
+    actionType: "ROUTE_PLAN",
+    resultType: "ROUTE_PLANNED",
   });
   return {
     succeeded: true,
     route,
     routePlanningRun,
     routeExecution: nextExecution,
-    task: {
+    task: withFleetOperationLifecycleStatus({
       ...task,
       task_status: movingStatus,
       route_id: route.route_id,
@@ -610,7 +691,15 @@ export function replanFleetOperationRouteAfterAbnormalArrival({
       actual_target_cell_id: null,
       failure_reason: null,
       updated_at: now,
-    },
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: movingStatus,
+      actionType: "ROUTE_PLAN",
+      resultType: "ROUTE_PLANNED",
+    }),
     robotaxi: {
       ...robotaxi,
       current_task_id: task.task_id,
@@ -636,18 +725,38 @@ export function advanceFleetOperationRouteExecution({ execution, task, route, ro
   const nextTaskStatus = arrived ? arrivedStatus : movingStatus;
   return {
     succeeded: true,
-    routeExecution: {
+    routeExecution: withFleetOperationLifecycleStatus({
       ...step.execution,
       updated_at: now,
-    },
-    task: task ? {
+    }, {
+      context,
+      objectType: "routeExecution",
+      statusField: "execution_status",
+      fromStatus: execution.execution_status,
+      toStatus: step.execution.execution_status,
+      actionType: "ROUTE_EXECUTION_STEP",
+      resultType: arrived ? "ROUTE_TRAVEL_COMPLETED" : "ROUTE_STEPPED",
+      movementStepCount: route?.route_step_count || execution.total_step_count || null,
+      secondsPerCell: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS,
+    }),
+    task: task ? withFleetOperationLifecycleStatus({
       ...task,
       task_status: nextTaskStatus,
       arrival_confirmed_at: arrived ? now : task.arrival_confirmed_at || null,
       actual_target_cell_id: arrived ? step.execution.current_cell_id : task.actual_target_cell_id || null,
       actual_target_service_area_id: arrived ? step.execution.target_service_area_id || step.execution.current_target_service_area_id || null : task.actual_target_service_area_id || null,
       updated_at: now,
-    } : null,
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: nextTaskStatus,
+      actionType: "ROUTE_EXECUTION_STEP",
+      resultType: arrived ? "ROUTE_TRAVEL_COMPLETED" : "ROUTE_STEPPED",
+      movementStepCount: route?.route_step_count || execution.total_step_count || null,
+      secondsPerCell: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS,
+    }) : null,
     robotaxi: step.robotaxi ? {
       ...step.robotaxi,
       current_task_status: nextTaskStatus,
@@ -663,9 +772,9 @@ export function confirmFleetOperationArrival({ execution, task, robotaxi, contex
   }
   const now = resolveNow(context);
   const nextTaskStatus = getFleetOperationAfterArrivalStatus(task.task_type);
-  return {
+  const result = {
     succeeded: true,
-    routeExecution: {
+    routeExecution: withFleetOperationLifecycleStatus({
       ...execution,
       execution_status: "COMPLETED",
       arrival_confirmed: true,
@@ -674,15 +783,31 @@ export function confirmFleetOperationArrival({ execution, task, robotaxi, contex
       actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id || null,
       completed_at: now,
       updated_at: now,
-    },
-    task: {
+    }, {
+      context,
+      objectType: "routeExecution",
+      statusField: "execution_status",
+      fromStatus: execution.execution_status,
+      toStatus: "COMPLETED",
+      actionType: "ARRIVAL_CONFIRM",
+      resultType: "ARRIVAL_CONFIRMED",
+    }),
+    task: withFleetOperationLifecycleStatus({
       ...task,
       task_status: nextTaskStatus,
       arrival_confirmed_at: now,
       actual_target_cell_id: execution.current_cell_id,
       actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id || null,
       updated_at: now,
-    },
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: nextTaskStatus,
+      actionType: "ARRIVAL_CONFIRM",
+      resultType: "ARRIVAL_CONFIRMED",
+    }),
     robotaxi: robotaxi ? {
       ...robotaxi,
       current_cell_id: execution.current_cell_id,
@@ -693,6 +818,7 @@ export function confirmFleetOperationArrival({ execution, task, robotaxi, contex
       updated_at: now,
     } : null,
   };
+  return withFleetOperationRouteCostFacts(result, { context, sourceExecution: result.routeExecution });
 }
 
 export function confirmFleetOperationAbnormalArrival({ execution, task, robotaxi, arrivalResult, context = {} } = {}) {
@@ -702,7 +828,7 @@ export function confirmFleetOperationAbnormalArrival({ execution, task, robotaxi
   const now = resolveNow(context);
   return {
     succeeded: true,
-    routeExecution: {
+    routeExecution: withFleetOperationLifecycleStatus({
       ...execution,
       execution_status: "ARRIVAL_ABNORMAL",
       arrival_execution_result: arrivalResult || "ARRIVED_WITH_TARGET_OCCUPIED",
@@ -710,8 +836,16 @@ export function confirmFleetOperationAbnormalArrival({ execution, task, robotaxi
       actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id || null,
       failure_reason: arrivalResult || "ARRIVED_WITH_TARGET_OCCUPIED",
       updated_at: now,
-    },
-    task: {
+    }, {
+      context,
+      objectType: "routeExecution",
+      statusField: "execution_status",
+      fromStatus: execution.execution_status,
+      toStatus: "ARRIVAL_ABNORMAL",
+      actionType: "ARRIVAL_CONFIRM",
+      resultType: "ARRIVAL_CONFIRM_FAILED",
+    }),
+    task: withFleetOperationLifecycleStatus({
       ...task,
       task_status: "ARRIVAL_ABNORMAL",
       arrival_execution_result: arrivalResult || "ARRIVED_WITH_TARGET_OCCUPIED",
@@ -719,7 +853,15 @@ export function confirmFleetOperationAbnormalArrival({ execution, task, robotaxi
       actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id || null,
       failure_reason: arrivalResult || "ARRIVED_WITH_TARGET_OCCUPIED",
       updated_at: now,
-    },
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: "ARRIVAL_ABNORMAL",
+      actionType: "ARRIVAL_CONFIRM",
+      resultType: "ARRIVAL_CONFIRM_FAILED",
+    }),
     robotaxi: robotaxi ? {
       ...robotaxi,
       current_cell_id: execution.current_cell_id,
@@ -775,14 +917,22 @@ export function assignFleetOperationWorker({ task, robotaxi, workers = [], conte
   return {
     succeeded: true,
     worker,
-    task: {
+    task: withFleetOperationLifecycleStatus({
       ...task,
       worker_id: worker.worker_id,
       assigned_worker_id: worker.worker_id,
       task_status: nextStatus,
       assigned_at: now,
       updated_at: now,
-    },
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: nextStatus,
+      actionType: "FLEET_OPERATION_WORKER_ASSIGN",
+      resultType: "FLEET_OPERATION_WORKER_ASSIGNED",
+    }),
     robotaxi: {
       ...robotaxi,
       current_task_id: task.task_id,
@@ -805,13 +955,13 @@ export function startFleetOperationWork({ task, robotaxi, context = {} } = {}) {
   if (!task?.task_id || !robotaxi?.robotaxi_id) return { succeeded: false, reason: "INVALID_FLEET_OPERATION_WORK_INPUT" };
   const now = resolveNow(context);
   if (task.task_type === TaskType.CHARGING && task.task_status === ChargingTaskStatus.READY_TO_CHARGE) {
-    return completeChargingWork({ task, robotaxi, now });
+    return completeChargingWork({ task, robotaxi, now, context });
   }
   const nextStatus = getFleetOperationWorkStatus(task);
   if (!nextStatus) return { succeeded: false, reason: "FLEET_OPERATION_WORK_NOT_READY" };
   return {
     succeeded: true,
-    task: {
+    task: withFleetOperationLifecycleStatus({
       ...task,
       task_status: nextStatus,
       work_started_at: task.work_started_at || now,
@@ -821,7 +971,15 @@ export function startFleetOperationWork({ task, robotaxi, context = {} } = {}) {
           ? "DISCONNECTING"
           : task.charging_phase || null,
       updated_at: now,
-    },
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: nextStatus,
+      actionType: "FLEET_OPERATION_WORK_START",
+      resultType: "FLEET_OPERATION_WORK_STARTED",
+    }),
     robotaxi: {
       ...robotaxi,
       current_task_id: task.task_id,
@@ -838,10 +996,10 @@ export function completeFleetOperationWork({ task, robotaxi, context = {} } = {}
   const now = resolveNow(context);
   let result = null;
   if (task.task_type === TaskType.CHARGING) {
-    result = completeChargingWork({ task, robotaxi, now });
+    result = completeChargingWork({ task, robotaxi, now, context });
   } else {
     if (!isCompletableWorkStatus(task)) return { succeeded: false, reason: "FLEET_OPERATION_WORK_NOT_COMPLETABLE" };
-    result = completeFleetOperationTask({ task, robotaxi, now });
+    result = completeFleetOperationTask({ task, robotaxi, now, context });
   }
   if (result?.succeeded && result.task?.task_status === "COMPLETED") {
     return withFleetOperationCostFacts(result, { context, sourceTask: result.task });
@@ -983,11 +1141,11 @@ function isCompletableWorkStatus(task) {
   ].includes(task.task_status);
 }
 
-function completeChargingWork({ task, robotaxi, now }) {
+function completeChargingWork({ task, robotaxi, now, context = {} }) {
   if (task.task_status === ChargingTaskStatus.READY_TO_CHARGE) {
     return {
       succeeded: true,
-      task: {
+      task: withFleetOperationLifecycleStatus({
         ...task,
         task_status: ChargingTaskStatus.CHARGING,
         worker_id: null,
@@ -995,7 +1153,16 @@ function completeChargingWork({ task, robotaxi, now }) {
         charging_phase: "CHARGING",
         charging_started_at: now,
         updated_at: now,
-      },
+      }, {
+        context,
+        objectType: getFleetOperationObjectType(task.task_type),
+        statusField: "task_status",
+        fromStatus: task.task_status,
+        toStatus: ChargingTaskStatus.CHARGING,
+        actionType: "FLEET_OPERATION_WORK_START",
+        resultType: "FLEET_OPERATION_WORK_STARTED",
+        durationSeconds: 60,
+      }),
       robotaxi: {
         ...robotaxi,
         current_task_status: ChargingTaskStatus.CHARGING,
@@ -1016,7 +1183,7 @@ function completeChargingWork({ task, robotaxi, now }) {
   if (task.task_status === ChargingTaskStatus.CHARGING) {
     return {
       succeeded: true,
-      task: {
+      task: withFleetOperationLifecycleStatus({
         ...task,
         task_status: ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
         worker_id: null,
@@ -1024,7 +1191,16 @@ function completeChargingWork({ task, robotaxi, now }) {
         charging_phase: "DISCONNECT_REQUIRED",
         charging_completed_at: now,
         updated_at: now,
-      },
+      }, {
+        context,
+        objectType: getFleetOperationObjectType(task.task_type),
+        statusField: "task_status",
+        fromStatus: task.task_status,
+        toStatus: ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
+        actionType: "FLEET_OPERATION_CHARGING_COMPLETE",
+        resultType: "FLEET_OPERATION_CHARGING_COMPLETED",
+        durationSeconds: 1800,
+      }),
       robotaxi: {
         ...robotaxi,
         current_task_status: ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
@@ -1036,21 +1212,30 @@ function completeChargingWork({ task, robotaxi, now }) {
     };
   }
   if (task.task_status === ChargingTaskStatus.READY_TO_DISCONNECT) {
-    return completeFleetOperationTask({ task, robotaxi, now });
+    return completeFleetOperationTask({ task, robotaxi, now, context });
   }
   return { succeeded: false, reason: "CHARGING_WORK_NOT_COMPLETABLE" };
 }
 
-function completeFleetOperationTask({ task, robotaxi, now }) {
+function completeFleetOperationTask({ task, robotaxi, now, context = {} }) {
   return {
     succeeded: true,
-    task: {
+    task: withFleetOperationLifecycleStatus({
       ...task,
       task_status: "COMPLETED",
       operation_completed_at: now,
       completed_at: now,
       updated_at: now,
-    },
+    }, {
+      context,
+      objectType: getFleetOperationObjectType(task.task_type),
+      statusField: "task_status",
+      fromStatus: task.task_status,
+      toStatus: "COMPLETED",
+      actionType: "FLEET_OPERATION_WORK_COMPLETE",
+      resultType: "FLEET_OPERATION_WORK_COMPLETED",
+      durationSeconds: getDefaultFleetOperationWorkDurationSeconds(task.task_type),
+    }),
     robotaxi: restoreRobotaxiAfterFleetOperation(robotaxi, task, now),
     worker: task.worker_id ? {
       worker_id: task.worker_id,
@@ -1084,12 +1269,112 @@ function withFleetOperationCostFacts(result, { context = {}, sourceTask } = {}) 
   const previousRecords = context.costRecords || [];
   return {
     ...result,
+    task: calculation.sourceObject || result.task,
     costRecords: [
       ...calculation.costRecords,
       ...previousRecords.filter((record) => !(record.source_object_type === objectType && record.source_object_id === sourceTask.task_id)),
     ],
     generatedCostRecords: calculation.costRecords,
   };
+}
+
+function withFleetOperationRouteCostFacts(result, { context = {}, sourceExecution } = {}) {
+  if (!sourceExecution?.route_execution_id) return result;
+  const profile = context.costModelProfile || context.costModelProfiles?.find((item) => item.profile_status === "ACTIVE")
+    || costModelCalculator.initializeDefaultCostModelProfile?.();
+  const calculation = costModelCalculator.createIncrementalCostRecords({
+    simulationRun: {
+      simulation_run_id: sourceExecution.simulation_run_id || context.simulation_run_id || "BUSINESS-RUNTIME",
+      simulation_timeline_id: sourceExecution.simulation_timeline_id || context.simulation_timeline_id || null,
+      simulation_status: "COMPLETED",
+    },
+    profile,
+    businessData: context.businessData || {},
+    sourceObject: sourceExecution,
+    sourceObjectType: "routeExecution",
+    calculationRunId: typeof context.nextCostFactRunId === "function"
+      ? context.nextCostFactRunId()
+      : resolveNextId(context, "CFR"),
+  });
+  const previousRecords = context.costRecords || [];
+  return {
+    ...result,
+    routeExecution: calculation.sourceObject || result.routeExecution,
+    costRecords: [
+      ...calculation.costRecords,
+      ...previousRecords.filter((record) => !(record.source_object_type === "routeExecution" && record.source_object_id === sourceExecution.route_execution_id)),
+    ],
+    generatedCostRecords: calculation.costRecords,
+  };
+}
+
+function withFleetOperationLifecycleStatus(item, {
+  context = {},
+  objectType,
+  statusField,
+  fromStatus,
+  toStatus,
+  actionType,
+  resultType,
+  durationSeconds = 0,
+  movementStepCount = null,
+  secondsPerCell = null,
+  sourceTransitionId = null,
+} = {}) {
+  if (!item || !statusField || !actionType) return item;
+  const previousStatus = fromStatus !== undefined ? fromStatus : item[statusField] || null;
+  const nextStatus = toStatus !== undefined ? toStatus : item[statusField] || null;
+  const history = Array.isArray(item.simulation_status_transition_history) ? item.simulation_status_transition_history : [];
+  if (history.length > 0 && previousStatus === nextStatus) return item;
+  const occurredAt = resolveNow(context);
+  const simulationAt = resolveSimulationTime(context, item, occurredAt);
+  const transition = {
+    status_transition_id: typeof context.nextStatusTransitionId === "function"
+      ? context.nextStatusTransitionId()
+      : resolveNextId(context, "ST"),
+    transition_sequence: history.length + 1,
+    business_object_type: objectType || null,
+    business_object_id: resolveLifecycleObjectId(item, objectType),
+    from_status: previousStatus,
+    action_type: actionType,
+    result_type: resultType || null,
+    to_status: nextStatus,
+    occurred_at: occurredAt,
+    simulation_occurred_at: simulationAt,
+    time_mode: context.timeContext?.time_mode || context.time_mode || "REAL_TIME",
+    trigger_source: context.trigger_source || (context.action ? "SIMULATION_TIMED_OPERATION" : "MANUAL_OR_SERVICE"),
+    simulation_action_started_at: simulationAt,
+    calculated_simulation_action_started_at: simulationAt,
+    configured_duration_seconds: Math.max(0, Number(durationSeconds) || 0),
+    movement_step_count: movementStepCount,
+    seconds_per_cell: secondsPerCell,
+    simulation_status_changed_at: simulationAt,
+    calculated_simulation_status_changed_at: simulationAt,
+    workflow_timing_rule_id: context.workflow_timing_rule_id || null,
+    source_transition_id: sourceTransitionId,
+    business_timing_calculation_run_id: null,
+  };
+  return {
+    ...item,
+    simulation_status_transition_history: [...history, transition],
+  };
+}
+
+function resolveSimulationTime(context, item, fallback) {
+  if (typeof context.simulationTime === "function") return context.simulationTime();
+  return context.simulation_time
+    || item.simulation_updated_at
+    || item.simulation_created_at
+    || item.simulation_completed_at
+    || fallback;
+}
+
+function resolveLifecycleObjectId(item, objectType) {
+  if (objectType === "routeExecution") return item.route_execution_id || null;
+  if (objectType === "trip") return item.trip_id || null;
+  if (objectType === "serviceOrder") return item.service_order_id || null;
+  if (objectType === "robotaxi") return item.robotaxi_id || null;
+  return item.task_id || item.route_execution_id || item.robotaxi_id || null;
 }
 
 function getFleetOperationObjectType(taskType) {
@@ -1135,6 +1420,14 @@ function restoreRobotaxiAfterFleetOperation(robotaxi, task, now) {
   return restored;
 }
 
+function getDefaultFleetOperationWorkDurationSeconds(taskType) {
+  if (taskType === TaskType.CHARGING) return 60;
+  if (taskType === TaskType.MAINTENANCE) return 900;
+  if (taskType === TaskType.FAILURE_HANDLING) return 900;
+  if (taskType === TaskType.RETIREMENT) return 600;
+  return 600;
+}
+
 function resolveNextId(context, prefix) {
   if (typeof context.nextId === "function") return context.nextId(prefix);
   const suffix = String((context.sequence || 1)).padStart(4, "0");
@@ -1175,6 +1468,8 @@ function findMatchingOpsCenterForRobotaxiTask(robotaxi, taskType, opsCenters = [
 }
 
 function isCellInOperationCapabilityZone(opsCenter, taskType, cellId) {
+  if (!cellId) return false;
+  if ((opsCenter.cell_ids || []).includes(cellId)) return true;
   const zone = (opsCenter.operation_capability_zones || []).find((item) =>
     item.task_type === taskType || item.capability_type === taskType
   );
@@ -1182,5 +1477,6 @@ function isCellInOperationCapabilityZone(opsCenter, taskType, cellId) {
   return [
     ...(zone.work_cell_ids || []),
     ...(zone.parking_cell_ids || []),
+    ...(zone.dispatch_target_cell_ids || []),
   ].includes(cellId);
 }
