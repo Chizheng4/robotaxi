@@ -1386,7 +1386,7 @@ function withFleetOperationCostFacts(result, { context = {}, sourceTask } = {}) 
     sourceObjectType: objectType,
     calculationRunId: typeof context.nextCostFactRunId === "function"
       ? context.nextCostFactRunId()
-      : resolveNextId(context, "CFR"),
+      : createDefaultCostFactRunId(context, sourceTask.task_id || objectType),
   });
   const previousRecords = context.costRecords || [];
   return {
@@ -1416,7 +1416,7 @@ function withFleetOperationRouteCostFacts(result, { context = {}, sourceExecutio
     sourceObjectType: "routeExecution",
     calculationRunId: typeof context.nextCostFactRunId === "function"
       ? context.nextCostFactRunId()
-      : resolveNextId(context, "CFR"),
+      : createDefaultCostFactRunId(context, sourceExecution.route_execution_id || "routeExecution"),
   });
   const previousRecords = context.costRecords || [];
   return {
@@ -1428,6 +1428,11 @@ function withFleetOperationRouteCostFacts(result, { context = {}, sourceExecutio
     ],
     generatedCostRecords: calculation.costRecords,
   };
+}
+
+function createDefaultCostFactRunId(context = {}, sourceObjectId = "OBJECT") {
+  const rawId = String(sourceObjectId || "OBJECT").replace(/[^A-Za-z0-9-]/g, "-");
+  return `${resolveNextId(context, "CFR")}-${rawId}`;
 }
 
 function withFleetOperationLifecycleStatus(item, {

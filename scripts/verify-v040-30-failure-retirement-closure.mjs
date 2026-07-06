@@ -11,12 +11,29 @@ import { initializePricing } from "../src/data/pricingInitialization.js";
 import { initializeOrderMatching } from "../src/data/orderMatchingInitialization.js";
 import { initializeDefaultWorkflowTimingProfile } from "../src/data/businessTimingCalculator.js";
 import * as costModelCalculator from "../src/data/costModelCalculator.js";
+import { executeTick } from "../src/data/simulationLoop.js";
+import { registerActionHandlers } from "../src/data/simulationExecutionEngine.js";
+import {
+  handleDeploymentTaskCreate,
+  handleReadinessTaskAssign,
+  handleReadinessTaskCreate,
+  handleReadinessTaskPass,
+  handleReadinessTaskStart,
+} from "../src/services/simulationHandlers.js";
 import { getCurrentNormalStatusValues, getLegacyCompatStatusValues } from "../src/domain/statusRegistry.js";
 import { TaskType } from "../src/domain/taskTypes.js";
 import * as robotaxiTaskPlanningService from "../src/services/robotaxiTaskPlanningService.js";
 
 const root = process.cwd();
 const now = "2026-07-06T00:00:00.000Z";
+
+registerActionHandlers({
+  READINESS_TASK_CREATE: handleReadinessTaskCreate,
+  READINESS_TASK_ASSIGN: handleReadinessTaskAssign,
+  READINESS_TASK_START: handleReadinessTaskStart,
+  READINESS_TASK_PASS: handleReadinessTaskPass,
+  DEPLOYMENT_TASK_CREATE: handleDeploymentTaskCreate,
+});
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
@@ -458,6 +475,221 @@ function verifyFleetOperationQueueActivationIsolation() {
   assert.ok(!activated.task.simulation_status_transition_history.some((item) => item.to_status === "CLEANING_IN_PROGRESS"), "维修任务时间线不得出现清洁状态");
 }
 
+function verifyFleetOperationQueuedTaskCostIsolationAfterCompletion() {
+  const costProfile = costModelCalculator.initializeDefaultCostModelProfile();
+  const worker = { worker_id: "WK-QUEUE", ops_center_id: "OC-VERIFY", worker_status: "IDLE", current_task_id: null, current_task_type: null, current_task_status: null };
+  const cleaningTask = {
+    task_id: "TASK-CLN-COST",
+    task_type: TaskType.CLEANING,
+    task_status: "CLEANING_IN_PROGRESS",
+    robotaxi_id: "RTX-COST",
+    worker_id: worker.worker_id,
+    simulation_status_transition_history: [{
+      status_transition_id: "ST-CLN-COST-1",
+      transition_sequence: 1,
+      business_object_type: "cleaningTask",
+      business_object_id: "TASK-CLN-COST",
+      from_status: "READY_TO_START",
+      action_type: "FLEET_OPERATION_WORK_START",
+      result_type: "FLEET_OPERATION_WORK_STARTED",
+      to_status: "CLEANING_IN_PROGRESS",
+      configured_duration_seconds: 30,
+    }],
+  };
+  const maintenanceQueuedTask = {
+    task_id: "TASK-MNT-COST",
+    task_type: TaskType.MAINTENANCE,
+    task_status: "WAITING_ROBOTAXI_AVAILABLE",
+    robotaxi_id: "RTX-COST",
+    maintenance_type: "GENERAL",
+    simulation_status_transition_history: [{
+      status_transition_id: "ST-MNT-COST-1",
+      transition_sequence: 1,
+      business_object_type: "maintenanceTask",
+      business_object_id: "TASK-MNT-COST",
+      from_status: null,
+      action_type: "FLEET_OPERATION_TASK_CREATE",
+      result_type: "FLEET_OPERATION_TASK_QUEUED",
+      to_status: "WAITING_ROBOTAXI_AVAILABLE",
+      configured_duration_seconds: 0,
+    }],
+  };
+  const robotaxiWithQueue = {
+    robotaxi_id: "RTX-COST",
+    current_cell_id: "C-REPAIR-1",
+    availability_status: "IN_FLEET_OPERATION",
+    available_for_dispatch: false,
+    current_task_id: cleaningTask.task_id,
+    current_task_type: TaskType.CLEANING,
+    current_task_status: "CLEANING_IN_PROGRESS",
+    pending_task_queue: [{ task_id: maintenanceQueuedTask.task_id, task_type: TaskType.MAINTENANCE, priority: 80, queue_sequence: 1 }],
+    fleet_operation_status: "IN_CLEANING",
+    battery_percent: 90,
+    battery_capacity_kwh: 80,
+    current_battery_kwh: 72,
+  };
+  const cleaningCompleted = fleetOperationTaskService.completeFleetOperationWork({
+    task: cleaningTask,
+    robotaxi: robotaxiWithQueue,
+    context: context({
+      costModelProfile: costProfile,
+      costRecords: [],
+      businessData: { routes: [], routeExecutions: [] },
+    }),
+  });
+  assert.equal(cleaningCompleted.succeeded, true);
+  const cleaningCostRecords = cleaningCompleted.costRecords.filter((record) => record.source_object_id === cleaningTask.task_id);
+  assert.ok(cleaningCostRecords.length > 0, "清洁任务完成必须生成自己的成本记录");
+
+  const activated = fleetOperationTaskService.activateNextQueuedFleetOperationTask({
+    robotaxi: cleaningCompleted.robotaxi,
+    tasksByType: { maintenanceTasks: [maintenanceQueuedTask] },
+    opsCenters,
+    context: context(),
+  });
+  assert.equal(activated.activated, true);
+  const assigned = fleetOperationTaskService.assignFleetOperationWorker({
+    task: activated.task,
+    robotaxi: activated.robotaxi,
+    workers: [worker],
+    context: context(),
+  });
+  assert.equal(assigned.succeeded, true);
+  const started = fleetOperationTaskService.startFleetOperationWork({
+    task: assigned.task,
+    robotaxi: assigned.robotaxi,
+    context: context(),
+  });
+  assert.equal(started.succeeded, true);
+  const maintenanceCompleted = fleetOperationTaskService.completeFleetOperationWork({
+    task: started.task,
+    robotaxi: started.robotaxi,
+    context: context({
+      costModelProfile: costProfile,
+      costRecords: cleaningCompleted.costRecords,
+      businessData: { routes: [], routeExecutions: [] },
+    }),
+  });
+  assert.equal(maintenanceCompleted.succeeded, true);
+  const maintenanceCostRecords = maintenanceCompleted.costRecords.filter((record) => record.source_object_id === maintenanceQueuedTask.task_id);
+  const remainingCleaningCostRecords = maintenanceCompleted.costRecords.filter((record) => record.source_object_id === cleaningTask.task_id);
+  assert.ok(maintenanceCostRecords.length > 0, "维修任务完成必须生成自己的成本记录");
+  assert.ok(remainingCleaningCostRecords.length > 0, "维修任务完成不得删除清洁任务成本记录");
+  assert.ok(!maintenanceCostRecords.some((record) => record.source_object_id === cleaningTask.task_id), "维修成本记录不得指向清洁任务");
+  assert.notEqual(
+    maintenanceCompleted.task.cost_calculation_run_id,
+    cleaningCompleted.task.cost_calculation_run_id,
+    "清洁和维修必须是不同单据的成本计算结果"
+  );
+}
+
+function verifySimulationTickReadinessDoesNotFail() {
+  const state = createBaseBusinessState();
+  const businessData = {
+    ...state,
+    robotaxis: state.robotaxis,
+    workers: state.workers,
+    routes: state.routes,
+    data: { ...state.data, robotaxis: state.robotaxis, workers: state.workers, routes: state.routes },
+  };
+  const refresh = () => {
+    businessData.data = {
+      ...businessData.data,
+      robotaxis: businessData.robotaxis,
+      workers: businessData.workers,
+      readinessTasks: businessData.readinessTasks,
+      deploymentTasks: businessData.deploymentTasks,
+      routeExecutions: businessData.routeExecutions,
+      routes: businessData.routes,
+      timedOperations: businessData.timedOperations,
+    };
+  };
+  const bindSetter = (key) => (updater) => {
+    businessData[key] = typeof updater === "function" ? updater(businessData[key]) : updater;
+    refresh();
+  };
+  [
+    "demandSimulationRuns",
+    "serviceOrders",
+    "trips",
+    "readinessTasks",
+    "deploymentTasks",
+    "routeExecutions",
+    "routes",
+    "routePlanningRuns",
+    "robotaxis",
+    "pricingStrategyRuns",
+    "pricingDecisions",
+    "orderMatchingRuns",
+    "orderMatchingDecisions",
+    "taskEventLogs",
+    "timedOperations",
+    "costRecords",
+    "revenueRecords",
+  ].forEach((key) => {
+    businessData[`set${key[0].toUpperCase()}${key.slice(1)}`] = bindSetter(key);
+  });
+  refresh();
+
+  const policy = {
+    tick_seconds: 6,
+    tick_minutes: 0.1,
+    supply_trigger_config: {
+      supply_trigger_enabled: true,
+      readiness_trigger_enabled: true,
+      deployment_trigger_enabled: false,
+      readiness_trigger_interval_seconds: 6,
+    },
+    demand_generation_enabled: false,
+    service_order_auto_config: {},
+    default_completion_config: {},
+    execution_time_config: { readiness_check_seconds: 6 },
+    worker_work_start_time: "00:00:00",
+    worker_work_end_time: "23:59:59",
+    robotaxi_operating_start_time: "00:00:00",
+    robotaxi_operating_end_time: "23:59:59",
+    simulation_performance_config: {},
+  };
+  const runAt = (seconds) => ({
+    simulation_run_id: "SIM-RUN-V04031-READINESS",
+    simulation_status: "RUNNING",
+    current_simulation_seconds: seconds,
+    current_time: `Day 1 00:00:${String(seconds).padStart(2, "0")}`,
+    current_day: 1,
+    current_day_tick: Math.floor(seconds / 6),
+    current_global_tick: Math.floor(seconds / 6),
+    current_run_tick: Math.floor(seconds / 6),
+    tick_seconds: 6,
+    total_ticks: 100,
+    simulation_policy_snapshot: policy,
+  });
+
+  const firstTick = executeTick({ simulationRun: runAt(0), policySnapshot: policy, businessData });
+  assert.ok(firstTick?.executionResults?.length > 0, "模拟 Tick 必须执行准入触发和后续工作流动作");
+  assert.ok(businessData.readinessTasks.length > 0, "模拟 Tick 必须生成准入任务");
+  const task = businessData.readinessTasks[0];
+  assert.notEqual(task.task_status, "FAILED", "模拟准入任务不应创建后立即失败");
+  assert.ok(["WAITING_CHECK", "CHECKING"].includes(task.task_status), `模拟准入首轮推进状态异常：${task.task_status}`);
+
+  executeTick({ simulationRun: runAt(6), policySnapshot: policy, businessData });
+  const checkingTask = businessData.readinessTasks.find((item) => item.task_id === task.task_id);
+  assert.equal(checkingTask.task_status, "CHECKING", "模拟准入第二轮应进入检查中并等待时间作业");
+  assert.ok(
+    businessData.timedOperations.some((operation) => operation.object_id === task.task_id && operation.action_type === "READINESS_TASK_PASS"),
+    "模拟准入检查中必须创建通过检查时间作业"
+  );
+
+  executeTick({ simulationRun: runAt(36), policySnapshot: policy, businessData });
+  const updatedTask = businessData.readinessTasks.find((item) => item.task_id === task.task_id);
+  assert.equal(updatedTask.task_status, "COMPLETED", "模拟准入时间作业到期后必须完成");
+  assert.equal(updatedTask.check_result, "PASSED", "模拟准入默认检查结果必须通过");
+  assert.equal(
+    businessData.robotaxis.find((item) => item.robotaxi_id === updatedTask.robotaxi_id)?.availability_status,
+    "AVAILABLE",
+    "模拟准入完成后 Robotaxi 必须可运营"
+  );
+}
+
 function verifyServiceOrderCreationPricingAndCall() {
   let state = createBaseBusinessState();
   const runtime = actionRuntime({ context: { order_channel: "OWN_APP_SIMULATED_ORDER" } });
@@ -535,6 +767,8 @@ verifyDeploymentCreationServiceLifecycle();
 verifyRouteExecutionServiceLifecycle();
 verifyDeploymentNormalArrivalGeneratesCostFacts();
 verifyFleetOperationQueueActivationIsolation();
+verifyFleetOperationQueuedTaskCostIsolationAfterCompletion();
+verifySimulationTickReadinessDoesNotFail();
 verifyServiceOrderCreationPricingAndCall();
 verifyStaticContracts();
 
