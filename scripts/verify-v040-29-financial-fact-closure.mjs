@@ -171,6 +171,8 @@ function verifyStaticContracts() {
   const main = read("src/main.jsx");
   assert.match(main, /function summarizeCostRecords/, "前端展示必须从成本记录兜底聚合成本摘要");
   assert.match(main, /function attachRevenueRecords/, "前端展示必须从收入记录兜底聚合收入摘要");
+  assert.match(main, /readinessTask:\s*rowsByPage\.readinessTasks/, "运营准入任务详情必须使用已挂载成本明细的统一展示行");
+  assert.doesNotMatch(main, /readinessTask:\s*readinessTasks,/, "运营准入任务详情不得直接使用未挂载成本明细的原始任务集合");
   const actionService = read("src/services/businessActionService.js");
   assert.match(actionService, /replaceFinancialSourceInUpdates/, "业务动作服务必须把成本收入事实回填到来源对象");
   const fieldDictionary = read("src/domain/fieldDictionary.js");

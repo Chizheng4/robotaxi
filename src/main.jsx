@@ -1211,7 +1211,7 @@ function App() {
       timedOperation: timedOperations,
       opsCenter: data.opsCenters,
       worker: data.workers,
-      readinessTask: readinessTasks,
+      readinessTask: rowsByPage.readinessTasks,
       cleaningTask: rowsByPage.cleaningTasks,
       chargingTask: rowsByPage.chargingTasks,
       maintenanceTask: rowsByPage.maintenanceTasks,
