@@ -56,7 +56,7 @@ const chargingResult = executeFleetOperationPolicy({
 });
 assert.equal(chargingResult.tasks[0].task_type, TaskType.CHARGING);
 assert.equal(chargingResult.tasks[0].battery_percent_before, 12);
-assert.equal(chargingResult.tasks[0].target_battery_percent, 90);
+assert.equal(chargingResult.tasks[0].target_battery_percent, 100);
 
 const directResult = createDirectFleetOperationTask({
   taskType: TaskType.CLEANING,

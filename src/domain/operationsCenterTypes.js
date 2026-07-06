@@ -68,6 +68,7 @@ export function createRobotaxi(robotaxi) {
     lifetime_distance_km: 0,
     lifetime_battery_consumed_kwh: 0,
     lifetime_battery_consumed_percent: 0,
+    lifetime_charged_energy_kwh: 0,
     completed_service_order_count: 0,
     completed_cleaning_count: 0,
     completed_charging_count: 0,

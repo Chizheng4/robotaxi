@@ -1,4 +1,16 @@
 
+## v040.26
+
+核心：补齐行驶耗电投影、Robotaxi 资产台账和充电任务电量闭环。
+
+- 运营行驶记录展示字段 `battery_consumed_kwh` 统一命名为“已耗电（千瓦时）”，并在行驶投影阶段按已行驶距离计算所有关联 Route 的累计已耗电。
+- 模拟运行的 TRAVEL 时间作业在 UI 快照 / 到期节点投影行驶进度时，同步把行驶差量反馈给 Robotaxi，更新当前位置、当前电量、剩余续航、累计行驶距离和累计耗电。
+- Robotaxi 新增 `lifetime_charged_energy_kwh`，列表和详情展示“累计充电量（千瓦时）”。
+- 充电任务单新增 `robotaxi_current_battery_kwh`、`robotaxi_battery_capacity_kwh`，创建或激活任务时从 Robotaxi 固化当前电量和总电量。
+- 充电任务默认目标电量为 100%，充电完成时计算 `charged_energy_kwh = 总电量 - 当前电量`，中文统一为“已充电量（千瓦时）”。
+- 充电完成时由服务层回写 Robotaxi 当前电量、当前电量百分比、剩余续航和累计充电量；后续断开电源完成任务时不重复累计。
+- 新增 `verify-v040-26-travel-charging-ledger.mjs` 并纳入提交前检查，锁定运营行驶投影、模拟运行反馈和充电资产台账闭环。
+
 ## v040.25
 
 核心：补齐 Robotaxi 能量事实、行驶耗电单位和当前任务展示一致性。

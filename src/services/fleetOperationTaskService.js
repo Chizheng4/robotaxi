@@ -26,6 +26,7 @@ import * as fleetOperationDispatchService from "./fleetOperationDispatchService.
 import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
 import * as costModelCalculator from "../data/costModelCalculator.js";
 import {
+  applyChargingDelta,
   getCompletedCounterKeyForFleetTask,
   getBatteryKwhFromPercent,
   getCurrentBatteryKwh,
@@ -169,7 +170,9 @@ export function createFleetOperationTask({
       pending_since_at: now,
       operation_created_at: now,
       created_at: now,
+      ...createChargingEnergySnapshotFields(robotaxi, taskType),
       ...trigger.task_fields,
+      ...createChargingTargetFields(taskType),
       ...resolveAudit(context, { created: true }),
     }), {
       context,
@@ -247,7 +250,9 @@ export function createFleetOperationTask({
     pending_since_at: null,
     operation_created_at: now,
     created_at: now,
+    ...createChargingEnergySnapshotFields(robotaxi, taskType),
     ...trigger.task_fields,
+    ...createChargingTargetFields(taskType),
     ...resolveAudit(context, { created: true }),
   }), {
     context,
@@ -287,6 +292,7 @@ export function activateQueuedFleetOperationTask({ task, robotaxi, opsCenters = 
     target_cell_id: currentOpsCenter ? robotaxi.current_cell_id || task.target_cell_id || null : null,
     actual_target_cell_id: currentOpsCenter ? robotaxi.current_cell_id || task.actual_target_cell_id || null : null,
     actual_target_service_area_id: currentOpsCenter?.service_area_ids?.[0] || task.actual_target_service_area_id || null,
+    ...createChargingEnergySnapshotFields(robotaxi, task.task_type, task),
     activated_at: now,
     updated_at: now,
   }, {
@@ -1168,11 +1174,18 @@ function completeChargingWork({ task, robotaxi, now, context = {} }) {
     };
   }
   if (task.task_status === ChargingTaskStatus.CHARGING) {
-    const targetBatteryPercent = Number(task.target_battery_percent || 100);
+    const targetBatteryPercent = 100;
     const batteryPercentBefore = Number(task.battery_percent_before ?? robotaxi.battery_percent ?? 0);
-    const targetBatteryKwh = getBatteryKwhFromPercent(robotaxi, targetBatteryPercent);
-    const currentBatteryKwh = getCurrentBatteryKwh(robotaxi);
+    const robotaxiBatteryCapacityKwh = Number(task.robotaxi_battery_capacity_kwh || robotaxi.battery_capacity_kwh || 0);
+    const targetBatteryKwh = robotaxiBatteryCapacityKwh || getBatteryKwhFromPercent(robotaxi, targetBatteryPercent);
+    const currentBatteryKwh = Number(task.robotaxi_current_battery_kwh ?? getCurrentBatteryKwh(robotaxi));
     const chargedEnergyKwh = Number(Math.max(0, targetBatteryKwh - currentBatteryKwh).toFixed(2));
+    const nextRobotaxi = applyChargingDelta(robotaxi, {
+      chargedEnergyKwh,
+      targetBatteryKwh,
+      targetBatteryPercent,
+      now,
+    });
     return {
       succeeded: true,
       task: withFleetOperationLifecycleStatus({
@@ -1181,6 +1194,8 @@ function completeChargingWork({ task, robotaxi, now, context = {} }) {
         worker_id: null,
         assigned_worker_id: null,
         charging_phase: "DISCONNECT_REQUIRED",
+        robotaxi_current_battery_kwh: currentBatteryKwh,
+        robotaxi_battery_capacity_kwh: robotaxiBatteryCapacityKwh || targetBatteryKwh,
         battery_percent_before: batteryPercentBefore,
         target_battery_percent: targetBatteryPercent,
         battery_percent_after: targetBatteryPercent,
@@ -1198,11 +1213,8 @@ function completeChargingWork({ task, robotaxi, now, context = {} }) {
         durationSeconds: 1800,
       }),
       robotaxi: {
-        ...robotaxi,
+        ...nextRobotaxi,
         current_task_status: ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
-        battery_percent: targetBatteryPercent,
-        current_battery_kwh: targetBatteryKwh,
-        estimated_range_km: Number((Number(robotaxi.max_range_km || robotaxi.estimated_range_km || 0) * targetBatteryPercent / 100).toFixed(2)),
         battery_operation_status: BatteryOperationStatus.ENOUGH,
         updated_at: now,
       },
@@ -1405,12 +1417,16 @@ function restoreRobotaxiAfterFleetOperation(robotaxi, task, now) {
     return { ...restored, needs_cleaning: false, cleanliness_status: CleanlinessStatus.CLEAN };
   }
   if (task.task_type === TaskType.CHARGING) {
+    const targetBatteryKwh = Number(task.robotaxi_battery_capacity_kwh || robotaxi.battery_capacity_kwh || robotaxi.current_battery_kwh || 0);
+    const chargedRobotaxi = applyChargingDelta(restored, {
+      chargedEnergyKwh: 0,
+      targetBatteryKwh,
+      targetBatteryPercent: 100,
+      now,
+    });
     return {
-      ...restored,
+      ...chargedRobotaxi,
       needs_charging: false,
-      battery_percent: 100,
-      current_battery_kwh: Number(robotaxi.battery_capacity_kwh || robotaxi.current_battery_kwh || 0),
-      estimated_range_km: Number(robotaxi.max_range_km || robotaxi.estimated_range_km || 0),
       battery_operation_status: BatteryOperationStatus.ENOUGH,
     };
   }
@@ -1418,6 +1434,22 @@ function restoreRobotaxiAfterFleetOperation(robotaxi, task, now) {
     return { ...restored, needs_maintenance: false, maintenance_status: MaintenanceStatus.NORMAL };
   }
   return restored;
+}
+
+function createChargingEnergySnapshotFields(robotaxi, taskType, existingTask = {}) {
+  if (taskType !== TaskType.CHARGING) return {};
+  const currentBatteryKwh = Number(existingTask.robotaxi_current_battery_kwh ?? getCurrentBatteryKwh(robotaxi));
+  const batteryCapacityKwh = Number(existingTask.robotaxi_battery_capacity_kwh ?? robotaxi?.battery_capacity_kwh ?? 0);
+  return {
+    robotaxi_current_battery_kwh: currentBatteryKwh,
+    robotaxi_battery_capacity_kwh: batteryCapacityKwh,
+    battery_percent_before: existingTask.battery_percent_before ?? robotaxi?.battery_percent ?? null,
+    target_battery_percent: 100,
+  };
+}
+
+function createChargingTargetFields(taskType) {
+  return taskType === TaskType.CHARGING ? { target_battery_percent: 100 } : {};
 }
 
 function getDefaultFleetOperationWorkDurationSeconds(taskType) {

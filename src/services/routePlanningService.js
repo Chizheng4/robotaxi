@@ -218,7 +218,7 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
   };
 }
 
-export function projectRouteExecutionTravelProgress({ execution, route, elapsedSeconds = 0, cellTravelSeconds = DEFAULT_CELL_TRAVEL_SECONDS }) {
+export function projectRouteExecutionTravelProgress({ execution, route, elapsedSeconds = 0, cellTravelSeconds = DEFAULT_CELL_TRAVEL_SECONDS, robotaxi = null }) {
   if (!execution || !route) return null;
   const routeCellIds = execution.route_cell_ids?.length
     ? execution.route_cell_ids
@@ -228,7 +228,7 @@ export function projectRouteExecutionTravelProgress({ execution, route, elapsedS
   const elapsedStepIndex = Math.floor(Math.max(0, Number(elapsedSeconds) || 0) / secondsPerCell);
   const currentStepIndex = Math.min(elapsedStepIndex, totalStepCount);
   const currentCellId = routeCellIds[currentStepIndex] || execution.current_cell_id || execution.origin_cell_id;
-  return applyTravelMetrics({
+  const projected = applyTravelMetrics({
     record: {
       ...execution,
       current_cell_id: currentCellId,
@@ -240,6 +240,15 @@ export function projectRouteExecutionTravelProgress({ execution, route, elapsedS
     currentRouteId: execution.route_id,
     currentStepIndex,
   });
+  const batteryConsumedKwh = calculateBatteryConsumedKwh({ distanceKm: projected.distance_traveled_km });
+  const batteryConsumedPercent = robotaxi
+    ? getBatteryPercentFromKwh(robotaxi, batteryConsumedKwh)
+    : Number(projected.battery_consumed_percent || 0);
+  return {
+    ...projected,
+    battery_consumed_kwh: batteryConsumedKwh,
+    battery_consumed_percent: batteryConsumedPercent || projected.battery_consumed_percent || 0,
+  };
 }
 
 export function completeRouteExecutionTravel({ execution, task, route, robotaxi, cellTravelSeconds = DEFAULT_CELL_TRAVEL_SECONDS }) {
@@ -249,6 +258,7 @@ export function completeRouteExecutionTravel({ execution, task, route, robotaxi,
     route,
     elapsedSeconds: Math.max(0, Number(route.route_step_count || route.total_step_count || 0) * secondsPerCell),
     cellTravelSeconds: secondsPerCell,
+    robotaxi,
   });
   const nextExecution = {
     ...execution,

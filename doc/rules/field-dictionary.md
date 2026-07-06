@@ -758,6 +758,7 @@
 |lifetime_distance_km|累计行驶距离（公里）|运行态字段|Robotaxi 运营行驶记录与履约行驶记录累计行驶距离|
 |lifetime_battery_consumed_kwh|累计耗电（千瓦时）|运行态字段|Robotaxi 运营行驶记录与履约行驶记录累计消耗电量|
 |lifetime_battery_consumed_percent|累计耗电（%）|兼容字段|旧版累计耗电百分比，主展示和成本计算使用 kWh|
+|lifetime_charged_energy_kwh|累计充电量（千瓦时）|运行态字段|Robotaxi 已完成充电任务累计充入电量|
 |completed_service_order_count|已服务订单数|运行态字段|Robotaxi 已完成服务订单数量|
 |completed_cleaning_count|已清洁次数|运行态字段|Robotaxi 已完成清洁任务数量|
 |completed_charging_count|已充电次数|运行态字段|Robotaxi 已完成充电任务数量|
@@ -785,7 +786,9 @@
 |battery_percent_before|充电前电量（%）|持久化字段|充电开始前电量|
 |target_battery_percent|目标电量（%）|持久化字段|充电目标电量|
 |battery_percent_after|充电后电量（%）|运行态字段|充电完成后电量|
-|charged_energy_kwh|补能电量（千瓦时）|运行态字段|本次充电任务补入 Robotaxi 的电量，用于充电能源成本计算|
+|robotaxi_current_battery_kwh|当前电量（千瓦时）|持久化字段|充电任务创建或激活时从 Robotaxi 获取的当前电量|
+|robotaxi_battery_capacity_kwh|总电量（千瓦时）|持久化字段|充电任务创建或激活时从 Robotaxi 获取的电池容量|
+|charged_energy_kwh|已充电量（千瓦时）|运行态字段|本次充电任务完成后实际充入 Robotaxi 的电量，用于充电能源成本计算|
 |charger_id|充电桩编号|持久化字段|充电任务绑定的充电桩，可为空|
 |charging_started_at|充电开始时间|运行态字段|充电作业开始时间|
 |charging_completed_at|充电完成时间|运行态字段|充电作业完成时间|
@@ -1229,7 +1232,7 @@
 |total_distance_km|总距离（公里）|运行态字段|履约行驶记录关联所有 Route 的总距离|
 |distance_traveled_km|已行驶距离（公里）|运行态字段|历史已完成 Route 距离 + 当前 Route 已行驶距离|
 |distance_remaining_km|剩余距离（公里）|运行态字段|当前 Route 剩余距离|
-|battery_consumed_kwh|已消耗电量（千瓦时）|运行态字段|行驶记录累计已消耗电量，按千瓦时表达|
+|battery_consumed_kwh|已耗电（千瓦时）|运行态字段|行驶记录累计已耗电量，按千瓦时表达|
 |battery_consumed_percent|已消耗电量（%）|兼容字段|旧版行驶消耗百分比，主展示和成本计算使用 kWh|
 |time_elapsed|已耗时（分钟）|运行态字段|履约行驶累计已耗时，按分钟表达|
 |trip_status|履约行驶状态|运行态字段|Trip 当前状态|

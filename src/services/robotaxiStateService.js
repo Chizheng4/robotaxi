@@ -124,7 +124,7 @@ export function applyTravelDelta(robotaxi, {
   const nextBattery = robotaxi.battery_capacity_kwh
     ? round2(Math.max(0, Math.min(100, nextBatteryKwh / Number(robotaxi.battery_capacity_kwh || 1) * 100)))
     : round2(Math.max(0, Number(robotaxi.battery_percent || 0) - normalizedBatteryDeltaPercent));
-  const nextRange = round2(Math.max(0, Number(robotaxi.estimated_range_km || 0) - Math.max(0, Number(distanceDeltaKm) || 0)));
+  const nextRange = getEstimatedRangeFromBattery(robotaxi, nextBattery);
   return {
     ...robotaxi,
     current_cell_id: currentCellId || robotaxi.current_cell_id,
@@ -137,6 +137,30 @@ export function applyTravelDelta(robotaxi, {
     lifetime_distance_km: nextDistance,
     lifetime_battery_consumed_kwh: nextConsumedKwh,
     lifetime_battery_consumed_percent: nextConsumedPercent,
+    updated_at: now || robotaxi.updated_at,
+  };
+}
+
+export function applyChargingDelta(robotaxi, {
+  chargedEnergyKwh = 0,
+  targetBatteryKwh = null,
+  targetBatteryPercent = 100,
+  now = null,
+} = {}) {
+  if (!robotaxi) return null;
+  const capacity = Number(robotaxi.battery_capacity_kwh || 0);
+  const nextBatteryKwh = targetBatteryKwh !== null && targetBatteryKwh !== undefined
+    ? round2(Math.max(0, Number(targetBatteryKwh) || 0))
+    : getBatteryKwhFromPercent(robotaxi, targetBatteryPercent);
+  const nextBatteryPercent = capacity > 0
+    ? round2(Math.max(0, Math.min(100, nextBatteryKwh / capacity * 100)))
+    : round2(Math.max(0, Number(targetBatteryPercent) || 0));
+  return {
+    ...robotaxi,
+    battery_percent: nextBatteryPercent,
+    current_battery_kwh: nextBatteryKwh,
+    estimated_range_km: getEstimatedRangeFromBattery(robotaxi, nextBatteryPercent),
+    lifetime_charged_energy_kwh: round2(Number(robotaxi.lifetime_charged_energy_kwh || 0) + Math.max(0, Number(chargedEnergyKwh) || 0)),
     updated_at: now || robotaxi.updated_at,
   };
 }
@@ -165,6 +189,12 @@ export function calculateBatteryConsumedKwh({
   energyConsumptionKwhPerKm = DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM,
 } = {}) {
   return round2(Math.max(0, Number(distanceKm) || 0) * Math.max(0, Number(energyConsumptionKwhPerKm) || 0));
+}
+
+export function getEstimatedRangeFromBattery(robotaxi, batteryPercent = robotaxi?.battery_percent) {
+  const maxRange = Number(robotaxi?.max_range_km);
+  if (!Number.isFinite(maxRange) || maxRange <= 0) return round2(robotaxi?.estimated_range_km || 0);
+  return round2(maxRange * Math.max(0, Number(batteryPercent) || 0) / 100);
 }
 
 function calculateBatteryPercentFromKwh(robotaxi, batteryKwh) {

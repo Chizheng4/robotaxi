@@ -353,7 +353,7 @@ const tableConfig = {
   chargingTasks: {
     title: "充电任务",
     description: "用于将 Robotaxi 从低电量或计划补能状态恢复到可运营电量状态。",
-    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "charger_id", "battery_percent_before", "target_battery_percent", "battery_percent_after", "charging_started_at", "charging_completed_at"],
+    columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "charger_id", "robotaxi_current_battery_kwh", "robotaxi_battery_capacity_kwh", "charged_energy_kwh", "battery_percent_before", "target_battery_percent", "battery_percent_after", "charging_started_at", "charging_completed_at"],
   },
   maintenanceTasks: {
     title: "维修任务",
@@ -498,7 +498,7 @@ const tableConfig = {
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "availability_status", "motion_status", "max_range_km", "battery_capacity_kwh", "current_battery_kwh", "battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_kwh", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "pending_task_queue", "operation_blocking_reason"],
+    columns: ["robotaxi_id", "fleet_id", "availability_status", "motion_status", "max_range_km", "battery_capacity_kwh", "current_battery_kwh", "battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_kwh", "lifetime_charged_energy_kwh", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "pending_task_queue", "operation_blocking_reason"],
   },
   validations: {
     title: "初始化校验",
@@ -5611,7 +5611,7 @@ function getDetailTabs(selectedType) {
   if (selectedType === "robotaxi") {
     return [
       { key: "basic", label: "基础信息", keys: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "availability_status", "operation_blocking_reason", "motion_status"] },
-      { key: "asset", label: "资产事实", keys: ["max_range_km", "battery_capacity_kwh", "current_battery_kwh", "battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_kwh", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count"] },
+      { key: "asset", label: "资产事实", keys: ["max_range_km", "battery_capacity_kwh", "current_battery_kwh", "battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_kwh", "lifetime_charged_energy_kwh", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count"] },
       { key: "task", label: "任务状态", keys: ["current_task_id", "current_task_type", "current_task_status", "current_order_id", "current_order_status", "current_route_id", "pending_task_queue", "pending_fleet_task_type", "pending_fleet_task_id"] },
       { key: "location", label: "位置上下文", keys: ["current_cell_id", "location_summary", "location_context"] },
       { key: "execution", label: "行驶记录", keys: ["current_route_execution_id", "current_execution_status", "current_route_step"] },
@@ -5657,7 +5657,7 @@ function getDetailTabs(selectedType) {
     return [
       { key: "basic", label: "任务信息", keys: ["task_id", "task_type", "task_status", "task_priority", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id"] },
       { key: "location", label: "位置与行驶", keys: ["robotaxi_current_cell_id", "robotaxi_current_location_summary", "robotaxi_current_location_detail", "origin_cell_id", "origin_location_summary", "origin_location_detail", "target_ops_center_id", "target_cell_id", "target_location_summary", "target_location_detail", "route_execution_id", "route_id", "route_strategy_id"] },
-      { key: "work", label: "作业信息", keys: ["worker_id", "charger_id", "maintenance_type", "clean_level_before", "clean_level_after", "battery_percent_before", "target_battery_percent", "battery_percent_after", "charged_energy_kwh", "failure_type", "failure_severity", "diagnosis_result", "disposition_result", "repair_result", "requires_readiness_check", "retirement_reason", "approval_status", "asset_exit_result"] },
+      { key: "work", label: "作业信息", keys: ["worker_id", "charger_id", "maintenance_type", "clean_level_before", "clean_level_after", "robotaxi_current_battery_kwh", "robotaxi_battery_capacity_kwh", "charged_energy_kwh", "battery_percent_before", "target_battery_percent", "battery_percent_after", "failure_type", "failure_severity", "diagnosis_result", "disposition_result", "repair_result", "requires_readiness_check", "retirement_reason", "approval_status", "asset_exit_result"] },
       { key: "time", label: "时间与来源", keys: ["pending_since_at", "operation_created_at", "created_at", "started_at", "work_started_at", "charging_started_at", "charging_completed_at", "operation_completed_at", "completed_at", "simulation_created_at", "simulation_completed_at", "failure_reason"] },
       { key: "cost", label: "成本", cost: true, keys: [] },
       { key: "timeline", label: "状态时间线", timeline: true, keys: [] },
@@ -6701,8 +6701,10 @@ function createDirectFleetOperationTaskFields(robotaxi, taskType) {
   if (taskType === taskTypes.TaskType.CHARGING) {
     return {
       ...commonFields,
+      robotaxi_current_battery_kwh: robotaxi.current_battery_kwh ?? null,
+      robotaxi_battery_capacity_kwh: robotaxi.battery_capacity_kwh ?? null,
       battery_percent_before: robotaxi.battery_percent ?? null,
-      target_battery_percent: 90,
+      target_battery_percent: 100,
     };
   }
   if (taskType === taskTypes.TaskType.MAINTENANCE) {
@@ -8002,6 +8004,7 @@ function enrichRouteExecutionForDisplay(execution, data) {
     total_distance_km: executionMetrics.totalDistanceKm,
     distance_traveled_km: executionMetrics.distanceTraveledKm,
     distance_remaining_km: executionMetrics.distanceRemainingKm,
+    battery_consumed_kwh: execution.battery_consumed_kwh ?? Number((Number(executionMetrics.distanceTraveledKm || 0) * DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM).toFixed(2)),
   };
 }
 

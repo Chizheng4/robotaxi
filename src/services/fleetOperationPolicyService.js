@@ -48,7 +48,7 @@ const DEFAULT_POLICY_CONFIGS = [
     taskType: TaskType.CHARGING,
     parameters: {
       battery_percent_threshold: 25,
-      target_battery_percent: 90,
+      target_battery_percent: 100,
     },
   },
   {

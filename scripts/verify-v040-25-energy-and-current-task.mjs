@@ -18,8 +18,8 @@ const baseRobotaxi = {
 
 assert.equal(fieldDictionary.current_battery_kwh, "当前电量（千瓦时）");
 assert.equal(fieldDictionary.lifetime_battery_consumed_kwh, "累计耗电（千瓦时）");
-assert.equal(fieldDictionary.battery_consumed_kwh, "已消耗电量（千瓦时）");
-assert.equal(fieldDictionary.charged_energy_kwh, "补能电量（千瓦时）");
+assert.equal(fieldDictionary.battery_consumed_kwh, "已耗电（千瓦时）");
+assert.equal(fieldDictionary.charged_energy_kwh, "已充电量（千瓦时）");
 assert.equal(valueDictionary.AVAILABLE, "可运营");
 assert.equal(baseRobotaxi.current_battery_kwh, Number((baseRobotaxi.battery_capacity_kwh * baseRobotaxi.battery_percent / 100).toFixed(2)));
 

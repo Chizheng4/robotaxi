@@ -77,6 +77,7 @@ export function validateOperationsCenter(data) {
       "current_battery_kwh 必须由 battery_capacity_kwh 和 battery_percent 计算得到",
       data.robotaxis.every((robotaxi) => robotaxi.current_battery_kwh === robotaxi.battery_capacity_kwh * robotaxi.battery_percent / 100),
     ),
+    check("ROBOTAXI_INITIAL_CHARGED_ENERGY", "每台 Robotaxi 初始累计充电量必须为 0", data.robotaxis.every((robotaxi) => Number(robotaxi.lifetime_charged_energy_kwh || 0) === 0)),
     check("WORKER_COUNT", "Worker 数量必须为 10", (data.workers || []).length === 10, `当前 ${(data.workers || []).length} 个 Worker`),
     check("WORKER_ID_UNIQUE", "每个 Worker 必须有唯一 worker_id", new Set(workerIds).size === workerIds.length),
     check("WORKER_IN_OPS_CENTER", "每个 Worker 必须属于运营中心", (data.workers || []).every((worker) => worker.ops_center_id === opsCenter?.ops_center_id)),

@@ -17,6 +17,7 @@ import { advanceTimedOperations } from "./timedOperationScheduler.js";
 import { countActiveWorkflowObjects, createSimulationRuntimeScope, mergeTimedOperationUpdates } from "./simulationRuntimeScope.js";
 import { getActiveWorkflowTimingProfile } from "./workflowRuntimeConfig.js";
 import * as routePlanningService from "../services/routePlanningService.js";
+import { applyTravelDelta, getTravelDeltaFromRecords } from "../services/robotaxiStateService.js";
 import * as tripService from "../services/tripService.js";
 export { resolveIdleJumpTargetSeconds } from "./simulationEventHorizon.js";
 
@@ -214,6 +215,8 @@ function applyTravelProgressFromTimedOperations({ timedOperations = [], business
   let routeExecutionChanged = false;
   let nextTrips = businessData.trips || [];
   let tripChanged = false;
+  let nextRobotaxis = businessData.robotaxis || [];
+  let robotaxiChanged = false;
 
   for (const operation of travelOperations) {
     const routeId = operation.operation_payload?.route_id;
@@ -223,13 +226,29 @@ function applyTravelProgressFromTimedOperations({ timedOperations = [], business
     if (operation.object_type === "routeExecution") {
       nextRouteExecutions = nextRouteExecutions.map((execution) => {
         if (execution.route_execution_id !== operation.object_id) return execution;
+        const robotaxi = nextRobotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id) || null;
         const projected = routePlanningService.projectRouteExecutionTravelProgress({
           execution,
           route,
           elapsedSeconds: operation.elapsed_seconds,
           cellTravelSeconds: operation.operation_payload?.cell_travel_seconds,
+          robotaxi,
         });
         if (!projected) return execution;
+        if (robotaxi) {
+          const { distanceDeltaKm, batteryDeltaKwh, batteryDeltaPercent } = getTravelDeltaFromRecords(execution, projected);
+          const movedRobotaxi = applyTravelDelta(robotaxi, {
+            distanceDeltaKm,
+            batteryDeltaKwh,
+            batteryDeltaPercent,
+            currentCellId: projected.current_cell_id,
+            routeId: projected.route_id || robotaxi.current_route_id,
+            taskId: projected.task_id || robotaxi.current_task_id,
+            motionStatus: "MOVING",
+          });
+          nextRobotaxis = nextRobotaxis.map((item) => item.robotaxi_id === robotaxi.robotaxi_id ? movedRobotaxi : item);
+          robotaxiChanged = true;
+        }
         routeExecutionChanged = true;
         return projected;
       });
@@ -245,6 +264,20 @@ function applyTravelProgressFromTimedOperations({ timedOperations = [], business
           { cellTravelSeconds: operation.operation_payload?.cell_travel_seconds },
         );
         if (!projected) return trip;
+        const robotaxi = nextRobotaxis.find((item) => item.robotaxi_id === trip.robotaxi_id) || null;
+        if (robotaxi) {
+          const { distanceDeltaKm, batteryDeltaKwh, batteryDeltaPercent } = getTravelDeltaFromRecords(trip, projected);
+          const movedRobotaxi = applyTravelDelta(robotaxi, {
+            distanceDeltaKm,
+            batteryDeltaKwh,
+            batteryDeltaPercent,
+            currentCellId: projected.current_cell_id,
+            routeId: projected.route_id || robotaxi.current_route_id,
+            motionStatus: "MOVING",
+          });
+          nextRobotaxis = nextRobotaxis.map((item) => item.robotaxi_id === robotaxi.robotaxi_id ? movedRobotaxi : item);
+          robotaxiChanged = true;
+        }
         tripChanged = true;
         return projected;
       });
@@ -256,6 +289,9 @@ function applyTravelProgressFromTimedOperations({ timedOperations = [], business
   }
   if (tripChanged && typeof businessData.setTrips === "function") {
     businessData.setTrips(() => nextTrips);
+  }
+  if (robotaxiChanged && typeof businessData.setRobotaxis === "function") {
+    businessData.setRobotaxis(() => nextRobotaxis);
   }
 }
 
