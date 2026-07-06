@@ -5253,9 +5253,8 @@ function createFleetTaskEventRows(eventLogs = [], tasks = [], page = null) {
   const visibleTaskIds = new Set(tasks.map((task) => task.task_id).filter(Boolean));
   return (eventLogs || [])
     .filter((event) => {
-      const taskMatched = event.task_id && (visibleTaskIds.size === 0 || visibleTaskIds.has(event.task_id));
-      const pageMatched = page && event.source_page === page;
-      return taskMatched || pageMatched;
+      if (visibleTaskIds.size > 0) return event.task_id && visibleTaskIds.has(event.task_id);
+      return page && event.source_page === page;
     })
     .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
 }
@@ -5350,7 +5349,7 @@ function TabbedDetail({ selectedObject, selectedType }) {
         children: tab.cost ? (
           <CostDetail selectedObject={selectedObject} />
         ) : tab.timeline ? (
-          <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} />
+          <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
         ) : (
           <Descriptions
             className="compact-descriptions"
@@ -5565,7 +5564,7 @@ function getDetailStatusField(selectedType) {
   }[selectedType] || null;
 }
 
-function StatusTimeline({ history, statusField }) {
+function StatusTimeline({ history, statusField, row = null }) {
   if (!Array.isArray(history) || history.length === 0) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无业务状态时间线" />;
   }
@@ -5576,7 +5575,7 @@ function StatusTimeline({ history, statusField }) {
           <span className="status-timeline-marker" />
           <div className="status-timeline-content">
             <div className="status-timeline-heading">
-              <StatusValue value={item.to_status} label={getDisplayValue(item.to_status, statusField)} />
+              <StatusValue value={item.to_status} label={getFieldDisplayValue(statusField, item.to_status, row)} />
               <Text>{item.simulation_status_changed_at || item.calculated_simulation_status_changed_at}</Text>
             </div>
             <Text type="secondary">{getDisplayValue(item.action_type, "action_type")} · {item.configured_duration_seconds || 0} 秒</Text>
@@ -6878,6 +6877,7 @@ function isStatusField(key) {
     "current_task_status",
     "current_execution_status",
     "availability_status",
+    "fleet_operation_status",
     "motion_status",
     "worker_status",
     "route_status",

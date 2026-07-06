@@ -5416,9 +5416,8 @@ function createServiceOrderEventRows(eventLogs = [], serviceOrders = []) {
 function createFleetTaskEventRows(eventLogs = [], tasks = [], page = null) {
   const visibleTaskIds = new Set(tasks.map(task => task.task_id).filter(Boolean));
   return (eventLogs || []).filter(event => {
-    const taskMatched = event.task_id && (visibleTaskIds.size === 0 || visibleTaskIds.has(event.task_id));
-    const pageMatched = page && event.source_page === page;
-    return taskMatched || pageMatched;
+    if (visibleTaskIds.size > 0) return event.task_id && visibleTaskIds.has(event.task_id);
+    return page && event.source_page === page;
   }).sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
 }
 function createFleetOperationPolicyRunRows(policyRuns = [], policies = []) {
@@ -5508,7 +5507,8 @@ function TabbedDetail({
         selectedObject: selectedObject
       }) : tab.timeline ? /*#__PURE__*/React.createElement(StatusTimeline, {
         history: selectedObject.simulation_status_transition_history,
-        statusField: getDetailStatusField(selectedType)
+        statusField: getDetailStatusField(selectedType),
+        row: selectedObject
       }) : /*#__PURE__*/React.createElement(Descriptions, {
         className: "compact-descriptions",
         column: 1,
@@ -5991,7 +5991,8 @@ function getDetailStatusField(selectedType) {
 }
 function StatusTimeline({
   history,
-  statusField
+  statusField,
+  row = null
 }) {
   if (!Array.isArray(history) || history.length === 0) {
     return /*#__PURE__*/React.createElement(Empty, {
@@ -6011,7 +6012,7 @@ function StatusTimeline({
     className: "status-timeline-heading"
   }, /*#__PURE__*/React.createElement(StatusValue, {
     value: item.to_status,
-    label: getDisplayValue(item.to_status, statusField)
+    label: getFieldDisplayValue(statusField, item.to_status, row)
   }), /*#__PURE__*/React.createElement(Text, null, item.simulation_status_changed_at || item.calculated_simulation_status_changed_at)), /*#__PURE__*/React.createElement(Text, {
     type: "secondary"
   }, getDisplayValue(item.action_type, "action_type"), " \xB7 ", item.configured_duration_seconds || 0, " \u79D2"), item.movement_step_count !== null && item.movement_step_count !== undefined && /*#__PURE__*/React.createElement(Text, {
@@ -7308,7 +7309,7 @@ function summarizeRecord(record) {
   return Object.entries(record).slice(0, 3).map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`).join("，");
 }
 function isStatusField(key) {
-  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "trip_status", "payment_status", "simulation_status", "business_timing_calculation_status", "calculation_status", "metric_status", "data_readiness", "quality_status", "metric_calculation_status", "cost_calculation_status", "revenue_calculation_status", "policy_status", "profile_status", "rule_status", "event_result", "event_source"].includes(key);
+  return ["task_status", "execution_status", "current_task_status", "current_execution_status", "availability_status", "fleet_operation_status", "motion_status", "worker_status", "route_status", "ops_center_status", "zone_status", "road_status", "node_status", "segment_status", "service_area_status", "place_status", "strategy_status", "status", "result", "planning_result", "simulation_result", "run_result", "pricing_result", "decision_result", "customer_status", "order_status", "trip_status", "payment_status", "simulation_status", "business_timing_calculation_status", "calculation_status", "metric_status", "data_readiness", "quality_status", "metric_calculation_status", "cost_calculation_status", "revenue_calculation_status", "policy_status", "profile_status", "rule_status", "event_result", "event_source"].includes(key);
 }
 function getStatusDisplayValue(key, value, row = null) {
   if (!value) return "无";

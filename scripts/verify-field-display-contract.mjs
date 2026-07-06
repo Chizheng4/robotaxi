@@ -125,6 +125,13 @@ function createSampleBusinessData() {
       pending_fleet_task_type: "CLEANING",
       pending_fleet_task_id: "CLN-DISPLAY",
       last_health_check_at: "2026-06-30T10:00:00.000Z",
+    }, {
+      robotaxi_id: "RT-FLEET-RUNNING-DISPLAY",
+      availability_status: "IN_FLEET_OPERATION",
+      fleet_operation_status: "IN_CHARGING",
+      motion_status: "PARKED",
+      current_task_type: "CHARGING",
+      current_task_status: "CHARGING",
     }],
     cleaningTasks: [{
       task_id: "CLN-DISPLAY",

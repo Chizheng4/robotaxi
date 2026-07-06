@@ -81,6 +81,23 @@ const TASK_CONFIG = {
 };
 
 const TERMINAL_STATUSES = new Set(["COMPLETED", "CANCELLED", "FAILED"]);
+const BLOCKED_TRIGGER_TASK_FIELDS = new Set([
+  "task_id",
+  "task_type",
+  "task_status",
+  "simulation_status_transition_history",
+  "cost_records",
+  "cost_calculation_run_id",
+  "total_cost_amount",
+  "distance_cost_amount",
+  "energy_cost_amount",
+  "labor_cost_amount",
+  "asset_depreciation_cost_amount",
+  "created_at",
+  "completed_at",
+  "operation_created_at",
+  "operation_completed_at",
+]);
 
 export function getFleetOperationCollectionKey(taskType) {
   return TASK_CONFIG[taskType]?.collectionKey || null;
@@ -172,7 +189,7 @@ export function createFleetOperationTask({
       operation_created_at: now,
       created_at: now,
       ...createChargingEnergySnapshotFields(robotaxi, taskType),
-      ...trigger.task_fields,
+      ...sanitizeFleetOperationTriggerFields(trigger.task_fields),
       ...createChargingTargetFields(taskType),
       ...resolveAudit(context, { created: true }),
     }), {
@@ -252,7 +269,7 @@ export function createFleetOperationTask({
     operation_created_at: now,
     created_at: now,
     ...createChargingEnergySnapshotFields(robotaxi, taskType),
-    ...trigger.task_fields,
+    ...sanitizeFleetOperationTriggerFields(trigger.task_fields),
     ...createChargingTargetFields(taskType),
     ...resolveAudit(context, { created: true }),
   }), {
@@ -274,6 +291,12 @@ export function createFleetOperationTask({
     collectionKey: config.collectionKey,
     robotaxi: applyFleetOperationTaskReference(robotaxi, { task, shouldWait: false, now }),
   };
+}
+
+function sanitizeFleetOperationTriggerFields(fields = {}) {
+  return Object.fromEntries(
+    Object.entries(fields || {}).filter(([key]) => !BLOCKED_TRIGGER_TASK_FIELDS.has(key))
+  );
 }
 
 export function activateQueuedFleetOperationTask({ task, robotaxi, opsCenters = [], context = {} } = {}) {

@@ -131,6 +131,8 @@ const opsCenters = [{
   can_repair_robotaxi: true,
   cell_ids: ["C-RETIRE-1", "C-REPAIR-1"],
   operation_capability_zones: [
+    { task_type: TaskType.CLEANING, work_cell_ids: ["C-RETIRE-1"], parking_cell_ids: [] },
+    { task_type: TaskType.MAINTENANCE, work_cell_ids: ["C-REPAIR-1"], parking_cell_ids: [] },
     { task_type: TaskType.RETIREMENT, work_cell_ids: ["C-RETIRE-1"], parking_cell_ids: [] },
     { task_type: TaskType.FAILURE_HANDLING, work_cell_ids: ["C-REPAIR-1"], parking_cell_ids: [] },
   ],
@@ -354,6 +356,108 @@ function verifyRouteExecutionServiceLifecycle() {
   assert.ok(abnormalExecution.simulation_status_transition_history.some((item) => item.result_type === "ARRIVAL_ABNORMAL_CONFIRMED"), "异常到达必须由服务层写入行驶记录状态时间线");
 }
 
+function verifyDeploymentNormalArrivalGeneratesCostFacts() {
+  let state = createDeploymentActionState();
+  const runtime = actionRuntime({ context: { trigger_type: "MANUAL", source_type: "MANUAL_OPERATION" } });
+  const created = businessActionService.createDeploymentTask({ state, runtime });
+  assert.equal(created.success, true);
+  state = applyUpdates(state, created.updates);
+  const executionId = created.data.routeExecutionId;
+
+  const planned = businessActionService.executeRoutePlanning({ state, objectType: "routeExecution", objectId: executionId, runtime });
+  assert.equal(planned.success, true);
+  state = applyUpdates(state, planned.updates);
+  const arrived = businessActionService.completeRouteExecutionTravel({ state, objectId: executionId, runtime });
+  assert.equal(arrived.success, true);
+  state = applyUpdates(state, arrived.updates);
+  const confirmed = businessActionService.confirmRouteExecutionArrival({ state, objectId: executionId, runtime });
+  assert.equal(confirmed.success, true);
+  state = applyUpdates(state, confirmed.updates);
+
+  const execution = state.routeExecutions.find((item) => item.route_execution_id === executionId);
+  const task = state.deploymentTasks.find((item) => item.task_id === execution.task_id);
+  assert.equal(execution.execution_status, "COMPLETED");
+  assert.equal(task.task_status, "COMPLETED");
+  assert.ok((state.costRecords || []).some((record) => record.source_object_type === "routeExecution" && record.source_object_id === executionId), "运营行驶记录完成必须生成行驶成本明细");
+  assert.ok((state.costRecords || []).some((record) => record.source_object_type === "deploymentTask" && record.source_object_id === task.task_id), "运营投放任务完成必须生成任务成本明细");
+}
+
+function verifyFleetOperationQueueActivationIsolation() {
+  const activeCleaningTask = {
+    task_id: "TASK-CLN-ACTIVE",
+    task_type: TaskType.CLEANING,
+    task_status: "CLEANING_IN_PROGRESS",
+    robotaxi_id: "RTX-QUEUE",
+    simulation_status_transition_history: [{
+      status_transition_id: "ST-CLEAN-001",
+      transition_sequence: 1,
+      business_object_type: "cleaningTask",
+      business_object_id: "TASK-CLN-ACTIVE",
+      from_status: "READY_TO_START",
+      action_type: "FLEET_OPERATION_WORK_START",
+      result_type: "FLEET_OPERATION_WORK_STARTED",
+      to_status: "CLEANING_IN_PROGRESS",
+    }],
+  };
+  const occupiedRobotaxi = {
+    robotaxi_id: "RTX-QUEUE",
+    current_cell_id: "C-REPAIR-1",
+    availability_status: "IN_FLEET_OPERATION",
+    available_for_dispatch: false,
+    current_task_id: activeCleaningTask.task_id,
+    current_task_type: TaskType.CLEANING,
+    current_task_status: "CLEANING_IN_PROGRESS",
+    pending_task_queue: [],
+    fleet_operation_status: "IN_CLEANING",
+  };
+  const created = fleetOperationTaskService.createFleetOperationTask({
+    robotaxi: occupiedRobotaxi,
+    taskType: TaskType.MAINTENANCE,
+    existingTasks: [activeCleaningTask],
+    trigger: {
+      trigger_source: "VERIFY",
+      task_fields: {
+        task_status: "CLEANING_IN_PROGRESS",
+        simulation_status_transition_history: activeCleaningTask.simulation_status_transition_history,
+        total_cost_amount: 999,
+        maintenance_type: "GENERAL",
+      },
+    },
+    context: context({
+      opsCenters,
+      robotaxiTaskPlanningStrategy: robotaxiTaskPlanningService.initializeDefaultRobotaxiTaskPlanningStrategies(now)[0],
+      recordTaskPlanningAudit: true,
+    }),
+  });
+  assert.equal(created.created, true);
+  assert.equal(created.queued, true);
+  assert.equal(created.task.task_status, "WAITING_ROBOTAXI_AVAILABLE", "排队任务首态必须是自己的任务排队中");
+  assert.equal(created.task.total_cost_amount, undefined, "排队任务不得继承触发来源成本");
+  assert.equal(created.task.simulation_status_transition_history.length, 1, "排队任务不得继承前序任务状态时间线");
+  assert.equal(created.task.simulation_status_transition_history[0].business_object_type, "maintenanceTask");
+
+  const activated = fleetOperationTaskService.activateNextQueuedFleetOperationTask({
+    robotaxi: {
+      ...created.robotaxi,
+      current_cell_id: "C-REPAIR-1",
+      current_task_id: null,
+      current_task_type: null,
+      current_task_status: null,
+    },
+    tasksByType: { maintenanceTasks: [created.task] },
+    opsCenters,
+    context: context(),
+  });
+  assert.equal(activated.activated, true);
+  assert.equal(activated.task.task_status, "WAITING_RESOURCE_ASSIGNMENT");
+  assert.deepEqual(
+    activated.task.simulation_status_transition_history.map((item) => item.business_object_type),
+    ["maintenanceTask", "maintenanceTask"],
+    "排队激活后的任务时间线只能属于维修任务自身"
+  );
+  assert.ok(!activated.task.simulation_status_transition_history.some((item) => item.to_status === "CLEANING_IN_PROGRESS"), "维修任务时间线不得出现清洁状态");
+}
+
 function verifyServiceOrderCreationPricingAndCall() {
   let state = createBaseBusinessState();
   const runtime = actionRuntime({ context: { order_channel: "OWN_APP_SIMULATED_ORDER" } });
@@ -396,6 +500,8 @@ function verifyStaticContracts() {
   assert.match(main, /businessActionService\.completeRouteExecutionTravel/, "运营行驶自动到达必须调用业务服务");
   assert.match(main, /businessActionService\.confirmRouteExecutionArrival/, "运营行驶正常到达必须调用业务服务");
   assert.match(main, /businessActionService\.confirmRouteExecutionAbnormalArrival/, "运营行驶异常到达必须调用业务服务");
+  assert.match(main, /visibleTaskIds\.size > 0/, "运维最近任务事件有任务集合时必须按 task_id 严格过滤");
+  assert.match(main, /fleet_operation_status/, "Robotaxi 运维状态必须进入统一状态显示");
   assert.match(main, /approveRetirementTask/, "页面必须提供退役确认动作");
   assert.match(main, /rejectRetirementTask/, "页面必须提供退役驳回动作");
   assert.match(main, /退役完成/, "退役处理中必须显示退役完成动作");
@@ -427,6 +533,8 @@ verifyFailureCompletesToAvailableWithCost();
 verifyReadinessServiceLifecycle();
 verifyDeploymentCreationServiceLifecycle();
 verifyRouteExecutionServiceLifecycle();
+verifyDeploymentNormalArrivalGeneratesCostFacts();
+verifyFleetOperationQueueActivationIsolation();
 verifyServiceOrderCreationPricingAndCall();
 verifyStaticContracts();
 
