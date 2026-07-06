@@ -36,6 +36,7 @@ export function createReadinessTask({ state, runtime }) {
     task_id: taskId,
     task_type: taskTypes.TaskType.READINESS_CHECK,
     task_status: taskTypes.ReadinessTaskStatus.WAITING_ASSIGNMENT,
+    trigger_type: runtime.context?.trigger_type || taskTypes.TriggerType.AUTO,
     robotaxi_id: candidate.robotaxi_id,
     deployment_task_id: null,
     route_execution_id: null,
@@ -74,6 +75,14 @@ export function assignReadinessTask({ state, objectId, runtime }) {
       current_task_status: taskTypes.ReadinessTaskStatus.WAITING_CHECK,
       ...runtime.audit(),
     })),
+    workers: replaceById(appData.workers || [], "worker_id", worker.worker_id, (item) => ({
+      ...item,
+      worker_status: "BUSY",
+      current_task_id: objectId,
+      current_task_type: taskTypes.TaskType.READINESS_CHECK,
+      current_task_status: taskTypes.ReadinessTaskStatus.WAITING_CHECK,
+      ...runtime.audit(),
+    })),
   });
 }
 
@@ -89,6 +98,11 @@ export function startReadinessTask({ state, objectId, runtime }) {
     }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: item.task_status, toStatus: taskTypes.ReadinessTaskStatus.CHECKING, actionType: "READINESS_TASK_START", resultType: "READINESS_STARTED" })),
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", task.robotaxi_id, (robotaxi) => ({
       ...markPendingAdmission(robotaxi, { reason: "READINESS_CHECK", now: runtime.now() }),
+      current_task_status: taskTypes.ReadinessTaskStatus.CHECKING,
+      ...runtime.audit(),
+    })),
+    workers: replaceById(dataView(state).workers || [], "worker_id", task.worker_id || task.assigned_worker_id, (worker) => ({
+      ...worker,
       current_task_status: taskTypes.ReadinessTaskStatus.CHECKING,
       ...runtime.audit(),
     })),
@@ -138,10 +152,55 @@ export function passReadinessTask({ state, objectId, runtime }) {
       current_task_status: null,
       ...runtime.audit(),
     })),
+    workers: replaceById(dataView(state).workers || [], "worker_id", task.worker_id || task.assigned_worker_id, (worker) => ({
+      ...worker,
+      worker_status: "IDLE",
+      current_task_id: null,
+      current_task_type: null,
+      current_task_status: null,
+      ...runtime.audit(),
+    })),
     },
     costSources: [{ objectType: "readinessTask", object: completedTask }],
   });
   return success("READINESS_PASSED", `准入任务 ${objectId} 已通过`, { objectType: "readinessTask", objectId, robotaxiId: task.robotaxi_id }, updates);
+}
+
+export function failReadinessTask({ state, objectId, runtime, issueType = taskTypes.IssueType.UNKNOWN } = {}) {
+  const task = (state.readinessTasks || []).find((item) => item.task_id === objectId);
+  if (!task) return failure("READINESS_FAIL_FAILED", `未找到准入任务 ${objectId}`, "readinessTask", objectId, "未找到准入任务");
+  const completedTask = withLifecycleStatus({
+    ...task,
+    task_status: taskTypes.ReadinessTaskStatus.FAILED,
+    check_result: taskTypes.CheckResult.FAILED,
+    issue_type: issueType,
+    completed_at: runtime.now(),
+    ...runtime.audit({ completed: true }),
+  }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: task.task_status, toStatus: taskTypes.ReadinessTaskStatus.FAILED, actionType: "READINESS_TASK_FAIL", resultType: "READINESS_FAILED", durationSeconds: getConfiguredDurationSeconds(runtime, "readiness_check_seconds", 30) });
+  const updates = withFinancialFacts({
+    state,
+    runtime,
+    updates: {
+      readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, completedTask),
+      robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", task.robotaxi_id, (robotaxi) => ({
+        ...markPendingAdmission(robotaxi, { reason: issueType, now: runtime.now() }),
+        current_task_id: null,
+        current_task_type: null,
+        current_task_status: null,
+        ...runtime.audit(),
+      })),
+      workers: replaceById(dataView(state).workers || [], "worker_id", task.worker_id || task.assigned_worker_id, (worker) => ({
+        ...worker,
+        worker_status: "IDLE",
+        current_task_id: null,
+        current_task_type: null,
+        current_task_status: null,
+        ...runtime.audit(),
+      })),
+    },
+    costSources: [{ objectType: "readinessTask", object: completedTask }],
+  });
+  return success("READINESS_FAILED", `准入任务 ${objectId} 检查不通过`, { objectType: "readinessTask", objectId, robotaxiId: task.robotaxi_id, issueType }, updates);
 }
 
 export function createDeploymentTask({ state, runtime }) {
@@ -184,8 +243,8 @@ export function createDeploymentTask({ state, runtime }) {
     task_type: taskTypes.TaskType.DEPLOYMENT,
     task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
     task_priority: taskTypes.TaskPriority.LOW,
-    trigger_type: taskTypes.TriggerType.AUTO,
-    source_type: taskTypes.TaskSourceType.SUPPLY_ADJUSTMENT_PLAN,
+    trigger_type: runtime.context?.trigger_type || taskTypes.TriggerType.AUTO,
+    source_type: runtime.context?.source_type || taskTypes.TaskSourceType.SUPPLY_ADJUSTMENT_PLAN,
     robotaxi_id: candidate.robotaxi_id,
     route_execution_id: executionId,
     origin_cell_id: candidate.current_cell_id,
@@ -382,15 +441,48 @@ export function confirmRouteExecutionArrival({ state, objectId, runtime }) {
   return success("ARRIVAL_CONFIRMED", `行驶执行 ${execution.route_execution_id} 到达确认完成`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task?.task_id }, updates);
 }
 
+export function confirmRouteExecutionAbnormalArrival({ state, objectId, runtime, arrivalResult = taskTypes.ArrivalExecutionResult.BLOCKED_BY_OBSTACLE }) {
+  const execution = (state.routeExecutions || []).find((item) => item.route_execution_id === objectId || item.deployment_task_id === objectId);
+  if (!execution) return failure("ARRIVAL_ABNORMAL_CONFIRM_FAILED", `未找到行驶执行 ${objectId}`, "routeExecution", objectId, "未找到行驶执行");
+  if (execution.execution_status !== taskTypes.RouteExecutionStatus.ARRIVED) {
+    return failure("ARRIVAL_ABNORMAL_CONFIRM_FAILED", `行驶执行 ${execution.route_execution_id} 当前状态不可确认异常到达`, "routeExecution", execution.route_execution_id, "当前状态不可确认异常到达");
+  }
+  const task = (state.deploymentTasks || []).find((item) => item.task_id === execution.deployment_task_id || item.task_id === execution.task_id);
+  if (!task) return failure("ARRIVAL_ABNORMAL_CONFIRM_FAILED", `未找到投放任务 ${execution.deployment_task_id || execution.task_id}`, "routeExecution", execution.route_execution_id, "未找到投放任务");
+  const abnormalExecution = withLifecycleStatus({
+    ...execution,
+    execution_status: taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL,
+    arrival_execution_result: arrivalResult,
+    actual_target_service_area_id: execution.target_service_area_id || execution.current_target_service_area_id,
+    actual_target_cell_id: execution.current_cell_id,
+    failure_reason: arrivalResult,
+    ...runtime.audit(),
+  }, { runtime, objectType: "routeExecution", statusField: "execution_status", fromStatus: execution.execution_status, toStatus: taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL, actionType: "ARRIVAL_CONFIRM", resultType: "ARRIVAL_ABNORMAL_CONFIRMED", durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3) });
+  const abnormalTask = withLifecycleStatus({
+    ...task,
+    task_status: taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL,
+    arrival_execution_result: arrivalResult,
+    actual_target_service_area_id: task.target_service_area_id || task.planned_target_service_area_id || execution.target_service_area_id,
+    actual_target_cell_id: execution.current_cell_id,
+    failure_reason: arrivalResult,
+    ...runtime.audit(),
+  }, { runtime, objectType: "deploymentTask", statusField: "task_status", fromStatus: task.task_status, toStatus: taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL, actionType: "ARRIVAL_CONFIRM", resultType: "ARRIVAL_ABNORMAL_CONFIRMED", durationSeconds: getConfiguredDurationSeconds(runtime, "arrival_detection_seconds", 3) });
+  return success("ARRIVAL_ABNORMAL_CONFIRMED", `行驶执行 ${execution.route_execution_id} 已确认异常到达`, { objectType: "routeExecution", objectId: execution.route_execution_id, taskId: task.task_id }, {
+    routeExecutions: replaceById(state.routeExecutions || [], "route_execution_id", execution.route_execution_id, abnormalExecution),
+    deploymentTasks: replaceById(state.deploymentTasks || [], "task_id", task.task_id, abnormalTask),
+  });
+}
+
 export function createServiceOrder({ state, runtime }) {
   const appData = dataView(state);
   const runId = runtime.nextId("DSR");
+  const orderChannel = runtime.context?.order_channel || "OWN_APP_SIMULATED_ORDER";
   const demandEngine = state.demandSimulationEngine?.runDemandSimulation || runDemandSimulation;
   const demandRun = demandEngine({
     strategy: appData.demandSimulationStrategies?.[0],
     data: appData,
     customers: appData.customers,
-    orderChannel: "OWN_APP_SIMULATED_ORDER",
+    orderChannel,
     runId,
     randomSeed: runtime.randomSeed(),
     createdAt: runtime.now(),
@@ -401,7 +493,7 @@ export function createServiceOrder({ state, runtime }) {
       demandSimulationRuns: demandRun ? [{ ...demandRun, ...runtime.audit({ created: true }) }, ...(state.demandSimulationRuns || [])] : state.demandSimulationRuns,
     });
   }
-  const order = withLifecycleStatus(createServiceOrderFromDemandRun(demandRun, "OWN_APP_SIMULATED_ORDER", runtime), {
+  const order = withLifecycleStatus(createServiceOrderFromDemandRun(demandRun, orderChannel, runtime), {
     runtime,
     objectType: "serviceOrder",
     statusField: "order_status",
@@ -1269,6 +1361,7 @@ function dataView(state) {
     routes: state.routes || state.data?.routes || [],
     routePlanningRuns: state.routePlanningRuns || state.data?.routePlanningRuns || [],
     robotaxis: state.robotaxis || state.data?.robotaxis || [],
+    workers: state.workers || state.data?.workers || [],
   };
 }
 

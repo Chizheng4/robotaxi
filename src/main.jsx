@@ -1348,6 +1348,7 @@ function App() {
       deploymentTasks,
       routeExecutions,
       routes: data.routes,
+      workers: data.workers,
       routePlanningRuns,
       robotaxis: data.robotaxis,
       data,
@@ -1503,6 +1504,49 @@ function App() {
     return result;
   }
 
+  function runRepeatedManualBusinessAction(action, { maxIterations = 50, isProgressResult = null } = {}) {
+    return runManualBusinessAction(({ state, runtime }) => {
+      let workingState = state;
+      const results = [];
+      for (let index = 0; index < maxIterations; index += 1) {
+        const result = action({ state: workingState, runtime });
+        if (!result?.success || !result.updates || (isProgressResult && !isProgressResult(result))) {
+          if (results.length === 0) return result;
+          break;
+        }
+        results.push(result);
+        workingState = {
+          ...workingState,
+          ...result.updates,
+          data: {
+            ...(workingState.data || {}),
+            ...(result.updates.robotaxis ? { robotaxis: result.updates.robotaxis } : {}),
+            ...(result.updates.workers ? { workers: result.updates.workers } : {}),
+            ...(result.updates.routes ? { routes: result.updates.routes } : {}),
+            ...(result.updates.serviceOrders ? { serviceOrders: result.updates.serviceOrders } : {}),
+            ...(result.updates.trips ? { trips: result.updates.trips } : {}),
+            ...(result.updates.deploymentTasks ? { deploymentTasks: result.updates.deploymentTasks } : {}),
+            ...(result.updates.readinessTasks ? { readinessTasks: result.updates.readinessTasks } : {}),
+            ...(result.updates.routeExecutions ? { routeExecutions: result.updates.routeExecutions } : {}),
+          },
+        };
+      }
+      const latest = results.at(-1);
+      return {
+        success: true,
+        resultType: latest?.resultType || "BATCH_BUSINESS_ACTION_COMPLETED",
+        message: `批量业务动作完成 ${results.length} 条`,
+        data: {
+          objectType: latest?.data?.objectType || null,
+          objectId: latest?.data?.objectId || null,
+          results: results.map((item) => item.data).filter(Boolean),
+          createdCount: results.length,
+        },
+        updates: Object.fromEntries(Object.entries(workingState).filter(([key]) => key !== "data")),
+      };
+    });
+  }
+
   function getActiveWorkflowTimingProfileForBusinessAction() {
     return workflowTimingProfiles.find((item) => item.profile_status === "ACTIVE") || workflowTimingProfiles[0] || null;
   }
@@ -1531,11 +1575,12 @@ function App() {
     if (updates.costRecords) setCostRecords(updates.costRecords);
     if (updates.revenueRecords) setRevenueRecords(updates.revenueRecords);
     if (updates.demandSimulationRuns) setDemandSimulationRuns(updates.demandSimulationRuns);
-    if (updates.routes || updates.robotaxis) {
+    if (updates.routes || updates.robotaxis || updates.workers) {
       setOperationalData((current) => ({
         ...current,
         ...(updates.routes ? { routes: updates.routes } : {}),
         ...(updates.robotaxis ? { robotaxis: updates.robotaxis } : {}),
+        ...(updates.workers ? { workers: updates.workers } : {}),
       }));
     }
   }
@@ -2117,6 +2162,8 @@ function App() {
                   planFleetOperationRoute,
                   advanceFleetOperationRouteExecution,
                   confirmFleetOperationArrival,
+                  approveRetirementTask,
+                  rejectRetirementTask,
                   assignFleetOperationWorker,
                   startFleetOperationWork,
                   completeFleetOperationWork,
@@ -2567,64 +2614,75 @@ function App() {
   }
 
   function createManualTask() {
-    const candidates = data.robotaxis.filter((robotaxi) => isCandidateRobotaxi(robotaxi, readinessTasks));
-    const nextLogs = [createEventLog({
-      event_type: taskTypes.TaskEventType.MANUAL_TRIGGER_STARTED,
-      event_result: taskTypes.TaskEventResult.SUCCESS,
-      trigger_type: taskTypes.TriggerType.MANUAL,
-      message: "手动触发运营准入任务生成",
-    })];
-
-    if (candidates.length === 0) {
-      setTaskEventLogs((logs) => [...nextLogs, ...logs]);
-      addLog({
-        event_type: taskTypes.TaskEventType.NO_CANDIDATE_ROBOTAXI,
-        event_result: taskTypes.TaskEventResult.SKIPPED,
-        trigger_type: taskTypes.TriggerType.MANUAL,
-        message: "当前没有可生成准入任务的 Robotaxi",
-      });
+    const result = runRepeatedManualBusinessAction(
+      (params) => businessActionService.createReadinessTask({
+        ...params,
+        runtime: {
+          ...params.runtime,
+          context: { ...(params.runtime.context || {}), trigger_type: taskTypes.TriggerType.MANUAL },
+        },
+      }),
+      { maxIterations: data.robotaxis.length, isProgressResult: (item) => item.resultType === "READINESS_CREATED" },
+    );
+    const created = result?.data?.results || [];
+    if (!created.length) {
+      setTaskEventLogs((logs) => [
+        createEventLog({
+          event_type: taskTypes.TaskEventType.MANUAL_TRIGGER_STARTED,
+          event_result: taskTypes.TaskEventResult.SUCCESS,
+          trigger_type: taskTypes.TriggerType.MANUAL,
+          message: "手动触发运营准入任务生成",
+        }),
+        createEventLog({
+          event_type: taskTypes.TaskEventType.NO_CANDIDATE_ROBOTAXI,
+          event_result: taskTypes.TaskEventResult.SKIPPED,
+          trigger_type: taskTypes.TriggerType.MANUAL,
+          message: "当前没有可生成准入任务的 Robotaxi",
+        }),
+        ...logs,
+      ]);
       return;
     }
-
-    const newTasks = candidates.map((robotaxi) => createTask(robotaxi, taskTypes.TriggerType.MANUAL));
-    setReadinessTasks((tasks) => [...newTasks, ...tasks]);
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => {
-        const task = newTasks.find((item) => item.robotaxi_id === robotaxi.robotaxi_id);
-        return task ? {
-          ...robotaxi,
-          current_task_id: task.task_id,
-          current_task_type: taskTypes.TaskType.READINESS_CHECK,
-          current_task_status: task.task_status,
-        } : robotaxi;
-      }),
-    }));
     setTaskEventLogs((logs) => [
-      ...newTasks.map((task) => createEventLog({
+      ...created.map((item) => createEventLog({
         event_type: taskTypes.TaskEventType.TASK_CREATED,
         event_result: taskTypes.TaskEventResult.SUCCESS,
-        task_id: task.task_id,
-        robotaxi_id: task.robotaxi_id,
-        trigger_type: task.trigger_type,
-        message: `已创建 ${task.robotaxi_id} 的运营准入任务`,
+        task_id: item.objectId,
+        robotaxi_id: item.robotaxiId,
+        trigger_type: taskTypes.TriggerType.MANUAL,
+        message: `已创建 ${item.robotaxiId} 的运营准入任务`,
       })),
-      ...nextLogs,
+      createEventLog({
+        event_type: taskTypes.TaskEventType.MANUAL_TRIGGER_STARTED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        trigger_type: taskTypes.TriggerType.MANUAL,
+        message: `手动触发运营准入任务生成，生成 ${created.length} 条`,
+      }),
       ...logs,
     ]);
-    selectForPage("readinessTasks", "readinessTask", newTasks[0].task_id);
+    selectForPage("readinessTasks", "readinessTask", created[0]?.objectId);
   }
 
   function runAutoReadinessCheck() {
-    const candidates = data.robotaxis.filter((robotaxi) => isCandidateRobotaxi(robotaxi, readinessTasks));
+    const result = runRepeatedManualBusinessAction(
+      (params) => businessActionService.createReadinessTask({
+        ...params,
+        runtime: {
+          ...params.runtime,
+          context: { ...(params.runtime.context || {}), trigger_type: taskTypes.TriggerType.AUTO },
+        },
+      }),
+      { maxIterations: data.robotaxis.length, isProgressResult: (item) => item.resultType === "READINESS_CREATED" },
+    );
+    const created = result?.data?.results || [];
     const triggerLog = createEventLog({
       event_type: taskTypes.TaskEventType.AUTO_TRIGGER_STARTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       trigger_type: taskTypes.TriggerType.AUTO,
-      message: "启动自动准入检查",
+      message: created.length ? `启动自动准入检查，生成 ${created.length} 条` : "启动自动准入检查",
     });
 
-    if (candidates.length === 0) {
+    if (!created.length) {
       setTaskEventLogs((logs) => [
         createEventLog({
           event_type: taskTypes.TaskEventType.NO_CANDIDATE_ROBOTAXI,
@@ -2638,32 +2696,19 @@ function App() {
       return;
     }
 
-    const newTasks = candidates.map((robotaxi) => createTask(robotaxi, taskTypes.TriggerType.AUTO));
-    setReadinessTasks((tasks) => [...newTasks, ...tasks]);
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => {
-        const task = newTasks.find((item) => item.robotaxi_id === robotaxi.robotaxi_id);
-        return task ? {
-          ...robotaxi,
-          current_task_id: task.task_id,
-          current_task_type: taskTypes.TaskType.READINESS_CHECK,
-          current_task_status: task.task_status,
-        } : robotaxi;
-      }),
-    }));
     setTaskEventLogs((logs) => [
-      ...newTasks.map((task) => createEventLog({
+      ...created.map((item) => createEventLog({
         event_type: taskTypes.TaskEventType.TASK_CREATED,
         event_result: taskTypes.TaskEventResult.SUCCESS,
-        task_id: task.task_id,
-        robotaxi_id: task.robotaxi_id,
-        trigger_type: task.trigger_type,
-        message: `自动创建 ${task.robotaxi_id} 的运营准入任务`,
+        task_id: item.objectId,
+        robotaxi_id: item.robotaxiId,
+        trigger_type: taskTypes.TriggerType.AUTO,
+        message: `自动创建 ${item.robotaxiId} 的运营准入任务`,
       })),
       triggerLog,
       ...logs,
     ]);
+    selectForPage("readinessTasks", "readinessTask", created[0]?.objectId);
   }
 
   function runFleetOperationPolicyForPage(page) {
@@ -3490,72 +3535,109 @@ function App() {
     });
   }
 
+  function approveRetirementTask(task) {
+    if (!task?.task_id || !fleetOperationTaskService) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
+    const robotaxi = operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
+    if (!robotaxi) return;
+    const result = fleetOperationTaskService.confirmRetirementTask({
+      task,
+      robotaxi,
+      opsCenters: data.opsCenters,
+      context: { now, workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction() },
+    });
+    if (!result.succeeded) {
+      appendFleetOperationPageEvent(collectionKey, {
+        event_type: taskTypes.TaskEventType.TASK_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        task_type: task.task_type,
+        robotaxi_id: task.robotaxi_id,
+        message: getDisplayValue(result.reason, "result_reason") || "当前退役任务不能确认",
+      });
+      return;
+    }
+    updateFleetOperationTask(result.task);
+    setOperationalData((current) => ({
+      ...current,
+      robotaxis: current.robotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+    }));
+    appendFleetOperationPageEvent(collectionKey, {
+      event_type: taskTypes.TaskEventType.TASK_ASSIGNED,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: result.task.task_id,
+      task_type: result.task.task_type,
+      robotaxi_id: result.task.robotaxi_id,
+      message: result.alreadyAtCapableCenter ? "退役已确认，Robotaxi 已在退役处理位置" : "退役已确认，等待分配退役处理中心",
+    });
+  }
+
+  function rejectRetirementTask(task) {
+    if (!task?.task_id || !fleetOperationTaskService) return;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
+    const robotaxi = operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
+    if (!robotaxi) return;
+    const result = fleetOperationTaskService.rejectRetirementTask({
+      task,
+      robotaxi,
+      context: { now, workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction() },
+    });
+    if (!result.succeeded) {
+      appendFleetOperationPageEvent(collectionKey, {
+        event_type: taskTypes.TaskEventType.TASK_FAILED,
+        event_result: taskTypes.TaskEventResult.FAILED,
+        task_id: task.task_id,
+        task_type: task.task_type,
+        robotaxi_id: task.robotaxi_id,
+        message: getDisplayValue(result.reason, "result_reason") || "当前退役任务不能驳回",
+      });
+      return;
+    }
+    updateFleetOperationTask(result.task);
+    setOperationalData((current) => ({
+      ...current,
+      robotaxis: current.robotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+    }));
+    appendFleetOperationPageEvent(collectionKey, {
+      event_type: taskTypes.TaskEventType.ROBOTAXI_MARKED_AVAILABLE,
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      task_id: result.task.task_id,
+      task_type: result.task.task_type,
+      robotaxi_id: result.task.robotaxi_id,
+      message: "退役已驳回，Robotaxi 恢复可运营",
+    });
+  }
+
   function assignWorker(taskId) {
     const task = readinessTasks.find((item) => item.task_id === taskId);
-    if (!task || task.task_status !== taskTypes.ReadinessTaskStatus.WAITING_ASSIGNMENT) return;
-    const worker = data.workers.find((item) => item.ops_center_id === task.ops_center_id && item.worker_status === "IDLE" && item.current_task_id === null);
-
-    if (!worker) {
+    if (!task) return;
+    const result = runManualBusinessAction((params) => businessActionService.assignReadinessTask({ ...params, objectId: taskId }));
+    const nextTask = result?.updates?.readinessTasks?.find((item) => item.task_id === taskId);
+    if (!result?.success) {
       addLog({
         event_type: taskTypes.TaskEventType.NO_IDLE_WORKER,
         event_result: taskTypes.TaskEventResult.FAILED,
         task_id: task.task_id,
         robotaxi_id: task.robotaxi_id,
-        message: "没有可分配的空闲作业人员",
+        message: getDisplayValue(result?.data?.failureReason, "result_reason") || "没有可分配的空闲作业人员",
       });
       return;
     }
-
-    setReadinessTasks((tasks) => tasks.map((item) => item.task_id === taskId ? {
-      ...item,
-      worker_id: worker.worker_id,
-      task_status: taskTypes.ReadinessTaskStatus.WAITING_CHECK,
-      assigned_at: now(),
-    } : item));
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === task.robotaxi_id ? {
-        ...robotaxi,
-        availability_status: "PENDING_ADMISSION",
-        available_for_dispatch: false,
-        operation_blocking_reason: "READINESS_CHECK",
-        current_task_id: taskId,
-        current_task_type: taskTypes.TaskType.READINESS_CHECK,
-        current_task_status: taskTypes.ReadinessTaskStatus.WAITING_CHECK,
-      } : robotaxi),
-      workers: current.workers.map((item) => item.worker_id === worker.worker_id ? {
-        ...item,
-        worker_status: "BUSY",
-        current_task_id: taskId,
-      } : item),
-    }));
     addLog({
       event_type: taskTypes.TaskEventType.WORKER_ASSIGNED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       task_id: task.task_id,
       robotaxi_id: task.robotaxi_id,
-      worker_id: worker.worker_id,
-      message: `${worker.worker_id} 已分配到 ${task.task_id}`,
+      worker_id: nextTask?.worker_id,
+      message: `${nextTask?.worker_id || "Worker"} 已分配到 ${task.task_id}`,
     });
   }
 
   function startCheck(taskId) {
     const task = readinessTasks.find((item) => item.task_id === taskId);
-    if (!task || task.task_status !== taskTypes.ReadinessTaskStatus.WAITING_CHECK) return;
-    setReadinessTasks((tasks) => tasks.map((item) => item.task_id === taskId ? {
-      ...item,
-      task_status: taskTypes.ReadinessTaskStatus.CHECKING,
-      started_at: now(),
-    } : item));
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === task.robotaxi_id ? {
-        ...robotaxi,
-        availability_status: "PENDING_ADMISSION",
-        operation_blocking_reason: "READINESS_CHECK",
-        current_task_status: taskTypes.ReadinessTaskStatus.CHECKING,
-      } : robotaxi),
-    }));
+    if (!task) return;
+    const result = runManualBusinessAction((params) => businessActionService.startReadinessTask({ ...params, objectId: taskId }));
+    if (!result?.success) return;
     addLog({
       event_type: taskTypes.TaskEventType.CHECK_STARTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
@@ -3568,34 +3650,12 @@ function App() {
 
   function submitCheckResult(taskId, checkResult, issueType = taskTypes.IssueType.NONE) {
     const task = readinessTasks.find((item) => item.task_id === taskId);
-    if (!task || task.task_status !== taskTypes.ReadinessTaskStatus.CHECKING) return;
+    if (!task) return;
     const passed = checkResult === taskTypes.CheckResult.PASSED;
-
-    setReadinessTasks((tasks) => tasks.map((item) => item.task_id === taskId ? {
-      ...item,
-      task_status: taskTypes.ReadinessTaskStatus.COMPLETED,
-      check_result: checkResult,
-      issue_type: passed ? taskTypes.IssueType.NONE : issueType,
-      completed_at: now(),
-    } : item));
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === task.robotaxi_id ? {
-        ...robotaxi,
-        availability_status: passed ? "AVAILABLE" : "PENDING_ADMISSION",
-        available_for_dispatch: passed,
-        unavailable_reason: null,
-        operation_blocking_reason: passed ? null : issueType,
-        current_task_id: null,
-        current_task_type: null,
-        current_task_status: null,
-      } : robotaxi),
-      workers: current.workers.map((worker) => worker.worker_id === task.worker_id ? {
-        ...worker,
-        worker_status: "IDLE",
-        current_task_id: null,
-      } : worker),
-    }));
+    const result = runManualBusinessAction((params) => passed
+      ? businessActionService.passReadinessTask({ ...params, objectId: taskId })
+      : businessActionService.failReadinessTask({ ...params, objectId: taskId, issueType }));
+    if (!result?.success) return;
     addLog({
       event_type: taskTypes.TaskEventType.CHECK_SUBMITTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
@@ -3615,50 +3675,35 @@ function App() {
   }
 
   function createDeploymentTasks() {
-    const planningStrategy = getActiveRobotaxiTaskPlanningStrategy();
-    const fleetOperationTasks = getAllFleetOperationTasks();
-    const planningResults = data.robotaxis.map((robotaxi) => robotaxiTaskPlanningService.executeRobotaxiTaskPlanning({
-      robotaxi,
-      requestedAssignmentType: robotaxiTaskPlanningService.TaskPlanningAssignmentType.DEPLOYMENT_TASK,
-      requestedTaskType: taskTypes.TaskType.DEPLOYMENT,
-      triggerSource: "MANUAL_DEPLOYMENT_TASK_CREATE",
-      readinessTasks,
-      deploymentTasks,
-      serviceOrders,
-      fleetOperationTasks,
-      strategy: planningStrategy,
-      context: {
-        now,
-        nextTaskPlanningRunId,
-        nextTaskPlanningResultId,
-        trigger_object_type: "deploymentTask",
-        trigger_object_id: null,
-      },
-    }));
-    appendTaskPlanningAudit(
-      planningResults.map((item) => item.planningRun),
-      planningResults.map((item) => item.planningResult),
+    const result = runRepeatedManualBusinessAction(
+      (params) => businessActionService.createDeploymentTask({
+        ...params,
+        runtime: {
+          ...params.runtime,
+          context: {
+            ...(params.runtime.context || {}),
+            trigger_type: taskTypes.TriggerType.MANUAL,
+            source_type: taskTypes.TaskSourceType.MANUAL_OPERATION,
+          },
+        },
+      }),
+      { maxIterations: data.robotaxis.length, isProgressResult: (item) => item.resultType === "DEPLOYMENT_CREATED" },
     );
-    const candidates = data.robotaxis.filter((robotaxi, index) => planningResults[index]?.allowed);
-    const targets = candidates.map((robotaxi) => getDefaultDeploymentTarget(data, {
-      originCellId: robotaxi.current_cell_id,
-      seed: `${robotaxi.robotaxi_id}-${Date.now()}`,
-    }));
-    const hasTarget = targets.some((target) => target?.target_cell_id);
+    const created = result?.data?.results || [];
     const triggerLog = createEventLog({
       event_type: taskTypes.TaskEventType.DEPLOYMENT_TRIGGER_STARTED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
       trigger_type: taskTypes.TriggerType.MANUAL,
-      message: "手动触发运营投放任务生成",
+      message: created.length ? `手动触发运营投放任务生成，生成 ${created.length} 条` : "手动触发运营投放任务生成",
     });
 
-    if (!hasTarget || candidates.length === 0) {
+    if (!created.length) {
       setTaskEventLogs((logs) => [
         createEventLog({
           event_type: taskTypes.TaskEventType.DEPLOYMENT_FAILED,
           event_result: taskTypes.TaskEventResult.SKIPPED,
           trigger_type: taskTypes.TriggerType.MANUAL,
-          message: hasTarget ? "当前没有可运营投放的 Robotaxi" : "当前没有有效投放目标",
+          message: result?.message || "当前没有可运营投放的 Robotaxi 或有效投放目标",
         }),
         triggerLog,
         ...logs,
@@ -3666,108 +3711,41 @@ function App() {
       return;
     }
 
-    const newTasks = candidates
-      .map((robotaxi, index) => targets[index]?.target_cell_id ? createDeploymentTask(robotaxi, targets[index]) : null)
-      .filter(Boolean);
-    const newExecutions = newTasks.map((task) => createDeploymentRouteExecution(task));
-    setDeploymentTasks((tasks) => [...newTasks, ...tasks]);
-    setRouteExecutions((items) => [...newExecutions, ...items]);
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => {
-        const task = newTasks.find((item) => item.robotaxi_id === robotaxi.robotaxi_id);
-        return task ? {
-          ...robotaxi,
-          current_task_id: task.task_id,
-          current_task_type: taskTypes.TaskType.DEPLOYMENT,
-          current_task_status: task.task_status,
-          current_route_id: null,
-          motion_status: "PARKED",
-        } : robotaxi;
-      }),
-    }));
     setTaskEventLogs((logs) => [
-      ...newTasks.map((task) => createEventLog({
+      ...created.map((item) => createEventLog({
         event_type: taskTypes.TaskEventType.TASK_CREATED,
         event_result: taskTypes.TaskEventResult.SUCCESS,
-        task_id: task.task_id,
-        robotaxi_id: task.robotaxi_id,
-        trigger_type: task.trigger_type,
-        message: `已创建 ${task.robotaxi_id} 的运营投放任务`,
-      })),
-      ...newExecutions.map((execution) => createEventLog({
-        event_type: taskTypes.TaskEventType.TASK_CREATED,
-        event_result: taskTypes.TaskEventResult.SUCCESS,
-        task_id: execution.task_id,
-        robotaxi_id: execution.robotaxi_id,
-        route_execution_id: execution.route_execution_id,
+        task_id: item.objectId,
+        robotaxi_id: item.robotaxiId,
+        route_execution_id: item.routeExecutionId,
         trigger_type: taskTypes.TriggerType.MANUAL,
-        message: `已创建 ${execution.robotaxi_id} 的运营行驶记录 ${execution.route_execution_id}`,
+        message: `已创建 ${item.robotaxiId} 的运营投放任务`,
+      })),
+      ...created.map((item) => createEventLog({
+        event_type: taskTypes.TaskEventType.TASK_CREATED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        task_id: item.objectId,
+        robotaxi_id: item.robotaxiId,
+        route_execution_id: item.routeExecutionId,
+        trigger_type: taskTypes.TriggerType.MANUAL,
+        message: `已创建 ${item.robotaxiId} 的运营行驶记录 ${item.routeExecutionId}`,
       })),
       triggerLog,
       ...logs,
     ]);
-    selectForPage("deploymentTasks", "deploymentTask", newTasks[0].task_id);
+    selectForPage("deploymentTasks", "deploymentTask", created[0]?.objectId);
   }
 
   function createServiceOrderFromDemand(orderChannel) {
-    const strategy = data.demandSimulationStrategies?.find((item) => item.demand_simulation_strategy_id === "DSS-001");
-    if (!strategy || strategy.strategy_status !== "ACTIVE") return;
-    const run = runDemandSimulation({
-      strategy,
-      data,
-      orderChannel,
-      runId: nextDemandSimulationRunId(),
-      randomSeed: `SO-${Date.now()}-${serviceOrders.length + 1}`,
-      createdAt: now(),
-    });
-    setDemandSimulationRuns((items) => [run, ...items]);
-    if (run.simulation_result !== "SUCCESS") return;
-
-    const order = serviceOrderTypes.createServiceOrder({
-      service_order_id: nextServiceOrderId(),
-      order_channel: orderChannel,
-      customer_id: run.customer_id,
-      demand_simulation_run_id: run.demand_simulation_run_id,
-      demand_simulation_result_id: getDemandSimulationResultId(run.demand_simulation_run_id),
-      customer_origin_location_type: run.customer_origin_location_type,
-      customer_origin_place_id: run.customer_origin_place_id,
-      customer_origin_road_segment_id: run.customer_origin_road_segment_id,
-      customer_origin_cell_id: run.customer_origin_cell_id,
-      pickup_service_area_id: run.pickup_service_area_id,
-      pickup_cell_id: run.pickup_cell_id,
-      dropoff_service_area_id: run.dropoff_service_area_id,
-      dropoff_cell_id: run.dropoff_cell_id,
-      estimated_pricing_decision_id: null,
-      final_pricing_decision_id: null,
-      price_estimation_route_id: null,
-      quote_base_fare: null,
-      quote_distance_unit_price: null,
-      quote_time_unit_price: null,
-      estimated_distance_km: null,
-      estimated_duration_min: null,
-      estimated_price: null,
-      quoted_price: null,
-      final_price: null,
-      trip_total_distance_km: null,
-      trip_total_duration_min: null,
-      payment_status: serviceOrderTypes.PaymentStatus.NOT_REQUIRED,
-      paid_amount: 0,
-      payment_completed_at: null,
-      pricing_explanation: "等待定价决策",
-      pricing_breakdown_snapshot: null,
-      order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_PRICE_ESTIMATE,
-      matched_robotaxi_id: null,
-      order_matching_decision_id: null,
-      trip_id: null,
-      created_at: now(),
-      confirmed_at: null,
-      matched_at: null,
-      completed_at: null,
-      cancelled_at: null,
-      failure_reason: null,
-    });
-    setServiceOrders((items) => [order, ...items]);
+    const result = runManualBusinessAction((params) => businessActionService.createServiceOrder({
+      ...params,
+      runtime: {
+        ...params.runtime,
+        context: { ...(params.runtime.context || {}), order_channel: orderChannel },
+      },
+    }));
+    const order = result?.updates?.serviceOrders?.[0];
+    if (!result?.success || !order) return;
     addServiceOrderEvent({
       service_order_id: order.service_order_id,
       event_type: taskTypes.TaskEventType.SERVICE_ORDER_CREATED,
@@ -3780,103 +3758,27 @@ function App() {
   function estimateServiceOrderPrice(serviceOrderId) {
     const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
     if (!serviceOrder || ![serviceOrderTypes.ServiceOrderStatus.WAITING_PRICE_ESTIMATE, serviceOrderTypes.ServiceOrderStatus.CREATED].includes(serviceOrder.order_status)) return;
-    const strategy = data.pricingStrategies?.find((item) => item.pricing_strategy_id === "DPS-001");
-    const routePlanningRunId = nextRoutePlanningRunId();
-    const priceRoute = createPriceEstimationRoute(serviceOrder, data, routePlanningRunId);
-    const routePlanningRun = createRoutePlanningRun({
-      routePlanningRunId,
-      routeStrategyId: priceRoute.route_strategy_id,
-      planningAlgorithm: priceRoute.planning_algorithm,
-      taskId: null,
-      serviceOrderId: serviceOrder.service_order_id,
-      tripId: null,
-      routeExecutionId: null,
-      robotaxiId: null,
-      originCellId: priceRoute.origin_cell_id,
-      targetCellId: priceRoute.target_cell_id,
-      resultRouteId: priceRoute.route_steps.length > 0 ? priceRoute.route_id : null,
-      planningResult: priceRoute.route_steps.length > 0 ? taskTypes.RoutePlanningResult.SUCCESS : taskTypes.RoutePlanningResult.FAILED,
-      failureReason: priceRoute.route_steps.length > 0 ? taskTypes.RoutePlanningFailureReason.NONE : priceRoute.failure_reason,
-      routeStepCount: priceRoute.route_step_count,
-      totalDistanceKm: priceRoute.total_distance_km,
-    });
-    setRoutePlanningRuns((items) => [routePlanningRun, ...items]);
-    if (priceRoute.route_steps.length === 0) {
-      setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-        ...order,
-        order_status: serviceOrderTypes.ServiceOrderStatus.FAILED,
-        failure_reason: priceRoute.failure_reason,
-      } : order));
+    const result = runManualBusinessAction((params) => businessActionService.executePricing({ ...params, objectId: serviceOrderId }));
+    const nextOrder = result?.updates?.serviceOrders?.find((order) => order.service_order_id === serviceOrderId);
+    if (!result?.success) {
       addServiceOrderEvent({
         service_order_id: serviceOrderId,
-        route_id: priceRoute.route_id,
         event_type: taskTypes.TaskEventType.SERVICE_ORDER_PRICE_ESTIMATED,
         event_result: taskTypes.TaskEventResult.FAILED,
-        message: `${serviceOrderId} 价格预估失败：${getDisplayValue(priceRoute.failure_reason)}`,
+        message: `${serviceOrderId} 价格预估失败：${getDisplayValue(result?.data?.failureReason)}`,
       });
       selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
       return;
     }
-    setOperationalData((current) => ({
-      ...current,
-      routes: [priceRoute, ...current.routes],
-    }));
-    const result = serviceOrderService.executePricing({
-      strategy,
-      serviceOrder,
-      data,
-      routeEstimate: {
-        route_id: priceRoute.route_id,
-        estimated_distance_km: priceRoute.total_distance_km ?? priceRoute.total_distance_m / 1000,
-        estimated_duration_min: routePlanningService.calculateRouteEstimatedDurationMin(priceRoute),
-        route_step_count: priceRoute.route_step_count,
-        cell_travel_seconds: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS,
-      },
-      pricingStrategyRunId: nextPricingStrategyRunId(),
-      pricingDecisionId: nextPricingDecisionId(),
-      createdAt: now(),
-    });
-    setPricingStrategyRuns((items) => [result.run, ...items]);
-    if (!result.success) {
-      setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-        ...order,
-        order_status: serviceOrderTypes.ServiceOrderStatus.FAILED,
-        failure_reason: result.run.failure_reason,
-      } : order));
-      addServiceOrderEvent({
-        service_order_id: serviceOrderId,
-        pricing_strategy_run_id: result.run.pricing_strategy_run_id,
-        event_type: taskTypes.TaskEventType.SERVICE_ORDER_PRICE_ESTIMATED,
-        event_result: taskTypes.TaskEventResult.FAILED,
-        message: `${serviceOrderId} 价格预估失败：${getDisplayValue(result.run.failure_reason)}`,
-      });
-      return;
-    }
-    setPricingDecisions((items) => [result.decision, ...items]);
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-      ...order,
-      estimated_pricing_decision_id: result.decision.pricing_decision_id,
-      price_estimation_route_id: priceRoute.route_id,
-      quote_base_fare: result.decision.base_fare,
-      quote_distance_unit_price: result.decision.distance_unit_price,
-      quote_time_unit_price: result.decision.time_unit_price,
-      estimated_distance_km: result.decision.estimated_distance_km,
-      estimated_duration_min: result.decision.estimated_duration_min,
-      estimated_price: result.decision.estimated_price,
-      quoted_price: result.decision.quoted_price,
-      pricing_explanation: result.decision.pricing_explanation,
-      pricing_breakdown_snapshot: result.decision.pricing_breakdown_snapshot,
-      order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_CALL,
-      failure_reason: null,
-    } : order));
+    const pricingDecision = result?.updates?.pricingDecisions?.[0];
     addServiceOrderEvent({
       service_order_id: serviceOrderId,
-      pricing_strategy_run_id: result.run.pricing_strategy_run_id,
-      pricing_decision_id: result.decision.pricing_decision_id,
-      route_id: priceRoute.route_id,
+      pricing_strategy_run_id: result?.updates?.pricingStrategyRuns?.[0]?.pricing_strategy_run_id,
+      pricing_decision_id: pricingDecision?.pricing_decision_id,
+      route_id: nextOrder?.price_estimation_route_id,
       event_type: taskTypes.TaskEventType.SERVICE_ORDER_PRICE_ESTIMATED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
-      message: `${serviceOrderId} 价格预估完成，预估价格 ${result.decision.estimated_price}`,
+      message: `${serviceOrderId} 价格预估完成，预估价格 ${pricingDecision?.estimated_price ?? nextOrder?.estimated_price}`,
     });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
@@ -3884,12 +3786,8 @@ function App() {
   function callRobotaxiForServiceOrder(serviceOrderId) {
     const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
     if (!serviceOrder || ![serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_CALL, serviceOrderTypes.ServiceOrderStatus.WAITING_CUSTOMER_CONFIRM].includes(serviceOrder.order_status)) return;
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-      ...order,
-      order_status: serviceOrderTypes.ServiceOrderStatus.WAITING_ROBOTAXI_ASSIGNMENT,
-      confirmed_at: now(),
-      failure_reason: null,
-    } : order));
+    const result = runManualBusinessAction((params) => businessActionService.callRobotaxi({ ...params, objectId: serviceOrderId }));
+    if (!result?.success) return;
     addServiceOrderEvent({
       service_order_id: serviceOrderId,
       event_type: taskTypes.TaskEventType.SERVICE_ORDER_ROBOTAXI_CALLED,
@@ -4512,85 +4410,14 @@ function App() {
       focusRouteExecutionStatus(nextExecution.execution_status);
       return;
     }
-
-    const nextStepIndex = Math.min(execution.current_step_index + 1, execution.total_step_count);
-    const nextCellId = execution.route_cell_ids[nextStepIndex] || execution.target_cell_id;
-    const completed = nextStepIndex >= execution.total_step_count;
-    const nextExecutionMetrics = routePlanningService.applyTravelMetrics({
-      record: {
-        ...execution,
-        current_cell_id: nextCellId,
-        current_step_index: nextStepIndex,
-      },
-      routes: data.routes,
-      currentRouteId: execution.route_id,
-      currentStepIndex: nextStepIndex,
-    });
-    const distanceDeltaKm = Number(Math.max(0, Number(nextExecutionMetrics.distance_traveled_km || 0) - Number(execution.distance_traveled_km || 0)).toFixed(2));
-    const robotaxi = data.robotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id);
-    const batteryDeltaKwh = Number((distanceDeltaKm * DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM).toFixed(2));
-    const batteryDeltaPercent = robotaxi?.battery_capacity_kwh
-      ? Number((batteryDeltaKwh / robotaxi.battery_capacity_kwh * 100).toFixed(2))
-      : robotaxi?.max_range_km
-        ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
-        : 0;
-    const batteryConsumedPercent = Number((Number(execution.battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2));
-    const batteryConsumedKwh = Number((Number(execution.battery_consumed_kwh || 0) + batteryDeltaKwh).toFixed(2));
-
-    setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? {
-      ...item,
-      execution_status: completed ? taskTypes.RouteExecutionStatus.ARRIVED : taskTypes.RouteExecutionStatus.MOVING,
-      current_cell_id: nextCellId,
-      current_step_index: nextStepIndex,
-      total_distance_km: nextExecutionMetrics.total_distance_km,
-      distance_traveled_km: nextExecutionMetrics.distance_traveled_km,
-      distance_remaining_km: nextExecutionMetrics.distance_remaining_km,
-      time_elapsed: `${nextStepIndex}`,
-      battery_consumed_kwh: batteryConsumedKwh,
-      battery_consumed_percent: batteryConsumedPercent,
-    } : item));
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((item) => item.robotaxi_id === execution.robotaxi_id ? {
-        ...item,
-        current_cell_id: nextCellId,
-        current_route_id: execution.route_id,
-        current_task_id: execution.task_id,
-        motion_status: completed ? "STOPPED" : "MOVING",
-        battery_percent: Number(Math.max(0, item.battery_percent - batteryDeltaPercent).toFixed(2)),
-        current_battery_kwh: Number(Math.max(0, Number(item.current_battery_kwh ?? item.battery_capacity_kwh * item.battery_percent / 100) - batteryDeltaKwh).toFixed(2)),
-        estimated_range_km: Number(Math.max(0, item.estimated_range_km - distanceDeltaKm).toFixed(2)),
-        lifetime_distance_km: Number((Number(item.lifetime_distance_km || 0) + distanceDeltaKm).toFixed(2)),
-        lifetime_battery_consumed_kwh: Number((Number(item.lifetime_battery_consumed_kwh || 0) + batteryDeltaKwh).toFixed(2)),
-        lifetime_battery_consumed_percent: Number((Number(item.lifetime_battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2)),
-      } : item),
-    }));
-
-    if (completed) {
-      setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === execution.task_id ? {
-        ...item,
-        task_status: taskTypes.DeploymentTaskStatus.ARRIVED,
-      } : item));
-      addLog({
-        event_type: taskTypes.TaskEventType.ROUTE_EXECUTION_ARRIVED,
-        event_result: taskTypes.TaskEventResult.SUCCESS,
-        task_id: execution.task_id,
-        robotaxi_id: execution.robotaxi_id,
-        route_execution_id: execution.route_execution_id,
-        message: `${execution.robotaxi_id} 已到达当前路径目标，等待到达结果`,
-      });
-      focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVED);
-      return;
-    }
-
     addLog({
-      event_type: taskTypes.TaskEventType.ROUTE_STEP_ADVANCED,
-      event_result: taskTypes.TaskEventResult.SUCCESS,
+      event_type: taskTypes.TaskEventType.ROUTE_PLANNING_FAILED,
+      event_result: taskTypes.TaskEventResult.FAILED,
       task_id: execution.task_id,
       robotaxi_id: execution.robotaxi_id,
-      message: `${execution.robotaxi_id} 继续行驶至 ${nextCellId}`,
+      route_execution_id: execution.route_execution_id,
+      message: serviceResult?.message || `${execution.robotaxi_id} 继续行驶失败`,
     });
-    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.MOVING);
   }
 
   function completeRouteExecutionTravelNow(routeExecutionId) {
@@ -4654,22 +4481,14 @@ function App() {
       focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVED);
       return;
     }
-    const completed = routePlanningService.completeRouteExecutionTravel({ execution, task, route, robotaxi });
-    setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? completed.execution : item));
-    setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? completed.task : item));
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((item) => item.robotaxi_id === robotaxi.robotaxi_id ? completed.robotaxi : item),
-    }));
     addLog({
       event_type: taskTypes.TaskEventType.ROUTE_EXECUTION_ARRIVED,
-      event_result: taskTypes.TaskEventResult.SUCCESS,
+      event_result: taskTypes.TaskEventResult.FAILED,
       task_id: execution.task_id,
       robotaxi_id: execution.robotaxi_id,
       route_execution_id: execution.route_execution_id,
-      message: `${execution.robotaxi_id} 已按自动行驶到达目的地，等待到达确认`,
+      message: serviceResult?.message || `${execution.robotaxi_id} 自动到达失败`,
     });
-    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVED);
   }
 
   function submitNormalArrival(routeExecutionId) {
@@ -4694,43 +4513,14 @@ function App() {
       focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.COMPLETED);
       return;
     }
-    setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? {
-      ...item,
-      execution_status: taskTypes.RouteExecutionStatus.COMPLETED,
-      completed_at: now(),
-      arrival_execution_result: taskTypes.ArrivalExecutionResult.NORMAL_ARRIVAL,
-      actual_target_service_area_id: item.target_service_area_id || item.current_target_service_area_id,
-      actual_target_cell_id: execution.current_cell_id,
-    } : item));
-    setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? {
-      ...item,
-      task_status: taskTypes.DeploymentTaskStatus.COMPLETED,
-      actual_target_service_area_id: item.target_service_area_id,
-      actual_target_cell_id: execution.current_cell_id,
-      arrival_execution_result: taskTypes.ArrivalExecutionResult.NORMAL_ARRIVAL,
-      completed_at: now(),
-    } : item));
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === execution.robotaxi_id ? {
-        ...robotaxi,
-        current_cell_id: execution.current_cell_id,
-        current_route_id: null,
-        current_task_id: null,
-        current_task_type: null,
-        current_task_status: null,
-        motion_status: "PARKED",
-      } : robotaxi),
-    }));
     addLog({
       event_type: taskTypes.TaskEventType.ARRIVAL_NORMAL,
-      event_result: taskTypes.TaskEventResult.SUCCESS,
+      event_result: taskTypes.TaskEventResult.FAILED,
       task_id: task.task_id,
       robotaxi_id: execution.robotaxi_id,
       route_execution_id: execution.route_execution_id,
-      message: `${execution.robotaxi_id} 正常到达，运营投放完成`,
+      message: serviceResult?.message || `${execution.robotaxi_id} 正常到达确认失败`,
     });
-    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.COMPLETED);
   }
 
   function submitAbnormalArrival(routeExecutionId, arrivalResult) {
@@ -4741,31 +4531,23 @@ function App() {
     }
     const task = deploymentTasks.find((item) => item.task_id === execution?.task_id);
     if (!execution || !task || execution.execution_status !== taskTypes.RouteExecutionStatus.ARRIVED) return;
-    setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? {
-      ...item,
-      execution_status: taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL,
-      arrival_execution_result: arrivalResult,
-      actual_target_service_area_id: item.target_service_area_id || item.current_target_service_area_id,
-      actual_target_cell_id: item.current_cell_id,
-      failure_reason: arrivalResult,
-    } : item));
-    setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? {
-      ...item,
-      task_status: taskTypes.DeploymentTaskStatus.ARRIVAL_ABNORMAL,
-      arrival_execution_result: arrivalResult,
-      actual_target_service_area_id: item.target_service_area_id || item.planned_target_service_area_id,
-      actual_target_cell_id: execution.current_cell_id,
-      failure_reason: arrivalResult,
-    } : item));
+    const serviceResult = runManualBusinessAction((params) => businessActionService.confirmRouteExecutionAbnormalArrival({
+      ...params,
+      objectId: routeExecutionId,
+      arrivalResult,
+    }));
+    const abnormalExecution = serviceResult?.updates?.routeExecutions?.find((item) => item.route_execution_id === routeExecutionId);
     addLog({
       event_type: taskTypes.TaskEventType.ARRIVAL_ABNORMAL,
-      event_result: taskTypes.TaskEventResult.SUCCESS,
+      event_result: serviceResult?.success ? taskTypes.TaskEventResult.SUCCESS : taskTypes.TaskEventResult.FAILED,
       task_id: task.task_id,
       robotaxi_id: execution.robotaxi_id,
       route_execution_id: execution.route_execution_id,
-      message: `${execution.robotaxi_id} 异常到达：${getDisplayValue(arrivalResult)}`,
+      message: serviceResult?.success
+        ? `${execution.robotaxi_id} 异常到达：${getDisplayValue(arrivalResult)}`
+        : serviceResult?.message || `${execution.robotaxi_id} 异常到达确认失败`,
     });
-    focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL);
+    if (abnormalExecution) focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVAL_ABNORMAL);
   }
 
   function addLog(log) {
@@ -4781,96 +4563,6 @@ function App() {
       }),
       ...logs,
     ]);
-  }
-
-  function createTask(robotaxi, triggerType) {
-    const opsCenter = data.opsCenters[0];
-    return taskTypes.createReadinessCheckTask({
-      task_id: nextTaskId(),
-      task_type: taskTypes.TaskType.READINESS_CHECK,
-      task_status: taskTypes.ReadinessTaskStatus.WAITING_ASSIGNMENT,
-      task_priority: taskTypes.TaskPriority.NORMAL,
-      trigger_type: triggerType,
-      source_type: taskTypes.TaskSourceType.OPS_CENTER,
-      source_id: opsCenter.ops_center_id,
-      robotaxi_id: robotaxi.robotaxi_id,
-      worker_id: null,
-      ops_center_id: opsCenter.ops_center_id,
-      check_result: null,
-      issue_type: null,
-      created_at: now(),
-      assigned_at: null,
-      started_at: null,
-      completed_at: null,
-    });
-  }
-
-  function createDeploymentTask(robotaxi, target) {
-    return taskTypes.createDeploymentTask({
-      task_id: nextDeploymentTaskId(),
-      task_type: taskTypes.TaskType.DEPLOYMENT,
-      task_status: taskTypes.DeploymentTaskStatus.WAITING_START,
-      task_priority: taskTypes.TaskPriority.LOW,
-      trigger_type: taskTypes.TriggerType.MANUAL,
-      source_type: taskTypes.TaskSourceType.MANUAL_OPERATION,
-      source_id: null,
-      robotaxi_id: robotaxi.robotaxi_id,
-      origin_cell_id: robotaxi.current_cell_id,
-      planned_target_zone_id: target.target_zone_id,
-      planned_target_service_area_id: target.target_service_area_id,
-      planned_target_cell_id: target.target_cell_id,
-      actual_target_service_area_id: null,
-      actual_target_cell_id: null,
-      arrival_behavior: taskTypes.ArrivalBehavior.AUTO_BY_SERVICE_AREA,
-      blocked_handling_policy: taskTypes.BlockedHandlingPolicy.SAME_SERVICE_AREA_RETRY,
-      arrival_execution_result: null,
-      target_cell_id: target.target_cell_id,
-      target_zone_id: target.target_zone_id,
-      target_service_area_id: target.target_service_area_id,
-      route_id: null,
-      route_strategy_id: null,
-      interruptible: true,
-      created_at: now(),
-      started_at: null,
-      completed_at: null,
-      failure_reason: null,
-    });
-  }
-
-  function createDeploymentRouteExecution(task) {
-    return taskTypes.createRouteExecution({
-      route_execution_id: nextRouteExecutionId(),
-      task_id: task.task_id,
-      task_type: task.task_type,
-      robotaxi_id: task.robotaxi_id,
-      route_id: null,
-      route_strategy_id: null,
-      execution_status: taskTypes.RouteExecutionStatus.WAITING_ROUTE,
-      origin_cell_id: task.origin_cell_id,
-      planned_target_zone_id: task.planned_target_zone_id || task.target_zone_id,
-      planned_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
-      planned_target_cell_id: task.planned_target_cell_id || task.target_cell_id,
-      target_cell_id: task.planned_target_cell_id || task.target_cell_id,
-      target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
-      actual_target_service_area_id: null,
-      actual_target_cell_id: null,
-      current_cell_id: task.origin_cell_id,
-      current_step_index: 0,
-      total_step_count: 0,
-      total_distance_km: 0,
-      route_cell_ids: [],
-      same_service_area_retry_allowed: true,
-      current_target_service_area_id: task.planned_target_service_area_id || task.target_service_area_id,
-      route_history: [],
-      distance_traveled_km: 0,
-      distance_remaining_km: 0,
-      time_elapsed: "0",
-      battery_consumed_kwh: 0,
-      battery_consumed_percent: 0,
-      started_at: null,
-      completed_at: null,
-      failure_reason: null,
-    });
   }
 
   function createEventLog(event) {
@@ -6487,6 +6179,14 @@ function renderDeploymentActions(row, actions) {
 function renderFleetOperationTaskActions(row, actions) {
   const status = row.task_status;
   const dispatchLabel = getFleetOperationDispatchLabel(row.task_type);
+  if (row.task_type === "RETIREMENT" && status === "WAITING_RETIREMENT_APPROVAL") {
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => actions.approveRetirementTask(row)}>确认退役</RowActionButton>
+        <RowActionButton type="default" onClick={() => actions.rejectRetirementTask(row)}>驳回退役</RowActionButton>
+      </RowActionGroup>
+    );
+  }
   if (isFleetOperationDestinationStatus(status)) {
     return <RowActionButton onClick={() => actions.dispatchFleetOperationTaskDestination(row)}>{dispatchLabel}</RowActionButton>;
   }
@@ -6542,7 +6242,6 @@ function isFleetOperationReadyToStartStatus(row) {
   return [
     "READY_TO_START",
     "READY_TO_CHARGE",
-    "PROCESSING_RETIREMENT",
   ].includes(row?.task_status);
 }
 
@@ -6553,6 +6252,7 @@ function isFleetOperationWorkActiveStatus(row) {
     "CHARGING",
     "READY_TO_DISCONNECT",
     "DIAGNOSING",
+    "PROCESSING_RETIREMENT",
   ].includes(row?.task_status);
 }
 
@@ -6571,6 +6271,7 @@ function getFleetOperationCompleteWorkLabel(row) {
   if (row.task_type === "CLEANING") return "清洁完成";
   if (row.task_type === "MAINTENANCE") return "维修完成";
   if (row.task_type === "FAILURE_HANDLING") return "诊断完成";
+  if (row.task_type === "RETIREMENT") return "退役完成";
   return "完成作业";
 }
 

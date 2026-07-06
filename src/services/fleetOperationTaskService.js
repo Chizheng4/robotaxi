@@ -319,6 +319,94 @@ export function activateQueuedFleetOperationTask({ task, robotaxi, opsCenters = 
   };
 }
 
+export function confirmRetirementTask({ task, robotaxi, opsCenters = [], context = {} } = {}) {
+  if (!task?.task_id || !robotaxi?.robotaxi_id || task.task_type !== TaskType.RETIREMENT) {
+    return { succeeded: false, reason: "INVALID_RETIREMENT_CONFIRM_INPUT" };
+  }
+  if (task.task_status !== RetirementTaskStatus.WAITING_RETIREMENT_APPROVAL) {
+    return { succeeded: false, reason: "RETIREMENT_TASK_NOT_WAITING_APPROVAL" };
+  }
+  const now = resolveNow(context);
+  const currentOpsCenter = findMatchingOpsCenterForRobotaxiTask(robotaxi, TaskType.RETIREMENT, opsCenters);
+  const nextStatus = currentOpsCenter
+    ? RetirementTaskStatus.PROCESSING_RETIREMENT
+    : RetirementTaskStatus.WAITING_DESTINATION_ASSIGNMENT;
+  const nextTask = withFleetOperationLifecycleStatus({
+    ...task,
+    task_status: nextStatus,
+    approval_status: "APPROVED",
+    approved_at: now,
+    origin_cell_id: robotaxi.current_cell_id || task.origin_cell_id || null,
+    target_ops_center_id: currentOpsCenter?.ops_center_id || task.target_ops_center_id || null,
+    target_cell_id: currentOpsCenter ? robotaxi.current_cell_id || task.target_cell_id || null : task.target_cell_id || null,
+    actual_target_cell_id: currentOpsCenter ? robotaxi.current_cell_id || task.actual_target_cell_id || null : task.actual_target_cell_id || null,
+    actual_target_service_area_id: currentOpsCenter?.service_area_ids?.[0] || task.actual_target_service_area_id || null,
+    updated_at: now,
+  }, {
+    context,
+    objectType: getFleetOperationObjectType(task.task_type),
+    statusField: "task_status",
+    fromStatus: task.task_status,
+    toStatus: nextStatus,
+    actionType: "FLEET_OPERATION_RETIREMENT_APPROVE",
+    resultType: currentOpsCenter ? "FLEET_OPERATION_ALREADY_AT_CAPABLE_CENTER" : "FLEET_OPERATION_RETIREMENT_APPROVED",
+  });
+  return {
+    succeeded: true,
+    alreadyAtCapableCenter: Boolean(currentOpsCenter),
+    task: nextTask,
+    robotaxi: {
+      ...applyFleetOperationTaskReference(robotaxi, { task: nextTask, shouldWait: false, now }),
+      current_task_id: nextTask.task_id,
+      current_task_type: nextTask.task_type,
+      current_task_status: nextTask.task_status,
+      fleet_operation_status: "IN_RETIREMENT",
+      operation_blocking_reason: TaskType.RETIREMENT,
+      updated_at: now,
+    },
+  };
+}
+
+export function rejectRetirementTask({ task, robotaxi, context = {} } = {}) {
+  if (!task?.task_id || !robotaxi?.robotaxi_id || task.task_type !== TaskType.RETIREMENT) {
+    return { succeeded: false, reason: "INVALID_RETIREMENT_REJECT_INPUT" };
+  }
+  if (task.task_status !== RetirementTaskStatus.WAITING_RETIREMENT_APPROVAL) {
+    return { succeeded: false, reason: "RETIREMENT_TASK_NOT_WAITING_APPROVAL" };
+  }
+  const now = resolveNow(context);
+  const nextTask = withFleetOperationLifecycleStatus({
+    ...task,
+    task_status: "CANCELLED",
+    approval_status: "REJECTED",
+    rejected_at: now,
+    operation_completed_at: now,
+    completed_at: now,
+    updated_at: now,
+  }, {
+    context,
+    objectType: getFleetOperationObjectType(task.task_type),
+    statusField: "task_status",
+    fromStatus: task.task_status,
+    toStatus: "CANCELLED",
+    actionType: "FLEET_OPERATION_RETIREMENT_REJECT",
+    resultType: "FLEET_OPERATION_RETIREMENT_REJECTED",
+  });
+  return {
+    succeeded: true,
+    task: nextTask,
+    robotaxi: {
+      ...markAvailable(robotaxi, { now }),
+      current_task_id: null,
+      current_task_type: null,
+      current_task_status: null,
+      fleet_operation_status: "NONE",
+      operation_blocking_reason: null,
+      updated_at: now,
+    },
+  };
+}
+
 export function dispatchFleetOperationTaskDestination({
   task,
   robotaxi,
@@ -1043,7 +1131,7 @@ export function resolveFleetOperationStatusForTask(taskType) {
   if (taskType === TaskType.CHARGING) return "NEED_CHARGING";
   if (taskType === TaskType.MAINTENANCE) return "NEED_MAINTENANCE";
   if (taskType === TaskType.FAILURE_HANDLING) return "BROKEN";
-  if (taskType === TaskType.RETIREMENT) return "RETIRED";
+  if (taskType === TaskType.RETIREMENT) return "IN_RETIREMENT";
   return "NONE";
 }
 
@@ -1123,6 +1211,7 @@ function getFleetOperationInProgressStatus(taskType, fallback) {
   if (taskType === TaskType.CLEANING) return "IN_CLEANING";
   if (taskType === TaskType.CHARGING) return "IN_CHARGING";
   if (taskType === TaskType.MAINTENANCE) return "IN_MAINTENANCE";
+  if (taskType === TaskType.RETIREMENT) return "IN_RETIREMENT";
   return fallback || "NONE";
 }
 

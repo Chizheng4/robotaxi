@@ -499,11 +499,14 @@
 |READINESS_ASSIGN|准入任务分配状态边|工作流状态边|
 |READINESS_START|准入检查开始状态边|工作流状态边|
 |READINESS_PASS|准入检查通过状态边|工作流状态边|
+|READINESS_FAIL|准入检查不通过状态边|工作流状态边|
 |ROUTE_MOVE|运营行驶推进状态边|工作流状态边|
 |ROUTE_ARRIVAL|运营到达确认状态边|工作流状态边|
+|ROUTE_ARRIVAL_ABNORMAL|运营异常到达确认状态边|工作流状态边|
 |DEPLOYMENT_PLAN|投放路径规划投影状态边|工作流状态边|
 |DEPLOYMENT_MOVE|投放行驶推进投影状态边|工作流状态边|
 |DEPLOYMENT_ARRIVAL|投放到达确认投影状态边|工作流状态边|
+|DEPLOYMENT_ARRIVAL_ABNORMAL|投放异常到达确认投影状态边|工作流状态边|
 |ORDER_PRICE|订单估价状态边|工作流状态边|
 |ORDER_CALL|订单呼叫 Robotaxi 状态边|工作流状态边|
 |ORDER_MATCH|订单匹配状态边|工作流状态边|
@@ -545,6 +548,9 @@
 |MAINTENANCE_WORK_COMPLETE|维修完成状态边|工作流状态边|
 |FAILURE_DIAGNOSIS_ASSIGN|故障诊断分配 Worker 状态边|工作流状态边|
 |FAILURE_DIAGNOSIS_COMPLETE|故障诊断完成状态边|工作流状态边|
+|RETIREMENT_APPROVE_TO_DESTINATION|退役确认后分配目的站点状态边|工作流状态边|
+|RETIREMENT_APPROVE_AT_CENTER|退役确认后直接处理状态边|工作流状态边|
+|RETIREMENT_REJECT|退役驳回状态边|工作流状态边|
 |RETIREMENT_DESTINATION_ASSIGN|退役分配目的站点状态边|工作流状态边|
 |RETIREMENT_ROUTE_PLAN|退役路径规划投影状态边|工作流状态边|
 |RETIREMENT_ROUTE_MOVE|退役行驶推进投影状态边|工作流状态边|
@@ -1637,6 +1643,10 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |REPAIRED|已修复|
 |NOT_REPAIRABLE|不可修复|
 |PARTIALLY_REPAIRED|部分修复|
+|PENDING|待确认|
+|APPROVED|已确认|
+|REJECTED|已驳回|
+|IN_RETIREMENT|退役处理中|
 |SENSOR|传感器|
 |HARDWARE|硬件|
 |SOFTWARE|软件|
@@ -2076,6 +2086,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |READINESS_TASK_ASSIGN|分配准入任务|event_type / action_type|
 |READINESS_TASK_START|开始准入检查|event_type / action_type|
 |READINESS_TASK_PASS|准入检查通过|event_type / action_type|
+|READINESS_TASK_FAIL|准入检查不通过|event_type / action_type|
 |ROUTE_PLAN|规划行驶路径|event_type / action_type|
 |ROUTE_EXECUTION_STEP|推进行驶记录|event_type / action_type|
 |ROUTE_EXECUTION_TRAVEL_COMPLETE|运营行驶时间到达|event_type / action_type|
@@ -2086,6 +2097,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |FLEET_OPERATION_WORKER_ASSIGN|分配 Worker|action_type|
 |FLEET_OPERATION_WORK_START|开始运维作业|action_type|
 |FLEET_OPERATION_WORK_COMPLETE|完成运维作业|action_type|
+|FLEET_OPERATION_RETIREMENT_APPROVE|确认退役|action_type|
+|FLEET_OPERATION_RETIREMENT_REJECT|驳回退役|action_type|
 |FLEET_OPERATION_CHARGING_COMPLETE|充电完成|action_type|
 |TRIP_TRAVEL_COMPLETE|履约行驶时间到达|event_type / action_type|
 |ORDER_AUTO_ASSIGNMENT|订单自动分配|operation_type|
@@ -2125,6 +2138,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |READINESS_START_FAILED|准入检查开始失败|result_type|
 |READINESS_PASSED|准入检查已通过|result_type|
 |READINESS_PASS_FAILED|准入检查通过失败|result_type|
+|READINESS_FAILED|准入检查不通过|result_type|
+|READINESS_FAIL_FAILED|准入检查不通过提交失败|result_type|
 |ROUTE_PLANNED|路径生成成功|result_type|
 |ROUTE_PLAN_FAILED|路径规划失败|result_type|
 |FLEET_OPERATION_TASK_CREATED|运维任务已创建|result_type|
@@ -2134,6 +2149,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |FLEET_OPERATION_WORKER_ASSIGNED|Worker 已分配|result_type|
 |FLEET_OPERATION_WORK_STARTED|运维作业已开始|result_type|
 |FLEET_OPERATION_WORK_COMPLETED|运维作业已完成|result_type|
+|FLEET_OPERATION_RETIREMENT_APPROVED|退役已确认|result_type|
+|FLEET_OPERATION_RETIREMENT_REJECTED|退役已驳回|result_type|
 |FLEET_OPERATION_CHARGING_COMPLETED|充电已完成|result_type|
 |ROUTE_STEPPED|行驶记录已步进|result_type|
 |ROUTE_STEP_FAILED|行驶记录步进失败|result_type|
@@ -2143,6 +2160,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |TRIP_TRAVEL_COMPLETE_FAILED|履约行驶时间到达失败|result_type|
 |ARRIVAL_CONFIRMED|到达已确认|result_type|
 |ARRIVAL_CONFIRM_FAILED|到达确认失败|result_type|
+|ARRIVAL_ABNORMAL_CONFIRMED|异常到达已确认|result_type|
+|ARRIVAL_ABNORMAL_CONFIRM_FAILED|异常到达确认失败|result_type|
 |TEMPORARY_SUPPLY_REBALANCE|临时供给再平衡|enum_value|
 |LOW_DENSITY_NEARBY_SERVICE_AREA|低密度邻近服务区|enum_value|
 |TEMPORARY_RANDOM_SERVICE_AREA|临时随机服务区投放|enum_value|

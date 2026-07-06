@@ -99,6 +99,7 @@ export function queryAllWorkflowRules({
   for (const dt of deploymentTasks) {
     const rules = queryWorkflowRules("deploymentTask", dt.task_status, autoConfig, defaultCompletionConfig);
     for (const rule of rules) {
+      if (isTimedOperationManagedAction("deploymentTask", rule.actionType)) continue;
       actions.push({ objectType: "deploymentTask", objectId: dt.task_id, actionType: rule.actionType, fromState: rule.fromState });
     }
   }
@@ -120,7 +121,8 @@ function isWaitingForTimedRetry(order, actionType) {
 
 function isTimedOperationManagedAction(objectType, actionType) {
   if (objectType === "readinessTask") return actionType === "READINESS_TASK_PASS";
-  if (objectType === "routeExecution") return actionType === "ROUTE_EXECUTION_STEP";
+  if (objectType === "deploymentTask") return actionType === "ARRIVAL_CONFIRM";
+  if (objectType === "routeExecution") return ["ROUTE_EXECUTION_STEP", "ARRIVAL_CONFIRM"].includes(actionType);
   if (objectType === "trip") return actionType === "TRIP_STEP_EXECUTE";
   return false;
 }

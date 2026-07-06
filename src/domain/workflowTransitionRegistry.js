@@ -74,6 +74,8 @@ export const normalWorkflowTransitions = [
   transition("FAILURE_DIAGNOSIS_ASSIGN", "failureHandlingTask", "WAITING_DIAGNOSIS_ASSIGNMENT", "FLEET_OPERATION_WORKER_ASSIGN", "DIAGNOSING", D, "failure-diagnosis-assign", F, 60),
   transition("FAILURE_DIAGNOSIS_COMPLETE", "failureHandlingTask", "DIAGNOSING", "FLEET_OPERATION_WORK_COMPLETE", "COMPLETED", D, "failure-diagnosis-complete", F, 900),
 
+  transition("RETIREMENT_APPROVE_TO_DESTINATION", "retirementTask", "WAITING_RETIREMENT_APPROVAL", "FLEET_OPERATION_RETIREMENT_APPROVE", "WAITING_DESTINATION_ASSIGNMENT", D, "retirement-approve", F, 30),
+  transition("RETIREMENT_APPROVE_AT_CENTER", "retirementTask", "WAITING_RETIREMENT_APPROVAL", "FLEET_OPERATION_RETIREMENT_APPROVE", "PROCESSING_RETIREMENT", D, "retirement-approve-at-center", F, 30),
   transition("RETIREMENT_DESTINATION_ASSIGN", "retirementTask", "WAITING_DESTINATION_ASSIGNMENT", "FLEET_OPERATION_DESTINATION_ASSIGN", "WAITING_ROUTE", D, "retirement-destination", F, 5),
   projection("RETIREMENT_ROUTE_PLAN", "retirementTask", "WAITING_ROUTE", "ROUTE_PLAN", "MOVING_TO_RETIREMENT_CENTER", "fleet-operation-route-plan", F, 8, "routeExecution", "WAITING_ROUTE", "ROUTE_PLAN"),
   projection("RETIREMENT_ROUTE_MOVE", "retirementTask", "MOVING_TO_RETIREMENT_CENTER", "ROUTE_EXECUTION_STEP", "ARRIVED_RETIREMENT_CENTER", "fleet-operation-route-move", C, 4, "routeExecution", "MOVING", "ROUTE_MOVE"),
@@ -84,10 +86,14 @@ export const normalWorkflowTransitions = [
 export const preservedWorkflowTransitions = [
   transition("ORDER_CREATED_COMPAT", "serviceOrder", "CREATED", "PRICING_EXECUTE", "WAITING_ROBOTAXI_CALL", WorkflowTransitionMode.COMPATIBILITY, null, null, null, "auto_pricing_enabled", false),
   transition("ORDER_MATCH_RETRY", "serviceOrder", "ROBOTAXI_ASSIGNMENT_FAILED", "ORDER_MATCHING_EXECUTE", "ON_THE_WAY_PICKUP", WorkflowTransitionMode.EXCEPTION, null, null, null, "auto_order_matching_enabled", false),
+  transition("READINESS_FAIL", "readinessTask", "CHECKING", "READINESS_TASK_FAIL", "FAILED", WorkflowTransitionMode.EXCEPTION, null, null, null, null, false),
+  transition("ROUTE_ARRIVAL_ABNORMAL", "routeExecution", "ARRIVED", "ARRIVAL_CONFIRM", "ARRIVAL_ABNORMAL", WorkflowTransitionMode.EXCEPTION, null, null, null, null, false),
+  transition("DEPLOYMENT_ARRIVAL_ABNORMAL", "deploymentTask", "ARRIVED", "ARRIVAL_CONFIRM", "ARRIVAL_ABNORMAL", WorkflowTransitionMode.EXCEPTION, null, null, null, null, false),
   transition("TRIP_PENDING_COMPAT", "trip", "PENDING", "ROUTE_PLAN", "ON_THE_WAY_PICKUP", WorkflowTransitionMode.COMPATIBILITY, null, null, null, "auto_trip_progress_enabled", false),
   transition("TRIP_ASSIGNED_COMPAT", "trip", "ASSIGNED", "ROUTE_PLAN", "ON_THE_WAY_PICKUP", WorkflowTransitionMode.COMPATIBILITY, null, null, null, "auto_trip_progress_enabled", false),
   transition("TRIP_ARRIVED_PICKUP_COMPAT", "trip", "ARRIVED_PICKUP", "PASSENGER_BOARD", "CUSTOMER_ONBOARD", WorkflowTransitionMode.COMPATIBILITY, null, null, null, "auto_trip_progress_enabled", false),
   transition("TRIP_PASSENGER_ONBOARD_COMPAT", "trip", "PASSENGER_ONBOARD", "ROUTE_PLAN", "ON_THE_WAY_DESTINATION", WorkflowTransitionMode.COMPATIBILITY, null, null, null, "auto_trip_progress_enabled", false),
+  transition("RETIREMENT_REJECT", "retirementTask", "WAITING_RETIREMENT_APPROVAL", "FLEET_OPERATION_RETIREMENT_REJECT", "CANCELLED", WorkflowTransitionMode.EXCEPTION, null, null, null, null, false),
 ];
 
 export const workflowTransitionRegistry = [...normalWorkflowTransitions, ...preservedWorkflowTransitions];
