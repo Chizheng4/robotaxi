@@ -1168,7 +1168,7 @@ function App() {
     orderMatchingRuns,
     orderMatchingDecisions: orderMatchingDecisions.map(decision => enrichOrderMatchingDecisionForDisplay(decision, data)),
     serviceFulfillmentRecords: trips.map(trip => attachCostRecords(enrichTripForDisplay(trip, data), "trip", costRecords)),
-    robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions)),
+    robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, allFleetOperationTasks, routeExecutions)),
     simulationPolicies,
     workflowTimingRules: (workflowTimingProfiles[0]?.timing_rules || []).map(rule => ({
       ...rule,
@@ -1199,7 +1199,7 @@ function App() {
     simulationEvents,
     timedOperations,
     validations
-  }), [chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
+  }), [allFleetOperationTasks, chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -1207,7 +1207,7 @@ function App() {
     }
     if (selected.type === "robotaxi") {
       const robotaxi = data.robotaxis.find(item => item.robotaxi_id === selected.id);
-      return robotaxi ? enrichRobotaxiForDetail(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions) : null;
+      return robotaxi ? enrichRobotaxiForDetail(robotaxi, data, readinessTasks, deploymentTasks, allFleetOperationTasks, routeExecutions) : null;
     }
     if (selected.type === "worker") {
       const worker = data.workers.find(item => item.worker_id === selected.id);
@@ -1283,7 +1283,7 @@ function App() {
       validation: validations
     };
     return collections[selected.type]?.find(item => item[idFieldByType[selected.type]] === selected.id) || null;
-  }, [costRecords, data, deploymentTasks, readinessTasks, routeExecutions, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, taskEventLogs, timedOperations, validations]);
+  }, [allFleetOperationTasks, costRecords, data, deploymentTasks, readinessTasks, routeExecutions, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, taskEventLogs, timedOperations, validations]);
   const menuItems = pageGroups.map(group => {
     if (group.key === "console") return {
       key: "console",
@@ -2773,15 +2773,16 @@ function App() {
   }
   function createDirectFleetOperationTaskFromRobotaxi(robotaxi, taskType) {
     if (!robotaxi?.robotaxi_id || !taskType) return;
+    const sourceRobotaxi = data.robotaxis.find(item => item.robotaxi_id === robotaxi.robotaxi_id) || robotaxi;
     const collectionKey = getFleetOperationTaskCollectionKey(taskType);
     const result = fleetOperationPolicyService.createDirectFleetOperationTask({
       taskType,
-      robotaxi,
+      robotaxi: sourceRobotaxi,
       existingTasks: getAllFleetOperationTasks(),
       taskFields: {
-        ...createDirectFleetOperationTaskFields(robotaxi, taskType),
+        ...createDirectFleetOperationTaskFields(sourceRobotaxi, taskType),
         trigger_object_type: "robotaxi",
-        trigger_object_id: robotaxi.robotaxi_id
+        trigger_object_id: sourceRobotaxi.robotaxi_id
       },
       context: {
         now,
@@ -2812,7 +2813,7 @@ function App() {
           task_id: result.task?.task_id || null,
           task_type: taskType,
           source_page: collectionKey,
-          robotaxi_id: robotaxi.robotaxi_id,
+          robotaxi_id: sourceRobotaxi.robotaxi_id,
           trigger_type: taskTypes.TriggerType.MANUAL,
           message: `${getDisplayValue(taskType)}任务已进入待执行队列`
         }), ...logs]);
@@ -2822,7 +2823,7 @@ function App() {
         event_type: taskTypes.TaskEventType.TASK_FAILED,
         event_result: taskTypes.TaskEventResult.FAILED,
         task_type: taskType,
-        robotaxi_id: robotaxi.robotaxi_id,
+        robotaxi_id: sourceRobotaxi.robotaxi_id,
         trigger_type: taskTypes.TriggerType.MANUAL,
         message: getDisplayValue(result.reason, "result_reason") || "当前 Robotaxi 暂不能生成运维任务"
       });
@@ -2840,7 +2841,7 @@ function App() {
       task_type: result.task.task_type,
       source_page: collectionKey,
       source_object_type: "robotaxi",
-      source_object_id: robotaxi.robotaxi_id,
+      source_object_id: sourceRobotaxi.robotaxi_id,
       robotaxi_id: result.task.robotaxi_id,
       trigger_type: result.task.trigger_type,
       message: result.queued ? `${getDisplayValue(taskType)}任务已创建并等待 Robotaxi 可执行` : `Robotaxi 直接触发${getDisplayValue(taskType)}任务`
@@ -2849,8 +2850,9 @@ function App() {
   }
   function getRobotaxiFleetOperationActions(robotaxi) {
     if (!robotaxiTaskPlanningService) return [];
+    const sourceRobotaxi = data.robotaxis.find(item => item.robotaxi_id === robotaxi?.robotaxi_id) || robotaxi;
     return robotaxiTaskPlanningService.getAvailableRobotaxiActions({
-      robotaxi,
+      robotaxi: sourceRobotaxi,
       readinessTasks,
       deploymentTasks,
       serviceOrders,
@@ -8261,26 +8263,24 @@ function enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, ro
     route_step_count: getMovementStepCount(route)
   };
 }
-function enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions = []) {
-  const currentTask = findCurrentTask(robotaxi.current_task_id, readinessTasks, deploymentTasks);
+function enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, fleetOperationTasks = [], routeExecutions = []) {
+  const currentTask = findCurrentTask(robotaxi.current_task_id, readinessTasks, deploymentTasks, fleetOperationTasks);
   const currentRouteExecution = findCurrentRouteExecution(robotaxi, routeExecutions);
   const location = getLocationInfo(robotaxi.current_cell_id, data);
-  const hasCurrentTaskReference = Boolean(currentTask || robotaxi.current_order_id || currentRouteExecution);
   return {
     ...robotaxi,
-    current_task_id: currentTask?.task_id || (hasCurrentTaskReference ? robotaxi.current_task_id || currentRouteExecution?.task_id || null : null),
+    current_task_id: currentTask?.task_id || currentRouteExecution?.task_id || null,
     current_task_type: currentTask?.task_type || currentRouteExecution?.task_type || null,
     current_task_status: currentTask?.task_status || currentRouteExecution?.execution_status || null,
     current_route_execution_id: currentRouteExecution?.route_execution_id || null,
     location_summary: location.summary
   };
 }
-function enrichRobotaxiForDetail(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions) {
-  const currentTask = findCurrentTask(robotaxi.current_task_id, readinessTasks, deploymentTasks);
+function enrichRobotaxiForDetail(robotaxi, data, readinessTasks, deploymentTasks, fleetOperationTasks, routeExecutions) {
   const currentRouteExecution = findCurrentRouteExecution(robotaxi, routeExecutions);
   const location = getLocationInfo(robotaxi.current_cell_id, data);
   return {
-    ...enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, routeExecutions),
+    ...enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, fleetOperationTasks, routeExecutions),
     current_route_execution_id: currentRouteExecution?.route_execution_id || null,
     current_execution_status: currentRouteExecution?.execution_status || null,
     current_route_step: currentRouteExecution ? `${currentRouteExecution.current_step_index} / ${currentRouteExecution.total_step_count}` : null,
@@ -8355,9 +8355,9 @@ function getRouteDetail(route) {
 function hasRelation(value) {
   return Boolean(value) && value !== "无关联";
 }
-function findCurrentTask(taskId, readinessTasks, deploymentTasks) {
+function findCurrentTask(taskId, readinessTasks, deploymentTasks, fleetOperationTasks = []) {
   if (!taskId) return null;
-  return readinessTasks.find(task => task.task_id === taskId) || deploymentTasks.find(task => task.task_id === taskId) || null;
+  return readinessTasks.find(task => task.task_id === taskId) || deploymentTasks.find(task => task.task_id === taskId) || fleetOperationTasks.find(task => task.task_id === taskId) || null;
 }
 function createTripRouteUpdate(trip, nextTrip, data) {
   const result = routePlanningService.createTripRouteUpdate({
@@ -8734,7 +8734,7 @@ function getDefaultSelection(page, data) {
 }
 function getPageLabel(page) {
   if (page === "console") return "运营中控台";
-  return tableConfig[page]?.title || findPageMenuLabel(page) || "业务页面";
+  return findPageMenuLabel(page) || tableConfig[page]?.title || "业务页面";
 }
 function findPageMenuLabel(page) {
   for (const group of pageGroups) {

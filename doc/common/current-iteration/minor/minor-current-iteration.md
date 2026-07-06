@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v040.27`：Robotaxi 页签、运维当前任务展示与任务规划输入源边界小迭代，已归档到 `doc/common/iteration-history/minor/v040.27-robotaxi-planning-display-source.md`。
 - `v040.26`：行驶耗电与充电资产台账闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.26-travel-charging-ledger.md`。
 - `v040.25`：能量事实与当前任务展示闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.25-energy-and-current-task.md`。
 - `v040.24`：Robotaxi 运营状态与资产事实闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.24-robotaxi-state-asset-facts.md`。
