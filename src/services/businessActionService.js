@@ -1289,12 +1289,28 @@ function withFinancialFacts({ state, runtime, updates = {}, costSources = [], re
         sourceObjectType: objectType,
         calculationRunId: runtime.nextId ? runtime.nextId("CFR") : `CFR-${Date.now()}`,
       });
+      const projectedObject = result.sourceObject || object;
+      nextUpdates = replaceFinancialSourceInUpdates(nextUpdates, objectType, projectedObject);
+      Object.assign(appData, nextUpdates);
       nextCostRecords = [
         ...result.costRecords,
         ...nextCostRecords.filter((record) => !(record.source_object_type === objectType && record.source_object_id === object[getObjectIdField(objectType)])),
       ];
     });
     nextUpdates.costRecords = nextCostRecords;
+    costSources.forEach(({ objectType, object }) => {
+      const idField = getObjectIdField(objectType);
+      const currentObject = findFinancialSourceInUpdates(nextUpdates, objectType, object?.[idField]) || object;
+      const relatedRecords = getFinancialSourceCostRecords(nextCostRecords, objectType, currentObject);
+      if (!relatedRecords.length) return;
+      const lastRecord = relatedRecords[0];
+      nextUpdates = replaceFinancialSourceInUpdates(nextUpdates, objectType, {
+        ...currentObject,
+        ...costModelCalculator.summarizeRecords(relatedRecords),
+        cost_calculated_at: lastRecord.created_at || runtime?.now?.() || new Date().toISOString(),
+        cost_calculation_run_id: lastRecord.cost_calculation_run_id || currentObject.cost_calculation_run_id || null,
+      });
+    });
   }
   if (revenueSources.length) {
     let nextRevenueRecords = appData.revenueRecords || [];
@@ -1305,6 +1321,14 @@ function withFinancialFacts({ state, runtime, updates = {}, costSources = [], re
         serviceOrder: order,
         calculationRunId: runtime.nextId ? runtime.nextId("RFR") : `RFR-${Date.now()}`,
       });
+      const revenueSummary = revenueCalculator.summarizeRevenueRecords(result.revenueRecords || []);
+      const projectedOrder = {
+        ...order,
+        ...revenueSummary,
+        revenue_calculated_at: result.calculationRun?.completed_at || runtime?.now?.() || new Date().toISOString(),
+        revenue_calculation_run_id: result.calculationRun?.revenue_calculation_run_id || null,
+      };
+      nextUpdates = replaceFinancialSourceInUpdates(nextUpdates, "serviceOrder", projectedOrder);
       nextRevenueRecords = [
         ...result.revenueRecords,
         ...nextRevenueRecords.filter((record) => record.service_order_id !== order.service_order_id),
@@ -1313,6 +1337,63 @@ function withFinancialFacts({ state, runtime, updates = {}, costSources = [], re
     nextUpdates.revenueRecords = nextRevenueRecords;
   }
   return nextUpdates;
+}
+
+function replaceFinancialSourceInUpdates(updates, objectType, object) {
+  const collectionKey = getFinancialSourceCollectionKey(objectType);
+  const idField = getObjectIdField(objectType);
+  const objectIdValue = object?.[idField];
+  if (!collectionKey || !objectIdValue) return updates;
+  const collection = updates[collectionKey];
+  if (!Array.isArray(collection)) return updates;
+  return {
+    ...updates,
+    [collectionKey]: replaceById(collection, idField, objectIdValue, object),
+  };
+}
+
+function findFinancialSourceInUpdates(updates, objectType, objectIdValue) {
+  const collectionKey = getFinancialSourceCollectionKey(objectType);
+  const idField = getObjectIdField(objectType);
+  if (!collectionKey || !objectIdValue || !Array.isArray(updates[collectionKey])) return null;
+  return updates[collectionKey].find((item) => item?.[idField] === objectIdValue) || null;
+}
+
+function getFinancialSourceCostRecords(costRecords = [], objectType, object = {}) {
+  const idField = getObjectIdField(objectType);
+  const sourceId = object?.[idField];
+  if (!sourceId) return [];
+  if (objectType === "serviceOrder") {
+    return costRecords.filter((record) => record.related_order_id === object.service_order_id);
+  }
+  if (objectType === "deploymentTask") {
+    return costRecords.filter((record) =>
+      (record.source_object_type === "deploymentTask" && record.source_object_id === object.task_id) ||
+      (object.route_execution_id && ["routeExecution", "route_execution"].includes(record.source_object_type) && record.source_object_id === object.route_execution_id)
+    );
+  }
+  if (["cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask"].includes(objectType)) {
+    return costRecords.filter((record) =>
+      (record.source_object_type === objectType && record.source_object_id === object.task_id) ||
+      (object.route_execution_id && record.source_object_type === "routeExecution" && record.source_object_id === object.route_execution_id)
+    );
+  }
+  return costRecords.filter((record) => record.source_object_type === objectType && record.source_object_id === sourceId);
+}
+
+function getFinancialSourceCollectionKey(objectType) {
+  return {
+    readinessTask: "readinessTasks",
+    deploymentTask: "deploymentTasks",
+    cleaningTask: "cleaningTasks",
+    chargingTask: "chargingTasks",
+    maintenanceTask: "maintenanceTasks",
+    failureHandlingTask: "failureHandlingTasks",
+    retirementTask: "retirementTasks",
+    routeExecution: "routeExecutions",
+    trip: "trips",
+    serviceOrder: "serviceOrders",
+  }[objectType] || null;
 }
 
 function createFactSimulationRun(runtime, object = {}) {

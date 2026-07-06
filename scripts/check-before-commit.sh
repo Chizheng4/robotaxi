@@ -129,6 +129,7 @@ node scripts/verify-v040-25-energy-and-current-task.mjs
 node scripts/verify-v040-26-travel-charging-ledger.mjs
 node scripts/verify-v040-27-robotaxi-planning-display-source.mjs
 node scripts/verify-v040-28-business-document-closure.mjs
+node scripts/verify-v040-29-financial-fact-closure.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

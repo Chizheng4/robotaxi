@@ -51,6 +51,14 @@ export function createRevenueCalculation({
       : RevenueCalculationStatus.SUCCEEDED;
 
   return {
+    businessData: {
+      serviceOrders: (scope.serviceOrders || []).map((order) => ({
+        ...order,
+        ...summarizeRevenueRecords(records.filter((record) => record.service_order_id === order.service_order_id)),
+        revenue_calculated_at: startedAt,
+        revenue_calculation_run_id: calculationRunId,
+      })),
+    },
     revenueRecords: records,
     calculationRun: {
       revenue_calculation_run_id: calculationRunId,

@@ -1136,7 +1136,7 @@ function App() {
     demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
     demandSimulationRuns,
     demandSimulationResults: createDemandSimulationResultRows(demandSimulationRuns),
-    serviceOrders: serviceOrders.map(order => attachCostRecords(enrichServiceOrderForDisplay(order, data, trips), "serviceOrder", costRecords)),
+    serviceOrders: serviceOrders.map(order => attachRevenueRecords(attachCostRecords(enrichServiceOrderForDisplay(order, data, trips), "serviceOrder", costRecords), revenueRecords)),
     opsCenters: data.opsCenters,
     workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks: readinessTasks.map(task => attachCostRecords(task, "readinessTask", costRecords)),
@@ -2008,6 +2008,9 @@ function App() {
           scope,
           calculationRunId
         });
+        if (result.businessData?.serviceOrders) {
+          setServiceOrders(current => mergeCalculatedObjects(current, result.businessData.serviceOrders, "service_order_id"));
+        }
         setRevenueRecords(current => [...result.revenueRecords, ...current.filter(record => record.simulation_run_id !== runId)]);
         setRevenueCalculationRuns(current => [result.calculationRun, ...current]);
         setSimulationRuns(current => current.map(item => item.simulation_run_id === runId ? {
@@ -8155,11 +8158,56 @@ function attachCostRecords(item, objectType, costRecords = [], routeExecutions =
     const executionIds = routeExecutions.filter(execution => execution.task_id === item.task_id).map(execution => execution.route_execution_id);
     records = costRecords.filter(record => record.source_object_type === "deploymentTask" && record.source_object_id === item.task_id || executionIds.includes(record.source_object_id));
   } else if (["cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask"].includes(objectType)) {
-    records = costRecords.filter(record => record.source_object_type === objectType && record.source_object_id === item.task_id);
+    records = costRecords.filter(record => record.source_object_type === objectType && record.source_object_id === item.task_id || item.route_execution_id && record.source_object_type === "routeExecution" && record.source_object_id === item.route_execution_id);
   }
   return {
     ...item,
+    ...(records.length ? summarizeCostRecords(records) : {}),
     cost_records: records
+  };
+}
+function summarizeCostRecords(records = []) {
+  const summary = {
+    total_cost_amount: 0,
+    distance_cost_amount: 0,
+    energy_cost_amount: 0,
+    labor_cost_amount: 0,
+    asset_depreciation_cost_amount: 0
+  };
+  records.forEach(record => {
+    const amount = Number(record.cost_amount || 0);
+    summary.total_cost_amount += amount;
+    if (record.cost_type === "DISTANCE_COST") summary.distance_cost_amount += amount;
+    if (record.cost_type === "ENERGY_COST") summary.energy_cost_amount += amount;
+    if (record.cost_type === "LABOR_COST") summary.labor_cost_amount += amount;
+    if (record.cost_type === "ASSET_DEPRECIATION_COST") summary.asset_depreciation_cost_amount += amount;
+  });
+  Object.keys(summary).forEach(key => {
+    summary[key] = Number(summary[key].toFixed(2));
+  });
+  return summary;
+}
+function attachRevenueRecords(order, revenueRecords = []) {
+  if (!order) return order;
+  const records = (revenueRecords || []).filter(record => record.service_order_id === order.service_order_id);
+  const summary = {
+    total_receivable_revenue_amount: 0,
+    total_collected_revenue_amount: 0,
+    total_unreceived_revenue_amount: 0
+  };
+  records.forEach(record => {
+    const amount = Number(record.revenue_amount || 0);
+    if (record.revenue_type === "RECEIVABLE_REVENUE") summary.total_receivable_revenue_amount += amount;
+    if (record.revenue_type === "COLLECTED_REVENUE") summary.total_collected_revenue_amount += amount;
+    if (record.revenue_type === "UNRECEIVED_REVENUE") summary.total_unreceived_revenue_amount += amount;
+  });
+  Object.keys(summary).forEach(key => {
+    summary[key] = Number(summary[key].toFixed(2));
+  });
+  return {
+    ...order,
+    ...(records.length ? summary : {}),
+    revenue_records: records
   };
 }
 function enrichDeploymentTaskForDisplay(task, data) {

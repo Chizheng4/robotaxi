@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v040.29`：业务单据成本 / 收入事实回填与运维工作流时效状态边小迭代，已归档到 `doc/common/iteration-history/minor/v040.29-financial-fact-closure.md`。
 - `v040.28`：业务单据底层闭环、运维作业时效和行驶自动到达体验小迭代，已归档到 `doc/common/iteration-history/minor/v040.28-business-document-closure.md`。
 - `v040.27`：Robotaxi 页签、运维当前任务展示与任务规划输入源边界小迭代，已归档到 `doc/common/iteration-history/minor/v040.27-robotaxi-planning-display-source.md`。
 - `v040.26`：行驶耗电与充电资产台账闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.26-travel-charging-ledger.md`。

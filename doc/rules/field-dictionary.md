@@ -164,6 +164,7 @@
 |asset_depreciation_cost_amount|资产折旧成本金额|运行态字段|业务对象关联资产折旧成本|
 |cost_calculated_at|成本计算时间|运行态字段|最近一次成本计算真实时间|
 |cost_calculation_run_id|成本计算运行编号|运行态字段|最近一次成本计算批次|
+|cost_records|成本明细|聚合展示字段|业务对象关联的成本记录明细|
 |cost_calculation_status|成本计算状态|运行态字段|SimulationRun 上的成本计算状态|
 |cost_calculation_progress_percent|成本计算进度（%）|运行态字段|SimulationRun 上的成本计算进度|
 |active_cost_calculation_run_id|当前成本计算运行编号|运行态字段|SimulationRun 当前使用的成本计算批次|
@@ -175,6 +176,9 @@
 |total_receivable_revenue_amount|应收收入总额|运行态字段|SimulationRun 应收收入总额|
 |total_collected_revenue_amount|实收收入总额|运行态字段|SimulationRun 实收收入总额|
 |total_unreceived_revenue_amount|未收收入总额|运行态字段|SimulationRun 未收收入总额|
+|revenue_calculated_at|收入生成时间|运行态字段|最近一次收入记录生成真实时间|
+|revenue_calculation_run_id|收入生成运行编号|运行态字段|最近一次收入生成批次|
+|revenue_records|收入明细|聚合展示字段|服务订单关联的收入记录明细|
 |revenue_result_summary|收入结果摘要|运行态字段|SimulationRun 收入生成汇总|
 |revenue_calculation_errors|收入生成错误|运行态字段|SimulationRun 收入生成错误|
 
@@ -516,19 +520,35 @@
 |TRIP_DESTINATION_PLAN|履约送达路径规划状态边|工作流状态边|
 |TRIP_DESTINATION_MOVE|履约送达行驶状态边|工作流状态边|
 |TRIP_DROPOFF|履约客户下车状态边|工作流状态边|
+|CLEANING_DESTINATION_ASSIGN|清洁分配目的站点状态边|工作流状态边|
+|CLEANING_ROUTE_PLAN|清洁路径规划投影状态边|工作流状态边|
+|CLEANING_ROUTE_MOVE|清洁行驶推进投影状态边|工作流状态边|
+|CLEANING_ROUTE_ARRIVAL|清洁到达确认投影状态边|工作流状态边|
 |CLEANING_WORKER_ASSIGN|清洁分配 Worker 状态边|工作流状态边|
 |CLEANING_WORK_START|清洁开始状态边|工作流状态边|
 |CLEANING_WORK_COMPLETE|清洁完成状态边|工作流状态边|
+|CHARGING_DESTINATION_ASSIGN|充电分配目的站点状态边|工作流状态边|
+|CHARGING_ROUTE_PLAN|充电路径规划投影状态边|工作流状态边|
+|CHARGING_ROUTE_MOVE|充电行驶推进投影状态边|工作流状态边|
+|CHARGING_ROUTE_ARRIVAL|充电到达确认投影状态边|工作流状态边|
 |CHARGING_WORKER_ASSIGN_CONNECT|充电接入分配 Worker 状态边|工作流状态边|
 |CHARGING_CONNECT|接入充电头状态边|工作流状态边|
 |CHARGING_COMPLETE|充电完成状态边|工作流状态边|
 |CHARGING_WORKER_ASSIGN_DISCONNECT|断开电源分配 Worker 状态边|工作流状态边|
 |CHARGING_DISCONNECT|断开电源状态边|工作流状态边|
+|MAINTENANCE_DESTINATION_ASSIGN|维修分配目的站点状态边|工作流状态边|
+|MAINTENANCE_ROUTE_PLAN|维修路径规划投影状态边|工作流状态边|
+|MAINTENANCE_ROUTE_MOVE|维修行驶推进投影状态边|工作流状态边|
+|MAINTENANCE_ROUTE_ARRIVAL|维修到达确认投影状态边|工作流状态边|
 |MAINTENANCE_WORKER_ASSIGN|维修分配 Worker 状态边|工作流状态边|
 |MAINTENANCE_WORK_START|维修开始状态边|工作流状态边|
 |MAINTENANCE_WORK_COMPLETE|维修完成状态边|工作流状态边|
 |FAILURE_DIAGNOSIS_ASSIGN|故障诊断分配 Worker 状态边|工作流状态边|
 |FAILURE_DIAGNOSIS_COMPLETE|故障诊断完成状态边|工作流状态边|
+|RETIREMENT_DESTINATION_ASSIGN|退役分配目的站点状态边|工作流状态边|
+|RETIREMENT_ROUTE_PLAN|退役路径规划投影状态边|工作流状态边|
+|RETIREMENT_ROUTE_MOVE|退役行驶推进投影状态边|工作流状态边|
+|RETIREMENT_ROUTE_ARRIVAL|退役到达确认投影状态边|工作流状态边|
 |RETIREMENT_PROCESS_COMPLETE|退役处理完成状态边|工作流状态边|
 
 ---
