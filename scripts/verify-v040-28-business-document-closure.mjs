@@ -57,7 +57,7 @@ assert.ok(
 const workflowTimingProfile = initializeDefaultWorkflowTimingProfile();
 const cleaningRule = workflowTimingProfile.timing_rules.find((rule) =>
   rule.business_object_type === "cleaningTask"
-  && rule.from_status === FleetOperationTaskStatus.CLEANING_IN_PROGRESS
+  && rule.from_status === FleetOperationTaskStatus.CLEANING
   && rule.action_type === "FLEET_OPERATION_WORK_COMPLETE"
 );
 assert.ok(cleaningRule, "默认工作流时效配置必须包含清洁完成规则");
@@ -66,7 +66,7 @@ assert.equal(cleaningRule.configured_duration_seconds, 600);
 const task = {
   task_id: "TASK-FOP-V04028",
   task_type: TaskType.CLEANING,
-  task_status: FleetOperationTaskStatus.CLEANING_IN_PROGRESS,
+  task_status: FleetOperationTaskStatus.CLEANING,
   robotaxi_id: "RTX-V04028",
   worker_id: "WK-V04028",
   simulation_status_transition_history: [],

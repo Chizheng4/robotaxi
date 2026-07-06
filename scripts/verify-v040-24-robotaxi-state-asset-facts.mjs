@@ -4,6 +4,7 @@ import { initializeOperationsCenter } from "../src/data/operationsCenterInitiali
 import { AvailabilityStatus } from "../src/domain/operationsCenterTypes.js";
 import {
   FleetOperationTaskStatus,
+  MaintenanceTaskStatus,
   MaintenanceStatus,
   RetirementTaskStatus,
   RouteExecutionStatus,
@@ -85,14 +86,36 @@ const cleaningDone = fleetOperationTaskService.completeFleetOperationWork({
   task: {
     ...cleaningCreate.task,
     worker_id: "WK-001",
-    task_status: FleetOperationTaskStatus.CLEANING_IN_PROGRESS,
+    task_status: FleetOperationTaskStatus.CLEANING,
   },
-  robotaxi: cleaningCreate.robotaxi,
+  robotaxi: queuedMaintenance.robotaxi,
   context,
 });
 assert.equal(cleaningDone.succeeded, true);
 assert.equal(cleaningDone.robotaxi.availability_status, AvailabilityStatus.AVAILABLE);
 assert.equal(cleaningDone.robotaxi.completed_cleaning_count, 1);
+
+const activatedMaintenance = fleetOperationTaskService.activateNextQueuedFleetOperationTask({
+  robotaxi: cleaningDone.robotaxi,
+  tasksByType: { maintenanceTasks: [queuedMaintenance.task] },
+  opsCenters: opsData.opsCenters,
+  context,
+});
+assert.equal(activatedMaintenance.activated, true);
+assert.equal(activatedMaintenance.robotaxi.completed_cleaning_count, 1, "激活下一排队任务时不得丢失上一任务完成次数");
+
+const maintenanceDone = fleetOperationTaskService.completeFleetOperationWork({
+  task: {
+    ...activatedMaintenance.task,
+    worker_id: "WK-001",
+    task_status: MaintenanceTaskStatus.REPAIRING,
+  },
+  robotaxi: activatedMaintenance.robotaxi,
+  context,
+});
+assert.equal(maintenanceDone.succeeded, true);
+assert.equal(maintenanceDone.robotaxi.completed_cleaning_count, 1);
+assert.equal(maintenanceDone.robotaxi.completed_maintenance_count, 1);
 
 const retirementCreate = fleetOperationTaskService.createFleetOperationTask({
   robotaxi: availableRobotaxi,

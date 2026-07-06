@@ -3053,10 +3053,9 @@ function App() {
     const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
     const robotaxi = robotaxiOverride || operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi || !routePlanningService) return;
-    const result = fleetOperationTaskService.planFleetOperationRoute({
+    const result = fleetOperationTaskService.createFleetOperationRouteExecution({
       task,
       robotaxi,
-      data,
       context: {
         now,
         workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction(),
@@ -3067,11 +3066,9 @@ function App() {
         },
       },
     });
-    if (result.routePlanningRun) setRoutePlanningRuns((items) => [result.routePlanningRun, ...items]);
     if (result.succeeded) {
       setOperationalData((current) => ({
         ...current,
-        routes: [result.route, ...current.routes],
         robotaxis: current.robotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
       }));
       setRouteExecutions((items) => (
@@ -3082,14 +3079,14 @@ function App() {
       updateFleetOperationTask(result.task);
       setTaskEventLogs((logs) => [
         createEventLog({
-          event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
+          event_type: taskTypes.TaskEventType.ROUTE_EXECUTION_CREATED,
           event_result: taskTypes.TaskEventResult.SUCCESS,
           task_id: result.task.task_id,
           task_type: result.task.task_type,
           source_page: collectionKey,
           robotaxi_id: result.task.robotaxi_id,
           route_execution_id: result.routeExecution.route_execution_id,
-          message: "运营行驶记录已生成，Robotaxi 前往目的地",
+          message: "运营行驶记录已生成，等待路径规划",
         }),
         ...logs,
       ]);
@@ -3108,10 +3105,55 @@ function App() {
   }
 
   function planFleetOperationRoute(task) {
-    const result = createFleetOperationRouteExecution(task);
+    if (!task?.route_execution_id || !fleetOperationTaskService) return null;
+    const execution = routeExecutions.find((item) => item.route_execution_id === task.route_execution_id);
+    const robotaxi = operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
+    if (!execution || !robotaxi) return null;
+    const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
+    const result = fleetOperationTaskService.planFleetOperationRoute({
+      task,
+      robotaxi,
+      execution,
+      data,
+      context: {
+        now,
+        workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction(),
+        nextId: (prefix) => {
+          if (prefix === "RPR") return nextRoutePlanningRunId();
+          return nextDeploymentRouteId();
+        },
+      },
+    });
+    if (result.routePlanningRun) setRoutePlanningRuns((items) => [result.routePlanningRun, ...items]);
     if (result?.succeeded) {
+      setOperationalData((current) => ({
+        ...current,
+        routes: [result.route, ...current.routes],
+        robotaxis: current.robotaxis.map((item) => item.robotaxi_id === result.robotaxi.robotaxi_id ? result.robotaxi : item),
+      }));
+      setRouteExecutions((items) => items.map((item) => item.route_execution_id === result.routeExecution.route_execution_id ? result.routeExecution : item));
+      updateFleetOperationTask(result.task);
+      setTaskEventLogs((logs) => [
+        createEventLog({
+          event_type: taskTypes.TaskEventType.ROUTE_PLANNED,
+          event_result: taskTypes.TaskEventResult.SUCCESS,
+          task_id: result.task.task_id,
+          task_type: result.task.task_type,
+          source_page: collectionKey,
+          robotaxi_id: result.task.robotaxi_id,
+          route_execution_id: result.routeExecution.route_execution_id,
+          message: "路径规划完成，Robotaxi 前往目的地",
+        }),
+        ...logs,
+      ]);
       selectForPage("routeExecutions", "routeExecution", result.routeExecution.route_execution_id);
+    } else if (result?.task) {
+      updateFleetOperationTask(result.task);
+      if (result.routeExecution) {
+        setRouteExecutions((items) => items.map((item) => item.route_execution_id === result.routeExecution.route_execution_id ? result.routeExecution : item));
+      }
     }
+    return result;
   }
 
   function planFleetOperationRouteExecutionRecord(execution) {
@@ -5846,6 +5888,14 @@ function renderCellValue(key, row) {
   if (key === "covered_cell_count") return (row.cell_ids || row.covered_cell_ids)?.length ?? 0;
   if (key === "route_step_count") return getMovementStepCount(row);
   if (key === "operation_tags") return renderOperationTags(row);
+  if (key === "pending_task_queue" && Array.isArray(row[key])) {
+    const summary = formatRobotaxiQueueSummary(row[key]);
+    return (
+      <Popover title="待执行任务队列" content={<RobotaxiQueuePopover queueItems={row[key]} />} placement="bottomLeft" trigger="hover">
+        <Text className="table-queue-summary">{summary}</Text>
+      </Popover>
+    );
+  }
   if (key === "result") {
     const passed = row[key] === "PASS";
     return <Tag color={passed ? "success" : "error"}>{getDisplayValue(row[key])}</Tag>;
@@ -6025,7 +6075,7 @@ function RobotaxiOperationPanel({ rows = [], selectedRow = null, actionMap = new
                 <RobotaxiSummaryItem label="当前任务" value={formatRobotaxiCurrentTask(activeRow)} />
                 <RobotaxiSummaryItem label="待处理" value={formatRobotaxiOperationNeedSummary(activeRow)} />
                 <RobotaxiSummaryItem
-                  label="排队"
+                  label="待执行队列"
                   value={formatRobotaxiQueueSummary(queueItems)}
                   popoverTitle="待执行任务队列"
                   popoverContent={<RobotaxiQueuePopover queueItems={queueItems} />}
@@ -6081,7 +6131,7 @@ function RobotaxiQueuePopover({ queueItems = [] }) {
   return (
     <div className="robotaxi-popover-list">
       {queueItems.map((item, index) => (
-        <span key={`${item.task_id || item.task_type}-${index}`}>{formatRobotaxiQueueItem(item, index)}</span>
+        <span key={`${item.task_id || item.task_type}-${index}`}>{formatRobotaxiQueueItem(item, index, { showPriority: true })}</span>
       ))}
     </div>
   );
@@ -6115,17 +6165,17 @@ function formatRobotaxiOperationNeedSummary(row) {
   return "无";
 }
 
-function formatRobotaxiQueueItem(item, index) {
+function formatRobotaxiQueueItem(item, index, { showPriority = false } = {}) {
   const sequence = item.queue_sequence || index + 1;
-  const priority = item.priority !== undefined && item.priority !== null ? `，优先级 ${item.priority}` : "";
-  const taskId = item.task_id ? `，${item.task_id}` : "";
+  const priority = showPriority && item.priority !== undefined && item.priority !== null ? ` · 优先级 ${item.priority}` : "";
+  const taskId = item.task_id ? ` ${item.task_id}` : "";
   return `${sequence}. ${getDisplayValue(item.task_type)}${taskId}${priority}`;
 }
 
 function formatRobotaxiQueueSummary(queueItems = []) {
   if (!queueItems.length) return "无";
-  const visible = queueItems.slice(0, 2).map((item, index) => formatRobotaxiQueueItem(item, index));
-  return queueItems.length > 2 ? `${visible.join(" / ")} / +${queueItems.length - 2}` : visible.join(" / ");
+  const first = formatRobotaxiQueueItem(queueItems[0], 0);
+  return queueItems.length > 1 ? `${first}（共 ${queueItems.length} 项）` : first;
 }
 
 function formatRobotaxiActionSummary(actions = []) {
@@ -6239,14 +6289,18 @@ function isFleetOperationWorkerAssignmentStatus(row) {
 
 function isFleetOperationReadyToStartStatus(row) {
   return [
+    "READY_TO_CLEAN",
     "READY_TO_START",
+    "READY_TO_REPAIR",
     "READY_TO_CHARGE",
   ].includes(row?.task_status);
 }
 
 function isFleetOperationWorkActiveStatus(row) {
   return [
+    "CLEANING",
     "CLEANING_IN_PROGRESS",
+    "REPAIRING",
     "MAINTENANCE_IN_PROGRESS",
     "CHARGING",
     "READY_TO_DISCONNECT",
@@ -6950,12 +7004,16 @@ function getFleetOperationStatusDisplay(taskType, status) {
   if (["ARRIVED_OPS_CENTER", "ARRIVED_CHARGER", "ARRIVED_MAINTENANCE_CENTER"].includes(status)) return "已到达目的地";
   if (["WAITING_WORKER_ASSIGNMENT", "WAITING_RESOURCE_ASSIGNMENT", "WAITING_CHARGER_ASSIGNMENT", "WAITING_DIAGNOSIS_ASSIGNMENT"].includes(status)) return "待分配 Worker";
   if (status === "ARRIVAL_ABNORMAL") return "异常到达";
-  if (status === "READY_TO_START" && taskType === "CLEANING") return "待清洁";
-  if (status === "READY_TO_START" && taskType === "MAINTENANCE") return "待维修";
+  if (status === "READY_TO_CLEAN") return "待清洁";
+  if (status === "READY_TO_START" && taskType === "CLEANING") return "待清洁（兼容）";
+  if (status === "READY_TO_REPAIR") return "待维修";
+  if (status === "READY_TO_START" && taskType === "MAINTENANCE") return "待维修（兼容）";
   if (status === "READY_TO_CHARGE") return "待充电";
   if (status === "READY_TO_DISCONNECT") return "待拔充电头";
-  if (status === "CLEANING_IN_PROGRESS") return "清洁中";
-  if (status === "MAINTENANCE_IN_PROGRESS") return "维修中";
+  if (status === "CLEANING") return "清洁中";
+  if (status === "CLEANING_IN_PROGRESS") return "清洁中（兼容）";
+  if (status === "REPAIRING") return "维修中";
+  if (status === "MAINTENANCE_IN_PROGRESS") return "维修中（兼容）";
   if (status === "CHARGING") return "充电中";
   return null;
 }

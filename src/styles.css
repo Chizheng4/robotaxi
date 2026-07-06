@@ -1741,6 +1741,16 @@ body {
   font-size: var(--font-xs);
 }
 
+.table-queue-summary {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+
 .robotaxi-empty-summary {
   grid-column: 1 / -1;
   padding: 12px;
@@ -1786,7 +1796,7 @@ body {
   color: #252a31;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .record-page-new .ant-table-container {

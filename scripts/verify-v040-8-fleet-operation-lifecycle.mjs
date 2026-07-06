@@ -113,7 +113,7 @@ const directWorker = assignFleetOperationWorker({
   context: fixedContext(),
 });
 assert.equal(directWorker.succeeded, true);
-assert.equal(directWorker.task.task_status, "READY_TO_START");
+assert.equal(directWorker.task.task_status, "READY_TO_CLEAN");
 assert.equal(directWorker.workerRecord.worker_status, "BUSY");
 
 const cleaningStarted = startFleetOperationWork({
@@ -122,7 +122,7 @@ const cleaningStarted = startFleetOperationWork({
   context: { ...fixedContext(), opsCenters },
 });
 assert.equal(cleaningStarted.succeeded, true);
-assert.equal(cleaningStarted.task.task_status, "CLEANING_IN_PROGRESS");
+assert.equal(cleaningStarted.task.task_status, "CLEANING");
 
 const cleaningCompleted = completeFleetOperationWork({
   task: cleaningStarted.task,

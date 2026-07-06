@@ -9,6 +9,7 @@ import {
   advanceFleetOperationRouteExecution,
   completeFleetOperationWork,
   confirmFleetOperationArrival,
+  createFleetOperationRouteExecution,
   dispatchFleetOperationTaskDestination,
   planFleetOperationRoute,
   startFleetOperationWork,
@@ -95,15 +96,27 @@ let routeRobotaxi = {
   availability_status: "UNAVAILABLE",
   available_for_dispatch: false,
 };
-const routePlan = planFleetOperationRoute({
+const routeCreate = createFleetOperationRouteExecution({
   task: routeTask,
   robotaxi: routeRobotaxi,
+  context: routeContext,
+});
+assert.equal(routeCreate.succeeded, true, "运维任务应能通过服务层创建运营行驶记录");
+assert.equal(routeCreate.routeExecution.execution_status, "WAITING_ROUTE", "运营行驶记录创建后必须先等待路径规划");
+assert.equal(routeCreate.routeExecution.simulation_status_transition_history.at(-1).to_status, "WAITING_ROUTE");
+
+const routePlan = planFleetOperationRoute({
+  task: routeCreate.task,
+  robotaxi: routeCreate.robotaxi,
+  execution: routeCreate.routeExecution,
   data,
   context: routeContext,
 });
-assert.equal(routePlan.succeeded, true, "运维任务应能通过服务层创建运营行驶记录");
+assert.equal(routePlan.succeeded, true, "运维任务应能通过服务层规划运营行驶记录");
 assert.equal(routePlan.routeExecution.execution_status, "MOVING");
-assert.equal(routePlan.routeExecution.simulation_status_transition_history.at(-1).to_status, "MOVING");
+assert.equal(routePlan.routeExecution.simulation_status_transition_history.at(-1).action_type, "ROUTE_PLAN");
+assert.equal(routePlan.task.simulation_status_transition_history.at(-1).action_type, "FLEET_OPERATION_ROUTE_PLAN", "运维任务应记录自己的路径规划动作");
+assert.ok(!routePlan.task.simulation_status_transition_history.some((item) => item.action_type === "ROUTE_PLAN"), "运维任务时间线不得混入行驶记录路径规划动作");
 
 let execution = routePlan.routeExecution;
 let activeRouteTask = routePlan.task;
@@ -122,6 +135,8 @@ for (let i = 0; i < 20 && execution.execution_status !== "ARRIVED"; i += 1) {
   routeRobotaxi = step.robotaxi;
 }
 assert.equal(execution.execution_status, "ARRIVED", "运营行驶记录应能到达目的地");
+assert.ok(activeRouteTask.simulation_status_transition_history.some((item) => item.action_type === "FLEET_OPERATION_ROUTE_PROGRESS"), "运维任务应使用自己的行驶进展动作");
+assert.ok(!activeRouteTask.simulation_status_transition_history.some((item) => item.action_type === "ROUTE_EXECUTION_STEP"), "运维任务时间线不得混入行驶记录推进动作");
 const confirmed = confirmFleetOperationArrival({
   execution,
   task: activeRouteTask,
@@ -137,6 +152,9 @@ const confirmed = confirmFleetOperationArrival({
 assert.equal(confirmed.succeeded, true, "运维行驶记录正常到达确认必须成功");
 assert.equal(confirmed.routeExecution.execution_status, "COMPLETED");
 assert.equal(confirmed.routeExecution.simulation_status_transition_history.at(-1).to_status, "COMPLETED");
+assert.equal(confirmed.task.task_status, "WAITING_WORKER_ASSIGNMENT", "清洁任务正常到达后应进入待分配 Worker");
+assert.equal(confirmed.task.simulation_status_transition_history.at(-1).action_type, "FLEET_OPERATION_ROUTE_ARRIVAL_RESULT", "运维任务应使用自己的到达结果动作");
+assert.ok(!confirmed.task.simulation_status_transition_history.some((item) => item.action_type === "ARRIVAL_CONFIRM"), "运维任务时间线不得混入行驶记录到达确认动作");
 assert.ok(confirmed.costRecords.some((record) =>
   record.source_object_type === "routeExecution"
   && record.source_object_id === confirmed.routeExecution.route_execution_id

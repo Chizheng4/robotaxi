@@ -146,9 +146,10 @@ const opsCenters = [{
   service_area_ids: ["SA-VERIFY"],
   can_receive_robotaxi: true,
   can_repair_robotaxi: true,
-  cell_ids: ["C-RETIRE-1", "C-REPAIR-1"],
+  cell_ids: ["C-RETIRE-1", "C-REPAIR-1", "C-CHARGE-1"],
   operation_capability_zones: [
     { task_type: TaskType.CLEANING, work_cell_ids: ["C-RETIRE-1"], parking_cell_ids: [] },
+    { task_type: TaskType.CHARGING, work_cell_ids: ["C-CHARGE-1"], parking_cell_ids: [] },
     { task_type: TaskType.MAINTENANCE, work_cell_ids: ["C-REPAIR-1"], parking_cell_ids: [] },
     { task_type: TaskType.RETIREMENT, work_cell_ids: ["C-RETIRE-1"], parking_cell_ids: [] },
     { task_type: TaskType.FAILURE_HANDLING, work_cell_ids: ["C-REPAIR-1"], parking_cell_ids: [] },
@@ -403,17 +404,17 @@ function verifyFleetOperationQueueActivationIsolation() {
   const activeCleaningTask = {
     task_id: "TASK-CLN-ACTIVE",
     task_type: TaskType.CLEANING,
-    task_status: "CLEANING_IN_PROGRESS",
+    task_status: "CLEANING",
     robotaxi_id: "RTX-QUEUE",
     simulation_status_transition_history: [{
       status_transition_id: "ST-CLEAN-001",
       transition_sequence: 1,
       business_object_type: "cleaningTask",
       business_object_id: "TASK-CLN-ACTIVE",
-      from_status: "READY_TO_START",
+      from_status: "READY_TO_CLEAN",
       action_type: "FLEET_OPERATION_WORK_START",
       result_type: "FLEET_OPERATION_WORK_STARTED",
-      to_status: "CLEANING_IN_PROGRESS",
+      to_status: "CLEANING",
     }],
   };
   const occupiedRobotaxi = {
@@ -423,7 +424,7 @@ function verifyFleetOperationQueueActivationIsolation() {
     available_for_dispatch: false,
     current_task_id: activeCleaningTask.task_id,
     current_task_type: TaskType.CLEANING,
-    current_task_status: "CLEANING_IN_PROGRESS",
+    current_task_status: "CLEANING",
     pending_task_queue: [],
     fleet_operation_status: "IN_CLEANING",
   };
@@ -434,7 +435,7 @@ function verifyFleetOperationQueueActivationIsolation() {
     trigger: {
       trigger_source: "VERIFY",
       task_fields: {
-        task_status: "CLEANING_IN_PROGRESS",
+        task_status: "CLEANING",
         simulation_status_transition_history: activeCleaningTask.simulation_status_transition_history,
         total_cost_amount: 999,
         maintenance_type: "GENERAL",
@@ -472,7 +473,37 @@ function verifyFleetOperationQueueActivationIsolation() {
     ["maintenanceTask", "maintenanceTask"],
     "排队激活后的任务时间线只能属于维修任务自身"
   );
-  assert.ok(!activated.task.simulation_status_transition_history.some((item) => item.to_status === "CLEANING_IN_PROGRESS"), "维修任务时间线不得出现清洁状态");
+  assert.ok(!activated.task.simulation_status_transition_history.some((item) => item.to_status === "CLEANING"), "维修任务时间线不得出现清洁状态");
+
+  const queuedCharging = fleetOperationTaskService.createFleetOperationTask({
+    robotaxi: occupiedRobotaxi,
+    taskType: TaskType.CHARGING,
+    existingTasks: [activeCleaningTask],
+    trigger: {
+      trigger_source: "VERIFY",
+      task_fields: {
+        task_status: "CLEANING",
+        simulation_status_transition_history: activeCleaningTask.simulation_status_transition_history,
+        total_cost_amount: 888,
+        charging_reason: "LOW_BATTERY",
+      },
+    },
+    context: context({
+      opsCenters,
+      robotaxiTaskPlanningStrategy: robotaxiTaskPlanningService.initializeDefaultRobotaxiTaskPlanningStrategies(now)[0],
+      recordTaskPlanningAudit: true,
+    }),
+  });
+  assert.equal(queuedCharging.created, true);
+  assert.equal(queuedCharging.queued, true);
+  assert.equal(queuedCharging.task.task_status, "WAITING_ROBOTAXI_AVAILABLE", "排队充电任务首态必须是自己的任务排队中");
+  assert.equal(queuedCharging.task.total_cost_amount, undefined, "排队充电任务不得继承触发来源成本");
+  assert.deepEqual(
+    queuedCharging.task.simulation_status_transition_history.map((item) => item.business_object_type),
+    ["chargingTask"],
+    "充电排队任务时间线只能属于充电任务自身"
+  );
+  assert.ok(!queuedCharging.task.simulation_status_transition_history.some((item) => item.to_status === "CLEANING"), "充电任务时间线不得出现清洁状态");
 }
 
 function verifyFleetOperationQueuedTaskCostIsolationAfterCompletion() {
@@ -481,7 +512,7 @@ function verifyFleetOperationQueuedTaskCostIsolationAfterCompletion() {
   const cleaningTask = {
     task_id: "TASK-CLN-COST",
     task_type: TaskType.CLEANING,
-    task_status: "CLEANING_IN_PROGRESS",
+    task_status: "CLEANING",
     robotaxi_id: "RTX-COST",
     worker_id: worker.worker_id,
     simulation_status_transition_history: [{
@@ -489,10 +520,10 @@ function verifyFleetOperationQueuedTaskCostIsolationAfterCompletion() {
       transition_sequence: 1,
       business_object_type: "cleaningTask",
       business_object_id: "TASK-CLN-COST",
-      from_status: "READY_TO_START",
+      from_status: "READY_TO_CLEAN",
       action_type: "FLEET_OPERATION_WORK_START",
       result_type: "FLEET_OPERATION_WORK_STARTED",
-      to_status: "CLEANING_IN_PROGRESS",
+      to_status: "CLEANING",
       configured_duration_seconds: 30,
     }],
   };
@@ -521,7 +552,7 @@ function verifyFleetOperationQueuedTaskCostIsolationAfterCompletion() {
     available_for_dispatch: false,
     current_task_id: cleaningTask.task_id,
     current_task_type: TaskType.CLEANING,
-    current_task_status: "CLEANING_IN_PROGRESS",
+    current_task_status: "CLEANING",
     pending_task_queue: [{ task_id: maintenanceQueuedTask.task_id, task_type: TaskType.MAINTENANCE, priority: 80, queue_sequence: 1 }],
     fleet_operation_status: "IN_CLEANING",
     battery_percent: 90,

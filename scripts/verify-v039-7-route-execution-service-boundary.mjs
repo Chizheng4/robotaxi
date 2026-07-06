@@ -4,6 +4,7 @@ import {
   createSimulationRuntimeScope,
 } from "../src/data/simulationRuntimeScope.js";
 import {
+  createFleetOperationRouteExecution,
   planFleetOperationRoute,
   advanceFleetOperationRouteExecution,
   confirmFleetOperationArrival,
@@ -43,6 +44,7 @@ assert.deepEqual(
 );
 
 assert.equal(typeof planFleetOperationRoute, "function", "Fleet Operation 路径规划必须由服务层提供");
+assert.equal(typeof createFleetOperationRouteExecution, "function", "Fleet Operation 行驶记录创建必须由服务层提供");
 assert.equal(typeof advanceFleetOperationRouteExecution, "function", "Fleet Operation 行驶推进必须由服务层提供");
 assert.equal(typeof confirmFleetOperationArrival, "function", "Fleet Operation 到达确认必须由服务层提供");
 
@@ -53,8 +55,10 @@ const planEnd = mainSource.indexOf("function advanceFleetOperationRouteExecution
 assert(helperStart > 0 && planStart > helperStart && planEnd > planStart, "缺少 Fleet Operation 页面动作函数");
 const helperBody = mainSource.slice(helperStart, planStart);
 const planBody = mainSource.slice(planStart, planEnd);
-assert.match(helperBody, /fleetOperationTaskService\.planFleetOperationRoute/, "页面路径规划必须通过共用函数调用 Fleet Operation 服务");
-assert.match(planBody, /createFleetOperationRouteExecution/, "页面路径规划动作必须复用共用行驶记录创建函数");
+assert.match(helperBody, /fleetOperationTaskService\.createFleetOperationRouteExecution/, "页面创建行驶记录必须通过 Fleet Operation 创建服务");
+assert.doesNotMatch(helperBody, /fleetOperationTaskService\.planFleetOperationRoute/, "页面创建行驶记录不得直接执行路径规划");
+assert.match(planBody, /fleetOperationTaskService\.planFleetOperationRoute/, "页面路径规划必须通过 Fleet Operation 路径规划服务");
+assert.doesNotMatch(planBody, /createFleetOperationRouteExecution\(task\)/, "页面路径规划动作不得重新创建行驶记录");
 assert.doesNotMatch(helperBody + planBody, /const\s+execution\s*=\s*\{/, "页面层不得拼装 routeExecution 对象");
 assert.doesNotMatch(helperBody + planBody, /setRouteExecutions\(\(r\)\s*=>\s*\[execution,/, "页面层不得直接插入手写行驶记录");
 

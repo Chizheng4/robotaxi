@@ -104,7 +104,7 @@ try {
   assert.equal(state.hasPanel, true, `Robotaxi 页面缺少运营概览区域：${state.bodyText}`);
   assert.equal(state.hasSelectedSummary, true, "Robotaxi 页面未使用当前选中统一概览结构");
   assert.equal(state.hasOldFocusBlock, false, "Robotaxi 页面仍存在旧卡片式焦点块");
-  ["当前 Robotaxi", "当前位置", "当前占用", "运维状态", "排队", "可触发"].forEach((text) => {
+  ["当前 Robotaxi", "当前位置", "当前任务", "待处理", "待执行队列", "可触发"].forEach((text) => {
     assert.match(state.visibleText, new RegExp(text), `Robotaxi 概览缺少字段：${text}`);
   });
   const truncatedLabels = (state.labelWidths || []).filter((item) => item.scrollWidth > item.clientWidth + 1);

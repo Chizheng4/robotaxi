@@ -546,22 +546,97 @@ export function dispatchFleetOperationTaskDestination({
   };
 }
 
-export function planFleetOperationRoute({
+export function createFleetOperationRouteExecution({
   task,
   robotaxi,
-  data = {},
   context = {},
 } = {}) {
   if (!task?.task_id || !task?.robotaxi_id || !robotaxi?.robotaxi_id || !task?.target_cell_id) {
-    return { succeeded: false, reason: "INVALID_FLEET_OPERATION_ROUTE_INPUT" };
+    return { succeeded: false, reason: "INVALID_FLEET_OPERATION_ROUTE_EXECUTION_INPUT" };
   }
   const now = resolveNow(context);
   const routeExecutionId = task.route_execution_id || resolveNextId(context, "REX");
-  const routeId = resolveNextId(context, "DRT");
-  const routePlanningRunId = resolveNextId(context, "RPR");
   const originCellId = robotaxi.current_cell_id || task.origin_cell_id;
   const targetCellId = task.target_cell_id;
   const targetServiceAreaId = task.target_service_area_id || task.planned_target_service_area_id || null;
+  const execution = withFleetOperationLifecycleStatus({
+    route_execution_id: routeExecutionId,
+    task_id: task.task_id,
+    task_type: task.task_type,
+    source_task_id: task.task_id,
+    robotaxi_id: task.robotaxi_id,
+    execution_status: "WAITING_ROUTE",
+    route_id: null,
+    route_strategy_id: null,
+    origin_cell_id: originCellId,
+    current_cell_id: originCellId,
+    target_ops_center_id: task.target_ops_center_id || null,
+    target_service_area_id: targetServiceAreaId,
+    target_cell_id: targetCellId,
+    current_target_service_area_id: targetServiceAreaId,
+    route_cell_ids: [],
+    current_step_index: 0,
+    total_step_count: 0,
+    route_history: [],
+    time_elapsed: "0",
+    battery_consumed_kwh: 0,
+    battery_consumed_percent: 0,
+    simulation_run_id: task.simulation_run_id || null,
+    created_at: now,
+    operation_created_at: now,
+    updated_at: now,
+    ...resolveAudit(context, { created: true }),
+  }, {
+    context,
+    objectType: "routeExecution",
+    statusField: "execution_status",
+    fromStatus: null,
+    toStatus: "WAITING_ROUTE",
+    actionType: "ROUTE_EXECUTION_CREATE",
+    resultType: "ROUTE_EXECUTION_CREATED",
+  });
+  return {
+    succeeded: true,
+    routeExecution: execution,
+    task: {
+      ...task,
+      origin_cell_id: originCellId,
+      route_execution_id: routeExecutionId,
+      updated_at: now,
+    },
+    robotaxi: {
+      ...markInFleetOperation(robotaxi, { task, now }),
+      current_task_id: task.task_id,
+      current_task_type: task.task_type,
+      current_task_status: task.task_status,
+      current_route_id: null,
+      current_route_execution_id: routeExecutionId,
+      motion_status: robotaxi.motion_status || "PARKED",
+      updated_at: now,
+    },
+  };
+}
+
+export function planFleetOperationRoute({
+  task,
+  robotaxi,
+  execution,
+  data = {},
+  context = {},
+} = {}) {
+  if (!task?.task_id || !task?.robotaxi_id || !robotaxi?.robotaxi_id || !task?.target_cell_id || !execution?.route_execution_id) {
+    return { succeeded: false, reason: "INVALID_FLEET_OPERATION_ROUTE_INPUT" };
+  }
+  if (execution.execution_status !== "WAITING_ROUTE") {
+    return { succeeded: false, reason: "FLEET_OPERATION_ROUTE_NOT_WAITING_ROUTE" };
+  }
+  const now = resolveNow(context);
+  const routeExecutionId = execution.route_execution_id;
+  const routeId = resolveNextId(context, "DRT");
+  const routePlanningRunId = resolveNextId(context, "RPR");
+  const originCellId = execution.current_cell_id || robotaxi.current_cell_id || task.origin_cell_id;
+  const targetCellId = execution.target_cell_id || task.target_cell_id;
+  const targetServiceAreaId = execution.target_service_area_id || task.target_service_area_id || task.planned_target_service_area_id || null;
   const route = routePlanningService.createDeploymentRouteForOperation({
     task,
     data,
@@ -594,6 +669,20 @@ export function planFleetOperationRoute({
       succeeded: false,
       reason: route.failure_reason,
       routePlanningRun,
+      routeExecution: withFleetOperationLifecycleStatus({
+        ...execution,
+        execution_status: "FAILED",
+        failure_reason: route.failure_reason,
+        updated_at: now,
+      }, {
+        context,
+        objectType: "routeExecution",
+        statusField: "execution_status",
+        fromStatus: execution.execution_status,
+        toStatus: "FAILED",
+        actionType: "ROUTE_PLAN",
+        resultType: "ROUTE_PLAN_FAILED",
+      }),
       task: withFleetOperationLifecycleStatus({
         ...task,
         task_status: "FAILED",
@@ -605,15 +694,16 @@ export function planFleetOperationRoute({
         statusField: "task_status",
         fromStatus: task.task_status,
         toStatus: "FAILED",
-        actionType: "ROUTE_PLAN",
+        actionType: "FLEET_OPERATION_ROUTE_PLAN",
         resultType: "ROUTE_PLAN_FAILED",
       }),
     };
   }
   const routeCellIds = routePlanningService.getRouteExecutionCells(route, data.roadSegments || [], originCellId, targetCellId);
   const movingStatus = getFleetOperationMovingStatus(task.task_type);
-  const execution = withFleetOperationLifecycleStatus(routePlanningService.applyTravelMetrics({
+  const plannedExecution = withFleetOperationLifecycleStatus(routePlanningService.applyTravelMetrics({
     record: {
+      ...execution,
       route_execution_id: routeExecutionId,
       task_id: task.task_id,
       task_type: task.task_type,
@@ -636,9 +726,7 @@ export function planFleetOperationRoute({
       battery_consumed_kwh: 0,
       battery_consumed_percent: 0,
       simulation_run_id: task.simulation_run_id || null,
-      created_at: now,
-      operation_created_at: now,
-      ...resolveAudit(context, { created: true }),
+      updated_at: now,
     },
     routes: [route],
     currentRouteId: route.route_id,
@@ -647,16 +735,16 @@ export function planFleetOperationRoute({
     context,
     objectType: "routeExecution",
     statusField: "execution_status",
-    fromStatus: null,
+    fromStatus: execution.execution_status,
     toStatus: "MOVING",
-    actionType: "ROUTE_EXECUTION_CREATE",
-    resultType: "ROUTE_EXECUTION_TRIGGERED",
+    actionType: "ROUTE_PLAN",
+    resultType: "ROUTE_PLANNED",
   });
   return {
     succeeded: true,
     route,
     routePlanningRun,
-    routeExecution: execution,
+    routeExecution: plannedExecution,
     task: withFleetOperationLifecycleStatus({
       ...task,
       task_status: movingStatus,
@@ -672,8 +760,8 @@ export function planFleetOperationRoute({
       statusField: "task_status",
       fromStatus: task.task_status,
       toStatus: movingStatus,
-      actionType: "ROUTE_PLAN",
-      resultType: "ROUTE_PLANNED",
+      actionType: "FLEET_OPERATION_ROUTE_PLAN",
+      resultType: "FLEET_OPERATION_ROUTE_STARTED",
     }),
     robotaxi: {
       ...markInFleetOperation(robotaxi, { task, now }),
@@ -750,7 +838,7 @@ export function replanFleetOperationRouteAfterAbnormalArrival({
         statusField: "task_status",
         fromStatus: task.task_status,
         toStatus: "ARRIVAL_ABNORMAL",
-        actionType: "ROUTE_PLAN",
+        actionType: "FLEET_OPERATION_ROUTE_PLAN",
         resultType: "ROUTE_PLAN_FAILED",
       }),
     };
@@ -815,8 +903,8 @@ export function replanFleetOperationRouteAfterAbnormalArrival({
       statusField: "task_status",
       fromStatus: task.task_status,
       toStatus: movingStatus,
-      actionType: "ROUTE_PLAN",
-      resultType: "ROUTE_PLANNED",
+      actionType: "FLEET_OPERATION_ROUTE_PLAN",
+      resultType: "FLEET_OPERATION_ROUTE_STARTED",
     }),
     robotaxi: {
       ...markInFleetOperation(robotaxi, { task, now }),
@@ -868,7 +956,7 @@ export function advanceFleetOperationRouteExecution({ execution, task, route, ro
       statusField: "task_status",
       fromStatus: task.task_status,
       toStatus: nextTaskStatus,
-      actionType: "ROUTE_EXECUTION_STEP",
+      actionType: "FLEET_OPERATION_ROUTE_PROGRESS",
       resultType: arrived ? "ROUTE_TRAVEL_COMPLETED" : "ROUTE_STEPPED",
       movementStepCount: route?.route_step_count || execution.total_step_count || null,
       secondsPerCell: routePlanningService.DEFAULT_CELL_TRAVEL_SECONDS,
@@ -921,8 +1009,8 @@ export function confirmFleetOperationArrival({ execution, task, robotaxi, contex
       statusField: "task_status",
       fromStatus: task.task_status,
       toStatus: nextTaskStatus,
-      actionType: "ARRIVAL_CONFIRM",
-      resultType: "ARRIVAL_CONFIRMED",
+      actionType: "FLEET_OPERATION_ROUTE_ARRIVAL_RESULT",
+      resultType: "FLEET_OPERATION_ROUTE_NORMAL_ARRIVAL",
     }),
     robotaxi: robotaxi ? {
       ...robotaxi,
@@ -975,8 +1063,8 @@ export function confirmFleetOperationAbnormalArrival({ execution, task, robotaxi
       statusField: "task_status",
       fromStatus: task.task_status,
       toStatus: "ARRIVAL_ABNORMAL",
-      actionType: "ARRIVAL_CONFIRM",
-      resultType: "ARRIVAL_CONFIRM_FAILED",
+      actionType: "FLEET_OPERATION_ROUTE_ARRIVAL_RESULT",
+      resultType: "FLEET_OPERATION_ROUTE_ABNORMAL_ARRIVAL",
     }),
     robotaxi: robotaxi ? {
       ...robotaxi,
@@ -1194,11 +1282,11 @@ function getWaitingRouteStatus() {
 }
 
 function getFleetOperationWorkStatus(task) {
-  if (task.task_type === TaskType.CLEANING && task.task_status === FleetOperationTaskStatus.READY_TO_START) {
-    return FleetOperationTaskStatus.CLEANING_IN_PROGRESS;
+  if (task.task_type === TaskType.CLEANING && [FleetOperationTaskStatus.READY_TO_CLEAN, FleetOperationTaskStatus.READY_TO_START].includes(task.task_status)) {
+    return FleetOperationTaskStatus.CLEANING;
   }
-  if (task.task_type === TaskType.MAINTENANCE && task.task_status === MaintenanceTaskStatus.READY_TO_START) {
-    return MaintenanceTaskStatus.MAINTENANCE_IN_PROGRESS;
+  if (task.task_type === TaskType.MAINTENANCE && [MaintenanceTaskStatus.READY_TO_REPAIR, MaintenanceTaskStatus.READY_TO_START].includes(task.task_status)) {
+    return MaintenanceTaskStatus.REPAIRING;
   }
   if (task.task_type === TaskType.CHARGING && task.task_status === ChargingTaskStatus.READY_TO_CHARGE) {
     return ChargingTaskStatus.CHARGING;
@@ -1225,9 +1313,10 @@ function isFleetOperationWaitingWorkerStatus(task) {
 function getFleetOperationReadyToStartStatus(task) {
   if (task.task_type === TaskType.CHARGING && task.charging_phase === "DISCONNECT_REQUIRED") return ChargingTaskStatus.READY_TO_DISCONNECT;
   if (task.task_type === TaskType.CHARGING) return ChargingTaskStatus.READY_TO_CHARGE;
-  if (task.task_type === TaskType.MAINTENANCE) return MaintenanceTaskStatus.READY_TO_START;
+  if (task.task_type === TaskType.MAINTENANCE) return MaintenanceTaskStatus.READY_TO_REPAIR;
   if (task.task_type === TaskType.FAILURE_HANDLING) return FailureHandlingTaskStatus.DIAGNOSING;
-  return FleetOperationTaskStatus.READY_TO_START;
+  if (task.task_type === TaskType.CLEANING) return FleetOperationTaskStatus.READY_TO_CLEAN;
+  return FleetOperationTaskStatus.READY_TO_CLEAN;
 }
 
 function getFleetOperationInProgressStatus(taskType, fallback) {
@@ -1240,7 +1329,9 @@ function getFleetOperationInProgressStatus(taskType, fallback) {
 
 function isCompletableWorkStatus(task) {
   return [
+    FleetOperationTaskStatus.CLEANING,
     FleetOperationTaskStatus.CLEANING_IN_PROGRESS,
+    MaintenanceTaskStatus.REPAIRING,
     MaintenanceTaskStatus.MAINTENANCE_IN_PROGRESS,
     RetirementTaskStatus.PROCESSING_RETIREMENT,
     FailureHandlingTaskStatus.DIAGNOSING,
