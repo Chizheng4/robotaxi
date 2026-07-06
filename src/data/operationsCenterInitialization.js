@@ -74,13 +74,19 @@ function createRobotaxis(opsCenter) {
       service_type: ServiceType.PASSENGER_RIDE,
       battery_percent: batteryPercent,
       estimated_range_km: 400 * batteryPercent / 100,
-      availability_status: AvailabilityStatus.PENDING_INSPECTION,
+      availability_status: AvailabilityStatus.PENDING_ADMISSION,
       motion_status: MotionStatus.PARKED,
       current_cell_id: opsCenter.cell_ids[index % opsCenter.cell_ids.length],
       current_route_id: null,
       current_task_id: null,
       current_order_id: null,
       available_for_dispatch: false,
+      lifetime_distance_km: 0,
+      lifetime_battery_consumed_percent: 0,
+      completed_service_order_count: 0,
+      completed_cleaning_count: 0,
+      completed_charging_count: 0,
+      completed_maintenance_count: 0,
     });
   });
 }

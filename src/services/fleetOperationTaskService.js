@@ -25,6 +25,13 @@ import * as robotaxiTaskPriorityService from "./robotaxiTaskPriorityService.js";
 import * as fleetOperationDispatchService from "./fleetOperationDispatchService.js";
 import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
 import * as costModelCalculator from "../data/costModelCalculator.js";
+import {
+  getCompletedCounterKeyForFleetTask,
+  incrementCompletedCounter,
+  markAvailable,
+  markInFleetOperation,
+  markRetired,
+} from "./robotaxiStateService.js";
 
 const TASK_CONFIG = {
   [TaskType.CLEANING]: {
@@ -207,13 +214,8 @@ export function createFleetOperationTask({
       collectionKey: config.collectionKey,
       robotaxi: {
         ...robotaxiWithQueue,
-        ...getTagUpdatesForTaskType(taskType),
         pending_fleet_task_type: taskType,
         pending_fleet_task_id: task.task_id,
-        availability_status: taskType === TaskType.RETIREMENT ? "RETIRED" : robotaxi.availability_status,
-        available_for_dispatch: taskType === TaskType.RETIREMENT ? false : robotaxi.available_for_dispatch,
-        fleet_operation_status: "WAITING_SERVICE_COMPLETION",
-        operation_blocking_reason: taskType === TaskType.RETIREMENT ? "RETIREMENT" : robotaxi.operation_blocking_reason || null,
         updated_at: now,
       },
     };
@@ -365,13 +367,11 @@ export function dispatchFleetOperationTaskDestination({
       decision: null,
       task: nextTask,
       robotaxi: {
-        ...robotaxi,
+        ...markInFleetOperation(robotaxi, { task, now }),
         current_task_id: task.task_id,
         current_task_type: task.task_type,
         current_task_status: nextStatus,
         current_cell_id: robotaxi.current_cell_id || null,
-        availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : "UNAVAILABLE",
-        available_for_dispatch: false,
         updated_at: now,
       },
     };
@@ -417,12 +417,10 @@ export function dispatchFleetOperationTaskDestination({
       resultType: "FLEET_OPERATION_DESTINATION_ASSIGNED",
     }),
     robotaxi: {
-      ...robotaxi,
+      ...markInFleetOperation(robotaxi, { task, now }),
       current_task_id: task.task_id,
       current_task_type: task.task_type,
       current_task_status: getWaitingRouteStatus(task.task_type),
-      availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : "UNAVAILABLE",
-      available_for_dispatch: false,
       updated_at: now,
     },
   };
@@ -557,15 +555,13 @@ export function planFleetOperationRoute({
       resultType: "ROUTE_PLANNED",
     }),
     robotaxi: {
-      ...robotaxi,
+      ...markInFleetOperation(robotaxi, { task, now }),
       current_task_id: task.task_id,
       current_task_type: task.task_type,
       current_task_status: movingStatus,
       current_route_id: route.route_id,
       current_route_execution_id: routeExecutionId,
       motion_status: "MOVING",
-      availability_status: "UNAVAILABLE",
-      available_for_dispatch: false,
       updated_at: now,
     },
   };
@@ -701,15 +697,13 @@ export function replanFleetOperationRouteAfterAbnormalArrival({
       resultType: "ROUTE_PLANNED",
     }),
     robotaxi: {
-      ...robotaxi,
+      ...markInFleetOperation(robotaxi, { task, now }),
       current_task_id: task.task_id,
       current_task_type: task.task_type,
       current_task_status: movingStatus,
       current_route_id: route.route_id,
       current_route_execution_id: execution.route_execution_id,
       motion_status: "MOVING",
-      availability_status: "UNAVAILABLE",
-      available_for_dispatch: false,
       updated_at: now,
     },
   };
@@ -1012,25 +1006,16 @@ export function applyFleetOperationTaskReference(robotaxi, { task, shouldWait, n
   if (shouldWait) {
     return {
       ...robotaxi,
-      ...getTagUpdatesForTaskType(task.task_type),
       pending_fleet_task_type: task.task_type,
       pending_fleet_task_id: task.task_id,
-      availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : robotaxi.availability_status,
-      available_for_dispatch: task.task_type === TaskType.RETIREMENT ? false : robotaxi.available_for_dispatch,
-      fleet_operation_status: "WAITING_SERVICE_COMPLETION",
-      operation_blocking_reason: task.task_type === TaskType.RETIREMENT ? "RETIREMENT" : robotaxi.operation_blocking_reason || null,
       updated_at: now || robotaxi.updated_at,
     };
   }
   return {
-    ...robotaxi,
-    ...getTagUpdatesForTaskType(task.task_type),
+    ...markInFleetOperation(robotaxi, { task, now }),
     current_task_id: task.task_id,
     current_task_type: task.task_type,
     current_task_status: task.task_status,
-    availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : "UNAVAILABLE",
-    retirement_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : robotaxi.retirement_status,
-    available_for_dispatch: false,
     fleet_operation_status: resolveFleetOperationStatusForTask(task.task_type),
     operation_blocking_reason: task.task_type,
     updated_at: now || robotaxi.updated_at,
@@ -1038,9 +1023,7 @@ export function applyFleetOperationTaskReference(robotaxi, { task, shouldWait, n
 }
 
 export function getTagUpdatesForTaskType(taskType) {
-  if (taskType === "CLEANING") return { needs_cleaning: true, cleanliness_status: CleanlinessStatus.NEEDS_CLEANING };
-  if (taskType === "CHARGING") return { needs_charging: true, battery_operation_status: BatteryOperationStatus.LOW };
-  if (taskType === "MAINTENANCE") return { needs_maintenance: true, maintenance_status: MaintenanceStatus.DUE };
+  void taskType;
   return {};
 }
 
@@ -1386,10 +1369,12 @@ function getFleetOperationObjectType(taskType) {
 }
 
 function restoreRobotaxiAfterFleetOperation(robotaxi, task, now) {
-  const restored = {
-    ...robotaxi,
-    availability_status: task.task_type === TaskType.RETIREMENT ? "RETIRED" : "AVAILABLE",
-    available_for_dispatch: task.task_type !== TaskType.RETIREMENT,
+  const baseStatus = task.task_type === TaskType.RETIREMENT
+    ? markRetired(robotaxi, { now })
+    : markAvailable(robotaxi, { now });
+  const counterKey = getCompletedCounterKeyForFleetTask(task.task_type);
+  const restored = incrementCompletedCounter({
+    ...baseStatus,
     current_task_id: null,
     current_task_type: null,
     current_task_status: null,
@@ -1401,7 +1386,7 @@ function restoreRobotaxiAfterFleetOperation(robotaxi, task, now) {
     pending_fleet_task_type: null,
     pending_fleet_task_id: null,
     updated_at: now,
-  };
+  }, counterKey, { now });
   if (task.task_type === TaskType.CLEANING) {
     return { ...restored, needs_cleaning: false, cleanliness_status: CleanlinessStatus.CLEAN };
   }

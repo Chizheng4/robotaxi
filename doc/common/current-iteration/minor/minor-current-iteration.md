@@ -21,6 +21,7 @@
 
 ## 最近完成
 
+- `v040.24`：Robotaxi 运营状态与资产事实闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.24-robotaxi-state-asset-facts.md`。
 - `v040.23`：运维任务位置兜底、状态时间线与成本事实闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.23-fleet-operation-location-timeline-cost.md`。
 - `v040.22`：业务事实、运维区域与模拟运行边界小迭代，已归档到 `doc/common/iteration-history/minor/v040.22-business-facts-and-simulation-boundary.md`。
 - `v040.21`：排队任务接管与经营指标展示闭环小迭代，已归档到 `doc/common/iteration-history/minor/v040.21-task-takeover-and-metric-display.md`。

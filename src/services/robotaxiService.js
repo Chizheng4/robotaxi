@@ -10,6 +10,7 @@ import {
 } from "../domain/taskTypes.js";
 import { createFleetOperationTask } from "./fleetOperationTaskService.js";
 import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
+import * as robotaxiStateService from "./robotaxiStateService.js";
 
 export function getOperationalHealth(robotaxi, context = {}) {
   return {
@@ -91,10 +92,7 @@ export function shouldRetire(robotaxi) {
 
 
 export function hasActiveFleetOperationTag(robotaxi) {
-  return robotaxi?.needs_cleaning === true
-    || robotaxi?.needs_charging === true
-    || robotaxi?.needs_maintenance === true
-    || hasActiveFailure(robotaxi);
+  return Boolean(robotaxi?.current_task_id || (robotaxi?.pending_task_queue || []).length > 0 || hasActiveFailure(robotaxi));
 }
 
 export function resolveFleetInterruptionPolicy(robotaxi, currentWork = {}, trigger = {}) {
@@ -125,9 +123,7 @@ export function resolveNextFleetOperationTaskType(robotaxi) {
 
 export function markUnavailableForFleetOperation(robotaxi, task = {}, occurredAt = null) {
   return {
-    ...robotaxi,
-    availability_status: "UNAVAILABLE",
-    available_for_dispatch: false,
+    ...robotaxiStateService.markInFleetOperation(robotaxi, { task, taskType: task.task_type || task.reason, now: occurredAt }),
     fleet_operation_status: task.fleet_operation_status || robotaxi.fleet_operation_status || FleetOperationStatus.NONE,
     operation_blocking_reason: task.task_type || task.reason || robotaxi.operation_blocking_reason || null,
     updated_at: occurredAt || robotaxi.updated_at,
@@ -136,9 +132,7 @@ export function markUnavailableForFleetOperation(robotaxi, task = {}, occurredAt
 
 export function markAvailableAfterFleetOperation(robotaxi, taskResult = {}, occurredAt = null) {
   return {
-    ...robotaxi,
-    availability_status: "AVAILABLE",
-    available_for_dispatch: true,
+    ...robotaxiStateService.markAvailable(robotaxi, { now: occurredAt }),
     fleet_operation_status: FleetOperationStatus.NONE,
     operation_blocking_reason: null,
     pending_fleet_task_type: null,
@@ -156,9 +150,7 @@ export function markAvailableAfterFleetOperation(robotaxi, taskResult = {}, occu
 
 export function markPendingInspection(robotaxi, reason = null, occurredAt = null) {
   return {
-    ...robotaxi,
-    availability_status: "PENDING_INSPECTION",
-    available_for_dispatch: false,
+    ...robotaxiStateService.markPendingAdmission(robotaxi, { reason, now: occurredAt }),
     fleet_operation_status: FleetOperationStatus.READY_FOR_INSPECTION,
     operation_blocking_reason: reason,
     updated_at: occurredAt || robotaxi.updated_at,
@@ -167,9 +159,7 @@ export function markPendingInspection(robotaxi, reason = null, occurredAt = null
 
 export function markRetired(robotaxi, reason = null, occurredAt = null) {
   return {
-    ...robotaxi,
-    availability_status: "RETIRED",
-    available_for_dispatch: false,
+    ...robotaxiStateService.markRetired(robotaxi, { now: occurredAt }),
     fleet_operation_status: FleetOperationStatus.RETIRED,
     retirement_status: RetirementStatus.RETIRED,
     operation_blocking_reason: reason || "RETIREMENT",
@@ -182,7 +172,7 @@ export function markRetired(robotaxi, reason = null, occurredAt = null) {
 }
 
 function isAvailableBase(robotaxi) {
-  return robotaxi?.availability_status === "AVAILABLE"
+  return robotaxiStateService.isAvailableStatus(robotaxi?.availability_status)
     && robotaxi?.retirement_status !== RetirementStatus.RETIRED
     && robotaxi?.failure_status !== FailureStatus.BROKEN
     && robotaxi?.available_for_dispatch !== false;

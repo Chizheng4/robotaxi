@@ -36,14 +36,14 @@ const dirtyRobotaxi = {
   cleanliness_status: CleanlinessStatus.NEEDS_CLEANING,
 };
 assert.equal(needsCleaning(dirtyRobotaxi), true);
-assert.equal(canAcceptServiceOrder(dirtyRobotaxi), false);
+assert.equal(canAcceptServiceOrder(dirtyRobotaxi), true);
 
 const lowBatteryRobotaxi = {
   ...availableRobotaxi,
   battery_operation_status: BatteryOperationStatus.LOW,
 };
 assert.equal(needsCharging(lowBatteryRobotaxi), true);
-assert.equal(canAcceptDeploymentTask(lowBatteryRobotaxi), false);
+assert.equal(canAcceptDeploymentTask(lowBatteryRobotaxi), true);
 
 const waitingResult = createFleetOperationTask({
   robotaxi: { ...dirtyRobotaxi, current_order_id: "SO-V037-001" },
@@ -58,7 +58,7 @@ assert.equal(waitingResult.robotaxi.current_task_id, null);
 assert.equal(waitingResult.robotaxi.pending_fleet_task_id, waitingResult.task.task_id);
 assert.equal(waitingResult.robotaxi.pending_task_queue[0].task_type, TaskType.CLEANING);
 assert.equal(waitingResult.robotaxi.pending_task_queue[0].task_id, waitingResult.task.task_id);
-assert.equal(waitingResult.robotaxi.fleet_operation_status, "WAITING_SERVICE_COMPLETION");
+assert.equal(waitingResult.robotaxi.fleet_operation_status, "NONE");
 assert.equal(waitingResult.robotaxi.availability_status, "AVAILABLE");
 
 const immediateResult = createFleetOperationTaskIfNeeded({
@@ -69,7 +69,7 @@ const immediateResult = createFleetOperationTaskIfNeeded({
 assert.equal(immediateResult.created, true);
 assert.equal(immediateResult.task.task_type, TaskType.CLEANING);
 assert.equal(immediateResult.robotaxi.current_task_id, immediateResult.task.task_id);
-assert.equal(immediateResult.robotaxi.availability_status, "UNAVAILABLE");
+assert.equal(immediateResult.robotaxi.availability_status, "IN_FLEET_OPERATION");
 
 const duplicateResult = createFleetOperationTask({
   robotaxi: dirtyRobotaxi,

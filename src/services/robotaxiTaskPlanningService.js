@@ -12,6 +12,15 @@ import {
 } from "../domain/robotaxiTaskPlanningTypes.js";
 import { TaskType } from "../domain/taskTypes.js";
 import { normalizeQueuedTasks } from "./robotaxiTaskPriorityService.js";
+import {
+  canAcceptExternalAssignment,
+  canTriggerFleetOperation,
+  isAvailableStatus,
+  isInFleetOperationStatus,
+  isPendingAdmissionStatus,
+  isRetiredStatus,
+  normalizeAvailabilityStatus,
+} from "./robotaxiStateService.js";
 
 const TERMINAL_STATUSES = new Set(["COMPLETED", "CANCELLED", "FAILED"]);
 
@@ -62,9 +71,12 @@ export function resolveRobotaxiCompositeState({
   const hasReadinessHistory = (readinessTasks || []).some((task) => task.robotaxi_id === robotaxi?.robotaxi_id);
   const hasOperationalHistory = hasDeploymentHistory || hasServiceHistory || Boolean(robotaxi?.current_order_id) || robotaxi?.current_task_type === TaskType.DEPLOYMENT;
   const currentAssignmentState = resolveCurrentAssignmentState(robotaxi);
-  const lifecycleStage = robotaxi?.availability_status === "RETIRED" || robotaxi?.retirement_status === "RETIRED"
+  const normalizedAvailabilityStatus = normalizeAvailabilityStatus(robotaxi?.availability_status);
+  const lifecycleStage = isRetiredStatus(normalizedAvailabilityStatus) || robotaxi?.retirement_status === "RETIRED"
     ? RobotaxiLifecycleStage.RETIRED
-    : hasOperationalHistory ? RobotaxiLifecycleStage.IN_OPERATION : RobotaxiLifecycleStage.PRE_OPERATION;
+    : hasOperationalHistory || isAvailableStatus(normalizedAvailabilityStatus) || isInFleetOperationStatus(normalizedAvailabilityStatus)
+      ? RobotaxiLifecycleStage.IN_OPERATION
+      : RobotaxiLifecycleStage.PRE_OPERATION;
   const operationPhase = resolveOperationPhase({ robotaxi, lifecycleStage, hasReadinessHistory, hasOperationalHistory });
   const openFleetTaskCount = (fleetOperationTasks || []).filter((task) =>
     task.robotaxi_id === robotaxi?.robotaxi_id && !TERMINAL_STATUSES.has(task.task_status)
@@ -76,7 +88,7 @@ export function resolveRobotaxiCompositeState({
   return {
     lifecycle_stage: lifecycleStage,
     operation_phase: operationPhase,
-    operation_status: robotaxi?.availability_status === "AVAILABLE" ? "AVAILABLE" : "UNAVAILABLE",
+    operation_status: normalizedAvailabilityStatus,
     vehicle_motion_state: robotaxi?.motion_status || "UNKNOWN",
     current_assignment_state: currentAssignmentState,
     has_operational_history: hasOperationalHistory,
@@ -131,10 +143,6 @@ export function planRobotaxiTask({
 
   if ([TaskPlanningAssignmentType.SERVICE_ORDER, TaskPlanningAssignmentType.DEPLOYMENT_TASK].includes(requestedAssignmentType)) {
     return planExternalAssignment({ robotaxi, requestedAssignmentType, compositeState, openFleetTasks, strategy: activeStrategy });
-  }
-
-  if (requestedAssignmentType === TaskPlanningAssignmentType.RETIREMENT_ACTION || taskType === TaskType.RETIREMENT) {
-    return reject("RETIREMENT_IS_LIFECYCLE_ACTION", "退役是生命周期动作，不进入普通任务规划队列", compositeState, activeStrategy);
   }
 
   if (requestedAssignmentType === TaskPlanningAssignmentType.FLEET_OPERATION_TASK) {
@@ -230,14 +238,14 @@ function planReadinessTask({ robotaxi, readinessTasks, compositeState, strategy 
   if (hasOpenReadiness || robotaxi.current_task_id) {
     return reject("ROBOTAXI_ALREADY_HAS_READINESS_TASK", "Robotaxi 已有准入任务", compositeState, strategy);
   }
-  if (!["PENDING_INSPECTION", "IN_INSPECTION"].includes(robotaxi.availability_status)) {
+  if (!isPendingAdmissionStatus(robotaxi.availability_status)) {
     return reject("ROBOTAXI_NOT_IN_ADMISSION_PHASE", "Robotaxi 不在准入阶段", compositeState, strategy);
   }
   return allow(TaskPlanningDecision.CREATE_NOW, "FIRST_ADMISSION_ALLOWED", "允许创建运营准入任务", compositeState, strategy);
 }
 
 function planExternalAssignment({ robotaxi, requestedAssignmentType, compositeState, openFleetTasks, strategy }) {
-  if (robotaxi.availability_status !== "AVAILABLE" || robotaxi.available_for_dispatch === false) {
+  if (!canAcceptExternalAssignment(robotaxi)) {
     return reject("ROBOTAXI_NOT_OPERATIONALLY_AVAILABLE", "Robotaxi 当前不可运营", compositeState, strategy);
   }
   if (robotaxi.current_order_id || robotaxi.current_task_id) {
@@ -246,26 +254,17 @@ function planExternalAssignment({ robotaxi, requestedAssignmentType, compositeSt
   if ((robotaxi.pending_task_queue || []).length > 0 || openFleetTasks.length > 0) {
     return reject("ROBOTAXI_INTERNAL_TASK_QUEUE_FIRST", "Robotaxi 已有内部任务队列，不能分配外部运营任务", compositeState, strategy);
   }
-  const blockingNeed = resolveExternalAssignmentBlockingNeed(robotaxi);
-  if (blockingNeed) {
-    return reject(blockingNeed, "Robotaxi 存在待处理运维状态，不能分配外部运营任务", compositeState, strategy);
-  }
   if (requestedAssignmentType === TaskPlanningAssignmentType.SERVICE_ORDER && compositeState.operation_phase === RobotaxiOperationPhase.FIRST_ADMISSION) {
     return reject("ROBOTAXI_NOT_ADMITTED_FOR_SERVICE_ORDER", "Robotaxi 尚未完成运营准入", compositeState, strategy);
   }
   return allow(TaskPlanningDecision.CREATE_NOW, "ROBOTAXI_READY_FOR_EXTERNAL_ASSIGNMENT", "允许分配外部运营任务", compositeState, strategy);
 }
 
-function resolveExternalAssignmentBlockingNeed(robotaxi) {
-  if (robotaxi?.needs_cleaning === true || robotaxi?.cleanliness_status === "NEEDS_CLEANING") return "ROBOTAXI_NEEDS_CLEANING";
-  if (robotaxi?.needs_charging === true || ["LOW", "CRITICAL"].includes(robotaxi?.battery_operation_status)) return "ROBOTAXI_NEEDS_CHARGING";
-  if (robotaxi?.needs_maintenance === true || ["DUE", "IN_MAINTENANCE"].includes(robotaxi?.maintenance_status)) return "ROBOTAXI_NEEDS_MAINTENANCE";
-  if (["ALERTED", "REMOTE_HANDLING", "BROKEN"].includes(robotaxi?.failure_status)) return "ROBOTAXI_HAS_FAILURE";
-  return null;
-}
-
 function planFleetOperationTask({ robotaxi, requestedTaskType, triggerSource, compositeState, openFleetTasks, strategy }) {
   if (!requestedTaskType) return reject("MISSING_FLEET_OPERATION_TASK_TYPE", "缺少运维任务类型", compositeState, strategy);
+  if (!canTriggerFleetOperation(robotaxi)) {
+    return reject("ROBOTAXI_NOT_READY_FOR_FLEET_OPERATION_TRIGGER", "Robotaxi 当前不能触发运维任务", compositeState, strategy);
+  }
   if (compositeState.operation_phase === RobotaxiOperationPhase.FIRST_ADMISSION) {
     return reject("FIRST_ADMISSION_ONLY_ALLOWS_READINESS", "首次不可运营阶段只能创建运营准入任务", compositeState, strategy);
   }
@@ -317,10 +316,11 @@ function resolveCurrentAssignmentState(robotaxi) {
 }
 
 function resolveOperationPhase({ robotaxi, lifecycleStage, hasReadinessHistory, hasOperationalHistory }) {
+  const normalizedAvailabilityStatus = normalizeAvailabilityStatus(robotaxi?.availability_status);
   if (lifecycleStage === RobotaxiLifecycleStage.RETIRED) return RobotaxiOperationPhase.RETIRED;
-  if (["PENDING_INSPECTION", "IN_INSPECTION"].includes(robotaxi?.availability_status) && !hasReadinessHistory) return RobotaxiOperationPhase.FIRST_ADMISSION;
-  if (robotaxi?.availability_status === "UNAVAILABLE" && !hasOperationalHistory) return RobotaxiOperationPhase.ADMISSION_REMEDIATION;
-  if (robotaxi?.availability_status === "AVAILABLE" && !hasOperationalHistory) return RobotaxiOperationPhase.READY_NOT_DEPLOYED;
+  if (isPendingAdmissionStatus(normalizedAvailabilityStatus) && !hasReadinessHistory) return RobotaxiOperationPhase.FIRST_ADMISSION;
+  if (isPendingAdmissionStatus(normalizedAvailabilityStatus) && hasReadinessHistory) return RobotaxiOperationPhase.ADMISSION_REMEDIATION;
+  if (isAvailableStatus(normalizedAvailabilityStatus) && !hasOperationalHistory) return RobotaxiOperationPhase.READY_NOT_DEPLOYED;
   return RobotaxiOperationPhase.ACTIVE_OPERATION;
 }
 

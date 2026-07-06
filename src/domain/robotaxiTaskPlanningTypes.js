@@ -58,6 +58,7 @@ export function createRobotaxiTaskPlanningStrategy(strategy = {}) {
     planning_algorithm: "ROBOTAXI_STATE_TASK_PLANNING",
     priority_rank: {
       FAILURE_HANDLING: 100,
+      RETIREMENT: 90,
       MAINTENANCE: 80,
       CHARGING: 70,
       CLEANING: 60,
@@ -75,7 +76,7 @@ export function createRobotaxiTaskPlanningStrategy(strategy = {}) {
       FIRST_ADMISSION: ["READINESS_CHECK"],
       ADMISSION_REMEDIATION: ["CLEANING", "CHARGING", "MAINTENANCE"],
       READY_NOT_DEPLOYED: ["DEPLOYMENT", "SERVICE_ORDER"],
-      ACTIVE_OPERATION: ["DEPLOYMENT", "SERVICE_ORDER", "CLEANING", "CHARGING", "MAINTENANCE", "FAILURE_HANDLING"],
+      ACTIVE_OPERATION: ["DEPLOYMENT", "SERVICE_ORDER", "CLEANING", "CHARGING", "MAINTENANCE", "FAILURE_HANDLING", "RETIREMENT"],
       RETIRED: [],
     },
     compatibility_rules: {

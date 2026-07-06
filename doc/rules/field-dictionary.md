@@ -727,8 +727,8 @@
 |max_range_km|满电续航（公里）|持久化字段|满电最大续航|
 |service_type|服务类型|持久化字段|支持的服务类型|
 |battery_percent|当前电量（%）|运行态字段|当前剩余电量百分比|
-|estimated_range_km|预计续航（公里）|运行态字段|根据当前电量计算的预计续航|
-|availability_status|运营可用状态|运行态字段|车辆是否具备运营资格|
+|estimated_range_km|剩余续航（公里）|运行态字段|根据当前电量计算的剩余续航|
+|availability_status|运营状态|运行态字段|Robotaxi 主运营状态：待准入、可运营、运维中、已退役|
 |motion_status|物理运动状态|运行态字段|车辆当前物理运动形态|
 |current_cell_id|当前所在网格|运行态字段|车辆当前位置|
 |current_route_id|当前路径|运行态字段|当前执行 Route，可为空|
@@ -739,11 +739,11 @@
 |current_task_status|当前任务状态|聚合展示字段|由 current_task_id 关联 Task 推导|
 |current_route_execution_id|当前行驶记录|聚合展示字段|当前关联 RouteExecution，可为空，展示推导字段|
 |location_summary|位置摘要|聚合展示字段|由 current_cell_id 通过 CellContext 推导|
-|fleet_operation_status|车队运维状态|运行态字段|Robotaxi 当前车队运维恢复状态|
-|operation_tags|运维标记|聚合展示字段|由清洁、充电、维修、故障等运维状态字段生成的前端标记展示|
-|needs_cleaning|需要清洁标记|运行态字段|Robotaxi 运维容器：是否需要清洁|
-|needs_charging|需要充电标记|运行态字段|Robotaxi 运维容器：是否需要充电|
-|needs_maintenance|需要维修标记|运行态字段|Robotaxi 运维容器：是否需要维修|
+|fleet_operation_status|车队运维状态|兼容字段|旧版运维恢复状态，主流程以当前任务和运营状态为准|
+|operation_tags|运维标记|兼容展示字段|旧版运维标记聚合展示，主展示以当前任务和排队任务为准|
+|needs_cleaning|需要清洁标记|兼容字段|旧版清洁标记，不作为新运维任务主流程来源|
+|needs_charging|需要充电标记|兼容字段|旧版充电标记，不作为新运维任务主流程来源|
+|needs_maintenance|需要维修标记|兼容字段|旧版维修标记，不作为新运维任务主流程来源|
 |pending_task_queue|待执行任务队列|运行态字段|Robotaxi 运维任务排队列表|
 |cleanliness_status|清洁状态|运行态字段|车辆是否需要清洁或正在清洁|
 |battery_operation_status|电量运营状态|运行态字段|电量是否满足运营、是否低电或充电中|
@@ -754,6 +754,12 @@
 |pending_fleet_task_type|待执行运维任务类型|运行态字段|等待车辆可执行的运维任务类型|
 |pending_fleet_task_id|待执行运维任务编号|运行态字段|等待车辆可执行的运维任务编号|
 |last_health_check_at|最近健康检查时间|运行态字段|最近一次 Robotaxi 运营健康检查时间|
+|lifetime_distance_km|累计行驶距离（公里）|运行态字段|Robotaxi 运营行驶记录与履约行驶记录累计行驶距离|
+|lifetime_battery_consumed_percent|累计耗电（%）|运行态字段|Robotaxi 运营行驶记录与履约行驶记录累计消耗电量百分比|
+|completed_service_order_count|已服务订单数|运行态字段|Robotaxi 已完成服务订单数量|
+|completed_cleaning_count|已清洁次数|运行态字段|Robotaxi 已完成清洁任务数量|
+|completed_charging_count|已充电次数|运行态字段|Robotaxi 已完成充电任务数量|
+|completed_maintenance_count|已维修次数|运行态字段|Robotaxi 已完成维修任务数量|
 
 说明：
 
@@ -1489,10 +1495,12 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |L4|L4（限定区域内无人驾驶）|
 |L5|L5（完全自动驾驶）|
 |PASSENGER_RIDE|载客出行服务|
-|PENDING_INSPECTION|待运维检查|
-|IN_INSPECTION|运维检查中|
+|PENDING_ADMISSION|待准入|
+|IN_FLEET_OPERATION|运维中|
+|PENDING_INSPECTION|待准入|
+|IN_INSPECTION|待准入|
 |AVAILABLE|可参与运营|
-|UNAVAILABLE|不可参与运营|
+|UNAVAILABLE|运维中|
 |RETIRED|已退役|
 |PARKED|停车中|
 |STOPPED|临停中|

@@ -59,12 +59,12 @@ export function validateReadinessCheckTasks(data) {
       data.readinessCheckTasks.every((task) => task.task_status !== ReadinessTaskStatus.WAITING_ASSIGNMENT || task.worker_id === null),
     ),
     check(
-      "READINESS_ASSIGNED_ROBOTAXI_IN_INSPECTION",
-      "已分配或检查中的准入任务必须使 Robotaxi 进入运维检查中",
+      "READINESS_ASSIGNED_ROBOTAXI_PENDING_ADMISSION",
+      "已分配或检查中的准入任务必须保持 Robotaxi 待准入",
       data.readinessCheckTasks.every((task) => ![
         ReadinessTaskStatus.WAITING_CHECK,
         ReadinessTaskStatus.CHECKING,
-      ].includes(task.task_status) || robotaxiById.get(task.robotaxi_id)?.availability_status === AvailabilityStatus.IN_INSPECTION),
+      ].includes(task.task_status) || robotaxiById.get(task.robotaxi_id)?.availability_status === AvailabilityStatus.PENDING_ADMISSION),
     ),
     check(
       "READINESS_COMPLETED_HAS_RESULT",
@@ -82,9 +82,9 @@ export function validateReadinessCheckTasks(data) {
       data.readinessCheckTasks.every((task) => task.check_result !== CheckResult.PASSED || robotaxiById.get(task.robotaxi_id)?.availability_status === AvailabilityStatus.AVAILABLE),
     ),
     check(
-      "READINESS_FAILED_ROBOTAXI_UNAVAILABLE",
-      "检查不通过后 Robotaxi 必须不可参与运营",
-      data.readinessCheckTasks.every((task) => task.check_result !== CheckResult.FAILED || robotaxiById.get(task.robotaxi_id)?.availability_status === AvailabilityStatus.UNAVAILABLE),
+      "READINESS_FAILED_ROBOTAXI_PENDING_ADMISSION",
+      "检查不通过后 Robotaxi 必须回到待准入",
+      data.readinessCheckTasks.every((task) => task.check_result !== CheckResult.FAILED || robotaxiById.get(task.robotaxi_id)?.availability_status === AvailabilityStatus.PENDING_ADMISSION),
     ),
     check(
       "READINESS_COMPLETED_WORKER_IDLE",

@@ -62,7 +62,7 @@ export function validateOperationsCenter(data) {
     check("ROBOTAXI_COUNT", "Robotaxi 数量必须为 20", data.robotaxis.length === 20, `当前 ${data.robotaxis.length} 台 Robotaxi`),
     check("ROBOTAXI_ID_UNIQUE", "每台 Robotaxi 必须有唯一 robotaxi_id", new Set(robotaxiIds).size === robotaxiIds.length),
     check("ROBOTAXI_CELL_IN_OPS_CENTER", "每台 Robotaxi 必须位于运营中心覆盖网格内", data.robotaxis.every((robotaxi) => opsCenterCellIds.has(robotaxi.current_cell_id))),
-    check("ROBOTAXI_PENDING_INSPECTION", "每台 Robotaxi 初始状态必须为待运维检查", data.robotaxis.every((robotaxi) => robotaxi.availability_status === AvailabilityStatus.PENDING_INSPECTION)),
+    check("ROBOTAXI_PENDING_ADMISSION", "每台 Robotaxi 初始状态必须为待准入", data.robotaxis.every((robotaxi) => robotaxi.availability_status === AvailabilityStatus.PENDING_ADMISSION)),
     check("ROBOTAXI_PARKED", "每台 Robotaxi 初始运动状态必须为停车中", data.robotaxis.every((robotaxi) => robotaxi.motion_status === MotionStatus.PARKED)),
     check("ROBOTAXI_NO_INITIAL_TASK", "每台 Robotaxi 初始 current_task_id 必须为空", data.robotaxis.every((robotaxi) => robotaxi.current_task_id === null)),
     check("ROBOTAXI_NO_INITIAL_ORDER", "每台 Robotaxi 初始 current_order_id 必须为空", data.robotaxis.every((robotaxi) => robotaxi.current_order_id === null)),

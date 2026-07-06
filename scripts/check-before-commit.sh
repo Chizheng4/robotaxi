@@ -124,6 +124,7 @@ node scripts/verify-v040-19-metric-queue-arrival.mjs
 node scripts/verify-v040-21-task-takeover-and-metric-display.mjs
 node scripts/verify-v040-22-business-facts-and-simulation-boundary.mjs
 node scripts/verify-v040-23-fleet-operation-location-timeline-cost.mjs
+node scripts/verify-v040-24-robotaxi-state-asset-facts.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

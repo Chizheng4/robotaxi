@@ -10,6 +10,14 @@ import * as serviceOrderService from "./serviceOrderService.js";
 import * as tripService from "./tripService.js";
 import * as costModelCalculator from "../data/costModelCalculator.js";
 import * as revenueCalculator from "../data/revenueCalculator.js";
+import {
+  applyTravelDelta,
+  getTravelDeltaFromRecords,
+  incrementCompletedCounter,
+  isPendingAdmissionStatus,
+  markAvailable,
+  markPendingAdmission,
+} from "./robotaxiStateService.js";
 import { TimedOperationStatus, TimedOperationType, createTimedOperation } from "../domain/timedOperationTypes.js";
 import { formatSimulationTimestamp } from "../domain/simulationTime.js";
 import { resolveTimingRuleDuration, resolveWorkflowRuntimeSeconds } from "../data/workflowRuntimeConfig.js";
@@ -20,7 +28,7 @@ export function createReadinessTask({ state, runtime }) {
   }
   const appData = dataView(state);
   const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi) =>
-    robotaxi.availability_status === "PENDING_INSPECTION" && !robotaxi.current_task_id
+    isPendingAdmissionStatus(robotaxi.availability_status) && !robotaxi.current_task_id
   );
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "准入任务创建失败：没有待准入 Robotaxi", "readinessTask", null, "没有待准入 Robotaxi");
   const taskId = runtime.nextId("TASK-RC");
@@ -80,8 +88,7 @@ export function startReadinessTask({ state, objectId, runtime }) {
       ...runtime.audit(),
     }, { runtime, objectType: "readinessTask", statusField: "task_status", fromStatus: item.task_status, toStatus: taskTypes.ReadinessTaskStatus.CHECKING, actionType: "READINESS_TASK_START", resultType: "READINESS_STARTED" })),
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", task.robotaxi_id, (robotaxi) => ({
-      ...robotaxi,
-      availability_status: "IN_INSPECTION",
+      ...markPendingAdmission(robotaxi, { reason: "READINESS_CHECK", now: runtime.now() }),
       current_task_status: taskTypes.ReadinessTaskStatus.CHECKING,
       ...runtime.audit(),
     })),
@@ -125,9 +132,7 @@ export function passReadinessTask({ state, objectId, runtime }) {
     updates: {
       readinessTasks: replaceById(state.readinessTasks || [], "task_id", objectId, completedTask),
     robotaxis: replaceById(state.robotaxis || [], "robotaxi_id", task.robotaxi_id, (robotaxi) => ({
-      ...robotaxi,
-      availability_status: "AVAILABLE",
-      available_for_dispatch: true,
+      ...markAvailable(robotaxi, { now: runtime.now() }),
       current_task_id: null,
       current_task_type: null,
       current_task_status: null,
@@ -1111,7 +1116,7 @@ function tripUpdateResult({ state, order, trip, runtime, resultType, message, ex
     updates: {
       trips: replaceById(state.trips || [], "trip_id", trip.trip_id, nextTrip),
       serviceOrders: syncServiceOrderFromTrip(state.serviceOrders || [], order.service_order_id, nextTrip, runtime, { actionType, resultType, movementStepCount, secondsPerCell: tripSecondsPerCell }),
-      robotaxis: updateRobotaxiFromTrip(state.robotaxis || [], nextTrip, runtime),
+      robotaxis: updateRobotaxiFromTrip(state.robotaxis || [], nextTrip, previousTrip, runtime),
       ...extraUpdates,
     },
     costSources: nextTrip.trip_status === tripTypes.TripStatus.COMPLETED
@@ -1160,14 +1165,33 @@ function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime, 
   }));
 }
 
-function updateRobotaxiFromTrip(robotaxis, trip, runtime) {
+function updateRobotaxiFromTrip(robotaxis, trip, previousTrip, runtime) {
   if (!trip?.robotaxi_id || !trip?.current_cell_id) return robotaxis;
-  return replaceById(robotaxis, "robotaxi_id", trip.robotaxi_id, (robotaxi) => ({
-    ...robotaxi,
-    current_cell_id: trip.current_cell_id,
-    motion_status: trip.trip_status === tripTypes.TripStatus.COMPLETED ? "PARKED" : "MOVING",
-    ...runtime.audit(),
-  }));
+  return replaceById(robotaxis, "robotaxi_id", trip.robotaxi_id, (robotaxi) => {
+    const { distanceDeltaKm } = getTravelDeltaFromRecords(previousTrip || {}, trip);
+    const batteryDeltaPercent = robotaxi?.max_range_km
+      ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
+      : Math.max(0, Number(trip.battery_consumed_percent || 0) - Number(previousTrip?.battery_consumed_percent || 0));
+    const completedNow = previousTrip?.trip_status !== tripTypes.TripStatus.COMPLETED && trip.trip_status === tripTypes.TripStatus.COMPLETED;
+    const movedRobotaxi = applyTravelDelta(robotaxi, {
+      distanceDeltaKm,
+      batteryDeltaPercent,
+      currentCellId: trip.current_cell_id,
+      routeId: trip.trip_status === tripTypes.TripStatus.COMPLETED ? null : trip.route_id || robotaxi.current_route_id,
+      motionStatus: trip.trip_status === tripTypes.TripStatus.COMPLETED ? "PARKED" : "MOVING",
+      now: runtime.now(),
+    });
+    const countedRobotaxi = completedNow
+      ? incrementCompletedCounter(movedRobotaxi, "completed_service_order_count", { now: runtime.now() })
+      : movedRobotaxi;
+    return {
+      ...countedRobotaxi,
+      current_order_id: trip.trip_status === tripTypes.TripStatus.COMPLETED ? null : trip.service_order_id || robotaxi.current_order_id,
+      available_for_dispatch: trip.trip_status === tripTypes.TripStatus.COMPLETED ? true : robotaxi.available_for_dispatch,
+      availability_status: trip.trip_status === tripTypes.TripStatus.COMPLETED ? "AVAILABLE" : robotaxi.availability_status,
+      ...runtime.audit(),
+    };
+  });
 }
 
 function createServiceOrderFromDemandRun(demandRun, orderChannel, runtime) {

@@ -584,12 +584,12 @@ const tableConfig = {
   serviceFulfillmentRecords: {
     title: "履约行驶记录",
     description: "履约行驶记录用于模拟 Robotaxi 执行客户服务订单的接驾、载客和完成过程。",
-    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "route_id", "created_at", "simulation_created_at"]
+    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "battery_consumed_percent", "time_elapsed", "route_id", "created_at", "simulation_created_at"]
   },
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "fleet_operation_status", "operation_tags", "needs_cleaning", "needs_charging", "needs_maintenance", "cleanliness_status", "battery_operation_status", "maintenance_status", "failure_status", "retirement_status", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "available_for_dispatch", "current_route_id", "current_route_execution_id", "unavailable_reason"]
+    columns: ["robotaxi_id", "fleet_id", "availability_status", "motion_status", "battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_percent", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count", "current_cell_id", "location_summary", "current_task_type", "current_task_status", "current_order_id", "pending_task_queue", "operation_blocking_reason"]
   },
   validations: {
     title: "初始化校验",
@@ -3458,8 +3458,9 @@ function App() {
       ...current,
       robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === task.robotaxi_id ? {
         ...robotaxi,
-        availability_status: "IN_INSPECTION",
+        availability_status: "PENDING_ADMISSION",
         available_for_dispatch: false,
+        operation_blocking_reason: "READINESS_CHECK",
         current_task_id: taskId,
         current_task_type: taskTypes.TaskType.READINESS_CHECK,
         current_task_status: taskTypes.ReadinessTaskStatus.WAITING_CHECK
@@ -3491,7 +3492,8 @@ function App() {
       ...current,
       robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === task.robotaxi_id ? {
         ...robotaxi,
-        availability_status: "IN_INSPECTION",
+        availability_status: "PENDING_ADMISSION",
+        operation_blocking_reason: "READINESS_CHECK",
         current_task_status: taskTypes.ReadinessTaskStatus.CHECKING
       } : robotaxi)
     }));
@@ -3519,9 +3521,10 @@ function App() {
       ...current,
       robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === task.robotaxi_id ? {
         ...robotaxi,
-        availability_status: passed ? "AVAILABLE" : "UNAVAILABLE",
+        availability_status: passed ? "AVAILABLE" : "PENDING_ADMISSION",
         available_for_dispatch: passed,
-        unavailable_reason: passed ? null : issueType,
+        unavailable_reason: null,
+        operation_blocking_reason: passed ? null : issueType,
         current_task_id: null,
         current_task_type: null,
         current_task_status: null
@@ -4065,7 +4068,7 @@ function App() {
       setTrips(items => items.map(item => item.trip_id === tripId ? movedTrip : item));
       setOperationalData(current => ({
         ...current,
-        robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, movedTrip) : robotaxi)
+        robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, movedTrip, trip) : robotaxi)
       }));
       setServiceOrders(items => items.map(order => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, movedTrip) : order));
       selectForPage("serviceFulfillmentRecords", "trip", tripId);
@@ -4088,7 +4091,7 @@ function App() {
     setOperationalData(current => ({
       ...current,
       routes: routeUpdate?.route ? [routeUpdate.route, ...current.routes] : current.routes,
-      robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, nextTrip) : robotaxi)
+      robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, nextTrip, trip) : robotaxi)
     }));
     setServiceOrders(items => items.map(order => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, nextTrip) : order));
     selectForPage("serviceFulfillmentRecords", "trip", tripId);
@@ -4142,7 +4145,7 @@ function App() {
       setServiceOrders(items => items.map(order => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, result.waitingTrip) : order));
       setOperationalData(current => ({
         ...current,
-        robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, result.waitingTrip) : robotaxi)
+        robotaxis: current.robotaxis.map(robotaxi => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, result.waitingTrip, trip) : robotaxi)
       }));
     }
     selectForPage("serviceFulfillmentRecords", "trip", trip.trip_id);
@@ -4504,7 +4507,9 @@ function App() {
         current_task_id: execution.task_id,
         motion_status: completed ? "STOPPED" : "MOVING",
         battery_percent: Number(Math.max(0, item.battery_percent - batteryDeltaPercent).toFixed(2)),
-        estimated_range_km: Number(Math.max(0, item.estimated_range_km - distanceDeltaKm).toFixed(2))
+        estimated_range_km: Number(Math.max(0, item.estimated_range_km - distanceDeltaKm).toFixed(2)),
+        lifetime_distance_km: Number((Number(item.lifetime_distance_km || 0) + distanceDeltaKm).toFixed(2)),
+        lifetime_battery_consumed_percent: Number((Number(item.lifetime_battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2))
       } : item)
     }));
     if (completed) {
@@ -5646,7 +5651,11 @@ function getDetailTabs(selectedType) {
     return [{
       key: "basic",
       label: "基础信息",
-      keys: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "battery_percent", "estimated_range_km", "availability_status", "motion_status", "unavailable_reason"]
+      keys: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "availability_status", "operation_blocking_reason", "motion_status"]
+    }, {
+      key: "asset",
+      label: "资产事实",
+      keys: ["battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_percent", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count"]
     }, {
       key: "task",
       label: "任务状态",
@@ -6516,8 +6525,10 @@ function RobotaxiOperationPanel({
   onSelect
 }) {
   const activeRow = selectedRow || rows[0] || null;
+  const pendingAdmissionCount = rows.filter(row => row.availability_status === "PENDING_ADMISSION" || row.availability_status === "PENDING_INSPECTION").length;
   const availableCount = rows.filter(row => row.availability_status === "AVAILABLE").length;
-  const unavailableCount = rows.filter(row => row.availability_status === "UNAVAILABLE").length;
+  const fleetOperationCount = rows.filter(row => row.availability_status === "IN_FLEET_OPERATION" || row.availability_status === "UNAVAILABLE").length;
+  const retiredCount = rows.filter(row => row.availability_status === "RETIRED").length;
   const queuedCount = rows.filter(row => Array.isArray(row.pending_task_queue) && row.pending_task_queue.length > 0).length;
   const occupiedCount = rows.filter(row => row.current_task_id || row.current_order_id).length;
   const availableActions = activeRow ? actionMap.get(activeRow.robotaxi_id) || [] : [];
@@ -6536,8 +6547,14 @@ function RobotaxiOperationPanel({
     label: "\u53EF\u8FD0\u8425",
     value: availableCount
   }), /*#__PURE__*/React.createElement(RobotaxiSummaryMetric, {
-    label: "\u4E0D\u53EF\u8FD0\u8425",
-    value: unavailableCount
+    label: "\u5F85\u51C6\u5165",
+    value: pendingAdmissionCount
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryMetric, {
+    label: "\u8FD0\u7EF4\u4E2D",
+    value: fleetOperationCount
+  }), /*#__PURE__*/React.createElement(RobotaxiSummaryMetric, {
+    label: "\u5DF2\u9000\u5F79",
+    value: retiredCount
   }), /*#__PURE__*/React.createElement(RobotaxiSummaryMetric, {
     label: "\u6267\u884C\u4E2D",
     value: occupiedCount
@@ -6661,12 +6678,10 @@ function formatRobotaxiCurrentTask(row) {
   return "空闲";
 }
 function formatRobotaxiOperationNeedSummary(row) {
-  const labels = [];
-  if (row?.needs_cleaning) labels.push("清洁");
-  if (row?.needs_charging) labels.push("充电");
-  if (row?.needs_maintenance) labels.push("维修");
-  if (row?.failure_status && row.failure_status !== "NONE") labels.push("故障");
-  return labels.length ? labels.join(" / ") : "无";
+  if (row?.current_task_type) return getDisplayValue(row.current_task_type, "current_task_type") || getDisplayValue(row.current_task_type);
+  if (Array.isArray(row?.pending_task_queue) && row.pending_task_queue.length > 0) return `排队 ${row.pending_task_queue.length} 项`;
+  if (row?.operation_blocking_reason) return getDisplayValue(row.operation_blocking_reason) || row.operation_blocking_reason;
+  return "无";
 }
 function formatRobotaxiQueueItem(item, index) {
   const sequence = item.queue_sequence || index + 1;
@@ -7589,7 +7604,7 @@ function findNextCandidate(robotaxis, tasks) {
   return robotaxis.find(robotaxi => isCandidateRobotaxi(robotaxi, tasks));
 }
 function isCandidateRobotaxi(robotaxi, tasks) {
-  return robotaxi.availability_status === "PENDING_INSPECTION" && !tasks.some(task => task.robotaxi_id === robotaxi.robotaxi_id && unfinishedTaskStatuses.has(task.task_status));
+  return ["PENDING_ADMISSION", "PENDING_INSPECTION"].includes(robotaxi.availability_status) && !tasks.some(task => task.robotaxi_id === robotaxi.robotaxi_id && unfinishedTaskStatuses.has(task.task_status));
 }
 function isDeploymentCandidateRobotaxi(robotaxi, context = {}) {
   const deploymentTasks = Array.isArray(context) ? context : context.deploymentTasks || [];
@@ -8469,10 +8484,13 @@ function getTripRouteRequest(trip) {
   }
   return null;
 }
-function updateRobotaxiForTrip(robotaxi, trip) {
+function updateRobotaxiForTrip(robotaxi, trip, previousTrip = {}) {
   const movingStatuses = ["ON_THE_WAY_PICKUP", "ON_THE_WAY_DESTINATION"];
   const completed = trip.trip_status === "COMPLETED";
   const waitingDecision = trip.trip_status === "WAITING_OPERATION_DECISION";
+  const distanceDeltaKm = Number(Math.max(0, Number(trip.distance_traveled_km || 0) - Number(previousTrip.distance_traveled_km || 0)).toFixed(2));
+  const batteryDeltaPercent = robotaxi.max_range_km ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2)) : Number(Math.max(0, Number(trip.battery_consumed_percent || 0) - Number(previousTrip.battery_consumed_percent || 0)).toFixed(2));
+  const completedNow = completed && previousTrip.trip_status !== "COMPLETED";
   return {
     ...robotaxi,
     current_cell_id: trip.current_cell_id || robotaxi.current_cell_id,
@@ -8480,7 +8498,12 @@ function updateRobotaxiForTrip(robotaxi, trip) {
     current_order_id: completed ? null : trip.service_order_id,
     availability_status: completed ? "AVAILABLE" : robotaxi.availability_status,
     motion_status: completed || waitingDecision ? "STOPPED" : movingStatuses.includes(trip.trip_status) ? "MOVING" : "STOPPED",
-    available_for_dispatch: completed
+    available_for_dispatch: completed,
+    battery_percent: Number(Math.max(0, Number(robotaxi.battery_percent || 0) - batteryDeltaPercent).toFixed(2)),
+    estimated_range_km: Number(Math.max(0, Number(robotaxi.estimated_range_km || 0) - distanceDeltaKm).toFixed(2)),
+    lifetime_distance_km: Number((Number(robotaxi.lifetime_distance_km || 0) + distanceDeltaKm).toFixed(2)),
+    lifetime_battery_consumed_percent: Number((Number(robotaxi.lifetime_battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2)),
+    completed_service_order_count: completedNow ? Number(robotaxi.completed_service_order_count || 0) + 1 : robotaxi.completed_service_order_count || 0
   };
 }
 function updateServiceOrderForTrip(order, trip) {

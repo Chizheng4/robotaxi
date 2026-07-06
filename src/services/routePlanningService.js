@@ -1,6 +1,7 @@
 import * as taskTypes from "../domain/taskTypes.js";
 import * as tripTypes from "../domain/tripTypes.js";
 import { createRoutePlanningStrategySnapshot } from "../domain/routePlanningStrategies.js";
+import { applyTravelDelta } from "./robotaxiStateService.js";
 
 export const DEFAULT_CELL_TRAVEL_SECONDS = 6;
 
@@ -191,6 +192,14 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
     ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
     : 0;
   const batteryConsumedPercent = Number((Number(execution.battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2));
+  const nextRobotaxi = robotaxi ? applyTravelDelta(robotaxi, {
+    distanceDeltaKm,
+    batteryDeltaPercent,
+    currentCellId: nextCellId,
+    routeId: execution.route_id,
+    taskId: execution.task_id || task.task_id,
+    motionStatus: completed ? "STOPPED" : "MOVING",
+  }) : null;
   return {
     execution: {
       ...execution,
@@ -198,15 +207,7 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
       battery_consumed_percent: batteryConsumedPercent,
     },
     task: completed ? { ...task, task_status: taskTypes.DeploymentTaskStatus.ARRIVED } : task,
-    robotaxi: robotaxi ? {
-      ...robotaxi,
-      current_cell_id: nextCellId,
-      current_route_id: execution.route_id,
-      current_task_id: execution.task_id || task.task_id,
-      motion_status: completed ? "STOPPED" : "MOVING",
-      battery_percent: Number(Math.max(0, Number(robotaxi.battery_percent || 0) - batteryDeltaPercent).toFixed(2)),
-      estimated_range_km: Number(Math.max(0, Number(robotaxi.estimated_range_km || 0) - distanceDeltaKm).toFixed(2)),
-    } : null,
+    robotaxi: nextRobotaxi,
   };
 }
 
@@ -251,16 +252,26 @@ export function completeRouteExecutionTravel({ execution, task, route, robotaxi,
     distance_traveled_km: projected?.total_distance_km ?? execution.total_distance_km,
     distance_remaining_km: 0,
   };
+  const distanceDeltaKm = roundDistance(Math.max(0, Number(nextExecution.distance_traveled_km || 0) - Number(execution.distance_traveled_km || 0)));
+  const batteryDeltaPercent = robotaxi?.max_range_km
+    ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
+    : 0;
+  const batteryConsumedPercent = Number((Number(execution.battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2));
+  const nextRobotaxi = robotaxi ? applyTravelDelta(robotaxi, {
+    distanceDeltaKm,
+    batteryDeltaPercent,
+    currentCellId: nextExecution.current_cell_id,
+    routeId: execution.route_id,
+    taskId: execution.task_id || task?.task_id,
+    motionStatus: "STOPPED",
+  }) : null;
   return {
-    execution: nextExecution,
+    execution: {
+      ...nextExecution,
+      battery_consumed_percent: batteryConsumedPercent,
+    },
     task: task ? { ...task, task_status: taskTypes.DeploymentTaskStatus.ARRIVED } : task,
-    robotaxi: robotaxi ? {
-      ...robotaxi,
-      current_cell_id: nextExecution.current_cell_id,
-      current_route_id: execution.route_id,
-      current_task_id: execution.task_id || task?.task_id,
-      motion_status: "STOPPED",
-    } : null,
+    robotaxi: nextRobotaxi,
   };
 }
 

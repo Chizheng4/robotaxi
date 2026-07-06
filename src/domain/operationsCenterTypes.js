@@ -15,11 +15,15 @@ export const ServiceType = {
 };
 
 export const AvailabilityStatus = {
+  PENDING_ADMISSION: "PENDING_ADMISSION",
+  IN_FLEET_OPERATION: "IN_FLEET_OPERATION",
+  RETIRED: "RETIRED",
+  // Legacy compatibility values. New business logic should use the four
+  // canonical statuses above plus AVAILABLE.
   PENDING_INSPECTION: "PENDING_INSPECTION",
   IN_INSPECTION: "IN_INSPECTION",
   AVAILABLE: "AVAILABLE",
   UNAVAILABLE: "UNAVAILABLE",
-  RETIRED: "RETIRED",
 };
 
 export const MotionStatus = {
@@ -61,6 +65,12 @@ export function createRobotaxi(robotaxi) {
     pending_fleet_task_type: null,
     pending_fleet_task_id: null,
     last_health_check_at: null,
+    lifetime_distance_km: 0,
+    lifetime_battery_consumed_percent: 0,
+    completed_service_order_count: 0,
+    completed_cleaning_count: 0,
+    completed_charging_count: 0,
+    completed_maintenance_count: 0,
     ...robotaxi,
   };
 }
