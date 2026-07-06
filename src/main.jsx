@@ -33,6 +33,7 @@ let validateDeploymentTasks;
 let taskTypes;
 let serviceOrderSettlement;
 let routePlanningService;
+let businessActionService;
 let businessTimingCalculator;
 let costModelCalculator;
 let revenueCalculator;
@@ -71,6 +72,7 @@ let orderMatchingRunSequence = 0;
 let orderMatchingDecisionSequence = 0;
 let tripSequence = 0;
 let eventSequence = 0;
+let manualBusinessActionSequence = 0;
 
 const unfinishedTaskStatuses = new Set([
   "WAITING_ASSIGNMENT",
@@ -1445,6 +1447,99 @@ function App() {
     return businessData;
   };
 
+  function runManualBusinessAction(action) {
+    if (!businessActionService || typeof action !== "function") return null;
+    const state = {
+      data,
+      demandSimulationEngine: { runDemandSimulation },
+      demandSimulationRuns,
+      serviceOrders,
+      trips,
+      readinessTasks,
+      deploymentTasks,
+      cleaningTasks,
+      chargingTasks,
+      maintenanceTasks,
+      failureHandlingTasks,
+      retirementTasks,
+      routeExecutions,
+      routes: data.routes,
+      routePlanningRuns,
+      robotaxis: data.robotaxis,
+      pricingStrategyRuns,
+      pricingDecisions,
+      orderMatchingRuns,
+      orderMatchingDecisions,
+      robotaxiTaskPlanningRuns,
+      robotaxiTaskPlanningResults,
+      taskEventLogs,
+      timedOperations,
+      workflowTimingProfiles,
+      costModelProfiles,
+      costRecords,
+      revenueRecords,
+    };
+    const activeWorkflowTimingProfile = getActiveWorkflowTimingProfileForBusinessAction();
+    const runtime = {
+      nextId: nextManualBusinessActionId,
+      timeContext: { time_mode: "REAL_TIME", simulation_run_id: null, simulation_timeline_id: null },
+      now,
+      simulationTime: now,
+      randomSeed: () => `MANUAL-${Date.now()}-${manualBusinessActionSequence}`,
+      audit: (options = {}) => {
+        const timestamp = now();
+        return {
+          record_source: "MANUAL",
+          updated_at: timestamp,
+          ...(options.created ? { created_at: timestamp } : {}),
+          ...(options.completed ? { completed_at: timestamp } : {}),
+        };
+      },
+      workflowTimingProfile: activeWorkflowTimingProfile,
+      context: { trigger_source: "MANUAL_UI" },
+    };
+    const result = action({ state, runtime });
+    applyManualBusinessUpdates(result?.updates || {});
+    return result;
+  }
+
+  function getActiveWorkflowTimingProfileForBusinessAction() {
+    return workflowTimingProfiles.find((item) => item.profile_status === "ACTIVE") || workflowTimingProfiles[0] || null;
+  }
+
+  function applyManualBusinessUpdates(updates) {
+    if (!updates || typeof updates !== "object") return;
+    if (updates.serviceOrders) setServiceOrders(updates.serviceOrders);
+    if (updates.trips) setTrips(updates.trips);
+    if (updates.readinessTasks) setReadinessTasks(updates.readinessTasks);
+    if (updates.deploymentTasks) setDeploymentTasks(updates.deploymentTasks);
+    if (updates.cleaningTasks) setCleaningTasks(updates.cleaningTasks);
+    if (updates.chargingTasks) setChargingTasks(updates.chargingTasks);
+    if (updates.maintenanceTasks) setMaintenanceTasks(updates.maintenanceTasks);
+    if (updates.failureHandlingTasks) setFailureHandlingTasks(updates.failureHandlingTasks);
+    if (updates.retirementTasks) setRetirementTasks(updates.retirementTasks);
+    if (updates.routeExecutions) setRouteExecutions(updates.routeExecutions);
+    if (updates.routePlanningRuns) setRoutePlanningRuns(updates.routePlanningRuns);
+    if (updates.pricingStrategyRuns) setPricingStrategyRuns(updates.pricingStrategyRuns);
+    if (updates.pricingDecisions) setPricingDecisions(updates.pricingDecisions);
+    if (updates.orderMatchingRuns) setOrderMatchingRuns(updates.orderMatchingRuns);
+    if (updates.orderMatchingDecisions) setOrderMatchingDecisions(updates.orderMatchingDecisions);
+    if (updates.robotaxiTaskPlanningRuns) setRobotaxiTaskPlanningRuns(updates.robotaxiTaskPlanningRuns);
+    if (updates.robotaxiTaskPlanningResults) setRobotaxiTaskPlanningResults(updates.robotaxiTaskPlanningResults);
+    if (updates.taskEventLogs) setTaskEventLogs(updates.taskEventLogs);
+    if (updates.timedOperations) setTimedOperations(updates.timedOperations);
+    if (updates.costRecords) setCostRecords(updates.costRecords);
+    if (updates.revenueRecords) setRevenueRecords(updates.revenueRecords);
+    if (updates.demandSimulationRuns) setDemandSimulationRuns(updates.demandSimulationRuns);
+    if (updates.routes || updates.robotaxis) {
+      setOperationalData((current) => ({
+        ...current,
+        ...(updates.routes ? { routes: updates.routes } : {}),
+        ...(updates.robotaxis ? { robotaxis: updates.robotaxis } : {}),
+      }));
+    }
+  }
+
   const simActions = simulationActions ? simulationActions.useSimulationActions({
     simulationEngine,
     simulationLoop,
@@ -2036,6 +2131,7 @@ function App() {
                   createTripForOrder,
                   viewTripForServiceOrder,
                   advanceTrip,
+                  completeTripTravelNow,
                   replanTripDestination,
                   replanTripRouteException,
                   planRouteExecutionRoute,
@@ -2915,6 +3011,7 @@ function App() {
       data,
       context: {
         now,
+        workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction(),
         nextId: (prefix) => {
           if (prefix === "REX") return nextRouteExecutionId();
           if (prefix === "RPR") return nextRoutePlanningRunId();
@@ -3081,7 +3178,7 @@ function App() {
       task,
       route,
       robotaxi,
-      context: { now },
+      context: { now, workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction() },
     });
     if (!result.succeeded) return;
     setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? result.routeExecution : item));
@@ -3113,6 +3210,7 @@ function App() {
       robotaxi,
       context: {
         now,
+        workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction(),
         costModelProfile: activeCostProfile,
         costRecords,
         businessData: { ...data, routeExecutions, routes: data.routes },
@@ -3151,7 +3249,7 @@ function App() {
       task,
       robotaxi,
       arrivalResult,
-      context: { now },
+      context: { now, workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction() },
     });
     if (!result.succeeded) return;
     setRouteExecutions((items) => items.map((item) => item.route_execution_id === execution.route_execution_id ? result.routeExecution : item));
@@ -3188,6 +3286,7 @@ function App() {
       strategy,
       context: {
         now,
+        workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction(),
         nextDispatchRunId: nextFleetOperationDispatchRunId,
         nextDispatchDecisionId: nextFleetOperationDispatchDecisionId,
       },
@@ -3243,7 +3342,7 @@ function App() {
     const collectionKey = getFleetOperationTaskCollectionKey(task.task_type);
     const robotaxi = operationalData.robotaxis?.find((r) => r.robotaxi_id === task.robotaxi_id);
     if (!robotaxi) return;
-    const result = fleetOperationTaskService.startFleetOperationWork({ task, robotaxi, context: { now } });
+    const result = fleetOperationTaskService.startFleetOperationWork({ task, robotaxi, context: { now, workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction() } });
     if (!result.succeeded) {
       appendFleetOperationPageEvent(collectionKey, {
         event_type: taskTypes.TaskEventType.TASK_FAILED,
@@ -3288,6 +3387,7 @@ function App() {
       robotaxi,
       context: {
         now,
+        workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction(),
         costModelProfile: activeCostProfile,
         costRecords,
         businessData: { ...data, routeExecutions, routes: data.routes },
@@ -3312,7 +3412,7 @@ function App() {
         robotaxi: result.robotaxi,
         tasksByType: getFleetOperationTasksByType(),
         opsCenters: data.opsCenters,
-        context: { now },
+        context: { now, workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction() },
       })
       : null;
     if (activation?.activated && activation.task) updateFleetOperationTask(activation.task);
@@ -3357,7 +3457,7 @@ function App() {
       task,
       robotaxi,
       workers: data.workers,
-      context: { now },
+      context: { now, workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction() },
     });
     if (!result.succeeded) {
       appendFleetOperationPageEvent(collectionKey, {
@@ -3806,81 +3906,36 @@ function App() {
       serviceOrderTypes.ServiceOrderStatus.MATCHING_FAILED,
     ];
     if (!serviceOrder || !assignableStatuses.includes(serviceOrder.order_status)) return;
-    const strategy = data.orderMatchingStrategies?.find((item) => item.order_matching_strategy_id === "OMS-001");
-    const result = serviceOrderService.executeOrderMatching({
-      strategy,
-      serviceOrder,
-      data: createRobotaxiPlanningData(),
-      orderMatchingRunId: nextOrderMatchingRunId(),
-      orderMatchingDecisionId: nextOrderMatchingDecisionId(),
-      nextTaskPlanningRunId,
-      nextTaskPlanningResultId,
-      createdAt: now(),
-    });
-    setOrderMatchingRuns((items) => [result.run, ...items]);
-    setOrderMatchingDecisions((items) => [result.decision, ...items]);
-    appendTaskPlanningAudit(result.taskPlanningRuns, result.taskPlanningResults);
-
-    if (!result.success) {
-      setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-        ...order,
-        order_matching_decision_id: result.decision?.order_matching_decision_id || null,
-        order_status: serviceOrderTypes.ServiceOrderStatus.ROBOTAXI_ASSIGNMENT_FAILED,
-        failure_reason: result.run.failure_reason,
-      } : order));
+    const result = runManualBusinessAction((params) => businessActionService.executeOrderMatching({ ...params, objectId: serviceOrderId }));
+    const nextOrder = result?.updates?.serviceOrders?.find((order) => order.service_order_id === serviceOrderId);
+    const trip = nextOrder?.trip_id ? result?.updates?.trips?.find((item) => item.trip_id === nextOrder.trip_id) : null;
+    if (!result?.success) {
       addServiceOrderEvent({
         service_order_id: serviceOrderId,
         event_type: taskTypes.TaskEventType.SERVICE_ORDER_ASSIGNMENT_FAILED,
         event_result: taskTypes.TaskEventResult.FAILED,
-        message: `${serviceOrderId} 分配 Robotaxi 失败：${getDisplayValue(result.run.failure_reason)}`,
+        message: `${serviceOrderId} 分配 Robotaxi 失败：${getDisplayValue(result?.data?.failureReason)}`,
       });
       selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
       return;
     }
-
-    const selectedRobotaxiId = result.decision.selected_robotaxi_id;
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-      ...order,
-      matched_robotaxi_id: selectedRobotaxiId,
-      order_matching_decision_id: result.decision.order_matching_decision_id,
-      order_status: serviceOrderTypes.ServiceOrderStatus.ON_THE_WAY_PICKUP,
-      matched_at: now(),
-      failure_reason: null,
-    } : order));
-    const trip = createTripRecord({ serviceOrder, robotaxiId: selectedRobotaxiId });
-    setTrips((items) => [trip, ...items]);
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-      ...order,
-      trip_id: trip.trip_id,
-    } : order));
     addServiceOrderEvent({
       service_order_id: serviceOrderId,
-      trip_id: trip.trip_id,
-      robotaxi_id: selectedRobotaxiId,
+      trip_id: trip?.trip_id || nextOrder?.trip_id,
+      robotaxi_id: nextOrder?.matched_robotaxi_id,
       event_type: taskTypes.TaskEventType.SERVICE_ORDER_ROBOTAXI_ASSIGNED,
       event_result: taskTypes.TaskEventResult.SUCCESS,
-      message: `${serviceOrderId} 已分配 ${selectedRobotaxiId}，并创建履约行驶记录 ${trip.trip_id}`,
+      message: `${serviceOrderId} 已分配 ${nextOrder?.matched_robotaxi_id}，并创建履约行驶记录 ${trip?.trip_id || nextOrder?.trip_id}`,
     });
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === selectedRobotaxiId ? {
-        ...robotaxi,
-        current_order_id: serviceOrderId,
-        available_for_dispatch: false,
-      } : robotaxi),
-    }));
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
 
   function createTripForOrder(serviceOrderId) {
     const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
     if (!serviceOrder || serviceOrder.trip_id || !serviceOrder.matched_robotaxi_id) return;
-    const trip = createTripRecord({ serviceOrder, robotaxiId: serviceOrder.matched_robotaxi_id });
-    setTrips((items) => [trip, ...items]);
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? {
-      ...order,
-      trip_id: trip.trip_id,
-    } : order));
+    const result = runManualBusinessAction((params) => businessActionService.advanceTrip({ ...params, objectId: serviceOrderId }));
+    const trip = result?.updates?.trips?.find((item) => item.service_order_id === serviceOrderId);
+    if (!result?.success || !trip) return;
     addServiceOrderEvent({
       service_order_id: serviceOrderId,
       trip_id: trip.trip_id,
@@ -3894,61 +3949,17 @@ function App() {
 
   function settleServiceOrder(serviceOrderId, visibleOrder = null) {
     const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
-    if (!serviceOrder) return;
-    const trip = trips.find((item) => item.trip_id === serviceOrder.trip_id || item.service_order_id === serviceOrderId);
-    const sourceOrder = {
-      ...serviceOrder,
-      ...(visibleOrder || {}),
-      ...serviceOrderSettlement.createServiceOrderActualSnapshotFromTrip(serviceOrder, trip, serviceOrderTypes, tripTypes),
-    };
-    const settlementInput = serviceOrderSettlement.buildServiceOrderSettlementInput({
-      serviceOrder: sourceOrder,
-      trip,
-      serviceOrderTypes,
-      tripTypes,
-    });
-    if (!settlementInput.settlementOrder) {
-      addServiceOrderEvent({
-        service_order_id: serviceOrderId,
-        trip_id: trip?.trip_id,
-        event_type: taskTypes.TaskEventType.SERVICE_ORDER_SETTLEMENT_FAILED,
-        event_result: taskTypes.TaskEventResult.FAILED,
-        message: `${serviceOrderId} 结算失败：${getDisplayValue(settlementInput.failure_reason)}`,
-      });
-      return;
-    }
-    const settlementOrder = settlementInput.settlementOrder;
-    const strategy = data.pricingStrategies?.find((item) => item.pricing_strategy_id === "DPS-002");
-    const result = serviceOrderSettlement.runFinalFareCalculation({
-      strategy,
-      serviceOrder: settlementOrder,
-      pricingStrategyRunId: nextPricingStrategyRunId(),
-      pricingDecisionId: nextPricingDecisionId(),
-      createdAt: now(),
-      pricingTypes,
-    });
-    setPricingStrategyRuns((items) => [result.run, ...items]);
-    if (result.decision) {
-      setPricingDecisions((items) => [result.decision, ...items]);
-    }
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId
-      ? serviceOrderSettlement.applyServiceOrderSettlementResult({
-        order,
-        settlementOrder,
-        result,
-        serviceOrderTypes,
-      })
-      : order));
+    const result = runManualBusinessAction((params) => businessActionService.settleServiceOrder({ ...params, objectId: serviceOrderId }));
+    const settledOrder = result?.updates?.serviceOrders?.find((item) => item.service_order_id === serviceOrderId);
+    const trip = trips.find((item) => item.trip_id === serviceOrder?.trip_id || item.service_order_id === serviceOrderId);
     addServiceOrderEvent({
       service_order_id: serviceOrderId,
       trip_id: trip?.trip_id,
-      pricing_strategy_run_id: result.run.pricing_strategy_run_id,
-      pricing_decision_id: result.decision?.pricing_decision_id || null,
-      event_type: result.decision ? taskTypes.TaskEventType.SERVICE_ORDER_SETTLED : taskTypes.TaskEventType.SERVICE_ORDER_SETTLEMENT_FAILED,
-      event_result: result.decision ? taskTypes.TaskEventResult.SUCCESS : taskTypes.TaskEventResult.FAILED,
-      message: result.decision
-        ? `${serviceOrderId} 结算完成，最终价格 ${result.decision.final_price}`
-        : `${serviceOrderId} 结算失败：${getDisplayValue(result.run.failure_reason)}`,
+      event_type: result?.success ? taskTypes.TaskEventType.SERVICE_ORDER_SETTLED : taskTypes.TaskEventType.SERVICE_ORDER_SETTLEMENT_FAILED,
+      event_result: result?.success ? taskTypes.TaskEventResult.SUCCESS : taskTypes.TaskEventResult.FAILED,
+      message: result?.success
+        ? `${serviceOrderId} 结算完成，最终价格 ${settledOrder?.final_price ?? visibleOrder?.final_price ?? serviceOrder?.final_price ?? ""}`
+        : `${serviceOrderId} 结算失败：${getDisplayValue(result?.data?.failureReason)}`,
     });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
@@ -3956,28 +3967,15 @@ function App() {
   function payServiceOrder(serviceOrderId) {
     const serviceOrder = serviceOrders.find((item) => item.service_order_id === serviceOrderId);
     if (!serviceOrder || serviceOrder.order_status !== serviceOrderTypes.ServiceOrderStatus.WAITING_PAYMENT) return;
-    const completedAt = now();
-    const result = serviceOrderService.payServiceOrder({
-      serviceOrder,
-      trips,
-      robotaxis: data.robotaxis,
-      completedAt,
-      serviceOrderTypes,
-      tripTypes,
-    });
-    if (!result.success) return;
-    setServiceOrders((items) => items.map((order) => order.service_order_id === serviceOrderId ? result.serviceOrder : order));
-    setTrips(result.trips);
-    setOperationalData((current) => ({
-      ...current,
-      robotaxis: result.robotaxis,
-    }));
+    const result = runManualBusinessAction((params) => businessActionService.payServiceOrder({ ...params, objectId: serviceOrderId }));
+    if (!result?.success) return;
+    const paidOrder = result.updates?.serviceOrders?.find((order) => order.service_order_id === serviceOrderId);
     addServiceOrderEvent({
       service_order_id: serviceOrderId,
       trip_id: serviceOrder.trip_id,
       event_type: taskTypes.TaskEventType.SERVICE_ORDER_PAID,
       event_result: taskTypes.TaskEventResult.SUCCESS,
-      message: `${serviceOrderId} 支付完成，支付金额 ${result.paidAmount}`,
+      message: `${serviceOrderId} 支付完成，支付金额 ${paidOrder?.paid_amount ?? paidOrder?.final_price ?? serviceOrder.final_price}`,
     });
     selectForPage("serviceOrders", "serviceOrder", serviceOrderId);
   }
@@ -4038,38 +4036,38 @@ function App() {
   function advanceTrip(tripId) {
     const trip = trips.find((item) => item.trip_id === tripId);
     if (!trip) return;
-    if ([tripTypes.TripStatus.ON_THE_WAY_PICKUP, tripTypes.TripStatus.ON_THE_WAY_DESTINATION].includes(trip.trip_status)) {
-      const movedTrip = tripService.getNextTripMovementState(trip, data);
-      if (!movedTrip) return;
-      setTrips((items) => items.map((item) => item.trip_id === tripId ? movedTrip : item));
-      setOperationalData((current) => ({
-        ...current,
-        robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, movedTrip, trip) : robotaxi),
-      }));
-      setServiceOrders((items) => items.map((order) => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, movedTrip) : order));
-      selectForPage("serviceFulfillmentRecords", "trip", tripId);
-      return;
+    const result = runManualBusinessAction((params) => businessActionService.advanceTrip({ ...params, objectId: tripId }));
+    if (!result?.success) return;
+    const nextTrip = result.updates?.trips?.find((item) => item.trip_id === tripId);
+    if (nextTrip) {
+      addServiceOrderEvent({
+        service_order_id: nextTrip.service_order_id,
+        trip_id: nextTrip.trip_id,
+        robotaxi_id: nextTrip.robotaxi_id,
+        event_type: taskTypes.TaskEventType.ROUTE_STEP_ADVANCED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        message: `履约行驶 ${nextTrip.trip_id} 已推进至 ${getDisplayValue(nextTrip.trip_status)}`,
+      });
     }
-    let nextTrip = tripService.getNextTripState(trip);
-    if (!nextTrip) return;
-    const routeUpdate = createTripRouteUpdate(trip, nextTrip, data);
-    if (routeUpdate?.failedTrip) {
-      setRoutePlanningRuns((items) => [routeUpdate.routePlanningRun, ...items]);
-      setTrips((items) => items.map((item) => item.trip_id === tripId ? routeUpdate.failedTrip : item));
-      selectForPage("serviceFulfillmentRecords", "trip", tripId);
-      return;
+    selectForPage("serviceFulfillmentRecords", "trip", tripId);
+  }
+
+  function completeTripTravelNow(tripId) {
+    const trip = trips.find((item) => item.trip_id === tripId);
+    if (!trip || ![tripTypes.TripStatus.ON_THE_WAY_PICKUP, tripTypes.TripStatus.ON_THE_WAY_DESTINATION].includes(trip.trip_status)) return;
+    const result = runManualBusinessAction((params) => businessActionService.completeTripTravel({ ...params, objectId: tripId }));
+    if (!result?.success) return;
+    const nextTrip = result.updates?.trips?.find((item) => item.trip_id === tripId);
+    if (nextTrip) {
+      addServiceOrderEvent({
+        service_order_id: nextTrip.service_order_id,
+        trip_id: nextTrip.trip_id,
+        robotaxi_id: nextTrip.robotaxi_id,
+        event_type: taskTypes.TaskEventType.ROUTE_EXECUTION_ARRIVED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        message: `履约行驶 ${nextTrip.trip_id} 已自动到达 ${getDisplayValue(nextTrip.trip_status)}`,
+      });
     }
-    if (routeUpdate?.route) {
-      nextTrip = routeUpdate.nextTrip;
-      setRoutePlanningRuns((items) => [routeUpdate.routePlanningRun, ...items]);
-    }
-    setTrips((items) => items.map((item) => item.trip_id === tripId ? nextTrip : item));
-    setOperationalData((current) => ({
-      ...current,
-      routes: routeUpdate?.route ? [routeUpdate.route, ...current.routes] : current.routes,
-      robotaxis: current.robotaxis.map((robotaxi) => robotaxi.robotaxi_id === trip.robotaxi_id ? updateRobotaxiForTrip(robotaxi, nextTrip, trip) : robotaxi),
-    }));
-    setServiceOrders((items) => items.map((order) => order.service_order_id === trip.service_order_id ? updateServiceOrderForTrip(order, nextTrip) : order));
     selectForPage("serviceFulfillmentRecords", "trip", tripId);
   }
 
@@ -4143,6 +4141,27 @@ function App() {
       return;
     }
     if (execution.execution_status !== taskTypes.RouteExecutionStatus.WAITING_ROUTE) return;
+    const serviceResult = runManualBusinessAction((params) => businessActionService.executeRoutePlanning({
+      ...params,
+      objectType: "routeExecution",
+      objectId: routeExecutionId,
+    }));
+    const plannedExecution = serviceResult?.updates?.routeExecutions?.find((item) => item.route_execution_id === routeExecutionId);
+    const plannedTask = plannedExecution ? serviceResult?.updates?.deploymentTasks?.find((item) => item.task_id === plannedExecution.task_id) : task;
+    addLog({
+      event_type: serviceResult?.success ? taskTypes.TaskEventType.ROUTE_PLANNED : taskTypes.TaskEventType.ROUTE_PLANNING_FAILED,
+      event_result: serviceResult?.success ? taskTypes.TaskEventResult.SUCCESS : taskTypes.TaskEventResult.FAILED,
+      task_id: plannedTask?.task_id || task.task_id,
+      robotaxi_id: plannedExecution?.robotaxi_id || task.robotaxi_id,
+      route_execution_id: routeExecutionId,
+      route_id: plannedExecution?.route_id || null,
+      message: serviceResult?.success
+        ? `${task.task_id} 的行驶记录 ${routeExecutionId} 已通过服务层完成路径规划`
+        : `${task.task_id} 路径规划失败：${getDisplayValue(serviceResult?.data?.failureReason)}`,
+    });
+    if (serviceResult?.success) focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.MOVING);
+    selectForPage("routeExecutions", "routeExecution", routeExecutionId);
+    return;
 
     const routePlanningRunId = nextRoutePlanningRunId();
     const route = createDeploymentRoute(task, data, {
@@ -4472,6 +4491,24 @@ function App() {
     const task = deploymentTasks.find((item) => item.task_id === execution.task_id);
     const route = data.routes.find((item) => item.route_id === execution.route_id);
     if (!task || !route) return;
+    const serviceResult = runManualBusinessAction((params) => businessActionService.advanceRouteExecution({ ...params, objectId: routeExecutionId }));
+    const nextExecution = serviceResult?.updates?.routeExecutions?.find((item) => item.route_execution_id === routeExecutionId);
+    if (serviceResult?.success && nextExecution) {
+      addLog({
+        event_type: nextExecution.execution_status === taskTypes.RouteExecutionStatus.ARRIVED
+          ? taskTypes.TaskEventType.ROUTE_EXECUTION_ARRIVED
+          : taskTypes.TaskEventType.ROUTE_STEP_ADVANCED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        task_id: nextExecution.task_id,
+        robotaxi_id: nextExecution.robotaxi_id,
+        route_execution_id: nextExecution.route_execution_id,
+        message: nextExecution.execution_status === taskTypes.RouteExecutionStatus.ARRIVED
+          ? `${nextExecution.robotaxi_id} 已到达当前路径目标，等待到达结果`
+          : `${nextExecution.robotaxi_id} 继续行驶至 ${nextExecution.current_cell_id}`,
+      });
+      focusRouteExecutionStatus(nextExecution.execution_status);
+      return;
+    }
 
     const nextStepIndex = Math.min(execution.current_step_index + 1, execution.total_step_count);
     const nextCellId = execution.route_cell_ids[nextStepIndex] || execution.target_cell_id;
@@ -4569,7 +4606,7 @@ function App() {
           task: nextTask,
           route,
           robotaxi: nextRobotaxi,
-          context: { now },
+          context: { now, workflowTimingProfile: getActiveWorkflowTimingProfileForBusinessAction() },
         });
         if (!result.succeeded) return;
         nextExecution = result.routeExecution;
@@ -4600,6 +4637,20 @@ function App() {
     const task = deploymentTasks.find((item) => item.task_id === execution.task_id);
     const robotaxi = operationalData.robotaxis.find((item) => item.robotaxi_id === execution.robotaxi_id);
     if (!task || !robotaxi) return;
+    const serviceResult = runManualBusinessAction((params) => businessActionService.completeRouteExecutionTravel({ ...params, objectId: routeExecutionId }));
+    const nextExecution = serviceResult?.updates?.routeExecutions?.find((item) => item.route_execution_id === routeExecutionId);
+    if (serviceResult?.success && nextExecution) {
+      addLog({
+        event_type: taskTypes.TaskEventType.ROUTE_EXECUTION_ARRIVED,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        task_id: nextExecution.task_id,
+        robotaxi_id: nextExecution.robotaxi_id,
+        route_execution_id: nextExecution.route_execution_id,
+        message: `${nextExecution.robotaxi_id} 已按自动行驶到达目的地，等待到达确认`,
+      });
+      focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.ARRIVED);
+      return;
+    }
     const completed = routePlanningService.completeRouteExecutionTravel({ execution, task, route, robotaxi });
     setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? completed.execution : item));
     setDeploymentTasks((tasks) => tasks.map((item) => item.task_id === task.task_id ? completed.task : item));
@@ -4626,6 +4677,20 @@ function App() {
     }
     const task = deploymentTasks.find((item) => item.task_id === execution?.task_id);
     if (!execution || !task || execution.execution_status !== taskTypes.RouteExecutionStatus.ARRIVED) return;
+    const serviceResult = runManualBusinessAction((params) => businessActionService.confirmRouteExecutionArrival({ ...params, objectId: routeExecutionId }));
+    const confirmedExecution = serviceResult?.updates?.routeExecutions?.find((item) => item.route_execution_id === routeExecutionId);
+    if (serviceResult?.success && confirmedExecution) {
+      addLog({
+        event_type: taskTypes.TaskEventType.ARRIVAL_NORMAL,
+        event_result: taskTypes.TaskEventResult.SUCCESS,
+        task_id: task.task_id,
+        robotaxi_id: execution.robotaxi_id,
+        route_execution_id: execution.route_execution_id,
+        message: `${execution.robotaxi_id} 正常到达，运营投放完成`,
+      });
+      focusRouteExecutionStatus(taskTypes.RouteExecutionStatus.COMPLETED);
+      return;
+    }
     setRouteExecutions((items) => items.map((item) => item.route_execution_id === routeExecutionId ? {
       ...item,
       execution_status: taskTypes.RouteExecutionStatus.COMPLETED,
@@ -6668,6 +6733,7 @@ function renderTripActions(row, actions) {
     return (
       <RowActionGroup>
         <RowActionButton onClick={() => actions.advanceTrip(row.trip_id)}>继续行驶</RowActionButton>
+        <RowActionButton type="default" onClick={() => actions.completeTripTravelNow(row.trip_id)}>自动到达</RowActionButton>
         <RowActionButton type="default" danger onClick={() => actions.replanTripRouteException(row.trip_id)}>路径异常</RowActionButton>
       </RowActionGroup>
     );
@@ -6676,6 +6742,7 @@ function renderTripActions(row, actions) {
     return (
       <RowActionGroup>
         <RowActionButton onClick={() => actions.advanceTrip(row.trip_id)}>继续行驶</RowActionButton>
+        <RowActionButton type="default" onClick={() => actions.completeTripTravelNow(row.trip_id)}>自动到达</RowActionButton>
         <RowActionButton type="default" onClick={() => actions.replanTripDestination(row.trip_id)}>变更目的地</RowActionButton>
         <RowActionButton type="default" danger onClick={() => actions.replanTripRouteException(row.trip_id)}>路径异常</RowActionButton>
       </RowActionGroup>
@@ -7306,6 +7373,7 @@ async function bootstrap() {
 		    statusRegistryModule,
 		    routePlanningStrategiesModule,
 		    timedOperationDiagnosticsModule,
+		    businessActionServiceModule,
 		    robotaxiTaskPriorityServiceModule,
 		    fleetOperationTaskServiceModule,
 		    fleetOperationPolicyServiceModule,
@@ -7359,6 +7427,7 @@ async function bootstrap() {
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
 		    import("./domain/routePlanningStrategies.js?v=20260625-v030-3"),
 		    import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"),
+		    import("./services/businessActionService.js?v=20260706-v040-28"),
 		    import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"),
 		    import("./services/fleetOperationTaskService.js?v=20260702-v039-7"),
 		    import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"),
@@ -7412,6 +7481,7 @@ async function bootstrap() {
 		  statusRegistry = statusRegistryModule;
 		  routePlanningStrategies = routePlanningStrategiesModule;
 		  timedOperationDiagnostics = timedOperationDiagnosticsModule;
+		  businessActionService = businessActionServiceModule;
 		  robotaxiTaskPriorityService = robotaxiTaskPriorityServiceModule;
 		  fleetOperationTaskService = fleetOperationTaskServiceModule;
 		  fleetOperationPolicyService = fleetOperationPolicyServiceModule;
@@ -8590,6 +8660,25 @@ function nextOrderMatchingDecisionId() {
 function nextTripId() {
   tripSequence += 1;
   return `TRIP-${String(tripSequence).padStart(3, "0")}`;
+}
+
+function nextManualBusinessActionId(prefix) {
+  if (prefix === "TASK-RC") return nextTaskId();
+  if (prefix === "TASK-DP") return nextDeploymentTaskId();
+  if (prefix === "TASK-FOP") return nextFleetOperationTaskId();
+  if (prefix === "REX") return nextRouteExecutionId();
+  if (prefix === "DRT") return nextDeploymentRouteId();
+  if (prefix === "SRT") return nextServiceRouteId();
+  if (prefix === "RPR") return nextRoutePlanningRunId();
+  if (prefix === "DPR") return nextPricingStrategyRunId();
+  if (prefix === "PD") return nextPricingDecisionId();
+  if (prefix === "OMR") return nextOrderMatchingRunId();
+  if (prefix === "OMD") return nextOrderMatchingDecisionId();
+  if (prefix === "TPR") return nextTaskPlanningRunId();
+  if (prefix === "TPRS") return nextTaskPlanningResultId();
+  if (prefix === "TRIP") return nextTripId();
+  manualBusinessActionSequence += 1;
+  return `${prefix || "MANUAL"}-${String(manualBusinessActionSequence).padStart(4, "0")}`;
 }
 
 function nextEventId() {

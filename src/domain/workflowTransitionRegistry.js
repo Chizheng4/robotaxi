@@ -44,6 +44,25 @@ export const normalWorkflowTransitions = [
   transition("TRIP_DESTINATION_PLAN", "trip", "CUSTOMER_ONBOARD", "ROUTE_PLAN", "ON_THE_WAY_DESTINATION", D, "trip-destination-plan", F, 8, "auto_trip_progress_enabled"),
   transition("TRIP_DESTINATION_MOVE", "trip", "ON_THE_WAY_DESTINATION", "TRIP_STEP_EXECUTE", "ARRIVED_DESTINATION", D, "trip-destination-move", C, 4, "auto_trip_progress_enabled"),
   transition("TRIP_DROPOFF", "trip", "ARRIVED_DESTINATION", "PASSENGER_DROPOFF", "COMPLETED", D, "trip-dropoff", F, 30, "auto_trip_progress_enabled"),
+
+  transition("CLEANING_WORKER_ASSIGN", "cleaningTask", "WAITING_WORKER_ASSIGNMENT", "FLEET_OPERATION_WORKER_ASSIGN", "READY_TO_START", D, "cleaning-worker-assign", F, 30),
+  transition("CLEANING_WORK_START", "cleaningTask", "READY_TO_START", "FLEET_OPERATION_WORK_START", "CLEANING_IN_PROGRESS", D, "cleaning-work-start", F, 30),
+  transition("CLEANING_WORK_COMPLETE", "cleaningTask", "CLEANING_IN_PROGRESS", "FLEET_OPERATION_WORK_COMPLETE", "COMPLETED", D, "cleaning-work-complete", F, 600),
+
+  transition("CHARGING_WORKER_ASSIGN_CONNECT", "chargingTask", "WAITING_CHARGER_ASSIGNMENT", "FLEET_OPERATION_WORKER_ASSIGN", "READY_TO_CHARGE", D, "charging-worker-assign", F, 30),
+  transition("CHARGING_CONNECT", "chargingTask", "READY_TO_CHARGE", "FLEET_OPERATION_WORK_START", "CHARGING", D, "charging-connect", F, 60),
+  transition("CHARGING_COMPLETE", "chargingTask", "CHARGING", "FLEET_OPERATION_CHARGING_COMPLETE", "WAITING_CHARGER_ASSIGNMENT", D, "charging-energy-fill", F, 1800),
+  transition("CHARGING_WORKER_ASSIGN_DISCONNECT", "chargingTask", "WAITING_CHARGER_ASSIGNMENT", "FLEET_OPERATION_WORKER_ASSIGN", "READY_TO_DISCONNECT", D, "charging-worker-assign", F, 30),
+  transition("CHARGING_DISCONNECT", "chargingTask", "READY_TO_DISCONNECT", "FLEET_OPERATION_WORK_COMPLETE", "COMPLETED", D, "charging-disconnect", F, 60),
+
+  transition("MAINTENANCE_WORKER_ASSIGN", "maintenanceTask", "WAITING_RESOURCE_ASSIGNMENT", "FLEET_OPERATION_WORKER_ASSIGN", "READY_TO_START", D, "maintenance-worker-assign", F, 60),
+  transition("MAINTENANCE_WORK_START", "maintenanceTask", "READY_TO_START", "FLEET_OPERATION_WORK_START", "MAINTENANCE_IN_PROGRESS", D, "maintenance-work-start", F, 60),
+  transition("MAINTENANCE_WORK_COMPLETE", "maintenanceTask", "MAINTENANCE_IN_PROGRESS", "FLEET_OPERATION_WORK_COMPLETE", "COMPLETED", D, "maintenance-work-complete", F, 900),
+
+  transition("FAILURE_DIAGNOSIS_ASSIGN", "failureHandlingTask", "WAITING_DIAGNOSIS_ASSIGNMENT", "FLEET_OPERATION_WORKER_ASSIGN", "DIAGNOSING", D, "failure-diagnosis-assign", F, 60),
+  transition("FAILURE_DIAGNOSIS_COMPLETE", "failureHandlingTask", "DIAGNOSING", "FLEET_OPERATION_WORK_COMPLETE", "COMPLETED", D, "failure-diagnosis-complete", F, 900),
+
+  transition("RETIREMENT_PROCESS_COMPLETE", "retirementTask", "PROCESSING_RETIREMENT", "FLEET_OPERATION_WORK_COMPLETE", "COMPLETED", D, "retirement-process-complete", F, 1200),
 ];
 
 export const preservedWorkflowTransitions = [

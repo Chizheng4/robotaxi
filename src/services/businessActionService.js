@@ -692,6 +692,8 @@ export function executeOrderMatching({ state, objectId, runtime }) {
     data: appData,
     orderMatchingRunId: runtime.nextId("OMR"),
     orderMatchingDecisionId: runtime.nextId("OMD"),
+    nextTaskPlanningRunId: () => runtime.nextId("TPR"),
+    nextTaskPlanningResultId: () => runtime.nextId("TPRS"),
     createdAt: runtime.now(),
   });
   if (!matchingResult.success) {

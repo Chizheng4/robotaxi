@@ -22,6 +22,7 @@ import {
 } from "../domain/taskTypes.js";
 import * as routePlanningService from "./routePlanningService.js";
 import * as robotaxiTaskPriorityService from "./robotaxiTaskPriorityService.js";
+import { resolveTimingRuleDuration } from "../data/workflowRuntimeConfig.js";
 import * as fleetOperationDispatchService from "./fleetOperationDispatchService.js";
 import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
 import * as costModelCalculator from "../data/costModelCalculator.js";
@@ -1337,6 +1338,14 @@ function withFleetOperationLifecycleStatus(item, {
   if (history.length > 0 && previousStatus === nextStatus) return item;
   const occurredAt = resolveNow(context);
   const simulationAt = resolveSimulationTime(context, item, occurredAt);
+  const timing = resolveTimingRuleDuration({
+    workflowTimingProfile: context.workflowTimingProfile || context.workflow_timing_profile || null,
+    objectType,
+    fromState: previousStatus,
+    actionType,
+    fallbackSeconds: durationSeconds,
+    movementStepCount,
+  });
   const transition = {
     status_transition_id: typeof context.nextStatusTransitionId === "function"
       ? context.nextStatusTransitionId()
@@ -1354,12 +1363,12 @@ function withFleetOperationLifecycleStatus(item, {
     trigger_source: context.trigger_source || (context.action ? "SIMULATION_TIMED_OPERATION" : "MANUAL_OR_SERVICE"),
     simulation_action_started_at: simulationAt,
     calculated_simulation_action_started_at: simulationAt,
-    configured_duration_seconds: Math.max(0, Number(durationSeconds) || 0),
+    configured_duration_seconds: Math.max(0, Number(timing.durationSeconds) || 0),
     movement_step_count: movementStepCount,
-    seconds_per_cell: secondsPerCell,
+    seconds_per_cell: timing.secondsPerCell ?? secondsPerCell,
     simulation_status_changed_at: simulationAt,
     calculated_simulation_status_changed_at: simulationAt,
-    workflow_timing_rule_id: context.workflow_timing_rule_id || null,
+    workflow_timing_rule_id: context.workflow_timing_rule_id || timing.rule?.workflow_timing_rule_id || null,
     source_transition_id: sourceTransitionId,
     business_timing_calculation_run_id: null,
   };
