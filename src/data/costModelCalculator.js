@@ -255,6 +255,7 @@ function calculateRouteExecutionCost(execution, context) {
     relatedTripId: null,
     robotaxiId: execution.robotaxi_id,
     distanceKm,
+    energyKwh: execution.battery_consumed_kwh,
     simulationCostOccurredAt: execution.calculated_simulation_completed_at || execution.simulation_completed_at || execution.simulation_created_at || null,
     basis,
   });
@@ -275,6 +276,7 @@ function calculateTripCost(trip, context) {
     relatedRouteExecutionId: null,
     robotaxiId: trip.robotaxi_id,
     distanceKm: distanceInfo.distanceKm,
+    energyKwh: trip.battery_consumed_kwh,
     simulationCostOccurredAt: trip.calculated_simulation_completed_at || trip.simulation_completed_at || trip.simulation_created_at || null,
     basis: distanceInfo.basis,
   });
@@ -282,10 +284,13 @@ function calculateTripCost(trip, context) {
 }
 
 function calculateTaskLaborCost(task, objectType, context) {
+  if (objectType === "chargingTask" && Number(task.charged_energy_kwh || 0) > 0) {
+    pushChargingEnergyCostRecord(task, objectType, context);
+  }
   const seconds = getOperationSeconds(task);
   if (!seconds) {
     addError(context, "COST_DURATION_MISSING", objectType, task.task_id, "任务缺少可计算操作时长");
-    return projectCostSummary(task, [], context.calculationRunId, context.createdAt);
+    return projectCostSummary(task, recordsForSource(context.records, objectType, task.task_id), context.calculationRunId, context.createdAt);
   }
   const quantityHours = roundQuantity(seconds / 3600);
   const costAmount = roundMoney(quantityHours * Number(context.profile.worker_cost_per_hour || 0));
@@ -312,9 +317,36 @@ function calculateTaskLaborCost(task, objectType, context) {
   return projectCostSummary(task, recordsForSource(context.records, objectType, task.task_id), context.calculationRunId, context.createdAt);
 }
 
+function pushChargingEnergyCostRecord(task, objectType, context) {
+  const chargedEnergyKwh = roundQuantity(task.charged_energy_kwh);
+  context.records.push(createRecord(context, {
+    sourceObjectType: objectType,
+    sourceObjectId: task.task_id,
+    robotaxiId: task.robotaxi_id || null,
+    workerId: task.worker_id || null,
+    relatedOrderId: null,
+    relatedTripId: null,
+    relatedRouteExecutionId: null,
+    costType: CostType.ENERGY_COST,
+    quantity: chargedEnergyKwh,
+    quantityUnit: "kWh",
+    unitCost: context.profile.electricity_price_per_kwh,
+    costAmount: roundMoney(chargedEnergyKwh * Number(context.profile.electricity_price_per_kwh || 0)),
+    formula: "charged_energy_kwh × electricity_price_per_kwh",
+    basis: {
+      charged_energy_kwh: chargedEnergyKwh,
+      battery_percent_before: task.battery_percent_before ?? null,
+      battery_percent_after: task.battery_percent_after ?? null,
+    },
+    simulationCostOccurredAt: task.calculated_simulation_completed_at || task.simulation_completed_at || task.simulation_created_at || null,
+  }));
+}
+
 function createDrivingCostRecords(context, params) {
   const distanceKm = roundQuantity(params.distanceKm);
-  const energyKwh = roundQuantity(distanceKm * Number(context.profile.energy_consumption_kwh_per_km || 0));
+  const energyKwh = Number(params.energyKwh) > 0
+    ? roundQuantity(params.energyKwh)
+    : roundQuantity(distanceKm * Number(context.profile.energy_consumption_kwh_per_km || 0));
   const depreciableValue = Math.max(0, Number(context.profile.robotaxi_purchase_cost || 0) - Number(context.profile.robotaxi_residual_value || 0));
   const depreciationCostPerKm = context.profile.depreciation_method === "PER_KM"
     ? depreciableValue / Number(context.profile.expected_lifetime_km || 1)
@@ -335,8 +367,10 @@ function createDrivingCostRecords(context, params) {
       quantityUnit: "kWh",
       unitCost: context.profile.electricity_price_per_kwh,
       costAmount: energyKwh * Number(context.profile.electricity_price_per_kwh || 0),
-      formula: "distance_km × energy_consumption_kwh_per_km × electricity_price_per_kwh",
-      basis: { ...params.basis, energy_consumption_kwh_per_km: context.profile.energy_consumption_kwh_per_km },
+      formula: Number(params.energyKwh) > 0
+        ? "battery_consumed_kwh × electricity_price_per_kwh"
+        : "distance_km × energy_consumption_kwh_per_km × electricity_price_per_kwh",
+      basis: { ...params.basis, energy_consumption_kwh_per_km: context.profile.energy_consumption_kwh_per_km, battery_consumed_kwh: Number(params.energyKwh) || null },
     },
     {
       costType: CostType.ASSET_DEPRECIATION_COST,

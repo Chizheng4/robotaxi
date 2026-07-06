@@ -235,6 +235,7 @@ export function createDeploymentTask({ state, runtime }) {
     distance_traveled_km: 0,
     distance_remaining_km: 0,
     time_elapsed: "0",
+    battery_consumed_kwh: 0,
     battery_consumed_percent: 0,
     created_at: runtime.now(),
     ...runtime.audit({ created: true }),
@@ -1168,14 +1169,12 @@ function syncServiceOrderFromTrip(serviceOrders, serviceOrderId, trip, runtime, 
 function updateRobotaxiFromTrip(robotaxis, trip, previousTrip, runtime) {
   if (!trip?.robotaxi_id || !trip?.current_cell_id) return robotaxis;
   return replaceById(robotaxis, "robotaxi_id", trip.robotaxi_id, (robotaxi) => {
-    const { distanceDeltaKm } = getTravelDeltaFromRecords(previousTrip || {}, trip);
-    const batteryDeltaPercent = robotaxi?.max_range_km
-      ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
-      : Math.max(0, Number(trip.battery_consumed_percent || 0) - Number(previousTrip?.battery_consumed_percent || 0));
+    const { distanceDeltaKm, batteryDeltaKwh, batteryDeltaPercent } = getTravelDeltaFromRecords(previousTrip || {}, trip);
     const completedNow = previousTrip?.trip_status !== tripTypes.TripStatus.COMPLETED && trip.trip_status === tripTypes.TripStatus.COMPLETED;
     const movedRobotaxi = applyTravelDelta(robotaxi, {
       distanceDeltaKm,
       batteryDeltaPercent,
+      batteryDeltaKwh,
       currentCellId: trip.current_cell_id,
       routeId: trip.trip_status === tripTypes.TripStatus.COMPLETED ? null : trip.route_id || robotaxi.current_route_id,
       motionStatus: trip.trip_status === tripTypes.TripStatus.COMPLETED ? "PARKED" : "MOVING",

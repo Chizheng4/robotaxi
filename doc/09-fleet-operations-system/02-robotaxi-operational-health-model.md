@@ -41,7 +41,7 @@ Fleet Task Service 执行具体任务闭环
 |字段|含义|说明|
 |---|---|---|
 |availability_status|运营可用状态|判断是否可参与订单匹配和投放|
-|motion_status|物理运动状态|停车、临停、行驶|
+|motion_status|运动状态|停车、临停、行驶|
 |fleet_operation_status|车队运维状态|是否处于清洁、充电、维修、故障等恢复链路|
 |current_order_id|当前服务订单编号|判断是否正在服务履约|
 |current_task_id|当前任务编号|判断是否正在执行投放、运维、行驶等任务|

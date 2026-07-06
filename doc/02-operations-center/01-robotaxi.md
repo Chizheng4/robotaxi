@@ -19,7 +19,7 @@ Robotaxi
 ├── 车辆能力
 ├── 能源信息
 ├── 运营可用状态
-├── 物理运动状态
+├── 运动状态
 ├── 当前空间位置
 └── 当前任务引用
 ```
@@ -106,8 +106,8 @@ service_type = PASSENGER_RIDE
 |---|---|
 |PENDING_INSPECTION|待运维检查|
 |IN_INSPECTION|运维检查中|
-|AVAILABLE|可参与运营|
-|UNAVAILABLE|不可参与运营|
+|AVAILABLE|可运营|
+|UNAVAILABLE|运维中|
 
 说明：
 
@@ -120,9 +120,9 @@ service_type = PASSENGER_RIDE
 
 ---
 
-## 7. 物理运动状态
+## 7. 运动状态
 
-物理运动状态表示 Robotaxi 当前的物理运动形态。
+运动状态表示 Robotaxi 当前的运动形态。
 
 |motion_status|含义|
 |---|---|
@@ -326,7 +326,7 @@ Robotaxi = 自动驾驶 AI 汽车资产
 
 运营可用状态 = 它是否具备进入运营闭环的资格
 
-物理运动状态 = 它当前是停着还是动着
+运动状态 = 它当前是停着还是动着
 
 当前任务 = 它现在正在做什么业务动作
 ```

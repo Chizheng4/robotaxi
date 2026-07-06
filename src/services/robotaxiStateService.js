@@ -1,6 +1,8 @@
 import { AvailabilityStatus } from "../domain/operationsCenterTypes.js";
 import { TaskType } from "../domain/taskTypes.js";
 
+export const DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM = 0.16;
+
 export const CANONICAL_AVAILABILITY_STATUSES = new Set([
   AvailabilityStatus.PENDING_ADMISSION,
   AvailabilityStatus.AVAILABLE,
@@ -97,7 +99,9 @@ export function markRetired(robotaxi, { now = null } = {}) {
 
 export function applyTravelDelta(robotaxi, {
   distanceDeltaKm = 0,
-  batteryDeltaPercent = 0,
+  batteryDeltaPercent = null,
+  batteryDeltaKwh = null,
+  energyConsumptionKwhPerKm = DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM,
   currentCellId = null,
   routeId = null,
   taskId = null,
@@ -105,9 +109,21 @@ export function applyTravelDelta(robotaxi, {
   now = null,
 } = {}) {
   if (!robotaxi) return null;
-  const nextDistance = round2(Number(robotaxi.lifetime_distance_km || 0) + Math.max(0, Number(distanceDeltaKm) || 0));
-  const nextConsumed = round2(Number(robotaxi.lifetime_battery_consumed_percent || 0) + Math.max(0, Number(batteryDeltaPercent) || 0));
-  const nextBattery = round2(Math.max(0, Number(robotaxi.battery_percent || 0) - Math.max(0, Number(batteryDeltaPercent) || 0)));
+  const normalizedDistanceDeltaKm = Math.max(0, Number(distanceDeltaKm) || 0);
+  const normalizedBatteryDeltaKwh = batteryDeltaKwh !== null && batteryDeltaKwh !== undefined
+    ? Math.max(0, Number(batteryDeltaKwh) || 0)
+    : calculateBatteryConsumedKwh({ distanceKm: normalizedDistanceDeltaKm, energyConsumptionKwhPerKm });
+  const normalizedBatteryDeltaPercent = batteryDeltaPercent !== null && batteryDeltaPercent !== undefined
+    ? Math.max(0, Number(batteryDeltaPercent) || 0)
+    : calculateBatteryPercentFromKwh(robotaxi, normalizedBatteryDeltaKwh);
+  const currentBatteryKwh = getCurrentBatteryKwh(robotaxi);
+  const nextDistance = round2(Number(robotaxi.lifetime_distance_km || 0) + normalizedDistanceDeltaKm);
+  const nextConsumedKwh = round2(Number(robotaxi.lifetime_battery_consumed_kwh || 0) + normalizedBatteryDeltaKwh);
+  const nextConsumedPercent = round2(Number(robotaxi.lifetime_battery_consumed_percent || 0) + normalizedBatteryDeltaPercent);
+  const nextBatteryKwh = round2(Math.max(0, currentBatteryKwh - normalizedBatteryDeltaKwh));
+  const nextBattery = robotaxi.battery_capacity_kwh
+    ? round2(Math.max(0, Math.min(100, nextBatteryKwh / Number(robotaxi.battery_capacity_kwh || 1) * 100)))
+    : round2(Math.max(0, Number(robotaxi.battery_percent || 0) - normalizedBatteryDeltaPercent));
   const nextRange = round2(Math.max(0, Number(robotaxi.estimated_range_km || 0) - Math.max(0, Number(distanceDeltaKm) || 0)));
   return {
     ...robotaxi,
@@ -116,11 +132,45 @@ export function applyTravelDelta(robotaxi, {
     current_task_id: taskId ?? robotaxi.current_task_id,
     motion_status: motionStatus || robotaxi.motion_status,
     battery_percent: nextBattery,
+    current_battery_kwh: nextBatteryKwh,
     estimated_range_km: nextRange,
     lifetime_distance_km: nextDistance,
-    lifetime_battery_consumed_percent: nextConsumed,
+    lifetime_battery_consumed_kwh: nextConsumedKwh,
+    lifetime_battery_consumed_percent: nextConsumedPercent,
     updated_at: now || robotaxi.updated_at,
   };
+}
+
+export function getCurrentBatteryKwh(robotaxi) {
+  const explicit = Number(robotaxi?.current_battery_kwh);
+  if (Number.isFinite(explicit) && explicit >= 0) return round2(explicit);
+  const capacity = Number(robotaxi?.battery_capacity_kwh);
+  const percent = Number(robotaxi?.battery_percent);
+  if (!Number.isFinite(capacity) || !Number.isFinite(percent)) return 0;
+  return round2(capacity * percent / 100);
+}
+
+export function getBatteryPercentFromKwh(robotaxi, batteryKwh) {
+  return calculateBatteryPercentFromKwh(robotaxi, batteryKwh);
+}
+
+export function getBatteryKwhFromPercent(robotaxi, percent) {
+  const capacity = Number(robotaxi?.battery_capacity_kwh);
+  if (!Number.isFinite(capacity) || capacity <= 0) return 0;
+  return round2(capacity * Math.max(0, Number(percent) || 0) / 100);
+}
+
+export function calculateBatteryConsumedKwh({
+  distanceKm = 0,
+  energyConsumptionKwhPerKm = DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM,
+} = {}) {
+  return round2(Math.max(0, Number(distanceKm) || 0) * Math.max(0, Number(energyConsumptionKwhPerKm) || 0));
+}
+
+function calculateBatteryPercentFromKwh(robotaxi, batteryKwh) {
+  const capacity = Number(robotaxi?.battery_capacity_kwh);
+  if (!Number.isFinite(capacity) || capacity <= 0) return 0;
+  return round2(Math.max(0, Number(batteryKwh) || 0) / capacity * 100);
 }
 
 export function incrementCompletedCounter(robotaxi, counterKey, { now = null } = {}) {
@@ -140,8 +190,11 @@ export function getCompletedCounterKeyForFleetTask(taskType) {
 }
 
 export function getTravelDeltaFromRecords(previousRecord = {}, nextRecord = {}) {
+  const distanceDeltaKm = round2(Math.max(0, Number(nextRecord.distance_traveled_km || 0) - Number(previousRecord.distance_traveled_km || 0)));
+  const batteryDeltaKwh = round2(Math.max(0, Number(nextRecord.battery_consumed_kwh || 0) - Number(previousRecord.battery_consumed_kwh || 0)));
   return {
-    distanceDeltaKm: round2(Math.max(0, Number(nextRecord.distance_traveled_km || 0) - Number(previousRecord.distance_traveled_km || 0))),
+    distanceDeltaKm,
+    batteryDeltaKwh,
     batteryDeltaPercent: round2(Math.max(0, Number(nextRecord.battery_consumed_percent || 0) - Number(previousRecord.battery_consumed_percent || 0))),
   };
 }

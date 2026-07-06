@@ -1,7 +1,11 @@
 import * as taskTypes from "../domain/taskTypes.js";
 import * as tripTypes from "../domain/tripTypes.js";
 import { createRoutePlanningStrategySnapshot } from "../domain/routePlanningStrategies.js";
-import { applyTravelDelta } from "./robotaxiStateService.js";
+import {
+  applyTravelDelta,
+  calculateBatteryConsumedKwh,
+  getBatteryPercentFromKwh,
+} from "./robotaxiStateService.js";
 
 export const DEFAULT_CELL_TRAVEL_SECONDS = 6;
 
@@ -118,6 +122,7 @@ export function planDeploymentRoute({ execution, task, data, routeId, routePlann
       current_target_service_area_id: targetServiceAreaId,
       route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
       time_elapsed: "0",
+      battery_consumed_kwh: 0,
       battery_consumed_percent: 0,
       started_at: new Date().toISOString(),
       completed_at: null,
@@ -188,13 +193,14 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
     currentStepIndex: nextStepIndex,
   });
   const distanceDeltaKm = roundDistance(Math.max(0, Number(nextExecution.distance_traveled_km || 0) - Number(execution.distance_traveled_km || 0)));
-  const batteryDeltaPercent = robotaxi?.max_range_km
-    ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
-    : 0;
+  const batteryDeltaKwh = calculateBatteryConsumedKwh({ distanceKm: distanceDeltaKm });
+  const batteryDeltaPercent = getBatteryPercentFromKwh(robotaxi, batteryDeltaKwh);
   const batteryConsumedPercent = Number((Number(execution.battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2));
+  const batteryConsumedKwh = Number((Number(execution.battery_consumed_kwh || 0) + batteryDeltaKwh).toFixed(2));
   const nextRobotaxi = robotaxi ? applyTravelDelta(robotaxi, {
     distanceDeltaKm,
     batteryDeltaPercent,
+    batteryDeltaKwh,
     currentCellId: nextCellId,
     routeId: execution.route_id,
     taskId: execution.task_id || task.task_id,
@@ -205,6 +211,7 @@ export function advanceRouteExecution({ execution, task, route, robotaxi }) {
       ...execution,
       ...nextExecution,
       battery_consumed_percent: batteryConsumedPercent,
+      battery_consumed_kwh: batteryConsumedKwh,
     },
     task: completed ? { ...task, task_status: taskTypes.DeploymentTaskStatus.ARRIVED } : task,
     robotaxi: nextRobotaxi,
@@ -253,13 +260,14 @@ export function completeRouteExecutionTravel({ execution, task, route, robotaxi,
     distance_remaining_km: 0,
   };
   const distanceDeltaKm = roundDistance(Math.max(0, Number(nextExecution.distance_traveled_km || 0) - Number(execution.distance_traveled_km || 0)));
-  const batteryDeltaPercent = robotaxi?.max_range_km
-    ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2))
-    : 0;
+  const batteryDeltaKwh = calculateBatteryConsumedKwh({ distanceKm: distanceDeltaKm });
+  const batteryDeltaPercent = getBatteryPercentFromKwh(robotaxi, batteryDeltaKwh);
   const batteryConsumedPercent = Number((Number(execution.battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2));
+  const batteryConsumedKwh = Number((Number(execution.battery_consumed_kwh || 0) + batteryDeltaKwh).toFixed(2));
   const nextRobotaxi = robotaxi ? applyTravelDelta(robotaxi, {
     distanceDeltaKm,
     batteryDeltaPercent,
+    batteryDeltaKwh,
     currentCellId: nextExecution.current_cell_id,
     routeId: execution.route_id,
     taskId: execution.task_id || task?.task_id,
@@ -269,6 +277,7 @@ export function completeRouteExecutionTravel({ execution, task, route, robotaxi,
     execution: {
       ...nextExecution,
       battery_consumed_percent: batteryConsumedPercent,
+      battery_consumed_kwh: batteryConsumedKwh,
     },
     task: task ? { ...task, task_status: taskTypes.DeploymentTaskStatus.ARRIVED } : task,
     robotaxi: nextRobotaxi,

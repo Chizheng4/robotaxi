@@ -72,6 +72,11 @@ export function validateOperationsCenter(data) {
       "estimated_range_km 必须由 battery_percent 和 max_range_km 计算得到",
       data.robotaxis.every((robotaxi) => robotaxi.estimated_range_km === robotaxi.max_range_km * robotaxi.battery_percent / 100),
     ),
+    check(
+      "ROBOTAXI_CURRENT_BATTERY_CALCULATION",
+      "current_battery_kwh 必须由 battery_capacity_kwh 和 battery_percent 计算得到",
+      data.robotaxis.every((robotaxi) => robotaxi.current_battery_kwh === robotaxi.battery_capacity_kwh * robotaxi.battery_percent / 100),
+    ),
     check("WORKER_COUNT", "Worker 数量必须为 10", (data.workers || []).length === 10, `当前 ${(data.workers || []).length} 个 Worker`),
     check("WORKER_ID_UNIQUE", "每个 Worker 必须有唯一 worker_id", new Set(workerIds).size === workerIds.length),
     check("WORKER_IN_OPS_CENTER", "每个 Worker 必须属于运营中心", (data.workers || []).every((worker) => worker.ops_center_id === opsCenter?.ops_center_id)),

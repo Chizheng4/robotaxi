@@ -11,8 +11,13 @@
 
 import * as tripTypes from "../domain/tripTypes.js";
 import { DEFAULT_CELL_TRAVEL_SECONDS, calculateTravelDistanceMetrics } from "./routePlanningService.js";
+import {
+  DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM,
+  calculateBatteryConsumedKwh,
+} from "./robotaxiStateService.js";
 
 const DEFAULT_REFERENCE_RANGE_KM = 400;
+const DEFAULT_REFERENCE_BATTERY_KWH = 75;
 
 // ============================================================================
 // 1. 行驶步数推进（Movement）
@@ -38,7 +43,7 @@ export function getNextTripMovementState(trip, data) {
     { ...trip, current_step_index: nextStepIndex },
     data.routes || [],
   );
-  const batteryConsumedPercent = calculateTripBatteryConsumedPercent(trip, distanceMetrics.distance_traveled_km);
+  const energyMetrics = calculateTripEnergyMetrics(trip, distanceMetrics.distance_traveled_km);
 
   const nextStatus = reachedTarget
     ? (trip.trip_status === tripTypes.TripStatus.ON_THE_WAY_PICKUP
@@ -60,7 +65,8 @@ export function getNextTripMovementState(trip, data) {
     total_distance_km: distanceMetrics.total_distance_km,
     distance_traveled_km: distanceMetrics.distance_traveled_km,
     distance_remaining_km: distanceMetrics.distance_remaining_km,
-    battery_consumed_percent: batteryConsumedPercent,
+    battery_consumed_kwh: energyMetrics.batteryConsumedKwh,
+    battery_consumed_percent: energyMetrics.batteryConsumedPercent,
     time_elapsed: addElapsedMinutes(trip.time_elapsed, DEFAULT_CELL_TRAVEL_SECONDS / 60),
     arrival_execution_result: reachedTarget && nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION
       ? "NORMAL_ARRIVAL" : trip.arrival_execution_result,
@@ -91,7 +97,7 @@ export function projectTripTravelProgress(trip, data, elapsedSeconds = 0, option
     { ...trip, current_step_index: currentStepIndex },
     data.routes || [],
   );
-  const batteryConsumedPercent = calculateTripBatteryConsumedPercent(trip, distanceMetrics.distance_traveled_km);
+  const energyMetrics = calculateTripEnergyMetrics(trip, distanceMetrics.distance_traveled_km);
   return {
     ...trip,
     current_cell_id: currentStep?.cell_id || trip.current_cell_id,
@@ -100,7 +106,8 @@ export function projectTripTravelProgress(trip, data, elapsedSeconds = 0, option
     total_distance_km: distanceMetrics.total_distance_km,
     distance_traveled_km: distanceMetrics.distance_traveled_km,
     distance_remaining_km: distanceMetrics.distance_remaining_km,
-    battery_consumed_percent: batteryConsumedPercent,
+    battery_consumed_kwh: energyMetrics.batteryConsumedKwh,
+    battery_consumed_percent: energyMetrics.batteryConsumedPercent,
     time_elapsed: String(roundDuration((Number(elapsedSeconds) || 0) / 60)),
   };
 }
@@ -127,7 +134,8 @@ export function completeTripTravel(trip, data, options = {}) {
     current_step_index: totalStepCount,
     distance_traveled_km: projected.total_distance_km,
     distance_remaining_km: 0,
-    battery_consumed_percent: calculateTripBatteryConsumedPercent(trip, projected.total_distance_km),
+    battery_consumed_kwh: calculateTripEnergyMetrics(trip, projected.total_distance_km).batteryConsumedKwh,
+    battery_consumed_percent: calculateTripEnergyMetrics(trip, projected.total_distance_km).batteryConsumedPercent,
     arrival_execution_result: nextStatus === tripTypes.TripStatus.ARRIVED_DESTINATION
       ? "NORMAL_ARRIVAL"
       : trip.arrival_execution_result,
@@ -149,6 +157,18 @@ function calculateTripBatteryConsumedPercent(trip, distanceTraveledKm) {
   const referenceRangeKm = Number(trip?.robotaxi_max_range_km || trip?.max_range_km || DEFAULT_REFERENCE_RANGE_KM);
   if (!Number.isFinite(referenceRangeKm) || referenceRangeKm <= 0) return Number(trip?.battery_consumed_percent || 0);
   return Number((Math.max(0, Number(distanceTraveledKm) || 0) / referenceRangeKm * 100).toFixed(2));
+}
+
+function calculateTripEnergyMetrics(trip, distanceTraveledKm) {
+  const batteryConsumedKwh = calculateBatteryConsumedKwh({
+    distanceKm: distanceTraveledKm,
+    energyConsumptionKwhPerKm: trip?.energy_consumption_kwh_per_km || DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM,
+  });
+  const capacity = Number(trip?.robotaxi_battery_capacity_kwh || trip?.battery_capacity_kwh || DEFAULT_REFERENCE_BATTERY_KWH);
+  const batteryConsumedPercent = capacity > 0
+    ? Number((batteryConsumedKwh / capacity * 100).toFixed(2))
+    : calculateTripBatteryConsumedPercent(trip, distanceTraveledKm);
+  return { batteryConsumedKwh, batteryConsumedPercent };
 }
 
 // ============================================================================

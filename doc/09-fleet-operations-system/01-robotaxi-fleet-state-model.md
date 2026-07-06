@@ -21,13 +21,13 @@
 |状态|含义|
 |---|---|
 |PENDING_INSPECTION|待运营准入检查|
-|AVAILABLE|可参与运营|
-|UNAVAILABLE|不可参与运营|
+|AVAILABLE|可运营|
+|UNAVAILABLE|运维中|
 |RETIRED|已退役，不再进入运营|
 
-### 2.2 motion_status：物理运动状态
+### 2.2 motion_status：运动状态
 
-表示车辆物理运动形态。
+表示车辆运动形态。
 
 |状态|含义|
 |---|---|

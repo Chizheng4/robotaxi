@@ -96,6 +96,7 @@ let orderMatchingDecisionSequence = 0;
 let tripSequence = 0;
 let eventSequence = 0;
 const unfinishedTaskStatuses = new Set(["WAITING_ASSIGNMENT", "WAITING_CHECK", "CHECKING"]);
+const DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM = 0.16;
 const unfinishedDeploymentStatuses = new Set(["WAITING_ROUTE", "WAITING_START", "MOVING", "ARRIVED", "ARRIVAL_ABNORMAL"]);
 const pageGroups = [{
   key: "console",
@@ -534,7 +535,7 @@ const tableConfig = {
   routeExecutions: {
     title: "运营行驶记录",
     description: "记录 Robotaxi 执行任务时的模拟行驶过程。",
-    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_strategy_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "planned_target_service_area_id", "current_target_service_area_id", "actual_target_service_area_id", "arrival_execution_result", "route_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "created_at", "simulation_created_at"]
+    columns: ["route_execution_id", "execution_status", "task_id", "task_type", "robotaxi_id", "route_id", "route_strategy_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "planned_target_service_area_id", "current_target_service_area_id", "actual_target_service_area_id", "arrival_execution_result", "route_summary", "current_cell_id", "current_location_summary", "current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "battery_consumed_kwh", "time_elapsed", "created_at", "simulation_created_at"]
   },
   taskEventLogs: {
     title: "任务事件日志",
@@ -584,12 +585,12 @@ const tableConfig = {
   serviceFulfillmentRecords: {
     title: "履约行驶记录",
     description: "履约行驶记录用于模拟 Robotaxi 执行客户服务订单的接驾、载客和完成过程。",
-    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "battery_consumed_percent", "time_elapsed", "route_id", "created_at", "simulation_created_at"]
+    columns: ["trip_id", "trip_status", "service_order_id", "robotaxi_id", "pickup_cell_id", "dropoff_cell_id", "current_cell_id", "trip_phase", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "battery_consumed_kwh", "time_elapsed", "route_id", "created_at", "simulation_created_at"]
   },
   robotaxis: {
     title: "Robotaxi 管理",
     description: "Robotaxi 是等待运维检查后进入运营闭环的自动驾驶车辆资产。",
-    columns: ["robotaxi_id", "fleet_id", "availability_status", "motion_status", "battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_percent", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count", "current_cell_id", "location_summary", "current_task_type", "current_task_status", "current_order_id", "pending_task_queue", "operation_blocking_reason"]
+    columns: ["robotaxi_id", "fleet_id", "availability_status", "motion_status", "max_range_km", "battery_capacity_kwh", "current_battery_kwh", "battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_kwh", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count", "current_cell_id", "location_summary", "current_task_id", "current_task_type", "current_task_status", "current_order_id", "pending_task_queue", "operation_blocking_reason"]
   },
   validations: {
     title: "初始化校验",
@@ -4234,6 +4235,7 @@ function App() {
         current_target_service_area_id: execution.planned_target_service_area_id || task.planned_target_service_area_id || task.target_service_area_id,
         route_history: [createRouteHistoryEntry(route, taskTypes.RouteChangeReason.INITIAL_PLANNING, null)],
         time_elapsed: "0",
+        battery_consumed_kwh: 0,
         battery_consumed_percent: 0,
         started_at: now(),
         completed_at: null,
@@ -4485,8 +4487,10 @@ function App() {
     });
     const distanceDeltaKm = Number(Math.max(0, Number(nextExecutionMetrics.distance_traveled_km || 0) - Number(execution.distance_traveled_km || 0)).toFixed(2));
     const robotaxi = data.robotaxis.find(item => item.robotaxi_id === execution.robotaxi_id);
-    const batteryDeltaPercent = robotaxi?.max_range_km ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2)) : 0;
+    const batteryDeltaKwh = Number((distanceDeltaKm * DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM).toFixed(2));
+    const batteryDeltaPercent = robotaxi?.battery_capacity_kwh ? Number((batteryDeltaKwh / robotaxi.battery_capacity_kwh * 100).toFixed(2)) : robotaxi?.max_range_km ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2)) : 0;
     const batteryConsumedPercent = Number((Number(execution.battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2));
+    const batteryConsumedKwh = Number((Number(execution.battery_consumed_kwh || 0) + batteryDeltaKwh).toFixed(2));
     setRouteExecutions(items => items.map(item => item.route_execution_id === routeExecutionId ? {
       ...item,
       execution_status: completed ? taskTypes.RouteExecutionStatus.ARRIVED : taskTypes.RouteExecutionStatus.MOVING,
@@ -4496,6 +4500,7 @@ function App() {
       distance_traveled_km: nextExecutionMetrics.distance_traveled_km,
       distance_remaining_km: nextExecutionMetrics.distance_remaining_km,
       time_elapsed: `${nextStepIndex}`,
+      battery_consumed_kwh: batteryConsumedKwh,
       battery_consumed_percent: batteryConsumedPercent
     } : item));
     setOperationalData(current => ({
@@ -4507,8 +4512,10 @@ function App() {
         current_task_id: execution.task_id,
         motion_status: completed ? "STOPPED" : "MOVING",
         battery_percent: Number(Math.max(0, item.battery_percent - batteryDeltaPercent).toFixed(2)),
+        current_battery_kwh: Number(Math.max(0, Number(item.current_battery_kwh ?? item.battery_capacity_kwh * item.battery_percent / 100) - batteryDeltaKwh).toFixed(2)),
         estimated_range_km: Number(Math.max(0, item.estimated_range_km - distanceDeltaKm).toFixed(2)),
         lifetime_distance_km: Number((Number(item.lifetime_distance_km || 0) + distanceDeltaKm).toFixed(2)),
+        lifetime_battery_consumed_kwh: Number((Number(item.lifetime_battery_consumed_kwh || 0) + batteryDeltaKwh).toFixed(2)),
         lifetime_battery_consumed_percent: Number((Number(item.lifetime_battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2))
       } : item)
     }));
@@ -4777,6 +4784,7 @@ function App() {
       distance_traveled_km: 0,
       distance_remaining_km: 0,
       time_elapsed: "0",
+      battery_consumed_kwh: 0,
       battery_consumed_percent: 0,
       started_at: null,
       completed_at: null,
@@ -5655,7 +5663,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "asset",
       label: "资产事实",
-      keys: ["battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_percent", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count"]
+      keys: ["max_range_km", "battery_capacity_kwh", "current_battery_kwh", "battery_percent", "estimated_range_km", "lifetime_distance_km", "lifetime_battery_consumed_kwh", "completed_service_order_count", "completed_cleaning_count", "completed_charging_count", "completed_maintenance_count"]
     }, {
       key: "task",
       label: "任务状态",
@@ -5778,7 +5786,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "work",
       label: "作业信息",
-      keys: ["worker_id", "charger_id", "maintenance_type", "clean_level_before", "clean_level_after", "battery_percent_before", "target_battery_percent", "battery_percent_after", "failure_type", "failure_severity", "diagnosis_result", "disposition_result", "repair_result", "requires_readiness_check", "retirement_reason", "approval_status", "asset_exit_result"]
+      keys: ["worker_id", "charger_id", "maintenance_type", "clean_level_before", "clean_level_after", "battery_percent_before", "target_battery_percent", "battery_percent_after", "charged_energy_kwh", "failure_type", "failure_severity", "diagnosis_result", "disposition_result", "repair_result", "requires_readiness_check", "retirement_reason", "approval_status", "asset_exit_result"]
     }, {
       key: "time",
       label: "时间与来源",
@@ -5807,7 +5815,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "progress",
       label: "行驶进度",
-      keys: ["current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "battery_consumed_percent"]
+      keys: ["current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "battery_consumed_kwh", "time_elapsed"]
     }, {
       key: "route",
       label: "路径信息",
@@ -5873,7 +5881,7 @@ function getDetailTabs(selectedType) {
     }, {
       key: "progress",
       label: "行驶进度",
-      keys: ["current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "time_elapsed", "arrival_execution_result", "exception_type"]
+      keys: ["current_step_index", "total_step_count", "total_distance_km", "distance_traveled_km", "distance_remaining_km", "battery_consumed_kwh", "time_elapsed", "arrival_execution_result", "exception_type"]
     }, {
       key: "route",
       label: "路径信息",
@@ -8254,10 +8262,12 @@ function enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTask
   const currentTask = findCurrentTask(robotaxi.current_task_id, readinessTasks, deploymentTasks);
   const currentRouteExecution = findCurrentRouteExecution(robotaxi, routeExecutions);
   const location = getLocationInfo(robotaxi.current_cell_id, data);
+  const hasCurrentTaskReference = Boolean(currentTask || robotaxi.current_order_id || currentRouteExecution);
   return {
     ...robotaxi,
-    current_task_type: currentTask?.task_type || robotaxi.current_task_type || null,
-    current_task_status: currentTask?.task_status || robotaxi.current_task_status || null,
+    current_task_id: currentTask?.task_id || (hasCurrentTaskReference ? robotaxi.current_task_id || currentRouteExecution?.task_id || null : null),
+    current_task_type: currentTask?.task_type || currentRouteExecution?.task_type || null,
+    current_task_status: currentTask?.task_status || currentRouteExecution?.execution_status || null,
     current_route_execution_id: currentRouteExecution?.route_execution_id || null,
     location_summary: location.summary
   };
@@ -8489,7 +8499,10 @@ function updateRobotaxiForTrip(robotaxi, trip, previousTrip = {}) {
   const completed = trip.trip_status === "COMPLETED";
   const waitingDecision = trip.trip_status === "WAITING_OPERATION_DECISION";
   const distanceDeltaKm = Number(Math.max(0, Number(trip.distance_traveled_km || 0) - Number(previousTrip.distance_traveled_km || 0)).toFixed(2));
-  const batteryDeltaPercent = robotaxi.max_range_km ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2)) : Number(Math.max(0, Number(trip.battery_consumed_percent || 0) - Number(previousTrip.battery_consumed_percent || 0)).toFixed(2));
+  const batteryDeltaKwh = Number(Math.max(0, Number(trip.battery_consumed_kwh || 0) - Number(previousTrip.battery_consumed_kwh || 0)).toFixed(2));
+  const fallbackBatteryDeltaKwh = Number((distanceDeltaKm * DEFAULT_ENERGY_CONSUMPTION_KWH_PER_KM).toFixed(2));
+  const nextBatteryDeltaKwh = batteryDeltaKwh || fallbackBatteryDeltaKwh;
+  const batteryDeltaPercent = robotaxi.battery_capacity_kwh ? Number((nextBatteryDeltaKwh / robotaxi.battery_capacity_kwh * 100).toFixed(2)) : robotaxi.max_range_km ? Number((distanceDeltaKm / robotaxi.max_range_km * 100).toFixed(2)) : Number(Math.max(0, Number(trip.battery_consumed_percent || 0) - Number(previousTrip.battery_consumed_percent || 0)).toFixed(2));
   const completedNow = completed && previousTrip.trip_status !== "COMPLETED";
   return {
     ...robotaxi,
@@ -8500,8 +8513,10 @@ function updateRobotaxiForTrip(robotaxi, trip, previousTrip = {}) {
     motion_status: completed || waitingDecision ? "STOPPED" : movingStatuses.includes(trip.trip_status) ? "MOVING" : "STOPPED",
     available_for_dispatch: completed,
     battery_percent: Number(Math.max(0, Number(robotaxi.battery_percent || 0) - batteryDeltaPercent).toFixed(2)),
+    current_battery_kwh: Number(Math.max(0, Number(robotaxi.current_battery_kwh ?? robotaxi.battery_capacity_kwh * robotaxi.battery_percent / 100) - nextBatteryDeltaKwh).toFixed(2)),
     estimated_range_km: Number(Math.max(0, Number(robotaxi.estimated_range_km || 0) - distanceDeltaKm).toFixed(2)),
     lifetime_distance_km: Number((Number(robotaxi.lifetime_distance_km || 0) + distanceDeltaKm).toFixed(2)),
+    lifetime_battery_consumed_kwh: Number((Number(robotaxi.lifetime_battery_consumed_kwh || 0) + nextBatteryDeltaKwh).toFixed(2)),
     lifetime_battery_consumed_percent: Number((Number(robotaxi.lifetime_battery_consumed_percent || 0) + batteryDeltaPercent).toFixed(2)),
     completed_service_order_count: completedNow ? Number(robotaxi.completed_service_order_count || 0) + 1 : robotaxi.completed_service_order_count || 0
   };

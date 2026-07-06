@@ -66,6 +66,7 @@ export function createRobotaxi(robotaxi) {
     pending_fleet_task_id: null,
     last_health_check_at: null,
     lifetime_distance_km: 0,
+    lifetime_battery_consumed_kwh: 0,
     lifetime_battery_consumed_percent: 0,
     completed_service_order_count: 0,
     completed_cleaning_count: 0,

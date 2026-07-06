@@ -78,7 +78,7 @@ export function validateReadinessCheckTasks(data) {
     ),
     check(
       "READINESS_PASSED_ROBOTAXI_AVAILABLE",
-      "检查通过后 Robotaxi 必须可参与运营",
+      "检查通过后 Robotaxi 必须可运营",
       data.readinessCheckTasks.every((task) => task.check_result !== CheckResult.PASSED || robotaxiById.get(task.robotaxi_id)?.availability_status === AvailabilityStatus.AVAILABLE),
     ),
     check(

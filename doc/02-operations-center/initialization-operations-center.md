@@ -30,7 +30,7 @@ Codex 应基于以下文档理解对象定义：
 |Worker 数量|10 个|
 |初始位置|OpsCenter 覆盖 Cell 内|
 |初始运营可用状态|PENDING_INSPECTION|
-|初始物理运动状态|PARKED|
+|初始运动状态|PARKED|
 |初始任务|无|
 |初始路径|无|
 

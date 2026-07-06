@@ -27,6 +27,8 @@ import * as robotaxiTaskPlanningService from "./robotaxiTaskPlanningService.js";
 import * as costModelCalculator from "../data/costModelCalculator.js";
 import {
   getCompletedCounterKeyForFleetTask,
+  getBatteryKwhFromPercent,
+  getCurrentBatteryKwh,
   incrementCompletedCounter,
   markAvailable,
   markInFleetOperation,
@@ -513,6 +515,7 @@ export function planFleetOperationRoute({
       total_step_count: Math.max(0, routeCellIds.length - 1),
       route_history: [routePlanningService.createRouteHistoryEntry(route, RouteChangeReason.INITIAL_PLANNING, null)],
       time_elapsed: "0",
+      battery_consumed_kwh: 0,
       battery_consumed_percent: 0,
       simulation_run_id: task.simulation_run_id || null,
       created_at: now,
@@ -656,6 +659,7 @@ export function replanFleetOperationRouteAfterAbnormalArrival({
         routePlanningService.createRouteHistoryEntry(route, RouteChangeReason.ABNORMAL_ARRIVAL_REPLAN, execution.arrival_execution_result || task.arrival_execution_result || null),
       ],
       time_elapsed: "0",
+      battery_consumed_kwh: 0,
       battery_consumed_percent: 0,
       completed_at: null,
       failure_reason: null,
@@ -1164,6 +1168,11 @@ function completeChargingWork({ task, robotaxi, now, context = {} }) {
     };
   }
   if (task.task_status === ChargingTaskStatus.CHARGING) {
+    const targetBatteryPercent = Number(task.target_battery_percent || 100);
+    const batteryPercentBefore = Number(task.battery_percent_before ?? robotaxi.battery_percent ?? 0);
+    const targetBatteryKwh = getBatteryKwhFromPercent(robotaxi, targetBatteryPercent);
+    const currentBatteryKwh = getCurrentBatteryKwh(robotaxi);
+    const chargedEnergyKwh = Number(Math.max(0, targetBatteryKwh - currentBatteryKwh).toFixed(2));
     return {
       succeeded: true,
       task: withFleetOperationLifecycleStatus({
@@ -1172,6 +1181,10 @@ function completeChargingWork({ task, robotaxi, now, context = {} }) {
         worker_id: null,
         assigned_worker_id: null,
         charging_phase: "DISCONNECT_REQUIRED",
+        battery_percent_before: batteryPercentBefore,
+        target_battery_percent: targetBatteryPercent,
+        battery_percent_after: targetBatteryPercent,
+        charged_energy_kwh: chargedEnergyKwh,
         charging_completed_at: now,
         updated_at: now,
       }, {
@@ -1187,8 +1200,9 @@ function completeChargingWork({ task, robotaxi, now, context = {} }) {
       robotaxi: {
         ...robotaxi,
         current_task_status: ChargingTaskStatus.WAITING_CHARGER_ASSIGNMENT,
-        battery_percent: 100,
-        estimated_range_km: Number(robotaxi.max_range_km || robotaxi.estimated_range_km || 0),
+        battery_percent: targetBatteryPercent,
+        current_battery_kwh: targetBatteryKwh,
+        estimated_range_km: Number((Number(robotaxi.max_range_km || robotaxi.estimated_range_km || 0) * targetBatteryPercent / 100).toFixed(2)),
         battery_operation_status: BatteryOperationStatus.ENOUGH,
         updated_at: now,
       },
@@ -1395,6 +1409,7 @@ function restoreRobotaxiAfterFleetOperation(robotaxi, task, now) {
       ...restored,
       needs_charging: false,
       battery_percent: 100,
+      current_battery_kwh: Number(robotaxi.battery_capacity_kwh || robotaxi.current_battery_kwh || 0),
       estimated_range_km: Number(robotaxi.max_range_km || robotaxi.estimated_range_km || 0),
       battery_operation_status: BatteryOperationStatus.ENOUGH,
     };
