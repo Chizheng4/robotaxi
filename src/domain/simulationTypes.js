@@ -4,8 +4,8 @@ import { formatSimulationTimestamp, getSimulationPosition } from "./simulationTi
  * Simulation System 类型定义
  *
  * 定义自动运营模拟系统的核心枚举和对象结构。
- * 参考文档：doc/08-simulation-system/01-simulation-runtime/02-simulation-run.md
- *           doc/08-simulation-system/01-simulation-runtime/04-simulation-policy.md
+ * 参考文档：doc/09-simulation-system/01-simulation-runtime/02-simulation-run.md
+ *           doc/09-simulation-system/01-simulation-runtime/04-simulation-policy.md
  */
 
 // ============================================================================

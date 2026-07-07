@@ -524,25 +524,25 @@
 |TRIP_DESTINATION_MOVE|履约送达行驶状态边|工作流状态边|
 |TRIP_DROPOFF|履约客户下车状态边|工作流状态边|
 |CLEANING_DESTINATION_ASSIGN|清洁分配目的站点状态边|工作流状态边|
-|CLEANING_ROUTE_PLAN|清洁路径规划投影状态边|工作流状态边|
-|CLEANING_ROUTE_MOVE|清洁行驶推进投影状态边|工作流状态边|
-|CLEANING_ROUTE_ARRIVAL|清洁到达确认投影状态边|工作流状态边|
+|CLEANING_ROUTE_PLAN|清洁路径规划结果状态边|工作流状态边|
+|CLEANING_ROUTE_MOVE|清洁行驶进展结果状态边|工作流状态边|
+|CLEANING_ROUTE_ARRIVAL|清洁到达结果状态边|工作流状态边|
 |CLEANING_WORKER_ASSIGN|清洁分配 Worker 状态边|工作流状态边|
 |CLEANING_WORK_START|清洁开始状态边|工作流状态边|
 |CLEANING_WORK_COMPLETE|清洁完成状态边|工作流状态边|
 |CHARGING_DESTINATION_ASSIGN|充电分配目的站点状态边|工作流状态边|
-|CHARGING_ROUTE_PLAN|充电路径规划投影状态边|工作流状态边|
-|CHARGING_ROUTE_MOVE|充电行驶推进投影状态边|工作流状态边|
-|CHARGING_ROUTE_ARRIVAL|充电到达确认投影状态边|工作流状态边|
+|CHARGING_ROUTE_PLAN|充电路径规划结果状态边|工作流状态边|
+|CHARGING_ROUTE_MOVE|充电行驶进展结果状态边|工作流状态边|
+|CHARGING_ROUTE_ARRIVAL|充电到达结果状态边|工作流状态边|
 |CHARGING_WORKER_ASSIGN_CONNECT|充电接入分配 Worker 状态边|工作流状态边|
 |CHARGING_CONNECT|接入充电头状态边|工作流状态边|
 |CHARGING_COMPLETE|充电完成状态边|工作流状态边|
 |CHARGING_WORKER_ASSIGN_DISCONNECT|断开电源分配 Worker 状态边|工作流状态边|
 |CHARGING_DISCONNECT|断开电源状态边|工作流状态边|
 |MAINTENANCE_DESTINATION_ASSIGN|维修分配目的站点状态边|工作流状态边|
-|MAINTENANCE_ROUTE_PLAN|维修路径规划投影状态边|工作流状态边|
-|MAINTENANCE_ROUTE_MOVE|维修行驶推进投影状态边|工作流状态边|
-|MAINTENANCE_ROUTE_ARRIVAL|维修到达确认投影状态边|工作流状态边|
+|MAINTENANCE_ROUTE_PLAN|维修路径规划结果状态边|工作流状态边|
+|MAINTENANCE_ROUTE_MOVE|维修行驶进展结果状态边|工作流状态边|
+|MAINTENANCE_ROUTE_ARRIVAL|维修到达结果状态边|工作流状态边|
 |MAINTENANCE_WORKER_ASSIGN|维修分配 Worker 状态边|工作流状态边|
 |MAINTENANCE_WORK_START|维修开始状态边|工作流状态边|
 |MAINTENANCE_WORK_COMPLETE|维修完成状态边|工作流状态边|
@@ -552,9 +552,9 @@
 |RETIREMENT_APPROVE_AT_CENTER|退役确认后直接处理状态边|工作流状态边|
 |RETIREMENT_REJECT|退役驳回状态边|工作流状态边|
 |RETIREMENT_DESTINATION_ASSIGN|退役分配目的站点状态边|工作流状态边|
-|RETIREMENT_ROUTE_PLAN|退役路径规划投影状态边|工作流状态边|
-|RETIREMENT_ROUTE_MOVE|退役行驶推进投影状态边|工作流状态边|
-|RETIREMENT_ROUTE_ARRIVAL|退役到达确认投影状态边|工作流状态边|
+|RETIREMENT_ROUTE_PLAN|退役路径规划结果状态边|工作流状态边|
+|RETIREMENT_ROUTE_MOVE|退役行驶进展结果状态边|工作流状态边|
+|RETIREMENT_ROUTE_ARRIVAL|退役到达结果状态边|工作流状态边|
 |RETIREMENT_PROCESS_COMPLETE|退役处理完成状态边|工作流状态边|
 
 ---
@@ -1145,7 +1145,7 @@
 说明：
 
 - 位置类展示字段均由 CellContext 推导，不作为业务对象冗余存储字段；
-- Route 是路径规划策略执行后的路径结果，主定义见 `doc/05-dispatch-trip/02-route.md`；
+- Route 是路径规划策略执行后的路径结果，主定义见 `doc/05-fleet-asset-management/03-route.md`；
 - Route 不再作为空间模型中的静态对象维护。
 
 ---

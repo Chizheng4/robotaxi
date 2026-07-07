@@ -6,6 +6,6 @@ Route 不再作为地图空间中的静态对象维护。
 
 Route 的主定义已迁移至：
 
-`doc/05-dispatch-trip/02-route.md`
+`doc/05-fleet-asset-management/03-route.md`
 
 空间模型只保留 Map、Cell、Road、RoadNode、RoadSegment、Place、ServiceArea、Zone 等底层空间与道路网络对象。

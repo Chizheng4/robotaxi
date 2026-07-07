@@ -4,7 +4,7 @@
  * 按 Tick 编排供应侧、需求侧和业务对象推进的执行顺序。
  * 本模块负责调度顺序，不执行业务逻辑。
  *
- * 参考文档：doc/08-simulation-system/01-simulation-runtime/07-simulation-loop.md
+ * 参考文档：doc/09-simulation-system/01-simulation-runtime/07-simulation-loop.md
  */
 
 import { SimulationStatus } from "../domain/simulationTypes.js";

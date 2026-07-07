@@ -2,8 +2,8 @@
  * Simulation Engine：模拟运行管理
  *
  * 管理 SimulationRun 生命周期和 SimulationEvent 记录。
- * 参考文档：doc/08-simulation-system/01-simulation-runtime/02-simulation-run.md
- *           doc/08-simulation-system/01-simulation-runtime/03-simulation-event.md
+ * 参考文档：doc/09-simulation-system/01-simulation-runtime/02-simulation-run.md
+ *           doc/09-simulation-system/01-simulation-runtime/03-simulation-event.md
  */
 
 import {

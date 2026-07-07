@@ -4,7 +4,7 @@
  * 维护业务单据的闭环流转规则表。
  * SimulationLoop 每 Tick 查询此表，获取应触发的动作列表。
  *
- * 参考文档：doc/08-simulation-system/02-workflow-engine/
+ * 参考文档：doc/09-simulation-system/02-workflow-engine/
  */
 
 import { getExecutableTransitions } from "../domain/workflowTransitionRegistry.js";

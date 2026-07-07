@@ -2,7 +2,7 @@
  * Simulation 校验
  *
  * 校验 SimulationPolicy 配置完整性。
- * 参考文档：doc/08-simulation-system/01-simulation-runtime/initialization-simulation.md § 19
+ * 参考文档：doc/09-simulation-system/01-simulation-runtime/initialization-simulation.md § 19
  */
 
 import { PolicyStatus } from "../domain/simulationTypes.js";

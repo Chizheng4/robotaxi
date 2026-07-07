@@ -4,7 +4,7 @@
  * 根据模拟时间上下文和 DemandProfile 配置，使用 Poisson 分布生成订单数量。
  * 本模块只计算"生成多少订单"，不执行订单创建（由 ExecutionEngine 分发）。
  *
- * 参考文档：doc/08-simulation-system/01-simulation-runtime/06-demand-trigger.md
+ * 参考文档：doc/09-simulation-system/01-simulation-runtime/06-demand-trigger.md
  */
 
 import { DistributionType } from "../domain/simulationTypes.js";

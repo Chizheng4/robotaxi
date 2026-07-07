@@ -5,7 +5,7 @@
  * 本模块只产出 Action，不执行具体业务逻辑（由 ExecutionEngine 分发）。
  * RouteExecution 推进不属于 SupplyTrigger 范围，由 WorkflowEngine 负责。
  *
- * 参考文档：doc/08-simulation-system/01-simulation-runtime/05-supply-trigger.md
+ * 参考文档：doc/09-simulation-system/01-simulation-runtime/05-supply-trigger.md
  */
 
 import { SECONDS_PER_DAY, clockTimeToSeconds } from "../domain/simulationTime.js";

@@ -351,7 +351,7 @@ Route 是路径规划策略执行后的路径结果，由 RoutePlanningStrategy 
 Route 主定义见：
 
 ```text
-doc/05-dispatch-trip/02-route.md
+doc/05-fleet-asset-management/03-route.md
 ```
 
 ---
@@ -385,7 +385,7 @@ Map
 |---|---|
 |Zone|Zone|
 |OperatingLocation|ServiceArea|
-|Route|已迁移为路径规划结果，见 doc/05-dispatch-trip/02-route.md|
+|Route|已迁移为路径规划结果，见 doc/05-fleet-asset-management/03-route.md|
 
 新增对象：
 

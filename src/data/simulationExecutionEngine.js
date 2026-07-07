@@ -4,7 +4,7 @@
  * 维护动作类型到业务函数的映射表。
  * 接收 WorkflowEngine 输出的动作，分发到对应业务函数执行。
  *
- * 参考文档：doc/08-simulation-system/03-execution-engine/01-execution-engine.md
+ * 参考文档：doc/09-simulation-system/03-execution-engine/01-execution-engine.md
  */
 
 // ============================================================================

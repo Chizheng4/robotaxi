@@ -2,7 +2,7 @@
  * Simulation 初始化
  *
  * 初始化默认 SimulationPolicy，供 SimulationRun 创建时引用。
- * 参考文档：doc/08-simulation-system/01-simulation-runtime/initialization-simulation.md
+ * 参考文档：doc/09-simulation-system/01-simulation-runtime/initialization-simulation.md
  */
 
 import {
