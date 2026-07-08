@@ -8,7 +8,14 @@ ReadinessCheckTask 是用于确认单台 Robotaxi 是否具备进入运营闭环
 ReadinessCheckTask = 单台 Robotaxi 的运营准入任务单
 ```
 
-它发生在 Robotaxi 到达 OpsCenter 后、正式投放到运营区域之前。
+它主要发生在 Robotaxi 从供给形成阶段进入运营阶段之前。
+
+当前阶段的默认业务含义：
+
+- 初始 Robotaxi 进入企业运营体系后，必须通过运营准入才能变为可运营；
+- 运营准入通过后，Robotaxi 才能进入运营投放、服务订单匹配和运营保障任务；
+- 维修、故障处理完成后默认直接恢复可运营，不自动追加一次准入；
+- 如未来需要“重大维修后复核”“事故后复核”等场景，应作为可配置准入复核规则扩展，而不是当前默认闭环。
 
 ---
 
@@ -28,7 +35,7 @@ ReadinessCheckTask 执行检查生命周期
 RobotaxiService 根据检查结果回写可运营状态
 ```
 
-这样维修、故障恢复、新车上线、人工复核和后续上层自动化都可以复用同一套准入闭环。
+这样新车上线、人工复核、供给进入和未来可配置复核都可以复用同一套准入闭环。
 
 ---
 
@@ -67,7 +74,7 @@ ReadinessCheckTask 支持多种触发来源，但创建逻辑必须统一。
 |---|---|
 |AUTO|系统按运营配置扫描候选 Robotaxi|
 |MANUAL|人工点击按钮触发|
-|TASK_RESULT|维修、故障处理、退役取消等任务结果触发|
+|TASK_RESULT|未来可配置的上游任务结果触发，当前默认不由维修或故障完成自动触发|
 
 所有触发方式共用同一套后续逻辑：
 
@@ -146,7 +153,7 @@ ROBOTAXI_ALREADY_HAS_PENDING_CHECK_TASK
 |trigger_type|触发方式|AUTO / MANUAL|
 |source_type|来源类型|固定为 OPS_CENTER|
 |source_id|来源编号|OpsCenter ID|
-|source_task_id|来源任务编号|维修、故障处理等来源任务，可为空|
+|source_task_id|来源任务编号|未来可配置复核的来源任务，可为空|
 |robotaxi_id|Robotaxi 编号|被检查 Robotaxi|
 |worker_id|作业人员编号|执行 Worker，可为空|
 |ops_center_id|运营中心编号|检查所在 OpsCenter|
@@ -554,7 +561,9 @@ max_robotaxi_per_day = 5
     
 16. 前端功能按钮必须由 task_status 决定；
     
-17. 全流程必须记录 TaskEventLog。
+17. 全流程必须记录 TaskEventLog；
+
+18. 维修、故障处理完成后默认不自动创建 ReadinessCheckTask，除非后续配置了明确的准入复核规则。
     
 
 ---

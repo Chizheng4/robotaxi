@@ -1,162 +1,228 @@
-# 00-system-overview.md：系统概览
+# 系统总览：Robotaxi 经营执行系统架构
 
 ## 1. 目的
 
-本文档概述 Robotaxi 最小运营闭环系统的核心模块、模块关系与任务流方向，为后续业务对象、任务系统和闭环模拟提供整体导航。
+本文档是 Robotaxi 最小经营闭环系统的当前有效总入口，用于说明系统分层、核心模块边界、业务单据原则和数据反馈方向。
 
----
-
-## 2. 系统模块
+当前系统不再以早期“任务系统 / 调度系统 / 运维系统”的横向堆叠作为主结构，而以企业经营闭环为主线：
 
 ```text
-1. 模拟空间管理
-    - Map / Cell
-    - Road / RoadSegment / RoadNode
-    - Place / ServiceArea
-    - Zone
-    - Route
-
-2. 运营中心管理
-    - OpsCenter
-    - Robotaxi
-    - Worker
-
-3. 任务管理
-    - 运营准入任务
-    - 投放 / 再平衡 / 停车待命任务
-    - 服务执行任务
-    - 充电 / 清洁 / 维修任务
-
-4. 需求与订单
-    - 客户服务订单：真实即时需求
-    - 需求预测：未来区域需求概率
-    - 运力调整计划：基于预测形成的供给调整方案
-
-5. 调度系统
-    - 订单匹配
-    - 运力调整分配
-    - 车辆任务分配
-    - 任务中止与切换
-
-6. 履约与指标
-    - Trip 执行记录
-    - Metric / KPI 统计
+经营目标
+  ↓
+经营决策
+  ↓
+执行系统
+  ↓
+业务单据闭环
+  ↓
+经营数据反馈
+  ↓
+经营优化
 ```
 
----
-
-## 3. 系统闭环概览
+## 2. 执行系统分层
 
 ```text
-供给进入闭环：
-    Robotaxi 到达 OpsCenter
-    → 运营准入任务
-    → 可运营车辆
-    → 投放任务
-    → Zone / ServiceArea
-
-客户订单闭环：
-    客户查询目的地
-    → 预估价格
-    → 客户确认叫车
-    → ServiceOrder
-    → Dispatch
-    → Service Task
-    → Robotaxi 执行 Route
-    → Trip
-    → Order 完成
-    → Metric 更新
-
-预测供给闭环：
-    DemandForecast
-    → 供需缺口判断
-    → SupplyAdjustmentPlan
-    → Dispatch
-    → Deployment / Rebalance / Parking Task
-    → Robotaxi 执行 Route
-    → 区域供给分布更新
-
-车辆运营触发闭环：
-    Robotaxi 电量不足 / 脏污 / 故障
-    → 系统生成充电 / 清洁 / 维修任务
-    → Dispatch / OpsCenter 分配资源
-    → Task 执行
-    → Robotaxi 状态更新
+Robotaxi 执行系统
+  ├─ 空间与运营区域
+  ├─ 客户与需求
+  ├─ 供应管理
+  ├─ 车队资产管理
+  ├─ 车队运营管理
+  ├─ 运营组织管理
+  ├─ 战略与经营指标
+  └─ 自动运营模拟
 ```
 
----
+## 3. 当前文档结构
 
-## 4. 任务来源
-
-Task 的来源分为三类：
-
-|来源|对象|触发任务|
-|---|---|---|
-|客户真实需求|ServiceOrder|服务执行任务|
-|预测运营需求|SupplyAdjustmentPlan|投放 / 再平衡 / 停车待命任务|
-|车辆运营状态触发|Robotaxi / System Rule → OpsRequirement|充电 / 清洁 / 维修任务|
-
-说明：
-
-```text
-预测的是需求；
-计划的是供给；
-调度决定分配；
-任务负责执行。
-```
-
-补充说明：
-
-```text
-Robotaxi 运营状态是运维需求的触发条件；
-OpsRequirement 是充电、清洁、维修 Task 的直接来源。
-```
-
----
-
-## 5. 核心对象边界
-
-|对象|本质|
+|目录|定位|
 |---|---|
-|Robotaxi|自动驾驶服务产能资源|
-|Worker|OpsCenter 内部作业资源|
-|ServiceOrder|客户真实服务交易|
-|SupplyAdjustmentPlan|基于预测的运力供给调整方案|
-|Dispatch|匹配与分配决策|
-|Task|下发给 Robotaxi / Worker 的执行单|
-|Route|路径结果|
-|Trip|实际履约记录|
-|Metric|经营反馈结果|
+|`01-space-model/`|Map、Cell、Road、RoadNode、RoadSegment、Place、Route 等物理空间模型|
+|`02-operation-zone/`|OperationCenter、ServiceArea、Zone，以及面向经营的空间画像方案|
+|`03-client-management/`|客户对象和客户初始化|
+|`04-fleet-supply-management/`|长期供给规划、供给来源、供给获取、运营准入和可运营供给形成|
+|`05-fleet-asset-management/`|Robotaxi 资产、路径规划策略、Route、RouteExecution、Trip 等资产和行驶事实|
+|`06-fleet-operations-management/`|运营投放、服务履约、运营保障任务和运营阶段闭环|
+|`07-operation-organization/`|Worker 和运营组织能力|
+|`08-strategy-operating-metrics-model/`|战略目标、经营指标、成本和结果分析|
+|`09-simulation-system/`|模拟运行、统一时间、工作流自动化和执行引擎|
+|`doc/rules/`|长期稳定的工程规则、字段字典和执行约束|
+|`doc/_archive/legacy-design/`|历史方案留存，不作为当前事实来源|
 
----
+## 4. 模块边界
 
-## 6. 核心原则
+### 4.1 空间与运营区域
 
-1. **Robotaxi 不主动行动**
+空间模型负责描述物理世界和可定位单元。
 
-    Robotaxi 是执行资源，车辆行为由 Task 驱动。
+运营区域负责描述运营管理边界和经营画像。
 
-2. **Order 和 Task 分离**
+```text
+Map / Cell / Road / RoadSegment / Place
+  ↓
+ServiceArea / Zone / OperationCenter
+  ↓
+空间画像和运营区域分析
+```
 
-    ServiceOrder 管客户交易闭环。
-    Task 管车辆或人员执行闭环。
+物理空间事实与经营画像必须分离。人口、需求率、服务容量、增长因子等经营预测信息不写入物理空间对象本体。
 
-3. **Dispatch 和 Task 分离**
+### 4.2 供应管理
 
-    Dispatch 是分配决策。
-    Task 是执行指令。
+供应管理负责形成可运营 Robotaxi 供给能力。
 
-4. **预测需求和真实订单分离**
+```text
+需求预测
+  ↓
+供给规划
+  ↓
+供给来源选择
+  ↓
+供给订单 / 车辆进入
+  ↓
+运营准入任务
+  ↓
+可运营车队
+```
 
-    DemandForecast 不等于 ServiceOrder。
-    预测需求用于生成 SupplyAdjustmentPlan，真实订单用于触发服务履约。
+运营准入任务属于供给形成闭环。它验证 Robotaxi 是否具备进入运营状态的条件，不属于运营阶段的清洁、充电、维修、故障处理或退役保障任务。
 
-5. **任务来源必须清晰**
+### 4.3 车队资产管理
 
-    Task 可以来自 ServiceOrder、SupplyAdjustmentPlan 和 OpsRequirement。
-    Robotaxi 运营状态只负责触发 OpsRequirement，不直接作为运维 Task 来源。
+车队资产管理负责单台 Robotaxi 的资产事实、生命周期、当前位置、行驶事实和历史累计事实。
 
-6. **字段与状态延后到对象文档**
+Robotaxi 是执行资源，不主动行动；所有车辆行为必须由业务单据或服务动作驱动。
 
-    本文档只定义系统关系和闭环方向。
-    具体字段、状态机、初始化规则在对应模块文档中定义。
+### 4.4 车队运营管理
+
+车队运营管理负责使用已有可运营车队创造经营价值。
+
+```text
+可运营车队
+  ├─ 运营投放
+  ├─ 服务履约
+  └─ 运营保障
+```
+
+其中：
+
+|子模块|职责|
+|---|---|
+|Fleet Deployment|把可运营 Robotaxi 投放或再平衡到合适运营位置|
+|Service Fulfillment|把客户需求转化为服务订单、履约行驶和收入|
+|Fleet Operations Support|在运营阶段通过清洁、充电、维修、故障处理、退役等任务保障车辆持续可用|
+
+### 4.5 自动运营模拟
+
+模拟运行是上层扩展，不是业务闭环的事实来源。
+
+```text
+SimulationLoop
+  ↓
+统一时间和到期动作
+  ↓
+调用已有业务服务
+  ↓
+业务单据自身闭环
+```
+
+模拟运行不得重新实现业务对象创建、状态流转、路径规划、成本收入或指标计算。
+
+## 5. 业务单据根本原则
+
+所有带有生命周期的业务单据都必须先作为独立服务闭环。
+
+```text
+单据自身服务
+  ├─ 创建
+  ├─ 状态机
+  ├─ 可执行动作
+  ├─ 状态时间线
+  ├─ 成本 / 收入事实
+  └─ 完成 / 取消 / 异常
+```
+
+单据之间只能通过服务动作、事件结果和关联字段相互驱动。
+
+禁止：
+
+- 把一个单据的状态写入另一个单据的状态时间线；
+- 把一个单据的成本或收入混入另一个单据；
+- 用页面组件直接拼业务对象；
+- 用模拟运行绕过业务服务；
+- 用通用状态叠加任务类型来替代单据自身状态。
+
+## 6. 核心业务闭环
+
+### 6.1 供给形成闭环
+
+```text
+长期需求预测
+  ↓
+供给规划
+  ↓
+供给来源 / 供给订单
+  ↓
+车辆进入
+  ↓
+运营准入任务
+  ↓
+Robotaxi 变为可运营
+```
+
+### 6.2 服务经营闭环
+
+```text
+客户需求
+  ↓
+服务订单
+  ↓
+定价
+  ↓
+呼叫 Robotaxi
+  ↓
+订单匹配
+  ↓
+履约行驶记录
+  ↓
+结算 / 支付
+  ↓
+收入事实
+```
+
+### 6.3 运营投放闭环
+
+```text
+短期供需变化
+  ↓
+投放任务
+  ↓
+运营行驶记录
+  ↓
+到达目标位置
+  ↓
+Robotaxi 位置和可参与运营状态更新
+```
+
+### 6.4 运营保障闭环
+
+```text
+Robotaxi 运营事实 / 人工操作 / 运维策略
+  ↓
+任务规划策略判断
+  ↓
+清洁 / 充电 / 维修 / 故障处理 / 退役任务
+  ↓
+必要时创建运营行驶记录
+  ↓
+Worker 或资源作业
+  ↓
+Robotaxi 状态和资产事实更新
+```
+
+## 7. 历史文档边界
+
+`doc/_archive/legacy-design/` 只用于历史留存。当前设计、代码实现、字段字典和后续迭代不得以归档文档作为事实来源。
+
+如果历史文档中的概念仍有价值，必须迁移到当前有效目录或规则文件后才能作为实现依据。

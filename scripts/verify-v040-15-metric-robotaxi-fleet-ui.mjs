@@ -13,8 +13,18 @@ function assertIncludes(source, needle, message) {
 
 assertIncludes(
   main,
-  "allRows={actions.metricObservations || rows}",
-  "经营分析洞察栏必须使用统一指标池，不能只使用当前页面过滤后的行",
+  "allRows={actions.metricDisplayRows || rows}",
+  "经营分析洞察栏必须使用合并字段定义后的统一指标池，不能只使用当前页面过滤后的行",
+);
+assertIncludes(
+  main,
+  "const metricDisplayRows = useMemo(() => createMetricDisplayRows(metricObservations, metricDefinitions, simulationRuns)",
+  "经营分析统一指标池必须由指标观测和指标定义合并生成",
+);
+assertIncludes(
+  main,
+  "metricDisplayRows,",
+  "经营分析统一指标池必须传入指标体验面板",
 );
 assertIncludes(
   main,

@@ -6,7 +6,8 @@ const planningService = fs.readFileSync("src/services/robotaxiTaskPlanningServic
 const fieldDictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
 
-assert.ok(main.includes('{ key: "robotaxiTaskPlanningStrategies", label: "任务规划策略" }'), "前台菜单必须显示任务规划策略");
+assert.ok(main.includes('label: "任务规划策略"'), "前台菜单必须显示任务规划策略分组");
+assert.ok(main.includes('{ key: "robotaxiTaskPlanningStrategies", label: "规划策略配置" }'), "任务规划策略分组必须包含规划策略配置页面");
 assert.ok(!main.includes('{ key: "taskDispatchStrategies", label: "任务调度策略" }'), "前台菜单不能继续展示任务调度策略入口");
 assert.match(main, /"taskDispatchStrategies",\s*\n\s*"taskDispatchRuns",\s*\n\s*"taskDispatchResults"/, "旧任务调度页面必须隐藏保留兼容");
 

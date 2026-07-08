@@ -58,6 +58,10 @@ sys.stdout.flush()
 server.serve_forever()
 " >"${LOG_FILE}" 2>&1 &
 SERVER_PID=$!
+cleanup() {
+  kill "${SERVER_PID}" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
 sleep 1
 
 if python3 scripts/verify-server-readiness.py "${HOST}" "${PORT}"; then
@@ -65,6 +69,9 @@ if python3 scripts/verify-server-readiness.py "${HOST}" "${PORT}"; then
   open "$URL"
   echo "==> Opened ${URL}"
   echo "==> Concurrent resource check passed. Browser render check passed. Cache disabled. Runtime data preserved."
+  echo "==> Server is running on ${URL}"
+  echo "==> Keep this command window open. Press Ctrl-C to stop the Robotaxi server."
+  wait "${SERVER_PID}"
 else
   kill "${SERVER_PID}" >/dev/null 2>&1 || true
   echo "ERROR: Server failed to start. See ${LOG_FILE}"

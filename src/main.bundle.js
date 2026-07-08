@@ -32,6 +32,8 @@ let validateMapSpace;
 let initializeOperationsCenter;
 let initializeCustomers;
 let initializeDemandSimulation;
+let initializeSupplyManagement;
+let initializeSpatialBusinessProfiles;
 let initializePricing;
 let initializeOrderMatching;
 let validateOperationsCenter;
@@ -109,22 +111,22 @@ const pageGroups = [{
   }]
 }, {
   key: "businessAnalysis",
-  label: "经营分析管理",
+  label: "经营分析",
   children: [{
     key: "operatingMetricsOverview",
-    label: "经营指标总览"
+    label: "经营总览"
   }, {
     key: "financialMetrics",
-    label: "财务表现分析"
+    label: "财务表现"
   }, {
     key: "serviceMetrics",
-    label: "服务经营分析"
+    label: "服务分析"
   }, {
     key: "processDiagnostics",
-    label: "运营过程诊断"
+    label: "过程诊断"
   }, {
     key: "dataCalculationManagement",
-    label: "数据计算管理",
+    label: "数据计算",
     children: [{
       key: "metricDefinitions",
       label: "指标定义"
@@ -138,7 +140,7 @@ const pageGroups = [{
   }]
 }, {
   key: "financialManagement",
-  label: "财务经营管理",
+  label: "财务管理",
   children: [{
     key: "revenueRecords",
     label: "收入记录"
@@ -159,11 +161,46 @@ const pageGroups = [{
     label: "成本模型配置"
   }]
 }, {
-  key: "decision",
-  label: "运营决策中心",
+  key: "customer",
+  label: "客户管理",
   children: [{
+    key: "customers",
+    label: "客户列表"
+  }]
+}, {
+  key: "supplyManagement",
+  label: "供应管理",
+  children: [{
+    key: "demandProfiles",
+    label: "需求画像"
+  }, {
+    key: "longTermDemandForecasts",
+    label: "需求预测"
+  }, {
+    key: "supplyPlans",
+    label: "供应计划"
+  }, {
+    key: "supplyOrders",
+    label: "供给单"
+  }, {
+    key: "readinessTasks",
+    label: "运营准入"
+  }, {
+    key: "dealerSupplies",
+    label: "车商供应"
+  }, {
+    key: "ownerSupplies",
+    label: "车主供应"
+  }]
+}, {
+  key: "robotaxi",
+  label: "Robotaxi",
+  children: [{
+    key: "robotaxis",
+    label: "Robotaxi 列表"
+  }, {
     key: "routePlanningManagement",
-    label: "路径规划管理",
+    label: "路径规划",
     children: [{
       key: "routePlanningStrategies",
       label: "路径规划策略"
@@ -175,65 +212,72 @@ const pageGroups = [{
       label: "路径规划结果"
     }]
   }, {
-    key: "demandSimulationManagement",
-    label: "需求模拟管理",
-    children: [{
-      key: "demandSimulationStrategies",
-      label: "需求模拟策略"
-    }, {
-      key: "demandSimulationRuns",
-      label: "需求模拟执行"
-    }, {
-      key: "demandSimulationResults",
-      label: "需求模拟结果"
-    }]
+    key: "routeExecutions",
+    label: "运营行驶"
   }, {
-    key: "pricingManagement",
-    label: "动态定价管理",
-    children: [{
-      key: "pricingStrategies",
-      label: "定价策略"
-    }, {
-      key: "pricingStrategyRuns",
-      label: "定价执行"
-    }, {
-      key: "pricingDecisions",
-      label: "定价结果"
-    }]
-  }, {
-    key: "orderMatchingManagement",
-    label: "订单匹配管理",
-    children: [{
-      key: "orderMatchingStrategies",
-      label: "订单匹配策略"
-    }, {
-      key: "orderMatchingRuns",
-      label: "订单匹配执行"
-    }, {
-      key: "orderMatchingDecisions",
-      label: "订单匹配结果"
-    }]
+    key: "serviceFulfillmentRecords",
+    label: "履约行驶"
   }]
 }, {
-  key: "demandOrder",
-  label: "需求订单管理",
+  key: "operationsManagement",
+  label: "运营管理",
   children: [{
-    key: "serviceOrders",
-    label: "服务订单管理"
-  }, {
-    key: "customers",
-    label: "客户管理"
-  }]
-}, {
-  key: "opsCenter",
-  label: "运营中心管理",
-  children: [{
-    key: "taskManagement",
-    label: "任务单管理",
+    key: "supplyDemandDeploymentManagement",
+    label: "供需投放",
     children: [{
-      key: "readinessTasks",
-      label: "运营准入"
+      key: "deploymentTasks",
+      label: "投放任务单"
+    }]
+  }, {
+    key: "travelServiceManagement",
+    label: "出行服务",
+    children: [{
+      key: "serviceOrders",
+      label: "服务订单管理"
     }, {
+      key: "demandSimulationPolicyGroup",
+      label: "虚拟需求策略",
+      children: [{
+        key: "demandSimulationStrategies",
+        label: "虚拟需求配置"
+      }, {
+        key: "demandSimulationRuns",
+        label: "虚拟需求执行"
+      }, {
+        key: "demandSimulationResults",
+        label: "虚拟需求结果"
+      }]
+    }, {
+      key: "pricingPolicyGroup",
+      label: "动态定价策略",
+      children: [{
+        key: "pricingStrategies",
+        label: "定价策略配置"
+      }, {
+        key: "pricingStrategyRuns",
+        label: "定价策略执行"
+      }, {
+        key: "pricingDecisions",
+        label: "定价策略结果"
+      }]
+    }, {
+      key: "orderMatchingPolicyGroup",
+      label: "订单匹配策略",
+      children: [{
+        key: "orderMatchingStrategies",
+        label: "匹配策略配置"
+      }, {
+        key: "orderMatchingRuns",
+        label: "匹配策略执行"
+      }, {
+        key: "orderMatchingDecisions",
+        label: "匹配策略结果"
+      }]
+    }]
+  }, {
+    key: "operationSupportManagement",
+    label: "运维支持",
+    children: [{
       key: "cleaningTasks",
       label: "清洁任务"
     }, {
@@ -249,41 +293,50 @@ const pageGroups = [{
       key: "retirementTasks",
       label: "退役任务"
     }, {
-      key: "deploymentTasks",
-      label: "运营投放"
+      key: "fleetOperationPolicyGroup",
+      label: "运维策略管理",
+      children: [{
+        key: "fleetOperationPolicies",
+        label: "运维策略配置"
+      }, {
+        key: "fleetOperationPolicyRuns",
+        label: "运维策略执行"
+      }, {
+        key: "fleetOperationPolicyResults",
+        label: "运维策略结果"
+      }]
+    }, {
+      key: "fleetOperationDispatchPolicyGroup",
+      label: "运维调度策略",
+      children: [{
+        key: "fleetOperationDispatchStrategies",
+        label: "调度策略配置"
+      }, {
+        key: "fleetOperationDispatchRuns",
+        label: "调度策略执行"
+      }, {
+        key: "fleetOperationDispatchDecisions",
+        label: "调度策略结果"
+      }]
+    }, {
+      key: "robotaxiTaskPlanningPolicyGroup",
+      label: "任务规划策略",
+      children: [{
+        key: "robotaxiTaskPlanningStrategies",
+        label: "规划策略配置"
+      }, {
+        key: "robotaxiTaskPlanningRuns",
+        label: "规划策略执行"
+      }, {
+        key: "robotaxiTaskPlanningResults",
+        label: "规划策略结果"
+      }]
     }]
-  }, {
-    key: "fleetOperationPolicyManagement",
-    label: "运维策略管理",
-    children: [{
-      key: "fleetOperationPolicies",
-      label: "运维策略配置"
-    }, {
-      key: "fleetOperationPolicyRuns",
-      label: "运维策略执行"
-    }, {
-      key: "fleetOperationPolicyResults",
-      label: "运维策略结果"
-    }, {
-      key: "fleetOperationDispatchStrategies",
-      label: "运维调度策略"
-    }, {
-      key: "fleetOperationDispatchRuns",
-      label: "运维调度执行"
-    }, {
-      key: "fleetOperationDispatchDecisions",
-      label: "运维调度结果"
-    }, {
-      key: "robotaxiTaskPlanningStrategies",
-      label: "任务规划策略"
-    }, {
-      key: "robotaxiTaskPlanningRuns",
-      label: "任务规划执行"
-    }, {
-      key: "robotaxiTaskPlanningResults",
-      label: "任务规划结果"
-    }]
-  }, {
+  }]
+}, {
+  key: "operationOrganization",
+  label: "运营组织",
+  children: [{
     key: "opsCenters",
     label: "运营中心列表"
   }, {
@@ -291,68 +344,55 @@ const pageGroups = [{
     label: "作业人员列表"
   }]
 }, {
-  key: "robotaxi",
-  label: "Robotaxi 管理",
-  children: [{
-    key: "robotaxis",
-    label: "Robotaxi 列表"
-  }, {
-    key: "routeExecutionManagement",
-    label: "行驶记录管理",
-    children: [{
-      key: "routeExecutions",
-      label: "运营行驶记录"
-    }, {
-      key: "serviceFulfillmentRecords",
-      label: "履约行驶记录"
-    }]
-  }]
-}, {
   key: "space",
-  label: "地图空间管理",
+  label: "地图空间",
   children: [{
     key: "maps",
     label: "地图管理"
   }, {
     key: "cells",
-    label: "网格单元管理"
+    label: "网格单元"
   }, {
     key: "roads",
     label: "道路管理"
   }, {
     key: "roadNodes",
-    label: "道路节点管理"
+    label: "道路节点"
   }, {
     key: "roadSegments",
-    label: "道路片段管理"
+    label: "道路片段"
   }, {
     key: "places",
     label: "地点管理"
   }, {
     key: "serviceAreas",
-    label: "服务区管理"
+    label: "服务区域"
   }, {
     key: "zones",
     label: "Zone 管理"
   }]
 }, {
   key: "simulation",
-  label: "自动运营模拟",
+  label: "运营模拟",
   children: [{
-    key: "simulationPolicies",
-    label: "模拟规则配置"
-  }, {
-    key: "workflowTimingRules",
-    label: "工作流时效配置"
-  }, {
     key: "simulationRuns",
-    label: "模拟运行管理"
+    label: "模拟运行"
   }, {
     key: "timedOperations",
     label: "时间作业"
+  }, {
+    key: "simulationConfigManagement",
+    label: "配置管理",
+    children: [{
+      key: "simulationPolicies",
+      label: "模拟规则"
+    }, {
+      key: "workflowTimingRules",
+      label: "工作流时效"
+    }]
   }]
 }];
-const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles", "taskPriorityConfig", "taskDispatchStrategies", "taskDispatchRuns", "taskDispatchResults"]);
+const hiddenWorkspacePages = new Set(["simulationEvents", "costCalculationRuns", "revenueCalculationRuns", "costModelProfiles", "taskPriorityConfig", "taskDispatchStrategies", "taskDispatchRuns", "taskDispatchResults", "placeDemandProfiles", "serviceAreaDemandProfiles", "zoneDemandProfiles"]);
 const tableConfig = {
   maps: {
     title: "地图管理",
@@ -393,6 +433,26 @@ const tableConfig = {
     title: "运营区域管理",
     description: "运营区域用于经营统计和管理。",
     columns: ["zone_id", "parent_zone_id", "zone_name", "zone_level", "zone_type", "zone_status", "cell_count", "place_ids", "service_area_ids"]
+  },
+  demandProfiles: {
+    title: "需求画像",
+    description: "需求画像统一展示地点、服务区和区域画像记录，用于供应管理中的需求预测和供应计划。",
+    columns: ["profile_id", "profile_type", "source_object_id", "source_object_name", "profile_status", "potential_demand", "expected_robotaxi_demand", "service_capacity", "supply_need_score", "calculated_at"]
+  },
+  placeDemandProfiles: {
+    title: "地点需求画像",
+    description: "地点需求画像描述 Place 的需求产生能力，配置后用于区域画像和需求预测。",
+    columns: ["profile_id", "place_id", "profile_status", "resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "peak_pattern", "growth_rate", "robotaxi_adoption_rate", "effective_from", "effective_to"]
+  },
+  serviceAreaDemandProfiles: {
+    title: "服务区需求画像",
+    description: "服务区需求画像描述服务区域的上车、下车、等待和周转能力。",
+    columns: ["profile_id", "service_area_id", "profile_status", "pickup_probability", "dropoff_probability", "peak_demand_ratio", "service_capacity", "waiting_capacity", "turnover_capacity", "effective_from", "effective_to"]
+  },
+  zoneDemandProfiles: {
+    title: "区域需求画像",
+    description: "区域需求画像由地点和服务区画像计算得到，用于供给规划和运营投放判断。",
+    columns: ["profile_id", "zone_id", "profile_status", "potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "growth_factor", "supply_need_score", "calculated_at"]
   },
   routes: {
     title: "路径规划结果",
@@ -439,6 +499,31 @@ const tableConfig = {
     description: "用于将待检查 Robotaxi 转化为可运营车辆的准入任务单。",
     columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "worker_id", "check_result", "issue_type", "created_at", "simulation_created_at"]
   },
+  longTermDemandForecasts: {
+    title: "长期需求预测",
+    description: "长期需求预测用于判断未来区域需求变化，是供应管理的上游输入。",
+    columns: ["forecast_id", "forecast_name", "forecast_status", "forecast_period", "zone_id", "expected_robotaxi_demand", "confidence_level", "created_at"]
+  },
+  supplyPlans: {
+    title: "供给计划单",
+    description: "供给计划单用于把长期需求预测转化为未来 Robotaxi 供给规模和节奏。",
+    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_id", "target_zone_id", "planned_robotaxi_count", "planned_start_date", "planned_end_date", "created_at"]
+  },
+  supplyOrders: {
+    title: "供给单",
+    description: "供给单用于记录 Robotaxi 供给获取过程，当前为未来对象占位。",
+    columns: ["supply_order_id", "supply_plan_id", "supply_source_type", "supplier_id", "ordered_robotaxi_count", "delivered_robotaxi_count", "order_status", "created_at"]
+  },
+  dealerSupplies: {
+    title: "车商供给",
+    description: "车商供给管理合作车商或车厂作为 Robotaxi 供应来源的基础信息。",
+    columns: ["dealer_supply_id", "dealer_name", "dealer_status", "supported_model_names", "monthly_supply_capacity", "quality_rating", "created_at"]
+  },
+  ownerSupplies: {
+    title: "车主供给",
+    description: "车主供给管理具备自动驾驶能力的私家车车主作为网络化供给来源的信息。",
+    columns: ["owner_supply_id", "owner_name", "owner_status", "vehicle_count", "qualified_vehicle_count", "service_area_ids", "created_at"]
+  },
   cleaningTasks: {
     title: "清洁任务",
     description: "用于将 Robotaxi 从需要清洁状态恢复到可运营状态。",
@@ -455,7 +540,7 @@ const tableConfig = {
     columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "maintenance_type", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "repair_result", "requires_readiness_check", "pending_since_at", "operation_completed_at"]
   },
   failureHandlingTasks: {
-    title: "故障处理任务",
+    title: "故障处理",
     description: "用于确认、分级和处置 Robotaxi 故障事件。",
     columns: ["task_id", "task_status", "trigger_type", "trigger_source", "trigger_object_type", "trigger_object_id", "fleet_operation_policy_run_id", "robotaxi_id", "robotaxi_current_location_summary", "origin_cell_id", "origin_location_summary", "target_ops_center_id", "target_cell_id", "target_location_summary", "route_execution_id", "worker_id", "failure_type", "failure_severity", "allow_current_service_completion", "diagnosis_result", "disposition_result", "maintenance_task_id", "retirement_task_id"]
   },
@@ -676,7 +761,7 @@ const tableConfig = {
   },
   simulationRuns: {
     title: "模拟运行管理",
-    description: "创建和管理自动运营模拟运行，查看实时进度、财务结果和指标结果。",
+    description: "创建和管理运营模拟运行，查看实时进度、财务结果和指标结果。",
     columns: ["simulation_run_id", "simulation_name", "simulation_status", "cost_calculation_status", "revenue_calculation_status", "calculation_progress_percent", "total_cost_amount", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_days", "current_day", "current_time", "current_global_tick", "started_at", "completed_at"]
   },
   simulationEvents: {
@@ -699,6 +784,10 @@ const pageObjectType = {
   places: "place",
   serviceAreas: "serviceArea",
   zones: "zone",
+  demandProfiles: "demandProfile",
+  placeDemandProfiles: "placeDemandProfile",
+  serviceAreaDemandProfiles: "serviceAreaDemandProfile",
+  zoneDemandProfiles: "zoneDemandProfile",
   routes: "route",
   customers: "customer",
   demandSimulationStrategies: "demandSimulationStrategy",
@@ -708,6 +797,11 @@ const pageObjectType = {
   opsCenters: "opsCenter",
   workers: "worker",
   readinessTasks: "readinessTask",
+  longTermDemandForecasts: "longTermDemandForecast",
+  supplyPlans: "supplyPlan",
+  supplyOrders: "supplyOrder",
+  dealerSupplies: "dealerSupply",
+  ownerSupplies: "ownerSupply",
   cleaningTasks: "cleaningTask",
   chargingTasks: "chargingTask",
   maintenanceTasks: "maintenanceTask",
@@ -768,6 +862,10 @@ const idFieldByType = {
   place: "place_id",
   serviceArea: "service_area_id",
   zone: "zone_id",
+  demandProfile: "profile_id",
+  placeDemandProfile: "profile_id",
+  serviceAreaDemandProfile: "profile_id",
+  zoneDemandProfile: "profile_id",
   route: "route_id",
   customer: "customer_id",
   demandSimulationStrategy: "demand_simulation_strategy_id",
@@ -777,6 +875,11 @@ const idFieldByType = {
   opsCenter: "ops_center_id",
   worker: "worker_id",
   readinessTask: "task_id",
+  longTermDemandForecast: "forecast_id",
+  supplyPlan: "supply_plan_id",
+  supplyOrder: "supply_order_id",
+  dealerSupply: "dealer_supply_id",
+  ownerSupply: "owner_supply_id",
   cleaningTask: "task_id",
   chargingTask: "task_id",
   maintenanceTask: "task_id",
@@ -831,10 +934,19 @@ const statusFieldByPage = {
   places: "place_status",
   serviceAreas: "service_area_status",
   zones: "zone_status",
+  demandProfiles: "profile_status",
+  placeDemandProfiles: "profile_status",
+  serviceAreaDemandProfiles: "profile_status",
+  zoneDemandProfiles: "profile_status",
   routes: "route_status",
   opsCenters: "ops_center_status",
   workers: "worker_status",
   readinessTasks: "task_status",
+  longTermDemandForecasts: "forecast_status",
+  supplyPlans: "plan_status",
+  supplyOrders: "order_status",
+  dealerSupplies: "dealer_status",
+  ownerSupplies: "owner_status",
   cleaningTasks: "task_status",
   chargingTasks: "task_status",
   maintenanceTasks: "task_status",
@@ -915,10 +1027,11 @@ const defaultPageFilters = {
   triggerType: null,
   objectType: null
 };
-const overviewMetricIds = ["OUTCOME-FIN-002", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-SERVICE-003", "OUTCOME-EFF-002"];
+const overviewMetricIds = ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "PROCESS-ASSET-001", "PROCESS-EFF-002", "PROCESS-EFF-001", "OUTCOME-FIN-005"];
 const financialMetricIds = ["OUTCOME-FIN-001", "OUTCOME-FIN-002", "OUTCOME-FIN-003", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-FIN-006", "OUTCOME-EFF-001", "OUTCOME-EFF-002"];
-const serviceMetricIds = ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "OUTCOME-SERVICE-004", "PROCESS-TRIP-001"];
-const diagnosticMetricIds = ["PROCESS-MATCH-001", "PROCESS-ROUTE-001", "PROCESS-TRIP-001", "PROCESS-SUPPLY-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "QUALITY-DATA-001"];
+const serviceMetricIds = ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "OUTCOME-SERVICE-004", "DEMAND-TREND-001", "DEMAND-TREND-002", "PROCESS-ASSET-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "PROCESS-TRIP-001"];
+const diagnosticMetricIds = ["PROCESS-ASSET-001", "PROCESS-MATCH-001", "PROCESS-ROUTE-001", "PROCESS-TRIP-001", "PROCESS-SUPPLY-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "QUALITY-DATA-001"];
+const demandTrendMetricIds = ["DEMAND-TREND-001", "DEMAND-TREND-002"];
 const metricPeriodOptions = [{
   value: "ALL",
   label: "全量经营周期"
@@ -933,15 +1046,59 @@ const legacyRouteStrategyIdMap = {
   "RPS-INITIAL-DEPLOYMENT": "RPS-001",
   "RPS-ABNORMAL-SAME-SA": "RPS-002"
 };
+function createDemandProfileRows(data) {
+  const placeById = new Map((data.places || []).map(place => [place.place_id, place]));
+  const serviceAreaById = new Map((data.serviceAreas || []).map(serviceArea => [serviceArea.service_area_id, serviceArea]));
+  const zoneById = new Map((data.zones || []).map(zone => [zone.zone_id, zone]));
+  const placeProfiles = (data.placeDemandProfiles || []).map(profile => {
+    const place = placeById.get(profile.place_id);
+    return {
+      ...profile,
+      profile_type: "PLACE_DEMAND",
+      source_object_id: profile.place_id,
+      source_object_name: place?.place_name || profile.place_id,
+      source_object_type: "place",
+      potential_demand: Number((Number(profile.daily_visitors || 0) * Number(profile.trip_generation_rate || 0)).toFixed(2))
+    };
+  });
+  const serviceAreaProfiles = (data.serviceAreaDemandProfiles || []).map(profile => {
+    const serviceArea = serviceAreaById.get(profile.service_area_id);
+    return {
+      ...profile,
+      profile_type: "SERVICE_AREA_DEMAND",
+      source_object_id: profile.service_area_id,
+      source_object_name: serviceArea?.service_area_name || profile.service_area_id,
+      source_object_type: "serviceArea"
+    };
+  });
+  const zoneProfiles = (data.zoneDemandProfiles || []).map(profile => {
+    const zone = zoneById.get(profile.zone_id);
+    return {
+      ...profile,
+      profile_type: "ZONE_DEMAND",
+      source_object_id: profile.zone_id,
+      source_object_name: zone?.zone_name || profile.zone_id,
+      source_object_type: "zone"
+    };
+  });
+  return [...placeProfiles, ...serviceAreaProfiles, ...zoneProfiles];
+}
 function App() {
-  const initialData = useMemo(() => ({
-    ...initializeMapSpace(),
-    ...initializeOperationsCenter(),
-    ...initializeCustomers(),
-    ...initializeDemandSimulation(),
-    ...initializePricing(),
-    ...initializeOrderMatching()
-  }), []);
+  const initialData = useMemo(() => {
+    const baseData = {
+      ...initializeMapSpace(),
+      ...initializeOperationsCenter(),
+      ...initializeCustomers(),
+      ...initializeDemandSimulation(),
+      ...initializePricing(),
+      ...initializeOrderMatching(),
+      ...initializeSupplyManagement()
+    };
+    return {
+      ...baseData,
+      ...initializeSpatialBusinessProfiles(baseData)
+    };
+  }, []);
   const initialRuntime = useMemo(() => loadRuntimeSnapshot(initialData), [initialData]);
   const [operationalData, setOperationalData] = useState(initialRuntime.operationalData);
   const [readinessTasks, setReadinessTasks] = useState(initialRuntime.readinessTasks);
@@ -1131,6 +1288,10 @@ function App() {
     places: data.places,
     serviceAreas: data.serviceAreas,
     zones: data.zones,
+    demandProfiles: createDemandProfileRows(data),
+    placeDemandProfiles: data.placeDemandProfiles || [],
+    serviceAreaDemandProfiles: data.serviceAreaDemandProfiles || [],
+    zoneDemandProfiles: data.zoneDemandProfiles || [],
     routes: data.routes.map(route => enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns)),
     customers: data.customers || [],
     demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
@@ -1140,6 +1301,11 @@ function App() {
     opsCenters: data.opsCenters,
     workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks: readinessTasks.map(task => attachCostRecords(task, "readinessTask", costRecords)),
+    longTermDemandForecasts: data.longTermDemandForecasts || [],
+    supplyPlans: data.supplyPlans || [],
+    supplyOrders: data.supplyOrders || [],
+    dealerSupplies: data.dealerSupplies || [],
+    ownerSupplies: data.ownerSupplies || [],
     cleaningTasks: cleaningTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "cleaningTask", costRecords)),
     chargingTasks: chargingTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "chargingTask", costRecords)),
     maintenanceTasks: maintenanceTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "maintenanceTask", costRecords)),
@@ -1231,6 +1397,10 @@ function App() {
       place: data.places,
       serviceArea: data.serviceAreas,
       zone: data.zones,
+      demandProfile: rowsByPage.demandProfiles,
+      placeDemandProfile: rowsByPage.placeDemandProfiles,
+      serviceAreaDemandProfile: rowsByPage.serviceAreaDemandProfiles,
+      zoneDemandProfile: rowsByPage.zoneDemandProfiles,
       route: rowsByPage.routes,
       customer: data.customers || [],
       demandSimulationStrategy: rowsByPage.demandSimulationStrategies,
@@ -1263,6 +1433,11 @@ function App() {
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: rowsByPage.readinessTasks,
+      longTermDemandForecast: rowsByPage.longTermDemandForecasts,
+      supplyPlan: rowsByPage.supplyPlans,
+      supplyOrder: rowsByPage.supplyOrders,
+      dealerSupply: rowsByPage.dealerSupplies,
+      ownerSupply: rowsByPage.ownerSupplies,
       cleaningTask: rowsByPage.cleaningTasks,
       chargingTask: rowsByPage.chargingTasks,
       maintenanceTask: rowsByPage.maintenanceTasks,
@@ -1294,14 +1469,7 @@ function App() {
     return {
       key: group.key,
       label: group.label,
-      children: group.children.map(item => ({
-        key: item.key,
-        label: item.label,
-        children: item.children?.map(child => ({
-          key: child.key,
-          label: child.label
-        }))
-      })).filter(item => !hiddenWorkspacePages.has(item.key))
+      children: createMenuItems(group.children || [])
     };
   });
   const failedCount = validations.filter(item => item.result !== "PASS").length;
@@ -2332,6 +2500,7 @@ function App() {
       revenueCalculationRuns,
       revenueRecords,
       metricDefinitions,
+      metricDisplayRows,
       metricCalculationRuns,
       metricObservations,
       simulationRuns,
@@ -2490,6 +2659,7 @@ function App() {
     onChange: event => setCostParameterValue(event.target.value)
   })))));
   function handleMenuClick(key) {
+    if (!isRenderablePage(key)) return;
     activateWorkspacePage(key);
   }
   function handleMenuOpenChange(keys) {
@@ -4802,6 +4972,13 @@ function RecordTable({
   const hasEventPanel = isTaskOperationPage || isStrategyExecutionPanelPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
+  if (!config || !objectType) {
+    return /*#__PURE__*/React.createElement("div", {
+      className: "record-page"
+    }, /*#__PURE__*/React.createElement(Empty, {
+      description: "\u9875\u9762\u914D\u7F6E\u5DF2\u66F4\u65B0\uFF0C\u8BF7\u4ECE\u5DE6\u4FA7\u83DC\u5355\u91CD\u65B0\u6253\u5F00\u9875\u9762"
+    }));
+  }
   const idField = idFieldByType[objectType];
   const statusField = statusFieldByPage[page];
   const [eventPanelHeight, setEventPanelHeight] = useState(112);
@@ -5019,7 +5196,7 @@ function RecordTable({
   }, createMetricDataPoolState(actions.metricCalculationRuns, actions.metricPeriodType))), isMetricAnalysisPage && /*#__PURE__*/React.createElement(MetricExperiencePanel, {
     page: page,
     rows: displayRows,
-    allRows: actions.metricObservations || rows,
+    allRows: actions.metricDisplayRows || rows,
     metricCalculationRuns: actions.metricCalculationRuns,
     metricPeriodType: actions.metricPeriodType,
     onSelect: row => onSelect(objectType, row[idField])
@@ -6401,8 +6578,16 @@ function MetricExperiencePanel({
   metricPeriodType = "ALL",
   onSelect
 }) {
+  const [demandTrendMode, setDemandTrendMode] = useState("HOURLY");
   const latestRows = createLatestMetricRows(rows);
   const insightSourceRows = allRows.filter(row => row.metric_scope_type === "OPERATING_PERIOD" && row.metric_period_type === metricPeriodType);
+  const hourlyDemandRows = createMetricTrendRows(insightSourceRows, "DEMAND-TREND-001");
+  const trendDayOptions = createTrendDayOptions(hourlyDemandRows);
+  const [selectedTrendDay, setSelectedTrendDay] = useState(null);
+  const activeTrendDay = selectedTrendDay && trendDayOptions.some(option => option.value === selectedTrendDay) ? selectedTrendDay : trendDayOptions[0]?.value || null;
+  const dailyDemandRows = createDailyDemandTrendRows(hourlyDemandRows);
+  const displayedDemandRows = demandTrendMode === "DAILY" ? dailyDemandRows : hourlyDemandRows.filter(row => getMetricTrendDayValue(row) === activeTrendDay);
+  const timeSegmentDemandRows = createMetricTrendRows(insightSourceRows, "DEMAND-TREND-002");
   const overviewRows = page === "operatingMetricsOverview" ? overviewMetricIds.map(id => latestRows.find(row => row.metric_definition_id === id)).filter(Boolean) : latestRows.slice(0, 6);
   const warningRows = insightSourceRows.filter(row => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
   const latestCalculationRun = getLatestMetricCalculationRun(metricCalculationRuns, metricPeriodType);
@@ -6420,8 +6605,13 @@ function MetricExperiencePanel({
   }), createMetricInsightGroup({
     title: "服务效率",
     description: "订单规模和履约效率决定收入质量。",
-    primary: metricById.get("OUTCOME-SERVICE-003"),
-    secondary: [metricById.get("OUTCOME-SERVICE-002"), metricById.get("OUTCOME-EFF-002")]
+    primary: metricById.get("PROCESS-EFF-002") || metricById.get("OUTCOME-SERVICE-003"),
+    secondary: [metricById.get("PROCESS-EFF-001"), metricById.get("OUTCOME-SERVICE-002")]
+  }), createMetricInsightGroup({
+    title: "资产利用",
+    description: "有过履约服务的 Robotaxi 占比解释资产是否被有效使用。",
+    primary: metricById.get("PROCESS-ASSET-001"),
+    secondary: [metricById.get("OUTCOME-SERVICE-002"), metricById.get("PROCESS-MATCH-001")]
   }), createMetricInsightGroup({
     title: "过程质量",
     description: "匹配、路径和数据质量解释异常来源。",
@@ -6444,9 +6634,128 @@ function MetricExperiencePanel({
     key: group.title,
     className: "metric-insight-lane",
     onClick: () => group.primary?.row && onSelect(group.primary.row)
-  }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primaryText), /*#__PURE__*/React.createElement("small", null, group.secondaryText), /*#__PURE__*/React.createElement("em", null, group.description)))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, group.title), /*#__PURE__*/React.createElement("strong", null, group.primaryText), /*#__PURE__*/React.createElement("small", null, group.secondaryText), /*#__PURE__*/React.createElement("em", null, group.description)))), page === "serviceMetrics" && /*#__PURE__*/React.createElement("div", {
+    className: "metric-trend-toolbar"
+  }, /*#__PURE__*/React.createElement("span", null, "\u9700\u6C42\u8D8B\u52BF"), /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    type: demandTrendMode === "HOURLY" ? "primary" : "default",
+    onClick: () => setDemandTrendMode("HOURLY")
+  }, "\u6309\u5C0F\u65F6"), /*#__PURE__*/React.createElement(Button, {
+    size: "small",
+    type: demandTrendMode === "DAILY" ? "primary" : "default",
+    onClick: () => setDemandTrendMode("DAILY")
+  }, "\u6309\u5929"), demandTrendMode === "HOURLY" && /*#__PURE__*/React.createElement(Select, {
+    size: "small",
+    value: activeTrendDay,
+    placeholder: "\u9009\u62E9\u6A21\u62DF\u65E5",
+    onChange: setSelectedTrendDay,
+    getPopupContainer: () => document.body,
+    options: trendDayOptions
+  })), page === "serviceMetrics" && /*#__PURE__*/React.createElement("div", {
+    className: "metric-trend-grid"
+  }, /*#__PURE__*/React.createElement(MetricTrendChart, {
+    title: demandTrendMode === "DAILY" ? "每日订单量" : "每小时订单量",
+    rows: displayedDemandRows,
+    emptyText: demandTrendMode === "DAILY" ? "暂无每日订单趋势" : "暂无每小时订单趋势",
+    onSelect: onSelect
+  }), /*#__PURE__*/React.createElement(MetricTrendChart, {
+    title: "\u65F6\u6BB5\u8BA2\u5355\u91CF",
+    rows: timeSegmentDemandRows,
+    emptyText: "\u6682\u65E0\u65F6\u6BB5\u8BA2\u5355\u8D8B\u52BF",
+    onSelect: onSelect
+  })), /*#__PURE__*/React.createElement("div", {
     className: "metric-quality-strip"
   }, /*#__PURE__*/React.createElement("span", null, "\u6570\u636E\u6C60\uFF1A", calculationSummary), /*#__PURE__*/React.createElement("span", null, "\u5F53\u524D\u7EDF\u8BA1\u5468\u671F\uFF1A", periodLabel), /*#__PURE__*/React.createElement("span", null, "\u6307\u6807\u7ED3\u679C ", latestRows.length), /*#__PURE__*/React.createElement("span", null, "\u6765\u6E90\u8BB0\u5F55 ", sourceRecordCount), /*#__PURE__*/React.createElement("span", null, qualitySummary), /*#__PURE__*/React.createElement("span", null, warningRows[0] ? `${getMetricDisplayName(warningRows[0])}：${warningRows[0].quality_reason || "存在质量提示"}` : "暂无质量提示")));
+}
+function MetricTrendChart({
+  title,
+  rows = [],
+  emptyText,
+  onSelect
+}) {
+  const maxValue = Math.max(1, ...rows.map(row => Number(row.metric_value || 0)));
+  return /*#__PURE__*/React.createElement("div", {
+    className: "metric-trend-chart"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "metric-trend-title"
+  }, /*#__PURE__*/React.createElement("span", null, title), /*#__PURE__*/React.createElement("small", null, rows.length ? `${rows.length} 个时间点` : "等待数据")), rows.length ? /*#__PURE__*/React.createElement("div", {
+    className: "metric-trend-bars"
+  }, rows.map(row => {
+    const value = Number(row.metric_value || 0);
+    const height = Math.max(8, Math.round(value / maxValue * 72));
+    return /*#__PURE__*/React.createElement("button", {
+      key: row.metric_observation_id,
+      className: "metric-trend-bar",
+      onClick: () => onSelect(row)
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "metric-trend-bar-track"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "metric-trend-bar-fill",
+      style: {
+        height
+      }
+    })), /*#__PURE__*/React.createElement("strong", null, formatMetricDisplayValue(row)), /*#__PURE__*/React.createElement("small", null, formatTrendDimensionLabel(row)));
+  })) : /*#__PURE__*/React.createElement("div", {
+    className: "metric-trend-empty"
+  }, emptyText));
+}
+function createMetricTrendRows(rows = [], metricDefinitionId) {
+  return (rows || []).filter(row => row.metric_definition_id === metricDefinitionId).sort((left, right) => Number(left.window_start_seconds || 0) - Number(right.window_start_seconds || 0));
+}
+function createTrendDayOptions(rows = []) {
+  const dayValues = [...new Set((rows || []).map(getMetricTrendDayValue).filter(Boolean))];
+  return dayValues.map(value => ({
+    value,
+    label: value
+  }));
+}
+function getMetricTrendDayValue(row) {
+  const seconds = Number(row?.window_start_seconds || 0);
+  if (!Number.isFinite(seconds)) return null;
+  return `Day${Math.floor(seconds / 86400) + 1}`;
+}
+function createDailyDemandTrendRows(hourlyRows = []) {
+  const grouped = new Map();
+  hourlyRows.forEach(row => {
+    const day = getMetricTrendDayValue(row);
+    if (!day) return;
+    const current = grouped.get(day) || {
+      ...row,
+      metric_observation_id: `${row.metric_calculation_run_id || "MCR"}-DAILY-${day}`,
+      dimension_type: "SIMULATION_DAY",
+      dimension_id: day,
+      window_type: "DAY",
+      window_start_seconds: Math.floor(Number(row.window_start_seconds || 0) / 86400) * 86400,
+      window_end_seconds: Math.floor(Number(row.window_start_seconds || 0) / 86400) * 86400 + 86400,
+      window_label: day,
+      metric_value: 0,
+      numerator_value: 0,
+      denominator_value: 1,
+      source_record_count: 0,
+      source_object_refs: []
+    };
+    current.metric_value = Number(current.metric_value || 0) + Number(row.metric_value || 0);
+    current.numerator_value = Number(current.numerator_value || 0) + Number(row.numerator_value || row.metric_value || 0);
+    current.source_record_count = Number(current.source_record_count || 0) + Number(row.source_record_count || 0);
+    current.source_object_refs = [...(current.source_object_refs || []), ...(row.source_object_refs || [])].slice(0, 20);
+    grouped.set(day, current);
+  });
+  return [...grouped.values()].sort((left, right) => Number(left.window_start_seconds || 0) - Number(right.window_start_seconds || 0));
+}
+function formatTrendDimensionLabel(row) {
+  if (row.dimension_type === "SIMULATION_DAY") return row.dimension_id || row.window_label || "模拟日";
+  if (row.dimension_type === "DEMAND_TIME_SEGMENT") {
+    if (row.dimension_id === "PEAK") return "高峰";
+    if (row.dimension_id === "NORMAL") return "平峰";
+    if (row.dimension_id === "OFF_PEAK") return "低峰";
+    return row.window_label || "时段";
+  }
+  if (row.dimension_type === "SIMULATION_HOUR") {
+    const seconds = Number(row.window_start_seconds || 0);
+    const hour = Math.floor(seconds % 86400 / 3600);
+    return `${String(hour).padStart(2, "0")}:00`;
+  }
+  return row.window_label || row.dimension_id || "趋势点";
 }
 function RobotaxiOperationPanel({
   rows = [],
@@ -7473,7 +7782,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, businessActionServiceModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule, taskDispatchStrategyServiceModule, robotaxiTaskPlanningServiceModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/businessActionService.js?v=20260706-v040-28"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"), import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"), import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, businessActionServiceModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule, taskDispatchStrategyServiceModule, robotaxiTaskPlanningServiceModule, supplyManagementInitializationModule, spatialBusinessProfileInitializationModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/businessActionService.js?v=20260706-v040-28"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"), import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"), import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"), import("./data/supplyManagementInitialization.js"), import("./data/spatialBusinessProfileInitialization.js")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -7526,6 +7835,8 @@ async function bootstrap() {
   fleetOperationDispatchService = fleetOperationDispatchServiceModule;
   taskDispatchStrategyService = taskDispatchStrategyServiceModule;
   robotaxiTaskPlanningService = robotaxiTaskPlanningServiceModule;
+  initializeSupplyManagement = supplyManagementInitializationModule.initializeSupplyManagement;
+  initializeSpatialBusinessProfiles = spatialBusinessProfileInitializationModule.initializeSpatialBusinessProfiles;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -8719,11 +9030,27 @@ function createNextPageUiState(currentState, patch) {
     } : normalizedState.pagination
   });
 }
+function createMenuItems(items = []) {
+  return items.filter(item => !hiddenWorkspacePages.has(item.key)).map(item => {
+    const children = createMenuItems(item.children || []);
+    return {
+      key: item.key,
+      label: item.label,
+      ...(children.length ? {
+        children
+      } : {})
+    };
+  });
+}
 function normalizePageUiStateMap(pageUiState) {
   return Object.entries(pageUiState || {}).reduce((result, [page, state]) => ({
     ...result,
     [page]: normalizePageUiState(state)
   }), {});
+}
+function isRenderablePage(page) {
+  if (page === "console") return true;
+  return Boolean(tableConfig[page] && pageObjectType[page]);
 }
 function getDefaultSelection(page, data) {
   if (page === "console") return {
@@ -8743,20 +9070,30 @@ function getPageLabel(page) {
   if (page === "console") return "运营中控台";
   return findPageMenuLabel(page) || tableConfig[page]?.title || "业务页面";
 }
-function findPageMenuLabel(page) {
-  for (const group of pageGroups) {
-    for (const item of group.children || []) {
-      if (item.key === page) return item.label;
-      for (const child of item.children || []) {
-        if (child.key === page) return child.label;
-      }
+function findMenuPath(page) {
+  const walk = (items = [], path = []) => {
+    for (const item of items) {
+      const nextPath = [...path, item];
+      if (item.key === page) return nextPath;
+      const childPath = walk(item.children || [], nextPath);
+      if (childPath) return childPath;
     }
+    return null;
+  };
+  for (const group of pageGroups) {
+    if (group.key === page) return [group];
+    const path = walk(group.children || [], [group]);
+    if (path) return path;
   }
-  return null;
+  return [];
+}
+function findPageMenuLabel(page) {
+  const path = findMenuPath(page);
+  return path.length ? path[path.length - 1].label : null;
 }
 function isLeafPage(page) {
   if (hiddenWorkspacePages.has(page)) return false;
-  return page === "console" || Boolean(pageObjectType[page] || tableConfig[page]);
+  return isRenderablePage(page);
 }
 function normalizeWorkspacePages(pages, activePage = "console") {
   const nextPages = ["console"];
@@ -8886,7 +9223,18 @@ function loadRuntimeSnapshot(initialData) {
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
     const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
     const timedOperations = Array.isArray(snapshot.timedOperations) ? snapshot.timedOperations : [];
-    const operationalData = normalizeOperationalRouteStrategies(snapshot.operationalData || initialData);
+    const operationalData = normalizeOperationalRouteStrategies({
+      ...initialData,
+      ...(snapshot.operationalData || {}),
+      longTermDemandForecasts: snapshot.operationalData?.longTermDemandForecasts || initialData.longTermDemandForecasts || [],
+      supplyPlans: snapshot.operationalData?.supplyPlans || initialData.supplyPlans || [],
+      supplyOrders: snapshot.operationalData?.supplyOrders || initialData.supplyOrders || [],
+      dealerSupplies: snapshot.operationalData?.dealerSupplies || initialData.dealerSupplies || [],
+      ownerSupplies: snapshot.operationalData?.ownerSupplies || initialData.ownerSupplies || [],
+      placeDemandProfiles: snapshot.operationalData?.placeDemandProfiles || initialData.placeDemandProfiles || [],
+      serviceAreaDemandProfiles: snapshot.operationalData?.serviceAreaDemandProfiles || initialData.serviceAreaDemandProfiles || [],
+      zoneDemandProfiles: snapshot.operationalData?.zoneDemandProfiles || initialData.zoneDemandProfiles || []
+    });
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
     fleetOperationTaskSequence = Math.max(deriveSequence(cleaningTasks, "task_id", "TASK-CLN-"), deriveSequence(chargingTasks, "task_id", "TASK-CHG-"), deriveSequence(maintenanceTasks, "task_id", "TASK-MNT-"), deriveSequence(failureHandlingTasks, "task_id", "TASK-FHL-"), deriveSequence(retirementTasks, "task_id", "TASK-RET-"));
     fleetOperationPolicyRunSequence = deriveSequence(fleetOperationPolicyRuns, "fleet_operation_policy_run_id", "FOP-RUN-");
@@ -9385,6 +9733,7 @@ function formatMetricDisplayValue(row) {
   if (row.metric_unit === "percent") return `${(value * 100).toFixed(1)}%`;
   if (row.metric_unit === "km") return `${value.toFixed(2)} km`;
   if (row.metric_unit === "second") return `${Math.round(value)} 秒`;
+  if (row.metric_unit === "minute") return `${value.toFixed(1)} 分钟`;
   return Number.isFinite(value) ? String(value) : String(row.metric_value);
 }
 function getOrderedStatusValues(page) {
@@ -9411,16 +9760,8 @@ function createStatusOptions(rows, statusField, orderedValues = [], statusContex
 }
 function getOpenKeysForPage(pageKey) {
   if (pageKey === "console") return [];
-  const parentKeys = [];
-  pageGroups.forEach(group => {
-    group.children?.forEach(item => {
-      if (item.key === pageKey) parentKeys.push(group.key);
-      item.children?.forEach(child => {
-        if (child.key === pageKey) parentKeys.push(group.key, item.key);
-      });
-    });
-  });
-  return parentKeys;
+  const path = findMenuPath(pageKey);
+  return path.slice(0, -1).map(item => item.key);
 }
 function getRootMenuKey(key) {
   if (pageGroups.some(group => group.key === key)) return key;

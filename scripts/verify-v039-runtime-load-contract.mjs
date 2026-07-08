@@ -20,9 +20,9 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
   "fleetOperationDispatchDecisions: \"fleetOperationDispatchDecision\"",
   "fleetOperationDispatchDecision: \"fleet_operation_dispatch_decision_id\"",
   "fleetOperationDispatchDecisions: \"decision_result\"",
-  "{ key: \"fleetOperationDispatchDecisions\", label: \"运维调度结果\" }",
+  "{ key: \"fleetOperationDispatchDecisions\", label: \"调度策略结果\" }",
 ].forEach((needle) => {
-  assert(source.includes(needle), `运维调度结果页面合同缺失：${needle}`);
+  assert(source.includes(needle), `运维调度策略结果页面合同缺失：${needle}`);
 });
 
 const planIndex = source.indexOf("function planFleetOperationRoute(task)");

@@ -374,7 +374,7 @@
 |metric_name_cn|指标中文名|持久化字段|前端展示中文名称|
 |metric_name_en|指标英文名|持久化字段|指标英文业务名称|
 |metric_layer|指标层级|持久化字段|STATE、PROCESS、OUTCOME、QUALITY|
-|metric_domain|指标领域|持久化字段|FINANCE、SERVICE、EFFICIENCY 等|
+|metric_domain|指标领域|持久化字段|DEMAND、ASSET、FINANCE、SERVICE、EFFICIENCY 等|
 |business_definition|业务定义|持久化字段|指标回答的经营问题|
 |calculation_formula|计算公式|持久化字段|使用正式字段描述的计算公式|
 |source_objects|来源对象|持久化字段|指标消费的业务对象或事实对象|
@@ -384,7 +384,7 @@
 |zero_denominator_rule|零分母规则|持久化字段|NULL_WITH_REASON（按原因置空）|
 |supported_dimensions|支持维度|持久化字段|simulation_run_id、service_area_id 等|
 |data_readiness|数据就绪度|持久化字段|READY、DERIVABLE、MISSING_DATA|
-|display_unit|展示单位|持久化字段|currency、percent、count、second、km|
+|display_unit|展示单位|持久化字段|currency、percent、count、second、minute、km|
 |higher_is_better|越高越好|持久化字段|指标趋势解释方向|
 |metric_status|指标状态|持久化字段|ACTIVE、RESERVED、DISABLED|
 |definition_version|定义版本|持久化字段|指标定义版本|
@@ -423,11 +423,11 @@
 |simulation_run_id|模拟运行编号|兼容字段|单次模拟运行计算来源；经营周期计算为空|
 |simulation_run_ids|来源模拟运行编号列表|持久化字段|经营周期纳入统计的模拟运行集合|
 |simulation_timeline_id|模拟时间轴编号|持久化字段|来源连续模拟时间轴|
-|window_type|时间窗类型|持久化字段|SIMULATION_RUN、DAY、HOUR、10_MINUTE|
+|window_type|时间窗类型|持久化字段|SIMULATION_RUN、OPERATING_PERIOD、DAY、HOUR、10_MINUTE|
 |window_start_seconds|窗口开始秒|持久化字段|绝对模拟秒窗口开始|
 |window_end_seconds|窗口结束秒|持久化字段|绝对模拟秒窗口结束|
 |window_label|窗口显示名|运行态字段|前端可读时间窗|
-|dimension_type|维度类型|持久化字段|GLOBAL、SERVICE_AREA、ROBOTAXI、ORDER_CHANNEL|
+|dimension_type|维度类型|持久化字段|GLOBAL、SIMULATION_DAY、SIMULATION_HOUR、DEMAND_TIME_SEGMENT、SERVICE_AREA、ROBOTAXI、ORDER_CHANNEL|
 |dimension_id|维度编号|持久化字段|具体维度值|
 |metric_value|指标值|运行态字段|指标计算结果|
 |metric_unit|指标单位|运行态字段|currency、percent、count 等|
@@ -725,6 +725,41 @@
 |service_area_ids|服务区域列表|持久化字段|包含的 ServiceArea 列表|
 |sub_zone_ids|子区域列表|持久化字段|子 Zone 列表|
 
+### 9.1 空间经营画像字段
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|profile_id|画像编号|持久化字段|画像唯一编号|
+|profile_type|画像类型|派生展示字段|需求画像来源类型：地点、服务区或区域|
+|profile_status|画像状态|持久化字段|画像是否可用|
+|source_object_id|来源对象编号|派生展示字段|画像关联的 Place、ServiceArea 或 Zone 编号|
+|source_object_name|来源对象名称|派生展示字段|画像关联对象的中文名称|
+|source_object_type|来源对象类型|派生展示字段|画像关联对象类型|
+|resident_population|常住人口|配置字段|地点常住人口|
+|working_population|工作人口|配置字段|地点工作人口|
+|daily_visitors|日访客量|配置字段|地点日访客量|
+|trip_generation_rate|出行产生率|配置字段|人群产生出行需求的比例|
+|demand_weight|需求权重|配置字段|地点需求权重|
+|peak_pattern|需求高峰模式|配置字段|地点高峰模式|
+|growth_rate|增长率|配置字段|地点需求增长率|
+|robotaxi_adoption_rate|Robotaxi 采用率|配置字段|潜在需求中采用 Robotaxi 的比例|
+|effective_from|生效时间|配置字段|画像开始生效时间|
+|effective_to|失效时间|配置字段|画像失效时间，可为空|
+|pickup_probability|上车概率|配置字段|服务区成为上车点的概率|
+|dropoff_probability|下车概率|配置字段|服务区成为下车点的概率|
+|peak_demand_ratio|高峰需求比例|配置字段|高峰时段需求放大比例|
+|service_capacity|服务容量|配置字段|服务区承载服务能力|
+|waiting_capacity|等待容量|配置字段|服务区可等待容量|
+|turnover_capacity|周转能力|配置字段|服务区单位周期周转能力|
+|potential_demand|潜在需求|计算字段|由地点画像计算得到的潜在需求|
+|expected_robotaxi_demand|预计 Robotaxi 需求|计算字段|由画像和采用率计算的 Robotaxi 需求|
+|peak_hour_demand|峰值需求|计算字段|高峰小时需求|
+|demand_distribution|需求分布|计算字段|区域需求来源分布摘要|
+|growth_factor|增长修正|计算字段|区域增长修正因子|
+|supply_need_score|供给需求评分|计算字段|用于供给规划和投放判断的需求评分|
+|calculated_from_profile_ids|计算来源画像|计算字段|区域画像计算引用的画像编号|
+|calculated_at|计算时间|计算字段|画像计算时间|
+
 ---
 
 ## 10. OpsCenter：运营中心
@@ -741,7 +776,7 @@
 |ops_center_status|运营中心状态|持久化字段|当前设施状态|
 |can_receive_robotaxi|允许接收 Robotaxi|持久化字段|是否可以接收车辆|
 |can_park_robotaxi|允许停放 Robotaxi|持久化字段|是否可以内部停放车辆|
-|can_inspect_robotaxi|允许运维检查|持久化字段|是否可以检查车辆|
+|can_inspect_robotaxi|允许准入检查|持久化字段|是否可以执行运营准入检查|
 |can_clean_robotaxi|允许清洁|持久化字段|是否可以清洁车辆|
 |can_charge_robotaxi|允许充电|持久化字段|是否可以为车辆充电|
 |can_repair_robotaxi|允许维修|持久化字段|是否可以维修车辆|
@@ -1065,6 +1100,40 @@
 |current_task_id|当前任务|运行态字段|当前执行任务，可为空|
 |current_task_type|当前任务类型|聚合展示字段|由 current_task_id 关联 Task 推导|
 |current_task_status|当前任务状态|聚合展示字段|由 current_task_id 关联 Task 推导|
+
+### 12.1 SupplyManagement：供应管理
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|forecast_id|预测编号|持久化字段|长期需求预测唯一编号|
+|forecast_name|预测名称|持久化字段|长期需求预测名称|
+|forecast_status|预测状态|持久化字段|预测是否可用|
+|forecast_period|预测周期|配置字段|预测覆盖周期|
+|confidence_level|置信水平|计算字段|预测置信水平|
+|supply_plan_id|供给计划编号|持久化字段|供给计划单唯一编号|
+|plan_name|计划名称|持久化字段|供给计划名称|
+|plan_status|计划状态|持久化字段|计划状态|
+|target_zone_id|目标区域|持久化字段|计划覆盖的目标区域|
+|planned_robotaxi_count|计划 Robotaxi 数|配置字段|计划形成的 Robotaxi 数量|
+|planned_start_date|计划开始日期|配置字段|计划开始日期|
+|planned_end_date|计划结束日期|配置字段|计划结束日期|
+|supply_order_id|供给单编号|持久化字段|供给单唯一编号|
+|supply_source_type|供给来源类型|持久化字段|车商供给、自有生产或车主供给|
+|supplier_id|供应方编号|持久化字段|供应方对象编号|
+|ordered_robotaxi_count|订购 Robotaxi 数|持久化字段|供给单订购车辆数|
+|delivered_robotaxi_count|已交付 Robotaxi 数|运行态字段|供给单已交付车辆数|
+|order_status|订单状态|运行态字段|供给单状态|
+|dealer_supply_id|车商供给编号|持久化字段|车商供给对象编号|
+|dealer_name|车商名称|持久化字段|合作车商或车厂名称|
+|dealer_status|车商状态|持久化字段|车商供给状态|
+|supported_model_names|支持车型|配置字段|车商可供应车型|
+|monthly_supply_capacity|月供给能力|配置字段|车商月度供给能力|
+|quality_rating|质量评级|配置字段|供应质量评级|
+|owner_supply_id|车主供给编号|持久化字段|车主供给对象编号|
+|owner_name|车主名称|持久化字段|自动驾驶私家车车主名称|
+|owner_status|车主状态|持久化字段|车主供给状态|
+|vehicle_count|车辆数|运行态字段|车主名下车辆数|
+|qualified_vehicle_count|合格车辆数|运行态字段|满足 Robotaxi 接入条件的车辆数|
 
 ---
 
@@ -1530,6 +1599,12 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |TRANSPORT_ZONE|交通区域|
 |MIXED_ZONE|混合区域|
 |SUPPORT_ZONE|保障区域|
+|PLACE_DEMAND|地点需求画像|
+|SERVICE_AREA_DEMAND|服务区需求画像|
+|ZONE_DEMAND|区域需求画像|
+|place|地点|
+|serviceArea|服务区|
+|zone|区域|
 |Planned|规划中|
 |Testing|测试中|
 |Active|可使用|
@@ -1546,7 +1621,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |PENDING_ADMISSION|待准入|
 |IN_FLEET_OPERATION|运维中|
 |PENDING_INSPECTION|待准入|
-|IN_INSPECTION|待准入|
+|IN_INSPECTION|准入检查中|
 |AVAILABLE|可运营|
 |UNAVAILABLE|运维中|
 |RETIRED|已退役|

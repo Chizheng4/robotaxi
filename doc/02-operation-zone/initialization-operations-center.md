@@ -159,7 +159,7 @@ estimated_range_km = max_range_km × battery_percent / 100
 ```text
 Robotaxi 已到达 OpsCenter
 ↓
-等待运维检查
+待准入
 ↓
 尚未进入可运营状态
 ```

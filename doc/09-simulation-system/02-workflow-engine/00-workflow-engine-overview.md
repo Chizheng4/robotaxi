@@ -45,7 +45,7 @@ ExecutionEngine（动作分发器）
 |---|---|---|---|
 | 01 | ServiceOrder | 服务订单：需求→定价→呼叫→匹配→履约→结算→支付 | `01-service-order-workflow.md` |
 | 02 | Trip | 履约行驶：接驾→上车→载客→到达 | `02-trip-workflow.md` |
-| 03 | ReadinessTask | 运营准入：生成→分配→检查→通过 | `03-readiness-task-workflow.md` |
+| 03 | ReadinessTask | 供给侧运营准入：生成→分配→检查→通过 | `03-readiness-task-workflow.md` |
 | 04 | DeploymentTask | 运营投放：生成→路径规划→行驶→到达 | `04-deployment-task-workflow.md` |
 | 05 | RouteExecution | 行驶记录：路径规划→行驶推进→到达 | `05-route-execution-workflow.md` |
 

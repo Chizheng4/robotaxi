@@ -18,6 +18,8 @@
 | `04-frontend-ux-rules.md` | 前端结构、视觉令牌、组件状态、交互与模型接入标准 |
 | `05-codex-execution-rules.md` | 执行方式、验证要求、禁止行为、暂停条件 |
 | `06-document-driven-iteration-rules.md` | 用户更新文档后的差异分析、确认和自动执行协议 |
+| `07-simulation-runtime-architecture-rules.md` | 模拟运行架构、性能、业务服务边界和扩展接入规则 |
+| `08-business-document-service-rules.md` | 业务单据独立服务闭环、关联驱动、状态时间线和成本收入边界 |
 
 ## 3. 读取规则
 

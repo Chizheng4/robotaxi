@@ -18,8 +18,8 @@ const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
   "nextTaskPlanningResultId",
 ].forEach((needle) => assert.ok(main.includes(needle), `主页面缺少 ${needle}`));
 
-assert.ok(main.includes('{ key: "robotaxiTaskPlanningRuns", label: "任务规划执行" }'), "菜单必须包含任务规划执行");
-assert.ok(main.includes('{ key: "robotaxiTaskPlanningResults", label: "任务规划结果" }'), "菜单必须包含任务规划结果");
+assert.ok(main.includes('{ key: "robotaxiTaskPlanningRuns", label: "规划策略执行" }'), "任务规划策略分组必须包含规划策略执行");
+assert.ok(main.includes('{ key: "robotaxiTaskPlanningResults", label: "规划策略结果" }'), "任务规划策略分组必须包含规划策略结果");
 assert.match(main, /isFleetOperationDispatchStrategyPage[\s\S]*isRobotaxiTaskPlanningStrategyPage[\s\S]*isStrategyExecutionPanelPage/, "策略页面必须统一接入最近策略执行区");
 assert.match(main, /isRobotaxiTaskPlanningStrategyPage \? createStrategyRunRows\(actions\.robotaxiTaskPlanningRuns/, "任务规划策略页必须展示最近任务规划执行");
 

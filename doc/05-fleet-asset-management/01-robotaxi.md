@@ -104,8 +104,8 @@ service_type = PASSENGER_RIDE
 
 |availability_status|含义|
 |---|---|
-|PENDING_INSPECTION|待运维检查|
-|IN_INSPECTION|运维检查中|
+|PENDING_INSPECTION|待准入|
+|IN_INSPECTION|准入检查中|
 |AVAILABLE|可运营|
 |UNAVAILABLE|运维中|
 
