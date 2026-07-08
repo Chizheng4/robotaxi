@@ -127,6 +127,8 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
     const potentialDemand = zonePlaceProfiles.reduce((sum, profile) => sum + Number(profile.potential_demand || 0), 0);
     const expectedDemand = zonePlaceProfiles.reduce((sum, profile) => sum + Number(profile.expected_robotaxi_demand || 0), 0);
     const serviceCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.service_capacity || 0), 0);
+    const waitingCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.waiting_capacity || 0), 0);
+    const turnoverCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.turnover_capacity || 0), 0);
     const supplyNeedScore = serviceCapacity > 0 ? expectedDemand / serviceCapacity : expectedDemand;
     const targetName = profileTargetName({
       targetObjectType: TargetObjectType.ZONE,
@@ -147,6 +149,9 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
       coverage_factor: 1,
       competition_factor: 1,
       growth_factor: 1,
+      service_capacity: roundValue(serviceCapacity),
+      waiting_capacity: roundValue(waitingCapacity),
+      turnover_capacity: roundValue(turnoverCapacity),
       potential_demand: roundValue(potentialDemand),
       expected_robotaxi_demand: roundValue(expectedDemand),
       peak_hour_demand: roundValue(expectedDemand * 1.2),

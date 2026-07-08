@@ -25,6 +25,12 @@ assert.ok(initialized.demandProfiles.some((profile) => profile.target_object_typ
 assert.ok(initialized.demandProfiles.some((profile) => profile.target_object_type === "ZONE"), "必须生成 Zone 类型 DemandProfile");
 assert.ok(initialized.demandProfiles.every((profile) => profile.target_object_id && profile.target_object_name), "DemandProfile 必须包含目标对象编号和名称");
 assert.equal(initialized.demandProfiles.some((profile) => Object.hasOwn(profile, "profile_type")), false, "新初始化不得写入 profile_type 主字段");
+const zoneProfile = initialized.demandProfiles.find((profile) => profile.target_object_type === "ZONE");
+assert.equal(zoneProfile.service_capacity, 8, "Zone 画像服务容量必须由包含的 ServiceArea 汇总计算");
+assert.equal(zoneProfile.waiting_capacity, 1, "Zone 画像等待容量必须由包含的 ServiceArea 汇总计算");
+assert.equal(zoneProfile.turnover_capacity, 32, "Zone 画像周转能力必须由包含的 ServiceArea 汇总计算");
+assert.ok(zoneProfile.potential_demand > 0, "Zone 画像潜在需求必须由包含的 Place 画像汇总计算");
+assert.ok(zoneProfile.expected_robotaxi_demand > 0, "Zone 画像预计 Robotaxi 需求必须由包含的 Place 画像汇总计算");
 
 const legacyProfiles = normalizeDemandProfiles({
   ...context,
@@ -44,7 +50,9 @@ const main = fs.readFileSync("src/main.jsx", "utf8");
 const fieldDictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
 
-assert.ok(main.includes('columns: ["profile_id", "profile_name", "target_object_type", "target_object_id", "target_object_name"'), "需求画像页面必须展示统一目标对象字段");
+assert.ok(main.includes('"target_object_name",\n      "potential_demand",\n      "expected_robotaxi_demand",\n      "peak_hour_demand",\n      "service_capacity"'), "需求画像页面必须把关键计算数字放在目标对象字段之后");
+assert.ok(main.includes('"resident_population",\n      "working_population",\n      "daily_visitors",\n      "trip_generation_rate"'), "需求画像页面必须展示可配置的 Place 需求输入数字");
+assert.ok(main.includes('"pickup_probability",\n      "dropoff_probability",\n      "peak_demand_ratio"'), "需求画像页面必须展示可配置的 ServiceArea 能力输入数字");
 assert.ok(!main.includes('columns: ["profile_id", "profile_type", "source_object_id", "source_object_name"'), "需求画像页面不得继续以 profile_type/source_object_* 为主列");
 assert.ok(main.includes("demandProfiles: snapshot.operationalData?.demandProfiles || initialData.demandProfiles || []"), "运行态恢复必须读取统一 demandProfiles");
 assert.ok(main.includes("normalizeDemandProfiles ? normalizeDemandProfiles(operationalData)"), "运行态必须归一化旧画像数据");

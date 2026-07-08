@@ -7,6 +7,8 @@
 - 旧的 `placeDemandProfiles / serviceAreaDemandProfiles / zoneDemandProfiles` 作为运行态兼容拆分，不再作为需求画像主事实来源。
 - 旧快照恢复时支持从三类画像数组或旧 `profile_type / source_object_*` 字段迁移到统一 `demandProfiles`。
 - 供应管理下“需求画像”页面改为展示统一对象字段，废弃 `profile_type` 主展示口径。
+- 需求画像表格前置展示关键数字：潜在需求、预计 Robotaxi 需求、峰值需求、服务容量、等待容量、周转能力、供给需求评分，以及可配置的人口、访客、出行产生率、采用率和服务区概率参数。
+- Zone 类型 DemandProfile 的需求与容量字段由其包含的 Place 和 ServiceArea 画像汇总计算，避免区域画像只显示对象编号而缺少供给判断数字。
 - 字段字典同步新增目标对象、服务接受率、服务区可达性、区域调整、覆盖和竞争修正等字段，并统一 `profile_name / profile_version / profile_status` 中文展示。
 - 本轮只落地供给端画像底座，不把需求预测、供应计划和供给单提前接入模拟运行主路径。
 
