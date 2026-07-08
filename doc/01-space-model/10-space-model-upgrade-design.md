@@ -187,7 +187,7 @@ Place 只维护空间事实：
 |cell_ids|覆盖 Cell|
 |place_status|地点状态|
 
-Place 不保存需求画像字段。Place 的需求产生能力由运营区域画像文档中的 `PlaceDemandProfile` 表达。
+Place 不保存需求画像字段。Place 的需求产生能力由运营区域画像文档中的 `DemandProfile` 表达，其中 `target_object_type = PLACE`。
 
 ## 7. 升级后结构
 
@@ -217,3 +217,160 @@ Route
 - Route Step 是否统一引用 Cell；
 - Robotaxi 当前位置是否统一为 `current_cell_id`；
 - RoadSegment 是否承担行驶速度、耗时和成本基础计算。
+
+## 9. 初始化设计
+
+### 9.1 初始化原则
+
+空间初始化只负责物理空间事实，不承载需求预测、人口、增长、服务容量等经营画像字段。
+
+初始化数据需要同时满足：
+
+1. 支撑当前单 Zone 最小运营闭环；
+2. 支撑未来多 Zone 扩展；
+3. 支撑长期需求预测和短期需求预测读取空间关联对象；
+4. 保持物理空间对象与 DemandProfile 对象分离；
+5. 不影响当前项目已经复用的地图、路径规划、Robotaxi 定位和任务调度逻辑。
+
+### 9.2 Map 初始化
+
+第一阶段初始化 1 个 Map。
+
+```json
+{
+  "map_id": "M-001",
+  "map_name": "Robotaxi 经营模拟地图",
+  "map_width_m": 10000,
+  "map_height_m": 10000,
+  "cell_resolution_m": 2,
+  "grid_cols": 5000,
+  "grid_rows": 5000,
+  "simulation_scale": "CITY_AREA",
+  "time_resolution": "MINUTE"
+}
+```
+
+规则：
+
+- Map 定义逻辑空间范围；
+- `cell_resolution_m` 是目标字段，现有实现如仍使用 `cell_size_m`，后续代码升级时需要兼容迁移；
+- 不生成全部 Cell；
+- 只根据业务对象和路径执行动态生成 Active Cell。
+
+### 9.3 Cell 初始化
+
+不初始化 25,000,000 个全量 Cell，只初始化或动态生成 Active Cell。
+
+Active Cell 来源：
+
+|来源|生成 Cell|
+|---|---|
+|RoadSegment|Road Cell|
+|RoadNode|Node Cell|
+|Place|Place Cell|
+|ServiceArea|Service Cell|
+|Robotaxi|Current Cell|
+|RouteExecution / Trip|Route Step Cell|
+
+Cell 示例：
+
+```json
+{
+  "cell_id": "C-1000-2000",
+  "map_id": "M-001",
+  "row": 1000,
+  "col": 2000,
+  "base_cell_type": "ROAD",
+  "traversable": true,
+  "center_x": 2000,
+  "center_y": 4000,
+  "area_m2": 4
+}
+```
+
+### 9.4 Road 初始化
+
+第一阶段初始化 10-20 条道路。
+
+|类型|建议数量|
+|---|---:|
+|MAIN_ROAD|3|
+|SECONDARY_ROAD|5|
+|ACCESS_ROAD|5|
+|INTERNAL_ROAD|5|
+
+Road 示例：
+
+```json
+{
+  "road_id": "RD-001",
+  "road_name": "中央主干路",
+  "road_type": "MAIN_ROAD",
+  "road_status": "ACTIVE"
+}
+```
+
+### 9.5 RoadNode 初始化
+
+RoadNode 表示道路网络中的连接点和路径规划节点。若当前实现仍直接使用 Cell 或 RoadSegment 表达节点关系，后续升级应保持兼容，不得破坏已有路径规划调用。
+
+RoadNode 示例：
+
+```json
+{
+  "road_node_id": "RN-001",
+  "map_id": "M-001",
+  "cell_id": "C-1000-2000",
+  "node_type": "INTERSECTION",
+  "connected_road_segment_ids": ["RS-001", "RS-002"],
+  "road_node_status": "ACTIVE"
+}
+```
+
+### 9.6 RoadSegment 初始化
+
+第一阶段初始化 50-100 个 RoadSegment。
+
+```json
+{
+  "road_segment_id": "RS-001",
+  "road_id": "RD-001",
+  "start_road_node_id": "RN-001",
+  "end_road_node_id": "RN-002",
+  "cell_sequence": ["C-1000-2000", "C-1001-2000", "C-1002-2000"],
+  "lane_count": 2,
+  "speed_limit_kmh": 40,
+  "average_speed_kmh": 30,
+  "traffic_level": "NORMAL",
+  "segment_status": "ACTIVE"
+}
+```
+
+### 9.7 Place 初始化
+
+第一阶段初始化 20 个左右 Place。
+
+|类型|建议数量|
+|---|---:|
+|RESIDENTIAL|6|
+|OFFICE|4|
+|COMMERCIAL|3|
+|HOSPITAL|2|
+|SCHOOL|2|
+|METRO_STATION|2|
+|TRANSPORT_HUB|1|
+|OPS_CENTER|1|
+
+Place 示例：
+
+```json
+{
+  "place_id": "P-001",
+  "place_name": "住宅生活区 A",
+  "place_type": "RESIDENTIAL",
+  "place_status": "ACTIVE",
+  "cell_ids": ["C-500-500", "C-500-501"]
+}
+```
+
+Place 只保存空间事实。常住人口、工作人口、访客量、出行产生率、Robotaxi 采用率等字段必须进入 DemandProfile。
