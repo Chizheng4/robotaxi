@@ -1,4 +1,15 @@
 
+## v041.1
+
+核心：供给端需求画像统一对象落地。
+
+- 需求画像初始化收敛为统一 `DemandProfile` 对象，通过 `target_object_type / target_object_id / target_object_name` 关联地点、服务区域和运营区域。
+- 旧的 `placeDemandProfiles / serviceAreaDemandProfiles / zoneDemandProfiles` 作为运行态兼容拆分，不再作为需求画像主事实来源。
+- 旧快照恢复时支持从三类画像数组或旧 `profile_type / source_object_*` 字段迁移到统一 `demandProfiles`。
+- 供应管理下“需求画像”页面改为展示统一对象字段，废弃 `profile_type` 主展示口径。
+- 字段字典同步新增目标对象、服务接受率、服务区可达性、区域调整、覆盖和竞争修正等字段，并统一 `profile_name / profile_version / profile_status` 中文展示。
+- 本轮只落地供给端画像底座，不把需求预测、供应计划和供给单提前接入模拟运行主路径。
+
 ## v040.35
 
 核心：增强经营分析的需求趋势、Robotaxi 资产利用率和服务效率指标。

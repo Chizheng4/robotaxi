@@ -34,6 +34,8 @@ let initializeCustomers;
 let initializeDemandSimulation;
 let initializeSupplyManagement;
 let initializeSpatialBusinessProfiles;
+let normalizeDemandProfiles;
+let splitDemandProfilesByTarget;
 let initializePricing;
 let initializeOrderMatching;
 let validateOperationsCenter;
@@ -437,7 +439,7 @@ const tableConfig = {
   demandProfiles: {
     title: "需求画像",
     description: "需求画像统一展示地点、服务区和区域画像记录，用于供应管理中的需求预测和供应计划。",
-    columns: ["profile_id", "profile_type", "source_object_id", "source_object_name", "profile_status", "potential_demand", "expected_robotaxi_demand", "service_capacity", "supply_need_score", "calculated_at"]
+    columns: ["profile_id", "profile_name", "target_object_type", "target_object_id", "target_object_name", "profile_status", "potential_demand", "expected_robotaxi_demand", "service_capacity", "supply_need_score", "calculated_at"]
   },
   placeDemandProfiles: {
     title: "地点需求画像",
@@ -1047,41 +1049,7 @@ const legacyRouteStrategyIdMap = {
   "RPS-ABNORMAL-SAME-SA": "RPS-002"
 };
 function createDemandProfileRows(data) {
-  const placeById = new Map((data.places || []).map(place => [place.place_id, place]));
-  const serviceAreaById = new Map((data.serviceAreas || []).map(serviceArea => [serviceArea.service_area_id, serviceArea]));
-  const zoneById = new Map((data.zones || []).map(zone => [zone.zone_id, zone]));
-  const placeProfiles = (data.placeDemandProfiles || []).map(profile => {
-    const place = placeById.get(profile.place_id);
-    return {
-      ...profile,
-      profile_type: "PLACE_DEMAND",
-      source_object_id: profile.place_id,
-      source_object_name: place?.place_name || profile.place_id,
-      source_object_type: "place",
-      potential_demand: Number((Number(profile.daily_visitors || 0) * Number(profile.trip_generation_rate || 0)).toFixed(2))
-    };
-  });
-  const serviceAreaProfiles = (data.serviceAreaDemandProfiles || []).map(profile => {
-    const serviceArea = serviceAreaById.get(profile.service_area_id);
-    return {
-      ...profile,
-      profile_type: "SERVICE_AREA_DEMAND",
-      source_object_id: profile.service_area_id,
-      source_object_name: serviceArea?.service_area_name || profile.service_area_id,
-      source_object_type: "serviceArea"
-    };
-  });
-  const zoneProfiles = (data.zoneDemandProfiles || []).map(profile => {
-    const zone = zoneById.get(profile.zone_id);
-    return {
-      ...profile,
-      profile_type: "ZONE_DEMAND",
-      source_object_id: profile.zone_id,
-      source_object_name: zone?.zone_name || profile.zone_id,
-      source_object_type: "zone"
-    };
-  });
-  return [...placeProfiles, ...serviceAreaProfiles, ...zoneProfiles];
+  return normalizeDemandProfiles ? normalizeDemandProfiles(data) : data.demandProfiles || [];
 }
 function App() {
   const initialData = useMemo(() => {
@@ -1279,95 +1247,103 @@ function App() {
       cancelled = true;
     };
   }, [initialData]);
-  const rowsByPage = useMemo(() => ({
-    maps: data.maps,
-    cells: data.cells,
-    roads: data.roads,
-    roadNodes: data.roadNodes,
-    roadSegments: data.roadSegments,
-    places: data.places,
-    serviceAreas: data.serviceAreas,
-    zones: data.zones,
-    demandProfiles: createDemandProfileRows(data),
-    placeDemandProfiles: data.placeDemandProfiles || [],
-    serviceAreaDemandProfiles: data.serviceAreaDemandProfiles || [],
-    zoneDemandProfiles: data.zoneDemandProfiles || [],
-    routes: data.routes.map(route => enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns)),
-    customers: data.customers || [],
-    demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
-    demandSimulationRuns,
-    demandSimulationResults: createDemandSimulationResultRows(demandSimulationRuns),
-    serviceOrders: serviceOrders.map(order => attachRevenueRecords(attachCostRecords(enrichServiceOrderForDisplay(order, data, trips), "serviceOrder", costRecords), revenueRecords)),
-    opsCenters: data.opsCenters,
-    workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
-    readinessTasks: readinessTasks.map(task => attachCostRecords(task, "readinessTask", costRecords)),
-    longTermDemandForecasts: data.longTermDemandForecasts || [],
-    supplyPlans: data.supplyPlans || [],
-    supplyOrders: data.supplyOrders || [],
-    dealerSupplies: data.dealerSupplies || [],
-    ownerSupplies: data.ownerSupplies || [],
-    cleaningTasks: cleaningTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "cleaningTask", costRecords)),
-    chargingTasks: chargingTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "chargingTask", costRecords)),
-    maintenanceTasks: maintenanceTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "maintenanceTask", costRecords)),
-    failureHandlingTasks: failureHandlingTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "failureHandlingTask", costRecords)),
-    retirementTasks: retirementTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "retirementTask", costRecords)),
-    fleetOperationPolicies,
-    fleetOperationPolicyRuns,
-    fleetOperationPolicyResults,
-    fleetOperationDispatchStrategies,
-    fleetOperationDispatchRuns,
-    fleetOperationDispatchDecisions,
-    taskDispatchStrategies,
-    robotaxiTaskPlanningStrategies,
-    robotaxiTaskPlanningRuns,
-    robotaxiTaskPlanningResults,
-    taskDispatchRuns,
-    taskDispatchResults,
-    taskPriorityConfig: taskPriorityConfigs,
-    deploymentTasks: deploymentTasks.map(task => attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions)),
-    routeExecutions: routeExecutions.map(execution => attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords)),
-    taskEventLogs,
-    routePlanningStrategies: createRoutePlanningStrategyRows(data, routePlanningRuns),
-    routePlanningRuns,
-    pricingStrategies: createPricingStrategyRows(data, pricingStrategyRuns),
-    pricingStrategyRuns,
-    pricingDecisions,
-    orderMatchingStrategies: createOrderMatchingStrategyRows(data, orderMatchingRuns),
-    orderMatchingRuns,
-    orderMatchingDecisions: orderMatchingDecisions.map(decision => enrichOrderMatchingDecisionForDisplay(decision, data)),
-    serviceFulfillmentRecords: trips.map(trip => attachCostRecords(enrichTripForDisplay(trip, data), "trip", costRecords)),
-    robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, allFleetOperationTasks, routeExecutions)),
-    simulationPolicies,
-    workflowTimingRules: (workflowTimingProfiles[0]?.timing_rules || []).map(rule => ({
-      ...rule,
-      workflow_timing_profile_id: workflowTimingProfiles[0]?.workflow_timing_profile_id,
-      profile_name: workflowTimingProfiles[0]?.profile_name,
-      profile_version: workflowTimingProfiles[0]?.profile_version
-    })),
-    costModelProfiles,
-    costParameterRules: (costModelProfiles[0]?.cost_parameter_rules || []).map(rule => ({
-      ...rule,
-      cost_model_profile_id: costModelProfiles[0]?.cost_model_profile_id,
-      profile_name: costModelProfiles[0]?.profile_name,
-      profile_version: costModelProfiles[0]?.profile_version,
-      currency_code: costModelProfiles[0]?.currency_code
-    })),
-    costCalculationRuns,
-    costRecords,
-    revenueCalculationRuns,
-    revenueRecords,
-    operatingMetricsOverview: filterMetricRowsForPage(metricDisplayRows, "operatingMetricsOverview", metricPeriodType),
-    financialMetrics: filterMetricRowsForPage(metricDisplayRows, "financialMetrics", metricPeriodType),
-    serviceMetrics: filterMetricRowsForPage(metricDisplayRows, "serviceMetrics", metricPeriodType),
-    processDiagnostics: filterMetricRowsForPage(metricDisplayRows, "processDiagnostics", metricPeriodType),
-    metricDefinitions,
-    metricCalculationRuns,
-    metricObservations: metricDisplayRows,
-    simulationRuns,
-    simulationEvents,
-    timedOperations,
-    validations
-  }), [allFleetOperationTasks, chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
+  const rowsByPage = useMemo(() => {
+    const demandProfileRows = createDemandProfileRows(data);
+    const legacyDemandProfileRows = splitDemandProfilesByTarget ? splitDemandProfilesByTarget(demandProfileRows) : {
+      placeDemandProfiles: data.placeDemandProfiles || [],
+      serviceAreaDemandProfiles: data.serviceAreaDemandProfiles || [],
+      zoneDemandProfiles: data.zoneDemandProfiles || []
+    };
+    return {
+      maps: data.maps,
+      cells: data.cells,
+      roads: data.roads,
+      roadNodes: data.roadNodes,
+      roadSegments: data.roadSegments,
+      places: data.places,
+      serviceAreas: data.serviceAreas,
+      zones: data.zones,
+      demandProfiles: demandProfileRows,
+      placeDemandProfiles: legacyDemandProfileRows.placeDemandProfiles,
+      serviceAreaDemandProfiles: legacyDemandProfileRows.serviceAreaDemandProfiles,
+      zoneDemandProfiles: legacyDemandProfileRows.zoneDemandProfiles,
+      routes: data.routes.map(route => enrichRouteForDisplay(route, data, deploymentTasks, routeExecutions, routePlanningRuns)),
+      customers: data.customers || [],
+      demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
+      demandSimulationRuns,
+      demandSimulationResults: createDemandSimulationResultRows(demandSimulationRuns),
+      serviceOrders: serviceOrders.map(order => attachRevenueRecords(attachCostRecords(enrichServiceOrderForDisplay(order, data, trips), "serviceOrder", costRecords), revenueRecords)),
+      opsCenters: data.opsCenters,
+      workers: data.workers.map(worker => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
+      readinessTasks: readinessTasks.map(task => attachCostRecords(task, "readinessTask", costRecords)),
+      longTermDemandForecasts: data.longTermDemandForecasts || [],
+      supplyPlans: data.supplyPlans || [],
+      supplyOrders: data.supplyOrders || [],
+      dealerSupplies: data.dealerSupplies || [],
+      ownerSupplies: data.ownerSupplies || [],
+      cleaningTasks: cleaningTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "cleaningTask", costRecords)),
+      chargingTasks: chargingTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "chargingTask", costRecords)),
+      maintenanceTasks: maintenanceTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "maintenanceTask", costRecords)),
+      failureHandlingTasks: failureHandlingTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "failureHandlingTask", costRecords)),
+      retirementTasks: retirementTasks.map(task => attachCostRecords(enrichFleetOperationTaskForDisplay(task, data), "retirementTask", costRecords)),
+      fleetOperationPolicies,
+      fleetOperationPolicyRuns,
+      fleetOperationPolicyResults,
+      fleetOperationDispatchStrategies,
+      fleetOperationDispatchRuns,
+      fleetOperationDispatchDecisions,
+      taskDispatchStrategies,
+      robotaxiTaskPlanningStrategies,
+      robotaxiTaskPlanningRuns,
+      robotaxiTaskPlanningResults,
+      taskDispatchRuns,
+      taskDispatchResults,
+      taskPriorityConfig: taskPriorityConfigs,
+      deploymentTasks: deploymentTasks.map(task => attachCostRecords(enrichDeploymentTaskForDisplay(task, data), "deploymentTask", costRecords, routeExecutions)),
+      routeExecutions: routeExecutions.map(execution => attachCostRecords(enrichRouteExecutionForDisplay(execution, data), "routeExecution", costRecords)),
+      taskEventLogs,
+      routePlanningStrategies: createRoutePlanningStrategyRows(data, routePlanningRuns),
+      routePlanningRuns,
+      pricingStrategies: createPricingStrategyRows(data, pricingStrategyRuns),
+      pricingStrategyRuns,
+      pricingDecisions,
+      orderMatchingStrategies: createOrderMatchingStrategyRows(data, orderMatchingRuns),
+      orderMatchingRuns,
+      orderMatchingDecisions: orderMatchingDecisions.map(decision => enrichOrderMatchingDecisionForDisplay(decision, data)),
+      serviceFulfillmentRecords: trips.map(trip => attachCostRecords(enrichTripForDisplay(trip, data), "trip", costRecords)),
+      robotaxis: data.robotaxis.map(robotaxi => enrichRobotaxiForDisplay(robotaxi, data, readinessTasks, deploymentTasks, allFleetOperationTasks, routeExecutions)),
+      simulationPolicies,
+      workflowTimingRules: (workflowTimingProfiles[0]?.timing_rules || []).map(rule => ({
+        ...rule,
+        workflow_timing_profile_id: workflowTimingProfiles[0]?.workflow_timing_profile_id,
+        profile_name: workflowTimingProfiles[0]?.profile_name,
+        profile_version: workflowTimingProfiles[0]?.profile_version
+      })),
+      costModelProfiles,
+      costParameterRules: (costModelProfiles[0]?.cost_parameter_rules || []).map(rule => ({
+        ...rule,
+        cost_model_profile_id: costModelProfiles[0]?.cost_model_profile_id,
+        profile_name: costModelProfiles[0]?.profile_name,
+        profile_version: costModelProfiles[0]?.profile_version,
+        currency_code: costModelProfiles[0]?.currency_code
+      })),
+      costCalculationRuns,
+      costRecords,
+      revenueCalculationRuns,
+      revenueRecords,
+      operatingMetricsOverview: filterMetricRowsForPage(metricDisplayRows, "operatingMetricsOverview", metricPeriodType),
+      financialMetrics: filterMetricRowsForPage(metricDisplayRows, "financialMetrics", metricPeriodType),
+      serviceMetrics: filterMetricRowsForPage(metricDisplayRows, "serviceMetrics", metricPeriodType),
+      processDiagnostics: filterMetricRowsForPage(metricDisplayRows, "processDiagnostics", metricPeriodType),
+      metricDefinitions,
+      metricCalculationRuns,
+      metricObservations: metricDisplayRows,
+      simulationRuns,
+      simulationEvents,
+      timedOperations,
+      validations
+    };
+  }, [allFleetOperationTasks, chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
       const cell = data.cells.find(item => item.cell_id === selected.id);
@@ -7837,6 +7813,8 @@ async function bootstrap() {
   robotaxiTaskPlanningService = robotaxiTaskPlanningServiceModule;
   initializeSupplyManagement = supplyManagementInitializationModule.initializeSupplyManagement;
   initializeSpatialBusinessProfiles = spatialBusinessProfileInitializationModule.initializeSpatialBusinessProfiles;
+  normalizeDemandProfiles = spatialBusinessProfileInitializationModule.normalizeDemandProfiles;
+  splitDemandProfilesByTarget = spatialBusinessProfileInitializationModule.splitDemandProfilesByTarget;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -9231,6 +9209,7 @@ function loadRuntimeSnapshot(initialData) {
       supplyOrders: snapshot.operationalData?.supplyOrders || initialData.supplyOrders || [],
       dealerSupplies: snapshot.operationalData?.dealerSupplies || initialData.dealerSupplies || [],
       ownerSupplies: snapshot.operationalData?.ownerSupplies || initialData.ownerSupplies || [],
+      demandProfiles: snapshot.operationalData?.demandProfiles || initialData.demandProfiles || [],
       placeDemandProfiles: snapshot.operationalData?.placeDemandProfiles || initialData.placeDemandProfiles || [],
       serviceAreaDemandProfiles: snapshot.operationalData?.serviceAreaDemandProfiles || initialData.serviceAreaDemandProfiles || [],
       zoneDemandProfiles: snapshot.operationalData?.zoneDemandProfiles || initialData.zoneDemandProfiles || []
@@ -9336,9 +9315,17 @@ function removeRuntimeResetParam() {
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 function normalizeOperationalRouteStrategies(operationalData) {
+  const demandProfiles = normalizeDemandProfiles ? normalizeDemandProfiles(operationalData) : operationalData.demandProfiles || [];
+  const legacyDemandProfileGroups = splitDemandProfilesByTarget ? splitDemandProfilesByTarget(demandProfiles) : {
+    placeDemandProfiles: operationalData.placeDemandProfiles || [],
+    serviceAreaDemandProfiles: operationalData.serviceAreaDemandProfiles || [],
+    zoneDemandProfiles: operationalData.zoneDemandProfiles || []
+  };
   return {
     ...operationalData,
-    routes: normalizeRouteStrategyReferences(operationalData.routes || [])
+    routes: normalizeRouteStrategyReferences(operationalData.routes || []),
+    demandProfiles,
+    ...legacyDemandProfileGroups
   };
 }
 function normalizeServiceOrders(orders) {

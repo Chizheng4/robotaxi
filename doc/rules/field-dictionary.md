@@ -31,9 +31,9 @@
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |cost_model_profile_id|成本模型配置编号|持久化字段|成本模型配置唯一编号|
-|profile_name|配置名称|持久化字段|用户可识别的配置名称|
-|profile_version|配置版本|持久化字段|配置版本号|
-|profile_status|配置状态|持久化字段|DRAFT、ACTIVE、ARCHIVED|
+|profile_name|名称|持久化字段|用户可识别的配置或画像名称|
+|profile_version|版本|持久化字段|配置或画像版本号|
+|profile_status|状态|持久化字段|DRAFT、ACTIVE、ARCHIVED|
 |description|配置说明|持久化字段|配置适用场景说明|
 |currency_code|币种|持久化字段|成本金额币种，默认 CNY|
 |distance_cost_per_km|每公里距离成本|持久化字段|行驶距离对应的可变成本单价|
@@ -730,11 +730,16 @@
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |profile_id|画像编号|持久化字段|画像唯一编号|
-|profile_type|画像类型|派生展示字段|需求画像来源类型：地点、服务区或区域|
-|profile_status|画像状态|持久化字段|画像是否可用|
-|source_object_id|来源对象编号|派生展示字段|画像关联的 Place、ServiceArea 或 Zone 编号|
-|source_object_name|来源对象名称|派生展示字段|画像关联对象的中文名称|
-|source_object_type|来源对象类型|派生展示字段|画像关联对象类型|
+|profile_name|名称|配置字段|画像名称|
+|profile_version|版本|持久化字段|画像版本|
+|profile_status|状态|持久化字段|画像是否可用|
+|target_object_type|目标对象类型|持久化字段|PLACE、SERVICE_AREA、ZONE|
+|target_object_id|目标对象编号|持久化字段|画像关联的 Place、ServiceArea 或 Zone 编号|
+|target_object_name|目标对象名称|派生展示字段|画像关联对象的中文名称|
+|profile_type|画像类型（兼容）|兼容字段|旧版画像来源类型，目标设计废弃|
+|source_object_id|来源对象编号（兼容）|兼容字段|旧版画像关联对象编号，目标设计废弃|
+|source_object_name|来源对象名称（兼容）|兼容字段|旧版画像关联对象名称，目标设计废弃|
+|source_object_type|来源对象类型（兼容）|兼容字段|旧版画像关联对象类型，目标设计废弃|
 |resident_population|常住人口|配置字段|地点常住人口|
 |working_population|工作人口|配置字段|地点工作人口|
 |daily_visitors|日访客量|配置字段|地点日访客量|
@@ -743,6 +748,7 @@
 |peak_pattern|需求高峰模式|配置字段|地点高峰模式|
 |growth_rate|增长率|配置字段|地点需求增长率|
 |robotaxi_adoption_rate|Robotaxi 采用率|配置字段|潜在需求中采用 Robotaxi 的比例|
+|service_acceptance_rate|服务接受率|配置字段|潜在 Robotaxi 需求转化为服务订单的比例|
 |effective_from|生效时间|配置字段|画像开始生效时间|
 |effective_to|失效时间|配置字段|画像失效时间，可为空|
 |pickup_probability|上车概率|配置字段|服务区成为上车点的概率|
@@ -751,6 +757,10 @@
 |service_capacity|服务容量|配置字段|服务区承载服务能力|
 |waiting_capacity|等待容量|配置字段|服务区可等待容量|
 |turnover_capacity|周转能力|配置字段|服务区单位周期周转能力|
+|accessibility_factor|可达性系数|配置字段|服务区道路可达性修正|
+|zone_adjustment_factor|区域调整系数|配置字段|区域经营修正|
+|coverage_factor|服务覆盖系数|配置字段|服务覆盖修正|
+|competition_factor|竞争影响系数|配置字段|竞争影响修正|
 |potential_demand|潜在需求|计算字段|由地点画像计算得到的潜在需求|
 |expected_robotaxi_demand|预计 Robotaxi 需求|计算字段|由画像和采用率计算的 Robotaxi 需求|
 |peak_hour_demand|峰值需求|计算字段|高峰小时需求|
@@ -1599,6 +1609,8 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |TRANSPORT_ZONE|交通区域|
 |MIXED_ZONE|混合区域|
 |SUPPORT_ZONE|保障区域|
+|PLACE|地点|
+|SERVICE_AREA|服务区域|
 |PLACE_DEMAND|地点需求画像|
 |SERVICE_AREA_DEMAND|服务区需求画像|
 |ZONE_DEMAND|区域需求画像|
@@ -2282,9 +2294,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |workflow_timing_profile_id|工作流时效配置编号|持久化字段|配置唯一编号|
-|profile_name|配置名称|持久化字段|配置中文名称|
-|profile_version|配置版本|运行态字段|每次修改规则后递增的版本|
-|profile_status|配置状态|运行态字段|ACTIVE / DISABLED / ARCHIVED|
+|profile_name|名称|持久化字段|配置中文名称|
+|profile_version|版本|运行态字段|每次修改规则后递增的版本|
+|profile_status|状态|运行态字段|ACTIVE / DISABLED / ARCHIVED|
 |timing_rules|工作流时效规则|持久化字段|配置包含的 WorkflowTimingRule 列表|
 |description|说明|持久化字段|配置用途说明|
 |created_at|创建时间|运行态字段|真实审计创建时间|
