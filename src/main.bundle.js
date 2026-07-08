@@ -5943,7 +5943,7 @@ function TabbedDetail({
     }))
   });
 }
-function getDetailTabs(selectedType) {
+function getDetailTabs(selectedType, selectedObject) {
   if (selectedType === "robotaxi") {
     return [{
       key: "basic",

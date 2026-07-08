@@ -5745,7 +5745,7 @@ function TabbedDetail({ selectedObject, selectedType }) {
   );
 }
 
-function getDetailTabs(selectedType) {
+function getDetailTabs(selectedType, selectedObject) {
   if (selectedType === "robotaxi") {
     return [
       { key: "basic", label: "基础信息", keys: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "availability_status", "operation_blocking_reason", "motion_status"] },

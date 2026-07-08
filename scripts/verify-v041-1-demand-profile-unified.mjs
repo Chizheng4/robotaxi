@@ -77,6 +77,8 @@ assert.ok(main.includes('"resident_population",\n      "working_population",\n  
 assert.ok(main.includes('"pickup_probability",\n      "dropoff_probability",\n      "peak_demand_ratio"'), "需求画像页面必须展示可配置的 ServiceArea 能力输入数字");
 assert.ok(main.includes("function editDemandProfile(profile)"), "需求画像必须提供配置入口");
 assert.ok(main.includes("function saveDemandProfileConfig()"), "需求画像必须提供保存配置动作");
+assert.ok(main.includes("function getDetailTabs(selectedType, selectedObject)"), "详情标签必须接收选中对象，避免需求画像详情白屏");
+assert.ok(main.includes('if (selectedType === "demandProfile") {\n    return getDemandProfileDetailTabs(selectedObject);'), "需求画像详情必须使用当前选中画像生成详情标签");
 assert.ok(main.includes('renderActionCell(row, <RowActionButton onClick={() => actions.editDemandProfile(row)}>配置</RowActionButton>)'), "需求画像表格行操作必须显示配置按钮");
 assert.ok(main.includes('if (profile.target_object_type === "ZONE")'), "Zone 画像配置必须单独分支");
 assert.ok(main.includes('{ key: "zone_adjustment_factor", type: "number"'), "Zone 画像配置必须只暴露区域修正类字段");
