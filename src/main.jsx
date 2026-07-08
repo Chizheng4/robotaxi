@@ -12,6 +12,7 @@ let initializeSupplyManagement;
 let initializeSpatialBusinessProfiles;
 let normalizeDemandProfiles;
 let splitDemandProfilesByTarget;
+let updateDemandProfileConfig;
 let initializePricing;
 let initializeOrderMatching;
 let validateOperationsCenter;
@@ -972,6 +973,7 @@ const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
+const peakPatternOptions = ["BALANCED", "MORNING_OUTBOUND", "EVENING_INBOUND", "EVENING_OUTBOUND", "ALL_DAY_STABLE", "WEEKEND_PEAK", "EVENT_DRIVEN", "LOW_DEMAND"];
 const runtimeStorageKey = "robotaxi.runtime.v019-7-service-route";
 const runtimeStorageKeyPrefix = "robotaxi.runtime.";
 const simulationEventDbName = "robotaxi.simulation.events.v027";
@@ -997,6 +999,62 @@ const legacyRouteStrategyIdMap = {
 
 function createDemandProfileRows(data) {
   return normalizeDemandProfiles ? normalizeDemandProfiles(data) : (data.demandProfiles || []);
+}
+
+function getDemandProfileConfigFields(profile) {
+  if (!profile) return [];
+  const commonFields = [{ key: "profile_name", type: "text" }];
+  if (profile.target_object_type === "PLACE") {
+    return [
+      ...commonFields,
+      { key: "resident_population", type: "number", min: 0, step: 1 },
+      { key: "working_population", type: "number", min: 0, step: 1 },
+      { key: "daily_visitors", type: "number", min: 0, step: 1 },
+      { key: "trip_generation_rate", type: "number", min: 0, step: 0.01 },
+      { key: "demand_weight", type: "number", min: 0, step: 0.01 },
+      { key: "robotaxi_adoption_rate", type: "number", min: 0, max: 1, step: 0.01 },
+      { key: "service_acceptance_rate", type: "number", min: 0, max: 1, step: 0.01 },
+      { key: "growth_rate", type: "number", step: 0.01 },
+      { key: "peak_pattern", type: "select", options: peakPatternOptions },
+    ];
+  }
+  if (profile.target_object_type === "SERVICE_AREA") {
+    return [
+      ...commonFields,
+      { key: "pickup_probability", type: "number", min: 0, max: 1, step: 0.01 },
+      { key: "dropoff_probability", type: "number", min: 0, max: 1, step: 0.01 },
+      { key: "peak_demand_ratio", type: "number", min: 0, step: 0.01 },
+      { key: "service_capacity", type: "number", min: 0, step: 1 },
+      { key: "waiting_capacity", type: "number", min: 0, step: 1 },
+      { key: "turnover_capacity", type: "number", min: 0, step: 1 },
+      { key: "accessibility_factor", type: "number", min: 0, step: 0.01 },
+    ];
+  }
+  if (profile.target_object_type === "ZONE") {
+    return [
+      ...commonFields,
+      { key: "zone_adjustment_factor", type: "number", min: 0, step: 0.01 },
+      { key: "coverage_factor", type: "number", min: 0, step: 0.01 },
+      { key: "competition_factor", type: "number", min: 0, step: 0.01 },
+      { key: "growth_factor", type: "number", min: 0, step: 0.01 },
+    ];
+  }
+  return commonFields;
+}
+
+function createDemandProfileConfigDraft(profile) {
+  return Object.fromEntries(getDemandProfileConfigFields(profile).map((field) => [
+    field.key,
+    profile?.[field.key] ?? "",
+  ]));
+}
+
+function normalizeDemandProfileDraft(profile, draft) {
+  return Object.fromEntries(getDemandProfileConfigFields(profile).map((field) => {
+    const value = draft[field.key];
+    if (field.type === "number") return [field.key, Number(value || 0)];
+    return [field.key, value];
+  }));
 }
 
 function App() {
@@ -1140,6 +1198,9 @@ function App() {
   const [pendingFleetOperationPolicy, setPendingFleetOperationPolicy] = useState(null);
   const [fleetOperationPolicyModalOpen, setFleetOperationPolicyModalOpen] = useState(false);
   const [fleetOperationPolicyDraft, setFleetOperationPolicyDraft] = useState({});
+  const [pendingDemandProfile, setPendingDemandProfile] = useState(null);
+  const [demandProfileModalOpen, setDemandProfileModalOpen] = useState(false);
+  const [demandProfileDraft, setDemandProfileDraft] = useState({});
   const [metricPeriodType, setMetricPeriodType] = useState(initialRuntime.metricPeriodType || "ALL");
   const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
@@ -2262,6 +2323,37 @@ function App() {
       : profile));
     setCostParameterModalOpen(false);
   }
+
+  function editDemandProfile(profile) {
+    setPendingDemandProfile(profile);
+    setDemandProfileDraft(createDemandProfileConfigDraft(profile));
+    setDemandProfileModalOpen(true);
+  }
+
+  function saveDemandProfileConfig() {
+    if (!pendingDemandProfile || !updateDemandProfileConfig) return;
+    const patch = normalizeDemandProfileDraft(pendingDemandProfile, demandProfileDraft);
+    setOperationalData((current) => {
+      const nextDemandProfiles = updateDemandProfileConfig({
+        demandProfiles: current.demandProfiles || [],
+        profileId: pendingDemandProfile.profile_id,
+        patch,
+        places: current.places || [],
+        serviceAreas: current.serviceAreas || [],
+        zones: current.zones || [],
+      });
+      const legacyGroups = splitDemandProfilesByTarget ? splitDemandProfilesByTarget(nextDemandProfiles) : {};
+      return normalizeOperationalRouteStrategies({
+        ...current,
+        demandProfiles: nextDemandProfiles,
+        ...legacyGroups,
+      });
+    });
+    setDemandProfileModalOpen(false);
+    setPendingDemandProfile(null);
+    setDemandProfileDraft({});
+    antd.message.success("需求画像配置已保存，区域画像已重新计算");
+  }
   return (
     <Layout className="ops-shell">
       <Sider className="ops-sider" width={232} collapsedWidth={60} collapsed={collapsed} trigger={null}>
@@ -2396,6 +2488,7 @@ function App() {
                   setMetricPeriodType,
                   metricCalculationInProgress,
                   editCostParameterRule,
+                  editDemandProfile,
                   clearEndedTimedOperations,
                   requestClearAllTimedOperations,
                   businessTimingCalculationRuns,
@@ -2541,6 +2634,52 @@ function App() {
               <Input type="number" min={0} value={costParameterValue} onChange={(event) => setCostParameterValue(event.target.value)} />
             )}
           </label>
+        </div>
+      </Modal>
+      <Modal
+        title="配置需求画像"
+        open={demandProfileModalOpen}
+        okText="保存配置"
+        cancelText="取消"
+        width={640}
+        onCancel={() => setDemandProfileModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setDemandProfileModalOpen(false)}>取消</Button>,
+          <Button key="save" type="primary" onClick={saveDemandProfileConfig}>保存配置</Button>,
+        ]}
+      >
+        <div className="timing-rule-editor demand-profile-editor">
+          <Descriptions size="small" column={1} colon={false}>
+            <Descriptions.Item label="画像编号">{pendingDemandProfile?.profile_id || "无"}</Descriptions.Item>
+            <Descriptions.Item label="目标对象">{getDisplayValue(pendingDemandProfile?.target_object_type, "target_object_type")} · {pendingDemandProfile?.target_object_name || pendingDemandProfile?.target_object_id || "无"}</Descriptions.Item>
+          </Descriptions>
+          {getDemandProfileConfigFields(pendingDemandProfile).map((field) => (
+            <label key={field.key}>
+              <span>{getFieldLabel(field.key)}</span>
+              {field.type === "select" ? (
+                <Select
+                  size="small"
+                  value={demandProfileDraft[field.key]}
+                  onChange={(value) => setDemandProfileDraft((draft) => ({ ...draft, [field.key]: value }))}
+                  options={field.options.map((value) => ({ value, label: getDisplayValue(value, field.key) }))}
+                  getPopupContainer={() => document.body}
+                />
+              ) : (
+                <Input
+                  size="small"
+                  type={field.type === "number" ? "number" : "text"}
+                  min={field.min ?? undefined}
+                  max={field.max ?? undefined}
+                  step={field.step ?? undefined}
+                  value={demandProfileDraft[field.key] ?? ""}
+                  onChange={(event) => setDemandProfileDraft((draft) => ({ ...draft, [field.key]: event.target.value }))}
+                />
+              )}
+            </label>
+          ))}
+          {pendingDemandProfile?.target_object_type === "ZONE" && (
+            <Text type="secondary">区域画像的需求、容量和供给需求评分由包含的地点画像与服务区域画像汇总计算；这里只配置区域修正系数。</Text>
+          )}
         </div>
       </Modal>
     </Layout>
@@ -4883,6 +5022,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
+  const isDemandProfilePage = page === "demandProfiles";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
   const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage;
@@ -5320,6 +5460,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editCostParameterRule(row)}>配置</RowActionButton>),
       };
     }
+    if (isDemandProfilePage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 120,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editDemandProfile(row)}>配置</RowActionButton>),
+      };
+    }
     if (isRobotaxiPage) {
       return {
         key: "actions",
@@ -5561,7 +5710,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "demandProfile", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -5621,6 +5770,9 @@ function getDetailTabs(selectedType) {
       { key: "steps", label: "路径步骤", keys: ["road_segment_sequence", "route_segments", "route_step_count", "route_steps"] },
       { key: "metrics", label: "路径指标", keys: ["total_distance_m", "related_service_area_ids"] },
     ];
+  }
+  if (selectedType === "demandProfile") {
+    return getDemandProfileDetailTabs(selectedObject);
   }
   if (selectedType === "readinessTask") {
     return [
@@ -5780,6 +5932,32 @@ function getDetailTabs(selectedType) {
     ];
   }
   return [];
+}
+
+function getDemandProfileDetailTabs(profile) {
+  const basic = { key: "basic", label: "画像信息", keys: ["profile_id", "profile_name", "target_object_type", "target_object_id", "target_object_name", "profile_version", "profile_status", "effective_from", "effective_to"] };
+  if (profile?.target_object_type === "PLACE") {
+    return [
+      basic,
+      { key: "config", label: "可配置参数", keys: ["resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "robotaxi_adoption_rate", "service_acceptance_rate", "growth_rate", "peak_pattern"] },
+      { key: "calculated", label: "自动计算", keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "calculated_at"] },
+    ];
+  }
+  if (profile?.target_object_type === "SERVICE_AREA") {
+    return [
+      basic,
+      { key: "config", label: "可配置参数", keys: ["pickup_probability", "dropoff_probability", "peak_demand_ratio", "service_capacity", "waiting_capacity", "turnover_capacity", "accessibility_factor"] },
+      { key: "calculated", label: "自动计算", keys: ["calculated_at"] },
+    ];
+  }
+  if (profile?.target_object_type === "ZONE") {
+    return [
+      basic,
+      { key: "config", label: "可配置参数", keys: ["zone_adjustment_factor", "coverage_factor", "competition_factor", "growth_factor"] },
+      { key: "calculated", label: "自动汇总", keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_distribution", "calculated_from_profile_ids", "calculated_at"] },
+    ];
+  }
+  return [basic];
 }
 
 function getDetailStatusField(selectedType) {
@@ -7588,6 +7766,7 @@ async function bootstrap() {
 		  initializeSpatialBusinessProfiles = spatialBusinessProfileInitializationModule.initializeSpatialBusinessProfiles;
 		  normalizeDemandProfiles = spatialBusinessProfileInitializationModule.normalizeDemandProfiles;
 		  splitDemandProfilesByTarget = spatialBusinessProfileInitializationModule.splitDemandProfilesByTarget;
+		  updateDemandProfileConfig = spatialBusinessProfileInitializationModule.updateDemandProfileConfig;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {

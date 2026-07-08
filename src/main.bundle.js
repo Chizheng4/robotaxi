@@ -36,6 +36,7 @@ let initializeSupplyManagement;
 let initializeSpatialBusinessProfiles;
 let normalizeDemandProfiles;
 let splitDemandProfilesByTarget;
+let updateDemandProfileConfig;
 let initializePricing;
 let initializeOrderMatching;
 let validateOperationsCenter;
@@ -1016,6 +1017,7 @@ const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
 const customerStatusOptions = ["ACTIVE", "TEST_ONLY", "INACTIVE", "BLOCKED"];
 const triggerTypeOptions = ["AUTO", "MANUAL"];
+const peakPatternOptions = ["BALANCED", "MORNING_OUTBOUND", "EVENING_INBOUND", "EVENING_OUTBOUND", "ALL_DAY_STABLE", "WEEKEND_PEAK", "EVENT_DRIVEN", "LOW_DEMAND"];
 const runtimeStorageKey = "robotaxi.runtime.v019-7-service-route";
 const runtimeStorageKeyPrefix = "robotaxi.runtime.";
 const simulationEventDbName = "robotaxi.simulation.events.v027";
@@ -1050,6 +1052,135 @@ const legacyRouteStrategyIdMap = {
 };
 function createDemandProfileRows(data) {
   return normalizeDemandProfiles ? normalizeDemandProfiles(data) : data.demandProfiles || [];
+}
+function getDemandProfileConfigFields(profile) {
+  if (!profile) return [];
+  const commonFields = [{
+    key: "profile_name",
+    type: "text"
+  }];
+  if (profile.target_object_type === "PLACE") {
+    return [...commonFields, {
+      key: "resident_population",
+      type: "number",
+      min: 0,
+      step: 1
+    }, {
+      key: "working_population",
+      type: "number",
+      min: 0,
+      step: 1
+    }, {
+      key: "daily_visitors",
+      type: "number",
+      min: 0,
+      step: 1
+    }, {
+      key: "trip_generation_rate",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }, {
+      key: "demand_weight",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }, {
+      key: "robotaxi_adoption_rate",
+      type: "number",
+      min: 0,
+      max: 1,
+      step: 0.01
+    }, {
+      key: "service_acceptance_rate",
+      type: "number",
+      min: 0,
+      max: 1,
+      step: 0.01
+    }, {
+      key: "growth_rate",
+      type: "number",
+      step: 0.01
+    }, {
+      key: "peak_pattern",
+      type: "select",
+      options: peakPatternOptions
+    }];
+  }
+  if (profile.target_object_type === "SERVICE_AREA") {
+    return [...commonFields, {
+      key: "pickup_probability",
+      type: "number",
+      min: 0,
+      max: 1,
+      step: 0.01
+    }, {
+      key: "dropoff_probability",
+      type: "number",
+      min: 0,
+      max: 1,
+      step: 0.01
+    }, {
+      key: "peak_demand_ratio",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }, {
+      key: "service_capacity",
+      type: "number",
+      min: 0,
+      step: 1
+    }, {
+      key: "waiting_capacity",
+      type: "number",
+      min: 0,
+      step: 1
+    }, {
+      key: "turnover_capacity",
+      type: "number",
+      min: 0,
+      step: 1
+    }, {
+      key: "accessibility_factor",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }];
+  }
+  if (profile.target_object_type === "ZONE") {
+    return [...commonFields, {
+      key: "zone_adjustment_factor",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }, {
+      key: "coverage_factor",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }, {
+      key: "competition_factor",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }, {
+      key: "growth_factor",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }];
+  }
+  return commonFields;
+}
+function createDemandProfileConfigDraft(profile) {
+  return Object.fromEntries(getDemandProfileConfigFields(profile).map(field => [field.key, profile?.[field.key] ?? ""]));
+}
+function normalizeDemandProfileDraft(profile, draft) {
+  return Object.fromEntries(getDemandProfileConfigFields(profile).map(field => {
+    const value = draft[field.key];
+    if (field.type === "number") return [field.key, Number(value || 0)];
+    return [field.key, value];
+  }));
 }
 function App() {
   const initialData = useMemo(() => {
@@ -1174,6 +1305,9 @@ function App() {
   const [pendingFleetOperationPolicy, setPendingFleetOperationPolicy] = useState(null);
   const [fleetOperationPolicyModalOpen, setFleetOperationPolicyModalOpen] = useState(false);
   const [fleetOperationPolicyDraft, setFleetOperationPolicyDraft] = useState({});
+  const [pendingDemandProfile, setPendingDemandProfile] = useState(null);
+  const [demandProfileModalOpen, setDemandProfileModalOpen] = useState(false);
+  const [demandProfileDraft, setDemandProfileDraft] = useState({});
   const [metricPeriodType, setMetricPeriodType] = useState(initialRuntime.metricPeriodType || "ALL");
   const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
@@ -2319,6 +2453,35 @@ function App() {
     setCostModelProfiles(profiles => profiles.map(profile => profile.profile_status === "ACTIVE" ? costModelCalculator.updateCostParameterRule(profile, pendingCostParameterRule.cost_parameter_key, costParameterValue) : profile));
     setCostParameterModalOpen(false);
   }
+  function editDemandProfile(profile) {
+    setPendingDemandProfile(profile);
+    setDemandProfileDraft(createDemandProfileConfigDraft(profile));
+    setDemandProfileModalOpen(true);
+  }
+  function saveDemandProfileConfig() {
+    if (!pendingDemandProfile || !updateDemandProfileConfig) return;
+    const patch = normalizeDemandProfileDraft(pendingDemandProfile, demandProfileDraft);
+    setOperationalData(current => {
+      const nextDemandProfiles = updateDemandProfileConfig({
+        demandProfiles: current.demandProfiles || [],
+        profileId: pendingDemandProfile.profile_id,
+        patch,
+        places: current.places || [],
+        serviceAreas: current.serviceAreas || [],
+        zones: current.zones || []
+      });
+      const legacyGroups = splitDemandProfilesByTarget ? splitDemandProfilesByTarget(nextDemandProfiles) : {};
+      return normalizeOperationalRouteStrategies({
+        ...current,
+        demandProfiles: nextDemandProfiles,
+        ...legacyGroups
+      });
+    });
+    setDemandProfileModalOpen(false);
+    setPendingDemandProfile(null);
+    setDemandProfileDraft({});
+    antd.message.success("需求画像配置已保存，区域画像已重新计算");
+  }
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -2468,6 +2631,7 @@ function App() {
       setMetricPeriodType,
       metricCalculationInProgress,
       editCostParameterRule,
+      editDemandProfile,
       clearEndedTimedOperations,
       requestClearAllTimedOperations,
       businessTimingCalculationRuns,
@@ -2633,7 +2797,59 @@ function App() {
     min: 0,
     value: costParameterValue,
     onChange: event => setCostParameterValue(event.target.value)
-  })))));
+  })))), /*#__PURE__*/React.createElement(Modal, {
+    title: "\u914D\u7F6E\u9700\u6C42\u753B\u50CF",
+    open: demandProfileModalOpen,
+    okText: "\u4FDD\u5B58\u914D\u7F6E",
+    cancelText: "\u53D6\u6D88",
+    width: 640,
+    onCancel: () => setDemandProfileModalOpen(false),
+    footer: [/*#__PURE__*/React.createElement(Button, {
+      key: "cancel",
+      onClick: () => setDemandProfileModalOpen(false)
+    }, "\u53D6\u6D88"), /*#__PURE__*/React.createElement(Button, {
+      key: "save",
+      type: "primary",
+      onClick: saveDemandProfileConfig
+    }, "\u4FDD\u5B58\u914D\u7F6E")]
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "timing-rule-editor demand-profile-editor"
+  }, /*#__PURE__*/React.createElement(Descriptions, {
+    size: "small",
+    column: 1,
+    colon: false
+  }, /*#__PURE__*/React.createElement(Descriptions.Item, {
+    label: "\u753B\u50CF\u7F16\u53F7"
+  }, pendingDemandProfile?.profile_id || "无"), /*#__PURE__*/React.createElement(Descriptions.Item, {
+    label: "\u76EE\u6807\u5BF9\u8C61"
+  }, getDisplayValue(pendingDemandProfile?.target_object_type, "target_object_type"), " \xB7 ", pendingDemandProfile?.target_object_name || pendingDemandProfile?.target_object_id || "无")), getDemandProfileConfigFields(pendingDemandProfile).map(field => /*#__PURE__*/React.createElement("label", {
+    key: field.key
+  }, /*#__PURE__*/React.createElement("span", null, getFieldLabel(field.key)), field.type === "select" ? /*#__PURE__*/React.createElement(Select, {
+    size: "small",
+    value: demandProfileDraft[field.key],
+    onChange: value => setDemandProfileDraft(draft => ({
+      ...draft,
+      [field.key]: value
+    })),
+    options: field.options.map(value => ({
+      value,
+      label: getDisplayValue(value, field.key)
+    })),
+    getPopupContainer: () => document.body
+  }) : /*#__PURE__*/React.createElement(Input, {
+    size: "small",
+    type: field.type === "number" ? "number" : "text",
+    min: field.min ?? undefined,
+    max: field.max ?? undefined,
+    step: field.step ?? undefined,
+    value: demandProfileDraft[field.key] ?? "",
+    onChange: event => setDemandProfileDraft(draft => ({
+      ...draft,
+      [field.key]: event.target.value
+    }))
+  }))), pendingDemandProfile?.target_object_type === "ZONE" && /*#__PURE__*/React.createElement(Text, {
+    type: "secondary"
+  }, "\u533A\u57DF\u753B\u50CF\u7684\u9700\u6C42\u3001\u5BB9\u91CF\u548C\u4F9B\u7ED9\u9700\u6C42\u8BC4\u5206\u7531\u5305\u542B\u7684\u5730\u70B9\u753B\u50CF\u4E0E\u670D\u52A1\u533A\u57DF\u753B\u50CF\u6C47\u603B\u8BA1\u7B97\uFF1B\u8FD9\u91CC\u53EA\u914D\u7F6E\u533A\u57DF\u4FEE\u6B63\u7CFB\u6570\u3002"))));
   function handleMenuClick(key) {
     if (!isRenderablePage(key)) return;
     activateWorkspacePage(key);
@@ -4942,6 +5158,7 @@ function RecordTable({
   const isSimulationRunPage = page === "simulationRuns";
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
+  const isDemandProfilePage = page === "demandProfiles";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
   const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage;
@@ -5423,6 +5640,17 @@ function RecordTable({
         }, "\u914D\u7F6E"))
       };
     }
+    if (isDemandProfilePage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 120,
+        render: (_, row) => renderActionCell(row, /*#__PURE__*/React.createElement(RowActionButton, {
+          onClick: () => actions.editDemandProfile(row)
+        }, "\u914D\u7F6E"))
+      };
+    }
     if (isRobotaxiPage) {
       return {
         key: "actions",
@@ -5682,7 +5910,7 @@ function DetailPanel({
   }));
 }
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "demandProfile", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 function TabbedDetail({
   selectedObject,
@@ -5776,6 +6004,9 @@ function getDetailTabs(selectedType) {
       label: "路径指标",
       keys: ["total_distance_m", "related_service_area_ids"]
     }];
+  }
+  if (selectedType === "demandProfile") {
+    return getDemandProfileDetailTabs(selectedObject);
   }
   if (selectedType === "readinessTask") {
     return [{
@@ -6171,6 +6402,47 @@ function getDetailTabs(selectedType) {
     }];
   }
   return [];
+}
+function getDemandProfileDetailTabs(profile) {
+  const basic = {
+    key: "basic",
+    label: "画像信息",
+    keys: ["profile_id", "profile_name", "target_object_type", "target_object_id", "target_object_name", "profile_version", "profile_status", "effective_from", "effective_to"]
+  };
+  if (profile?.target_object_type === "PLACE") {
+    return [basic, {
+      key: "config",
+      label: "可配置参数",
+      keys: ["resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "robotaxi_adoption_rate", "service_acceptance_rate", "growth_rate", "peak_pattern"]
+    }, {
+      key: "calculated",
+      label: "自动计算",
+      keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "calculated_at"]
+    }];
+  }
+  if (profile?.target_object_type === "SERVICE_AREA") {
+    return [basic, {
+      key: "config",
+      label: "可配置参数",
+      keys: ["pickup_probability", "dropoff_probability", "peak_demand_ratio", "service_capacity", "waiting_capacity", "turnover_capacity", "accessibility_factor"]
+    }, {
+      key: "calculated",
+      label: "自动计算",
+      keys: ["calculated_at"]
+    }];
+  }
+  if (profile?.target_object_type === "ZONE") {
+    return [basic, {
+      key: "config",
+      label: "可配置参数",
+      keys: ["zone_adjustment_factor", "coverage_factor", "competition_factor", "growth_factor"]
+    }, {
+      key: "calculated",
+      label: "自动汇总",
+      keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_distribution", "calculated_from_profile_ids", "calculated_at"]
+    }];
+  }
+  return [basic];
 }
 function getDetailStatusField(selectedType) {
   return {
@@ -7815,6 +8087,7 @@ async function bootstrap() {
   initializeSpatialBusinessProfiles = spatialBusinessProfileInitializationModule.initializeSpatialBusinessProfiles;
   normalizeDemandProfiles = spatialBusinessProfileInitializationModule.normalizeDemandProfiles;
   splitDemandProfilesByTarget = spatialBusinessProfileInitializationModule.splitDemandProfilesByTarget;
+  updateDemandProfileConfig = spatialBusinessProfileInitializationModule.updateDemandProfileConfig;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {

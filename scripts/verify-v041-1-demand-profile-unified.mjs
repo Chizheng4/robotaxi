@@ -4,6 +4,7 @@ import {
   initializeSpatialBusinessProfiles,
   normalizeDemandProfiles,
   splitDemandProfilesByTarget,
+  updateDemandProfileConfig,
 } from "../src/data/spatialBusinessProfileInitialization.js";
 
 const context = {
@@ -46,6 +47,27 @@ assert.equal(split.placeDemandProfiles.length, 1, "兼容拆分必须保留 Plac
 assert.equal(split.serviceAreaDemandProfiles.length, 1, "兼容拆分必须保留 ServiceArea 画像数组");
 assert.equal(split.zoneDemandProfiles.length, 1, "兼容拆分必须保留 Zone 画像数组");
 
+const placeProfile = initialized.demandProfiles.find((profile) => profile.target_object_type === "PLACE");
+const updatedByPlaceConfig = updateDemandProfileConfig({
+  ...context,
+  demandProfiles: initialized.demandProfiles,
+  profileId: placeProfile.profile_id,
+  patch: { daily_visitors: 2000, trip_generation_rate: 1, demand_weight: 1, robotaxi_adoption_rate: 0.5, service_acceptance_rate: 1 },
+});
+const recalculatedZone = updatedByPlaceConfig.find((profile) => profile.target_object_type === "ZONE");
+assert.equal(recalculatedZone.potential_demand, 3200, "配置 Place 后 Zone 潜在需求必须自动重算");
+assert.equal(recalculatedZone.expected_robotaxi_demand, 1600, "配置 Place 后 Zone 预计 Robotaxi 需求必须自动重算");
+
+const updatedByZoneConfig = updateDemandProfileConfig({
+  ...context,
+  demandProfiles: initialized.demandProfiles,
+  profileId: zoneProfile.profile_id,
+  patch: { zone_adjustment_factor: 2, coverage_factor: 1, competition_factor: 1, growth_factor: 1 },
+});
+const adjustedZone = updatedByZoneConfig.find((profile) => profile.target_object_type === "ZONE");
+assert.equal(adjustedZone.service_capacity, 8, "配置 Zone 时服务容量仍必须来自 ServiceArea 汇总，不能人工覆盖");
+assert.ok(adjustedZone.expected_robotaxi_demand > zoneProfile.expected_robotaxi_demand, "配置 Zone 修正系数后预计需求必须重算");
+
 const main = fs.readFileSync("src/main.jsx", "utf8");
 const fieldDictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
@@ -53,6 +75,12 @@ const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
 assert.ok(main.includes('"target_object_name",\n      "potential_demand",\n      "expected_robotaxi_demand",\n      "peak_hour_demand",\n      "service_capacity"'), "需求画像页面必须把关键计算数字放在目标对象字段之后");
 assert.ok(main.includes('"resident_population",\n      "working_population",\n      "daily_visitors",\n      "trip_generation_rate"'), "需求画像页面必须展示可配置的 Place 需求输入数字");
 assert.ok(main.includes('"pickup_probability",\n      "dropoff_probability",\n      "peak_demand_ratio"'), "需求画像页面必须展示可配置的 ServiceArea 能力输入数字");
+assert.ok(main.includes("function editDemandProfile(profile)"), "需求画像必须提供配置入口");
+assert.ok(main.includes("function saveDemandProfileConfig()"), "需求画像必须提供保存配置动作");
+assert.ok(main.includes('renderActionCell(row, <RowActionButton onClick={() => actions.editDemandProfile(row)}>配置</RowActionButton>)'), "需求画像表格行操作必须显示配置按钮");
+assert.ok(main.includes('if (profile.target_object_type === "ZONE")'), "Zone 画像配置必须单独分支");
+assert.ok(main.includes('{ key: "zone_adjustment_factor", type: "number"'), "Zone 画像配置必须只暴露区域修正类字段");
+assert.ok(!main.includes('profile.target_object_type === "ZONE") {\n    return [\n      ...commonFields,\n      { key: "service_capacity"'), "Zone 画像不得配置服务容量等汇总字段");
 assert.ok(!main.includes('columns: ["profile_id", "profile_type", "source_object_id", "source_object_name"'), "需求画像页面不得继续以 profile_type/source_object_* 为主列");
 assert.ok(main.includes("demandProfiles: snapshot.operationalData?.demandProfiles || initialData.demandProfiles || []"), "运行态恢复必须读取统一 demandProfiles");
 assert.ok(main.includes("normalizeDemandProfiles ? normalizeDemandProfiles(operationalData)"), "运行态必须归一化旧画像数据");

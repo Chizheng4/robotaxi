@@ -1591,6 +1591,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |HOTEL|酒店|
 |TRANSPORT_HUB|交通枢纽|
 |OPS_CENTER|运营中心|
+|BALANCED|均衡需求|
 |MORNING_OUTBOUND|早高峰流出|
 |EVENING_INBOUND|晚高峰流入|
 |EVENING_OUTBOUND|晚高峰流出|

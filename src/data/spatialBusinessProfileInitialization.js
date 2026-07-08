@@ -118,6 +118,9 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
     .filter((profile) => profile.target_object_type === TargetObjectType.SERVICE_AREA)
     .map((profile) => [profile.target_object_id, profile]));
   return zones.map((zone) => {
+    const existingZoneProfile = demandProfiles.find((profile) => (
+      profile.target_object_type === TargetObjectType.ZONE && profile.target_object_id === zone.zone_id
+    )) || {};
     const zonePlaceProfiles = (zone.place_ids || [])
       .map((placeId) => placeProfileById.get(placeId))
       .filter(Boolean);
@@ -129,7 +132,12 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
     const serviceCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.service_capacity || 0), 0);
     const waitingCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.waiting_capacity || 0), 0);
     const turnoverCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.turnover_capacity || 0), 0);
-    const supplyNeedScore = serviceCapacity > 0 ? expectedDemand / serviceCapacity : expectedDemand;
+    const zoneAdjustmentFactor = Number(existingZoneProfile.zone_adjustment_factor ?? 1);
+    const coverageFactor = Number(existingZoneProfile.coverage_factor ?? 1);
+    const competitionFactor = Number(existingZoneProfile.competition_factor ?? 1);
+    const growthFactor = Number(existingZoneProfile.growth_factor ?? 1);
+    const adjustedExpectedDemand = expectedDemand * zoneAdjustmentFactor * coverageFactor * competitionFactor * growthFactor;
+    const supplyNeedScore = serviceCapacity > 0 ? adjustedExpectedDemand / serviceCapacity : adjustedExpectedDemand;
     const targetName = profileTargetName({
       targetObjectType: TargetObjectType.ZONE,
       targetObjectId: zone.zone_id,
@@ -145,16 +153,18 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
         targetObjectId: zone.zone_id,
         targetObjectName: targetName,
       }),
-      zone_adjustment_factor: 1,
-      coverage_factor: 1,
-      competition_factor: 1,
-      growth_factor: 1,
+      profile_name: existingZoneProfile.profile_name || `${targetName}需求画像`,
+      profile_version: Number(existingZoneProfile.profile_version || 1),
+      zone_adjustment_factor: zoneAdjustmentFactor,
+      coverage_factor: coverageFactor,
+      competition_factor: competitionFactor,
+      growth_factor: growthFactor,
       service_capacity: roundValue(serviceCapacity),
       waiting_capacity: roundValue(waitingCapacity),
       turnover_capacity: roundValue(turnoverCapacity),
       potential_demand: roundValue(potentialDemand),
-      expected_robotaxi_demand: roundValue(expectedDemand),
-      peak_hour_demand: roundValue(expectedDemand * 1.2),
+      expected_robotaxi_demand: roundValue(adjustedExpectedDemand),
+      peak_hour_demand: roundValue(adjustedExpectedDemand * 1.2),
       demand_distribution: {
         place_count: zonePlaceProfiles.length,
         service_area_count: zoneServiceAreaProfiles.length,
@@ -235,6 +245,56 @@ export function normalizeDemandProfiles({
     ...normalized,
     ...calculateZoneDemandProfiles({ zones, places, serviceAreas, demandProfiles: normalized }),
   ];
+}
+
+export function recalculateDemandProfiles({ demandProfiles = [], places = [], serviceAreas = [], zones = [] } = {}) {
+  const nonZoneProfiles = demandProfiles.filter((profile) => profile.target_object_type !== TargetObjectType.ZONE);
+  const zoneProfiles = calculateZoneDemandProfiles({
+    zones,
+    places,
+    serviceAreas,
+    demandProfiles,
+  });
+  return [...nonZoneProfiles, ...zoneProfiles];
+}
+
+export function updateDemandProfileConfig({ demandProfiles = [], profileId, patch = {}, places = [], serviceAreas = [], zones = [] } = {}) {
+  const normalized = normalizeDemandProfiles({
+    demandProfiles,
+    places,
+    serviceAreas,
+    zones,
+  });
+  const updatedProfiles = normalized.map((profile) => {
+    if (profile.profile_id !== profileId) return profile;
+    const merged = {
+      ...profile,
+      ...patch,
+      profile_version: Number(profile.profile_version || 1) + 1,
+      calculated_at: "Day 1 00:00:00",
+    };
+    if (merged.target_object_type === TargetObjectType.PLACE) {
+      const potentialDemand = (
+        Number(merged.resident_population || 0)
+        + Number(merged.working_population || 0)
+        + Number(merged.daily_visitors || 0)
+      ) * Number(merged.trip_generation_rate || 0) * Number(merged.demand_weight || 1);
+      const expectedDemand = potentialDemand * Number(merged.robotaxi_adoption_rate || 0) * Number(merged.service_acceptance_rate || 1);
+      return {
+        ...merged,
+        potential_demand: roundValue(potentialDemand),
+        expected_robotaxi_demand: roundValue(expectedDemand),
+        peak_hour_demand: roundValue(expectedDemand * 1.2),
+      };
+    }
+    return merged;
+  });
+  return recalculateDemandProfiles({
+    demandProfiles: updatedProfiles,
+    places,
+    serviceAreas,
+    zones,
+  });
 }
 
 export function splitDemandProfilesByTarget(demandProfiles = []) {
