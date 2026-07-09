@@ -440,7 +440,7 @@ const tableConfig = {
   demandProfiles: {
     title: "需求画像",
     description: "需求画像统一展示地点、服务区和区域画像记录，用于供应管理中的需求预测和供应计划。",
-    columns: ["profile_id", "profile_name", "target_object_type", "target_object_id", "target_object_name", "potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "robotaxi_adoption_rate", "service_acceptance_rate", "pickup_probability", "dropoff_probability", "peak_demand_ratio", "zone_adjustment_factor", "coverage_factor", "competition_factor", "profile_status", "calculated_at"]
+    columns: ["profile_id", "profile_name", "target_object_type", "target_object_id", "target_object_name", "potential_demand", "expected_robotaxi_demand", "service_area_demand", "peak_hour_demand", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_growth_factor", "coverage_gap_factor", "resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "robotaxi_adoption_rate", "service_acceptance_rate", "pickup_probability", "dropoff_probability", "peak_demand_ratio", "zone_adjustment_factor", "coverage_factor", "competition_factor", "profile_status", "calculated_at"]
   },
   placeDemandProfiles: {
     title: "地点需求画像",
@@ -1096,6 +1096,11 @@ function getDemandProfileConfigFields(profile) {
       min: 0,
       step: 0.01
     }, {
+      key: "peak_demand_ratio",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }, {
       key: "robotaxi_adoption_rate",
       type: "number",
       min: 0,
@@ -1111,6 +1116,11 @@ function getDemandProfileConfigFields(profile) {
       key: "growth_rate",
       type: "number",
       step: 0.01
+    }, {
+      key: "forecast_years",
+      type: "number",
+      min: 1,
+      step: 1
     }, {
       key: "peak_pattern",
       type: "select",
@@ -1159,6 +1169,11 @@ function getDemandProfileConfigFields(profile) {
   }
   if (profile.target_object_type === "ZONE") {
     return [...commonFields, {
+      key: "peak_demand_ratio",
+      type: "number",
+      min: 0,
+      step: 0.01
+    }, {
       key: "zone_adjustment_factor",
       type: "number",
       min: 0,
@@ -1174,10 +1189,14 @@ function getDemandProfileConfigFields(profile) {
       min: 0,
       step: 0.01
     }, {
-      key: "growth_factor",
+      key: "growth_rate",
       type: "number",
-      min: 0,
       step: 0.01
+    }, {
+      key: "forecast_years",
+      type: "number",
+      min: 1,
+      step: 1
     }];
   }
   return commonFields;
@@ -6423,11 +6442,15 @@ function getDemandProfileDetailTabs(profile) {
     return [basic, {
       key: "config",
       label: "可配置参数",
-      keys: ["resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "robotaxi_adoption_rate", "service_acceptance_rate", "growth_rate", "peak_pattern"]
+      keys: ["resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "peak_demand_ratio", "robotaxi_adoption_rate", "service_acceptance_rate", "growth_rate", "forecast_years", "peak_pattern"]
     }, {
       key: "calculated",
       label: "自动计算",
-      keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "calculated_at"]
+      keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "growth_factor", "calculated_at"]
+    }, {
+      key: "steps",
+      label: "计算过程",
+      keys: ["profile_calculation_steps"]
     }, {
       key: "explanation",
       label: "字段解释",
@@ -6442,7 +6465,11 @@ function getDemandProfileDetailTabs(profile) {
     }, {
       key: "calculated",
       label: "自动计算",
-      keys: ["calculated_at"]
+      keys: ["service_area_demand", "calculated_from_profile_ids", "calculated_at"]
+    }, {
+      key: "steps",
+      label: "计算过程",
+      keys: ["profile_calculation_steps"]
     }, {
       key: "explanation",
       label: "字段解释",
@@ -6453,11 +6480,15 @@ function getDemandProfileDetailTabs(profile) {
     return [basic, {
       key: "config",
       label: "可配置参数",
-      keys: ["zone_adjustment_factor", "coverage_factor", "competition_factor", "growth_factor"]
+      keys: ["zone_adjustment_factor", "coverage_factor", "competition_factor", "peak_demand_ratio", "growth_rate", "forecast_years"]
     }, {
       key: "calculated",
       label: "自动汇总",
-      keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_distribution", "calculated_from_profile_ids", "calculated_at"]
+      keys: ["potential_demand", "service_area_demand", "expected_robotaxi_demand", "peak_hour_demand", "growth_factor", "demand_growth_factor", "peak_demand_factor", "coverage_gap_factor", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_distribution", "calculated_from_profile_ids", "calculated_at"]
+    }, {
+      key: "steps",
+      label: "计算过程",
+      keys: ["profile_calculation_steps"]
     }, {
       key: "explanation",
       label: "字段解释",
@@ -7713,6 +7744,16 @@ function renderDetailValue(key, value, row = null) {
       row: row
     });
   }
+  if (key === "profile_calculation_steps") {
+    return /*#__PURE__*/React.createElement(DemandProfileCalculationSteps, {
+      steps: value
+    });
+  }
+  if (key === "profile_field_explanations") {
+    return /*#__PURE__*/React.createElement(DemandProfileFieldExplanations, {
+      explanations: value
+    });
+  }
   if (Array.isArray(value) || value && typeof value === "object") {
     return /*#__PURE__*/React.createElement(StructuredDetailValue, {
       value: value,
@@ -7722,6 +7763,59 @@ function renderDetailValue(key, value, row = null) {
   return /*#__PURE__*/React.createElement(Text, {
     className: "detail-value"
   }, formatDetailValue(value, key, row) || "无");
+}
+function DemandProfileCalculationSteps({
+  steps
+}) {
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return /*#__PURE__*/React.createElement(Text, {
+      className: "detail-value"
+    }, "\u6682\u65E0\u8BA1\u7B97\u8FC7\u7A0B");
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-groups"
+  }, steps.map((step, index) => /*#__PURE__*/React.createElement("details", {
+    className: "structured-detail-group",
+    key: `${step.step_name || "step"}-${index}`,
+    open: index === 0
+  }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", null, step.step_name || `步骤 ${index + 1}`), /*#__PURE__*/React.createElement("span", null, formatDetailValue(step.output_value, "output_value") || "无结果")), /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-group-body"
+  }, /*#__PURE__*/React.createElement("dl", {
+    className: "structured-detail-fields"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-field"
+  }, /*#__PURE__*/React.createElement("dt", null, getFieldLabel("formula")), /*#__PURE__*/React.createElement("dd", null, step.formula || "无")), /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-field"
+  }, /*#__PURE__*/React.createElement("dt", null, getFieldLabel("input_values")), /*#__PURE__*/React.createElement("dd", null, /*#__PURE__*/React.createElement(StructuredDetailNode, {
+    value: step.input_values || {},
+    fieldKey: "input_values"
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-field"
+  }, /*#__PURE__*/React.createElement("dt", null, getFieldLabel("output_value")), /*#__PURE__*/React.createElement("dd", null, formatDetailValue(step.output_value, "output_value") || "无")))))));
+}
+function DemandProfileFieldExplanations({
+  explanations
+}) {
+  const entries = Object.entries(explanations || {});
+  if (entries.length === 0) return /*#__PURE__*/React.createElement(Text, {
+    className: "detail-value"
+  }, "\u6682\u65E0\u5B57\u6BB5\u89E3\u91CA");
+  return /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-groups"
+  }, entries.map(([fieldKey, explanation]) => /*#__PURE__*/React.createElement("details", {
+    className: "structured-detail-group",
+    key: fieldKey
+  }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", null, getFieldLabel(fieldKey)), /*#__PURE__*/React.createElement("span", null, explanation?.calculation_logic ? "含计算逻辑" : "配置说明")), /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-group-body"
+  }, /*#__PURE__*/React.createElement("dl", {
+    className: "structured-detail-fields"
+  }, explanation?.meaning && /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-field"
+  }, /*#__PURE__*/React.createElement("dt", null, getFieldLabel("meaning")), /*#__PURE__*/React.createElement("dd", null, explanation.meaning)), explanation?.source && /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-field"
+  }, /*#__PURE__*/React.createElement("dt", null, getFieldLabel("source")), /*#__PURE__*/React.createElement("dd", null, explanation.source)), explanation?.calculation_logic && /*#__PURE__*/React.createElement("div", {
+    className: "structured-detail-field"
+  }, /*#__PURE__*/React.createElement("dt", null, getFieldLabel("calculation_logic")), /*#__PURE__*/React.createElement("dd", null, explanation.calculation_logic)))))));
 }
 function isLocationDetailKey(key) {
   return ["location_context", "origin_location_detail", "target_location_detail", "current_location_detail"].includes(key);

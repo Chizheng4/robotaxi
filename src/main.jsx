@@ -357,11 +357,14 @@ const tableConfig = {
       "target_object_name",
       "potential_demand",
       "expected_robotaxi_demand",
+      "service_area_demand",
       "peak_hour_demand",
       "service_capacity",
       "waiting_capacity",
       "turnover_capacity",
       "supply_need_score",
+      "demand_growth_factor",
+      "coverage_gap_factor",
       "resident_population",
       "working_population",
       "daily_visitors",
@@ -1018,9 +1021,11 @@ function getDemandProfileConfigFields(profile) {
       { key: "daily_visitors", type: "number", min: 0, step: 1 },
       { key: "trip_generation_rate", type: "number", min: 0, step: 0.01 },
       { key: "demand_weight", type: "number", min: 0, step: 0.01 },
+      { key: "peak_demand_ratio", type: "number", min: 0, step: 0.01 },
       { key: "robotaxi_adoption_rate", type: "number", min: 0, max: 1, step: 0.01 },
       { key: "service_acceptance_rate", type: "number", min: 0, max: 1, step: 0.01 },
       { key: "growth_rate", type: "number", step: 0.01 },
+      { key: "forecast_years", type: "number", min: 1, step: 1 },
       { key: "peak_pattern", type: "select", options: peakPatternOptions },
     ];
   }
@@ -1039,10 +1044,12 @@ function getDemandProfileConfigFields(profile) {
   if (profile.target_object_type === "ZONE") {
     return [
       ...commonFields,
+      { key: "peak_demand_ratio", type: "number", min: 0, step: 0.01 },
       { key: "zone_adjustment_factor", type: "number", min: 0, step: 0.01 },
       { key: "coverage_factor", type: "number", min: 0, step: 0.01 },
       { key: "competition_factor", type: "number", min: 0, step: 0.01 },
-      { key: "growth_factor", type: "number", min: 0, step: 0.01 },
+      { key: "growth_rate", type: "number", step: 0.01 },
+      { key: "forecast_years", type: "number", min: 1, step: 1 },
     ];
   }
   return commonFields;
@@ -5945,8 +5952,9 @@ function getDemandProfileDetailTabs(profile) {
   if (profile?.target_object_type === "PLACE") {
     return [
       basic,
-      { key: "config", label: "可配置参数", keys: ["resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "robotaxi_adoption_rate", "service_acceptance_rate", "growth_rate", "peak_pattern"] },
-      { key: "calculated", label: "自动计算", keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "calculated_at"] },
+      { key: "config", label: "可配置参数", keys: ["resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "peak_demand_ratio", "robotaxi_adoption_rate", "service_acceptance_rate", "growth_rate", "forecast_years", "peak_pattern"] },
+      { key: "calculated", label: "自动计算", keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "growth_factor", "calculated_at"] },
+      { key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] },
       { key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] },
     ];
   }
@@ -5954,15 +5962,17 @@ function getDemandProfileDetailTabs(profile) {
     return [
       basic,
       { key: "config", label: "可配置参数", keys: ["pickup_probability", "dropoff_probability", "peak_demand_ratio", "service_capacity", "waiting_capacity", "turnover_capacity", "accessibility_factor"] },
-      { key: "calculated", label: "自动计算", keys: ["calculated_at"] },
+      { key: "calculated", label: "自动计算", keys: ["service_area_demand", "calculated_from_profile_ids", "calculated_at"] },
+      { key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] },
       { key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] },
     ];
   }
   if (profile?.target_object_type === "ZONE") {
     return [
       basic,
-      { key: "config", label: "可配置参数", keys: ["zone_adjustment_factor", "coverage_factor", "competition_factor", "growth_factor"] },
-      { key: "calculated", label: "自动汇总", keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_distribution", "calculated_from_profile_ids", "calculated_at"] },
+      { key: "config", label: "可配置参数", keys: ["zone_adjustment_factor", "coverage_factor", "competition_factor", "peak_demand_ratio", "growth_rate", "forecast_years"] },
+      { key: "calculated", label: "自动汇总", keys: ["potential_demand", "service_area_demand", "expected_robotaxi_demand", "peak_hour_demand", "growth_factor", "demand_growth_factor", "peak_demand_factor", "coverage_gap_factor", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_distribution", "calculated_from_profile_ids", "calculated_at"] },
+      { key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] },
       { key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] },
     ];
   }
@@ -7146,10 +7156,89 @@ function renderDetailValue(key, value, row = null) {
   if (key === "simulation_time_world_summary") {
     return <SimulationTimeWorldSummary row={row} />;
   }
+  if (key === "profile_calculation_steps") {
+    return <DemandProfileCalculationSteps steps={value} />;
+  }
+  if (key === "profile_field_explanations") {
+    return <DemandProfileFieldExplanations explanations={value} />;
+  }
   if ((Array.isArray(value) || (value && typeof value === "object"))) {
     return <StructuredDetailValue value={value} fieldKey={key} />;
   }
   return <Text className="detail-value">{formatDetailValue(value, key, row) || "无"}</Text>;
+}
+
+function DemandProfileCalculationSteps({ steps }) {
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return <Text className="detail-value">暂无计算过程</Text>;
+  }
+  return (
+    <div className="structured-detail-groups">
+      {steps.map((step, index) => (
+        <details className="structured-detail-group" key={`${step.step_name || "step"}-${index}`} open={index === 0}>
+          <summary>
+            <span>{step.step_name || `步骤 ${index + 1}`}</span>
+            <span>{formatDetailValue(step.output_value, "output_value") || "无结果"}</span>
+          </summary>
+          <div className="structured-detail-group-body">
+            <dl className="structured-detail-fields">
+              <div className="structured-detail-field">
+                <dt>{getFieldLabel("formula")}</dt>
+                <dd>{step.formula || "无"}</dd>
+              </div>
+              <div className="structured-detail-field">
+                <dt>{getFieldLabel("input_values")}</dt>
+                <dd><StructuredDetailNode value={step.input_values || {}} fieldKey="input_values" /></dd>
+              </div>
+              <div className="structured-detail-field">
+                <dt>{getFieldLabel("output_value")}</dt>
+                <dd>{formatDetailValue(step.output_value, "output_value") || "无"}</dd>
+              </div>
+            </dl>
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+}
+
+function DemandProfileFieldExplanations({ explanations }) {
+  const entries = Object.entries(explanations || {});
+  if (entries.length === 0) return <Text className="detail-value">暂无字段解释</Text>;
+  return (
+    <div className="structured-detail-groups">
+      {entries.map(([fieldKey, explanation]) => (
+        <details className="structured-detail-group" key={fieldKey}>
+          <summary>
+            <span>{getFieldLabel(fieldKey)}</span>
+            <span>{explanation?.calculation_logic ? "含计算逻辑" : "配置说明"}</span>
+          </summary>
+          <div className="structured-detail-group-body">
+            <dl className="structured-detail-fields">
+              {explanation?.meaning && (
+                <div className="structured-detail-field">
+                  <dt>{getFieldLabel("meaning")}</dt>
+                  <dd>{explanation.meaning}</dd>
+                </div>
+              )}
+              {explanation?.source && (
+                <div className="structured-detail-field">
+                  <dt>{getFieldLabel("source")}</dt>
+                  <dd>{explanation.source}</dd>
+                </div>
+              )}
+              {explanation?.calculation_logic && (
+                <div className="structured-detail-field">
+                  <dt>{getFieldLabel("calculation_logic")}</dt>
+                  <dd>{explanation.calculation_logic}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        </details>
+      ))}
+    </div>
+  );
 }
 
 function isLocationDetailKey(key) {

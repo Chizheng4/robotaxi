@@ -727,52 +727,62 @@
 
 ### 9.1 空间经营画像字段
 
-|属性英文名|中文名|字段性质|含义|
-|---|---|---|---|
-|profile_id|画像编号|持久化字段|画像唯一编号|
-|profile_name|名称|配置字段|画像名称|
-|profile_version|版本|持久化字段|画像版本|
-|profile_status|状态|持久化字段|画像是否可用|
-|target_object_type|目标对象类型|持久化字段|PLACE、SERVICE_AREA、ZONE|
-|target_object_id|目标对象编号|持久化字段|画像关联的 Place、ServiceArea 或 Zone 编号|
-|target_object_name|目标对象名称|派生展示字段|画像关联对象的中文名称|
-|profile_type|画像类型（兼容）|兼容字段|旧版画像来源类型，目标设计废弃|
-|source_object_id|来源对象编号（兼容）|兼容字段|旧版画像关联对象编号，目标设计废弃|
-|source_object_name|来源对象名称（兼容）|兼容字段|旧版画像关联对象名称，目标设计废弃|
-|source_object_type|来源对象类型（兼容）|兼容字段|旧版画像关联对象类型，目标设计废弃|
-|resident_population|常住人口|配置字段|地点常住人口|
-|working_population|工作人口|配置字段|地点工作人口|
-|daily_visitors|日访客量|配置字段|地点日访客量|
-|trip_generation_rate|出行产生率|配置字段|人群产生出行需求的比例|
-|demand_weight|需求权重|配置字段|地点需求权重|
-|peak_pattern|需求高峰模式|配置字段|地点高峰模式|
-|growth_rate|增长率|配置字段|地点需求增长率|
-|robotaxi_adoption_rate|Robotaxi 采用率|配置字段|潜在需求中采用 Robotaxi 的比例|
-|service_acceptance_rate|服务接受率|配置字段|潜在 Robotaxi 需求转化为服务订单的比例|
-|effective_from|生效时间|配置字段|画像开始生效时间|
-|effective_to|失效时间|配置字段|画像失效时间，可为空|
-|pickup_probability|上车概率|配置字段|服务区成为上车点的概率|
-|dropoff_probability|下车概率|配置字段|服务区成为下车点的概率|
-|peak_demand_ratio|高峰需求比例|配置字段|高峰时段需求放大比例|
-|service_capacity|服务容量|配置字段|服务区承载服务能力|
-|waiting_capacity|等待容量|配置字段|服务区可等待容量|
-|turnover_capacity|周转能力|配置字段|服务区单位周期周转能力|
-|accessibility_factor|可达性系数|配置字段|服务区道路可达性修正|
-|zone_adjustment_factor|区域调整系数|配置字段|区域经营修正|
-|coverage_factor|服务覆盖系数|配置字段|服务覆盖修正|
-|competition_factor|竞争影响系数|配置字段|竞争影响修正|
-|potential_demand|潜在需求|计算字段|由地点画像计算得到的潜在需求|
-|expected_robotaxi_demand|预计 Robotaxi 需求|计算字段|由画像和采用率计算的 Robotaxi 需求|
-|peak_hour_demand|峰值需求|计算字段|高峰小时需求|
-|demand_distribution|需求分布|计算字段|区域需求来源分布摘要|
-|growth_factor|增长修正|计算字段|区域增长修正因子|
-|supply_need_score|供给需求评分|计算字段|用于供给规划和投放判断的需求评分|
-|calculated_from_profile_ids|计算来源画像|计算字段|区域画像计算引用的画像编号|
-|profile_field_explanations|画像字段解释|聚合展示字段|解释画像关键字段的含义、来源和计算逻辑，是 DemandProfile 通用属性|
-|meaning|字段含义|聚合展示字段|画像字段解释中的含义说明|
-|source|来源|聚合展示字段|画像字段解释中的字段来源说明|
-|calculation_logic|计算逻辑|聚合展示字段|画像字段解释中的计算公式或汇总逻辑|
-|calculated_at|计算时间|计算字段|画像计算时间|
+| 属性英文名                       | 中文名            | 字段性质   | 含义                                       |
+| --------------------------- | -------------- | ------ | ---------------------------------------- |
+| profile_id                  | 画像编号           | 持久化字段  | 画像唯一编号                                   |
+| profile_name                | 名称             | 配置字段   | 画像名称                                     |
+| profile_version             | 版本             | 持久化字段  | 画像版本                                     |
+| profile_status              | 状态             | 持久化字段  | 画像是否可用                                   |
+| target_object_type          | 目标对象类型         | 持久化字段  | PLACE、SERVICE_AREA、ZONE                  |
+| target_object_id            | 目标对象编号         | 持久化字段  | 画像关联的 Place、ServiceArea 或 Zone 编号        |
+| target_object_name          | 目标对象名称         | 派生展示字段 | 画像关联对象的中文名称                              |
+| profile_type                | 画像类型（兼容）       | 兼容字段   | 旧版画像来源类型，目标设计废弃                          |
+| source_object_id            | 来源对象编号（兼容）     | 兼容字段   | 旧版画像关联对象编号，目标设计废弃                        |
+| source_object_name          | 来源对象名称（兼容）     | 兼容字段   | 旧版画像关联对象名称，目标设计废弃                        |
+| source_object_type          | 来源对象类型（兼容）     | 兼容字段   | 旧版画像关联对象类型，目标设计废弃                        |
+| resident_population         | 常住人口           | 配置字段   | 地点常住人口                                   |
+| working_population          | 工作人口           | 配置字段   | 地点工作人口                                   |
+| daily_visitors              | 日访客量           | 配置字段   | 地点日访客量                                   |
+| trip_generation_rate        | 出行产生率          | 配置字段   | 人群产生出行需求的比例                              |
+| demand_weight               | 需求权重           | 配置字段   | 地点需求权重                                   |
+| peak_pattern                | 需求高峰模式         | 配置字段   | 地点高峰模式                                   |
+| growth_rate                 | 增长率            | 配置字段   | 地点需求增长率                                  |
+| robotaxi_adoption_rate      | Robotaxi 采用率   | 配置字段   | 潜在需求中采用 Robotaxi 的比例                     |
+| service_acceptance_rate     | 服务接受率          | 配置字段   | 潜在 Robotaxi 需求转化为服务订单的比例                 |
+| effective_from              | 生效时间           | 配置字段   | 画像开始生效时间                                 |
+| effective_to                | 失效时间           | 配置字段   | 画像失效时间，可为空                               |
+| pickup_probability          | 上车概率           | 配置字段   | 服务区成为上车点的概率                              |
+| dropoff_probability         | 下车概率           | 配置字段   | 服务区成为下车点的概率                              |
+| peak_demand_ratio           | 高峰需求比例         | 配置字段   | 高峰时段需求放大比例                               |
+| service_capacity            | 服务容量           | 配置字段   | 服务区承载服务能力                                |
+| waiting_capacity            | 等待容量           | 配置字段   | 服务区可等待容量                                 |
+| turnover_capacity           | 周转能力           | 配置字段   | 服务区单位周期周转能力                              |
+| accessibility_factor        | 可达性系数          | 配置字段   | 服务区道路可达性修正                               |
+| zone_adjustment_factor      | 区域调整系数         | 配置字段   | 区域经营修正                                   |
+| coverage_factor             | 服务覆盖系数         | 配置字段   | 服务覆盖修正                                   |
+| competition_factor          | 竞争影响系数         | 配置字段   | 竞争影响修正                                   |
+| forecast_years              | 预测年数           | 配置字段   | 将增长率转换为增长修正因子的预测周期                       |
+| potential_demand            | 潜在需求           | 计算字段   | 由地点画像计算得到的潜在需求                           |
+| expected_robotaxi_demand    | 预计 Robotaxi 需求 | 计算字段   | 由画像和采用率计算的 Robotaxi 需求                   |
+| service_area_demand         | 服务区域需求         | 计算字段   | 服务区域承接的 Robotaxi 服务需求                     |
+| peak_hour_demand            | 峰值需求           | 计算字段   | 高峰小时需求                                   |
+| demand_distribution         | 需求分布           | 计算字段   | 区域需求来源分布摘要                               |
+| growth_factor               | 增长修正           | 计算字段   | 区域增长修正因子                                 |
+| demand_growth_factor        | 需求增长因子         | 计算字段   | 供给需求评分使用的需求增长因子                          |
+| peak_demand_factor          | 高峰需求因子         | 计算字段   | 供给需求评分使用的高峰需求因子                          |
+| coverage_gap_factor         | 覆盖缺口因子         | 计算字段   | 供给需求评分使用的服务覆盖缺口因子                        |
+| supply_need_score           | 供给需求评分         | 计算字段   | 用于供给规划和投放判断的需求评分                         |
+| calculated_from_profile_ids | 计算来源画像         | 计算字段   | 区域画像计算引用的画像编号                            |
+| profile_field_explanations  | 画像字段解释         | 聚合展示字段 | 解释画像关键字段的含义、来源和计算逻辑，是 DemandProfile 通用属性 |
+| profile_calculation_steps   | 画像计算过程         | 聚合展示字段 | 解释画像计算公式、输入值、中间结果和最终结果                   |
+| step_name                   | 步骤名称           | 聚合展示字段 | 画像计算过程中的步骤名称                             |
+| formula                     | 公式             | 聚合展示字段 | 画像计算过程中的公式                               |
+| input_values                | 输入值            | 聚合展示字段 | 画像计算过程中的输入字段和值                           |
+| output_value                | 计算结果           | 聚合展示字段 | 画像计算过程中的步骤输出值                            |
+| meaning                     | 字段含义           | 聚合展示字段 | 画像字段解释中的含义说明                             |
+| source                      | 来源             | 聚合展示字段 | 画像字段解释中的字段来源说明                           |
+| calculation_logic           | 计算逻辑           | 聚合展示字段 | 画像字段解释中的计算公式或汇总逻辑                        |
+| calculated_at               | 计算时间           | 计算字段   | 画像计算时间                                   |
 
 ---
 

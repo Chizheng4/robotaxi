@@ -4,6 +4,9 @@ const TargetObjectType = {
   ZONE: "ZONE",
 };
 
+const DEFAULT_PEAK_DEMAND_RATIO = 0.15;
+const DEFAULT_FORECAST_YEARS = 1;
+
 function profileTargetName({ targetObjectType, targetObjectId, places = [], serviceAreas = [], zones = [] }) {
   if (targetObjectType === TargetObjectType.PLACE) {
     const place = places.find((item) => item.place_id === targetObjectId);
@@ -22,6 +25,17 @@ function profileTargetName({ targetObjectType, targetObjectId, places = [], serv
 
 function roundValue(value, digits = 2) {
   return Number((Number(value) || 0).toFixed(digits));
+}
+
+function calculateGrowthFactor(growthRate = 0, forecastYears = DEFAULT_FORECAST_YEARS) {
+  return roundValue(Math.pow(1 + Number(growthRate || 0), Number(forecastYears || DEFAULT_FORECAST_YEARS)), 4);
+}
+
+function weightedAverage(items = [], field, weightField, fallback = 0) {
+  const totalWeight = items.reduce((sum, item) => sum + Number(item?.[weightField] || 0), 0);
+  if (totalWeight <= 0) return fallback;
+  const total = items.reduce((sum, item) => sum + Number(item?.[field] || 0) * Number(item?.[weightField] || 0), 0);
+  return total / totalWeight;
 }
 
 function normalizeTargetObjectType(value) {
@@ -55,9 +69,13 @@ function createProfileFieldExplanations(targetObjectType) {
       daily_visitors: { meaning: "地点日均访客量，是商业、医院、学校、交通枢纽等访客需求的输入项。", source: "人工配置或外部导入" },
       trip_generation_rate: { meaning: "人群在一个经营周期内产生出行需求的比例。", source: "人工配置或外部导入" },
       demand_weight: { meaning: "地点业务强度修正，用于表达同类地点之间的需求差异。", source: "Place 初始化权重或人工配置" },
+      peak_demand_ratio: { meaning: "高峰需求比例，用于把日需求转换为高峰窗口需求。", source: "人工配置或初始化默认值" },
+      growth_rate: { meaning: "需求增长率，用于长期需求预测周期的增长修正。", source: "人工配置或外部预测输入" },
+      forecast_years: { meaning: "预测年数，用于将增长率转换为增长修正因子。", source: "人工配置或长期需求预测策略" },
       potential_demand: { meaning: "地点潜在需求。", calculation_logic: "(常住人口 + 工作人口 + 日访客量) × 出行产生率 × 需求权重" },
       expected_robotaxi_demand: { meaning: "地点预计可转化为 Robotaxi 的需求。", calculation_logic: "潜在需求 × Robotaxi 采用率 × 服务接受率" },
-      peak_hour_demand: { meaning: "地点高峰小时需求估计。", calculation_logic: "预计 Robotaxi 需求 × 高峰系数，当前初始化使用 1.2" },
+      peak_hour_demand: { meaning: "地点高峰小时需求估计。", calculation_logic: "预计 Robotaxi 需求 × 高峰需求比例" },
+      growth_factor: { meaning: "地点需求增长修正因子。", calculation_logic: "(1 + 增长率) ^ 预测年数" },
     };
   }
   if (targetObjectType === TargetObjectType.SERVICE_AREA) {
@@ -69,18 +87,22 @@ function createProfileFieldExplanations(targetObjectType) {
       waiting_capacity: { meaning: "服务区域可等待容量。", source: "ServiceArea.waiting_capacity 或停车网格数量" },
       turnover_capacity: { meaning: "服务区域单位周期周转能力。", calculation_logic: "当前初始化按 服务容量 × 4 估算，可后续配置" },
       accessibility_factor: { meaning: "服务区域道路可达性修正。", source: "人工配置或初始化默认值" },
+      service_area_demand: { meaning: "服务区域承接的 Robotaxi 服务需求。", calculation_logic: "Σ 关联 Place expected_robotaxi_demand × 上车概率 × 可达性系数" },
     };
   }
   if (targetObjectType === TargetObjectType.ZONE) {
     return {
       potential_demand: { meaning: "一级 Zone 的潜在需求，用于长期需求预测。", calculation_logic: "Σ 子区域内 Place DemandProfile.potential_demand" },
-      expected_robotaxi_demand: { meaning: "一级 Zone 的预计 Robotaxi 需求，是长期需求预测和供应计划的核心输入。", calculation_logic: "Σ 子区域内 Place DemandProfile.expected_robotaxi_demand × 区域调整系数 × 服务覆盖系数 × 竞争影响系数 × 增长修正" },
-      peak_hour_demand: { meaning: "一级 Zone 的峰值需求。", calculation_logic: "预计 Robotaxi 需求 × 高峰系数，当前初始化使用 1.2" },
+      expected_robotaxi_demand: { meaning: "一级 Zone 的预计 Robotaxi 需求，是长期需求预测和供应计划的核心输入。", calculation_logic: "Σ 子区域内 ServiceArea DemandProfile.service_area_demand × 区域调整系数 × 服务覆盖系数 × 竞争影响系数" },
+      peak_hour_demand: { meaning: "一级 Zone 的峰值需求。", calculation_logic: "预计 Robotaxi 需求 × 高峰需求比例" },
       service_capacity: { meaning: "一级 Zone 包含服务区域的服务承载能力。", calculation_logic: "Σ 子区域内 ServiceArea DemandProfile.service_capacity" },
       waiting_capacity: { meaning: "一级 Zone 包含服务区域的等待能力。", calculation_logic: "Σ 子区域内 ServiceArea DemandProfile.waiting_capacity" },
       turnover_capacity: { meaning: "一级 Zone 包含服务区域的周转能力。", calculation_logic: "Σ 子区域内 ServiceArea DemandProfile.turnover_capacity" },
-      supply_need_score: { meaning: "供给需求评分，用于判断供给压力。", calculation_logic: "预计 Robotaxi 需求 / 服务容量；没有服务容量时使用预计 Robotaxi 需求" },
-      demand_distribution: { meaning: "一级 Zone 的画像来源构成。", calculation_logic: "统计子区域内参与汇总的 Place 画像数和 ServiceArea 画像数" },
+      demand_growth_factor: { meaning: "需求增长因子，用于长期预测期放大当前需求。", calculation_logic: "(1 + 增长率) ^ 预测年数" },
+      peak_demand_factor: { meaning: "高峰需求因子，用于表达高峰窗口需求压力。", calculation_logic: "高峰需求 / 预计 Robotaxi 需求" },
+      coverage_gap_factor: { meaning: "覆盖缺口因子，用于表达服务能力与需求之间的缺口。", calculation_logic: "max(0, 预计 Robotaxi 需求 - 服务容量) / 预计 Robotaxi 需求" },
+      supply_need_score: { meaning: "供给需求评分，用于判断供给紧迫程度。", calculation_logic: "需求增长因子 × 高峰需求因子 × 覆盖缺口因子 × 100" },
+      demand_distribution: { meaning: "一级 Zone 的需求来源结构。", calculation_logic: "按 Place 类型汇总 expected_robotaxi_demand 后除以 Zone Place 总需求" },
       calculated_from_profile_ids: { meaning: "一级 Zone 画像的计算来源画像。", calculation_logic: "子区域内所有 Place 与 ServiceArea 画像编号集合" },
     };
   }
@@ -104,6 +126,10 @@ function createPlaceDemandProfile(place) {
   const tripGenerationRate = Number((0.08 * demandWeight).toFixed(3));
   const robotaxiAdoptionRate = 0.18;
   const serviceAcceptanceRate = 0.9;
+  const peakDemandRatio = Number(place.peak_demand_ratio ?? DEFAULT_PEAK_DEMAND_RATIO);
+  const growthRate = Number(place.growth_rate || 0);
+  const forecastYears = Number(place.forecast_years || DEFAULT_FORECAST_YEARS);
+  const growthFactor = calculateGrowthFactor(growthRate, forecastYears);
   const potentialDemand = (residentPopulation + workingPopulation + dailyVisitors) * tripGenerationRate * demandWeight;
   const expectedDemand = potentialDemand * robotaxiAdoptionRate * serviceAcceptanceRate;
   return {
@@ -120,13 +146,31 @@ function createPlaceDemandProfile(place) {
     trip_generation_rate: tripGenerationRate,
     demand_weight: demandWeight,
     peak_pattern: place.peak_pattern || "BALANCED",
-    growth_rate: 0,
+    peak_demand_ratio: peakDemandRatio,
+    growth_rate: growthRate,
+    forecast_years: forecastYears,
     robotaxi_adoption_rate: robotaxiAdoptionRate,
     service_acceptance_rate: serviceAcceptanceRate,
+    growth_factor: growthFactor,
     potential_demand: roundValue(potentialDemand),
     expected_robotaxi_demand: roundValue(expectedDemand),
-    peak_hour_demand: roundValue(expectedDemand * 1.2),
+    peak_hour_demand: roundValue(expectedDemand * peakDemandRatio),
     profile_field_explanations: createProfileFieldExplanations(TargetObjectType.PLACE),
+    profile_calculation_steps: createPlaceCalculationSteps({
+      residentPopulation,
+      workingPopulation,
+      dailyVisitors,
+      tripGenerationRate,
+      demandWeight,
+      potentialDemand,
+      robotaxiAdoptionRate,
+      serviceAcceptanceRate,
+      expectedDemand,
+      peakDemandRatio,
+      growthRate,
+      forecastYears,
+      growthFactor,
+    }),
     calculated_at: "Day 1 00:00:00",
   };
 }
@@ -143,13 +187,58 @@ function createServiceAreaDemandProfile(serviceArea) {
     }),
     pickup_probability: 0.5,
     dropoff_probability: 0.5,
-    peak_demand_ratio: 1.2,
+    peak_demand_ratio: DEFAULT_PEAK_DEMAND_RATIO,
     service_capacity: capacity,
     waiting_capacity: Number(serviceArea.waiting_capacity || serviceArea.parking_cell_ids?.length || 0),
     turnover_capacity: Math.max(1, capacity * 4),
     accessibility_factor: 1,
+    service_area_demand: 0,
     profile_field_explanations: createProfileFieldExplanations(TargetObjectType.SERVICE_AREA),
+    profile_calculation_steps: [],
   };
+}
+
+function createPlaceCalculationSteps({
+  residentPopulation,
+  workingPopulation,
+  dailyVisitors,
+  tripGenerationRate,
+  demandWeight,
+  potentialDemand,
+  robotaxiAdoptionRate,
+  serviceAcceptanceRate,
+  expectedDemand,
+  peakDemandRatio,
+  growthRate,
+  forecastYears,
+  growthFactor,
+}) {
+  return [
+    {
+      step_name: "潜在需求",
+      formula: "(常住人口 + 工作人口 + 日访客量) × 出行产生率 × 需求权重",
+      input_values: { resident_population: residentPopulation, working_population: workingPopulation, daily_visitors: dailyVisitors, trip_generation_rate: tripGenerationRate, demand_weight: demandWeight },
+      output_value: roundValue(potentialDemand),
+    },
+    {
+      step_name: "Robotaxi 需求转换",
+      formula: "潜在需求 × Robotaxi 采用率 × 服务接受率",
+      input_values: { potential_demand: roundValue(potentialDemand), robotaxi_adoption_rate: robotaxiAdoptionRate, service_acceptance_rate: serviceAcceptanceRate },
+      output_value: roundValue(expectedDemand),
+    },
+    {
+      step_name: "峰值需求",
+      formula: "预计 Robotaxi 需求 × 高峰需求比例",
+      input_values: { expected_robotaxi_demand: roundValue(expectedDemand), peak_demand_ratio: peakDemandRatio },
+      output_value: roundValue(expectedDemand * peakDemandRatio),
+    },
+    {
+      step_name: "增长修正",
+      formula: "(1 + 增长率) ^ 预测年数",
+      input_values: { growth_rate: growthRate, forecast_years: forecastYears },
+      output_value: growthFactor,
+    },
+  ];
 }
 
 function topLevelZones(zones = []) {
@@ -166,6 +255,137 @@ function zoneComponentIds(zone, zones = []) {
     serviceAreaIds: [...new Set(sourceZones.flatMap((item) => item.service_area_ids || []))],
     subZoneIds: children.map((item) => item.zone_id),
   };
+}
+
+function serviceAreaPlaceProfiles(serviceArea, places = [], placeProfileById = new Map(), zones = []) {
+  const relatedPlaceIds = new Set(serviceArea.place_ids || []);
+  places.forEach((place) => {
+    if ((place.nearby_service_area_ids || []).includes(serviceArea.service_area_id)) {
+      relatedPlaceIds.add(place.place_id);
+    }
+  });
+  zones.forEach((zone) => {
+    if ((zone.service_area_ids || []).includes(serviceArea.service_area_id)) {
+      (zone.place_ids || []).forEach((placeId) => relatedPlaceIds.add(placeId));
+    }
+  });
+  return [...relatedPlaceIds]
+    .map((placeId) => placeProfileById.get(placeId))
+    .filter(Boolean);
+}
+
+function createServiceAreaCalculationSteps({ placeProfiles, pickupProbability, accessibilityFactor, serviceAreaDemand }) {
+  return [
+    {
+      step_name: "服务需求转换",
+      formula: "Σ 关联 Place 预计 Robotaxi 需求 × 上车概率 × 可达性系数",
+      input_values: {
+        related_place_profile_ids: placeProfiles.map((profile) => profile.profile_id),
+        related_place_expected_robotaxi_demand: roundValue(placeProfiles.reduce((sum, profile) => sum + Number(profile.expected_robotaxi_demand || 0), 0)),
+        pickup_probability: pickupProbability,
+        accessibility_factor: accessibilityFactor,
+      },
+      output_value: roundValue(serviceAreaDemand),
+    },
+  ];
+}
+
+function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zones = [], demandProfiles = [] }) {
+  const placeProfileById = new Map(demandProfiles
+    .filter((profile) => profile.target_object_type === TargetObjectType.PLACE)
+    .map((profile) => [profile.target_object_id, profile]));
+  const serviceAreaProfileById = new Map(demandProfiles
+    .filter((profile) => profile.target_object_type === TargetObjectType.SERVICE_AREA)
+    .map((profile) => [profile.target_object_id, profile]));
+  return serviceAreas.map((serviceArea) => {
+    const existingProfile = serviceAreaProfileById.get(serviceArea.service_area_id) || createServiceAreaDemandProfile(serviceArea);
+    const placeProfiles = serviceAreaPlaceProfiles(serviceArea, places, placeProfileById, zones);
+    const placeExpectedDemand = placeProfiles.reduce((sum, profile) => sum + Number(profile.expected_robotaxi_demand || 0), 0);
+    const pickupProbability = Number(existingProfile.pickup_probability ?? 0.5);
+    const accessibilityFactor = Number(existingProfile.accessibility_factor ?? 1);
+    const serviceAreaDemand = placeExpectedDemand * pickupProbability * accessibilityFactor;
+    return {
+      ...existingProfile,
+      service_area_demand: roundValue(serviceAreaDemand),
+      profile_field_explanations: existingProfile.profile_field_explanations || createProfileFieldExplanations(TargetObjectType.SERVICE_AREA),
+      profile_calculation_steps: createServiceAreaCalculationSteps({
+        placeProfiles,
+        pickupProbability,
+        accessibilityFactor,
+        serviceAreaDemand,
+      }),
+      calculated_from_profile_ids: placeProfiles.map((profile) => profile.profile_id),
+      calculated_at: "Day 1 00:00:00",
+    };
+  });
+}
+
+function demandDistributionByPlaceType(placeProfiles = [], places = []) {
+  const placeById = new Map(places.map((place) => [place.place_id, place]));
+  const demandByType = {};
+  placeProfiles.forEach((profile) => {
+    const type = placeById.get(profile.target_object_id)?.place_type || "UNKNOWN";
+    demandByType[type] = (demandByType[type] || 0) + Number(profile.expected_robotaxi_demand || 0);
+  });
+  const total = Object.values(demandByType).reduce((sum, value) => sum + Number(value || 0), 0);
+  if (total <= 0) return {};
+  return Object.fromEntries(Object.entries(demandByType).map(([type, value]) => [type, roundValue(Number(value || 0) / total, 4)]));
+}
+
+function createZoneCalculationSteps({
+  serviceAreaProfiles,
+  serviceAreaDemand,
+  zoneAdjustmentFactor,
+  coverageFactor,
+  competitionFactor,
+  expectedDemand,
+  peakDemandRatio,
+  peakHourDemand,
+  growthRate,
+  forecastYears,
+  growthFactor,
+  coverageGapFactor,
+  supplyNeedScore,
+  demandDistribution,
+}) {
+  return [
+    {
+      step_name: "服务区域需求聚合",
+      formula: "Σ ServiceArea DemandProfile.service_area_demand",
+      input_values: { service_area_profile_ids: serviceAreaProfiles.map((profile) => profile.profile_id) },
+      output_value: roundValue(serviceAreaDemand),
+    },
+    {
+      step_name: "区域修正",
+      formula: "服务区域需求聚合 × 区域调整系数 × 服务覆盖系数 × 竞争影响系数",
+      input_values: { service_area_demand: roundValue(serviceAreaDemand), zone_adjustment_factor: zoneAdjustmentFactor, coverage_factor: coverageFactor, competition_factor: competitionFactor },
+      output_value: roundValue(expectedDemand),
+    },
+    {
+      step_name: "峰值需求",
+      formula: "预计 Robotaxi 需求 × 高峰需求比例",
+      input_values: { expected_robotaxi_demand: roundValue(expectedDemand), peak_demand_ratio: peakDemandRatio },
+      output_value: roundValue(peakHourDemand),
+    },
+    {
+      step_name: "增长修正",
+      formula: "(1 + 增长率) ^ 预测年数",
+      input_values: { growth_rate: growthRate, forecast_years: forecastYears },
+      output_value: growthFactor,
+    },
+    {
+      step_name: "需求分布",
+      formula: "每类 Place expected_robotaxi_demand / Zone Place 总需求",
+      input_values: demandDistribution,
+      output_value: demandDistribution,
+    },
+    {
+      step_name: "供给需求评分",
+      formula: "需求增长因子 × 高峰需求因子 × 覆盖缺口因子 × 100",
+      input_values: { demand_growth_factor: growthFactor, peak_demand_factor: peakDemandRatio, coverage_gap_factor: coverageGapFactor },
+      output_value: roundValue(supplyNeedScore),
+    },
+  ];
 }
 
 export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAreas = [], demandProfiles = [] }) {
@@ -187,16 +407,22 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
       .map((serviceAreaId) => serviceAreaProfileById.get(serviceAreaId))
       .filter(Boolean);
     const potentialDemand = zonePlaceProfiles.reduce((sum, profile) => sum + Number(profile.potential_demand || 0), 0);
-    const expectedDemand = zonePlaceProfiles.reduce((sum, profile) => sum + Number(profile.expected_robotaxi_demand || 0), 0);
+    const serviceAreaDemand = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.service_area_demand || 0), 0);
     const serviceCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.service_capacity || 0), 0);
     const waitingCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.waiting_capacity || 0), 0);
     const turnoverCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.turnover_capacity || 0), 0);
     const zoneAdjustmentFactor = Number(existingZoneProfile.zone_adjustment_factor ?? 1);
     const coverageFactor = Number(existingZoneProfile.coverage_factor ?? 1);
     const competitionFactor = Number(existingZoneProfile.competition_factor ?? 1);
-    const growthFactor = Number(existingZoneProfile.growth_factor ?? 1);
-    const adjustedExpectedDemand = expectedDemand * zoneAdjustmentFactor * coverageFactor * competitionFactor * growthFactor;
-    const supplyNeedScore = serviceCapacity > 0 ? adjustedExpectedDemand / serviceCapacity : adjustedExpectedDemand;
+    const growthRate = Number(existingZoneProfile.growth_rate ?? weightedAverage(zonePlaceProfiles, "growth_rate", "expected_robotaxi_demand", 0));
+    const forecastYears = Number(existingZoneProfile.forecast_years ?? DEFAULT_FORECAST_YEARS);
+    const growthFactor = calculateGrowthFactor(growthRate, forecastYears);
+    const peakDemandRatio = Number(existingZoneProfile.peak_demand_ratio ?? weightedAverage(zonePlaceProfiles, "peak_demand_ratio", "expected_robotaxi_demand", DEFAULT_PEAK_DEMAND_RATIO));
+    const adjustedExpectedDemand = serviceAreaDemand * zoneAdjustmentFactor * coverageFactor * competitionFactor;
+    const peakHourDemand = adjustedExpectedDemand * peakDemandRatio;
+    const coverageGapFactor = adjustedExpectedDemand > 0 ? Math.max(0, adjustedExpectedDemand - serviceCapacity) / adjustedExpectedDemand : 0;
+    const supplyNeedScore = Math.min(100, growthFactor * peakDemandRatio * coverageGapFactor * 100);
+    const demandDistribution = demandDistributionByPlaceType(zonePlaceProfiles, places);
     const targetName = profileTargetName({
       targetObjectType: TargetObjectType.ZONE,
       targetObjectId: zone.zone_id,
@@ -217,24 +443,43 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
       zone_adjustment_factor: zoneAdjustmentFactor,
       coverage_factor: coverageFactor,
       competition_factor: competitionFactor,
+      growth_rate: growthRate,
+      forecast_years: forecastYears,
       growth_factor: growthFactor,
+      peak_demand_ratio: roundValue(peakDemandRatio, 4),
+      service_area_demand: roundValue(serviceAreaDemand),
       service_capacity: roundValue(serviceCapacity),
       waiting_capacity: roundValue(waitingCapacity),
       turnover_capacity: roundValue(turnoverCapacity),
       potential_demand: roundValue(potentialDemand),
       expected_robotaxi_demand: roundValue(adjustedExpectedDemand),
-      peak_hour_demand: roundValue(adjustedExpectedDemand * 1.2),
-      demand_distribution: {
-        sub_zone_count: components.subZoneIds.length,
-        place_count: zonePlaceProfiles.length,
-        service_area_count: zoneServiceAreaProfiles.length,
-      },
+      peak_hour_demand: roundValue(peakHourDemand),
+      demand_growth_factor: growthFactor,
+      peak_demand_factor: roundValue(peakDemandRatio, 4),
+      coverage_gap_factor: roundValue(coverageGapFactor, 4),
+      demand_distribution: demandDistribution,
       supply_need_score: roundValue(supplyNeedScore),
       calculated_from_profile_ids: [
         ...zonePlaceProfiles.map((profile) => profile.profile_id),
         ...zoneServiceAreaProfiles.map((profile) => profile.profile_id),
       ],
       profile_field_explanations: createProfileFieldExplanations(TargetObjectType.ZONE),
+      profile_calculation_steps: createZoneCalculationSteps({
+        serviceAreaProfiles: zoneServiceAreaProfiles,
+        serviceAreaDemand,
+        zoneAdjustmentFactor,
+        coverageFactor,
+        competitionFactor,
+        expectedDemand: adjustedExpectedDemand,
+        peakDemandRatio,
+        peakHourDemand,
+        growthRate,
+        forecastYears,
+        growthFactor,
+        coverageGapFactor,
+        supplyNeedScore,
+        demandDistribution,
+      }),
       calculated_at: "Day 1 00:00:00",
     };
   });
@@ -276,6 +521,26 @@ function migrateLegacyProfile(profile, targetObjectType, targetObjectId, context
     effective_to: profile.effective_to ?? base.effective_to,
     ...(potentialDemand == null ? {} : { potential_demand: roundValue(potentialDemand) }),
     ...(expectedDemand == null ? {} : { expected_robotaxi_demand: roundValue(expectedDemand) }),
+    ...(targetObjectType === TargetObjectType.PLACE ? {
+      peak_demand_ratio: Number(profile.peak_demand_ratio ?? DEFAULT_PEAK_DEMAND_RATIO),
+      forecast_years: Number(profile.forecast_years || DEFAULT_FORECAST_YEARS),
+      growth_factor: calculateGrowthFactor(Number(profile.growth_rate || 0), Number(profile.forecast_years || DEFAULT_FORECAST_YEARS)),
+      profile_calculation_steps: profile.profile_calculation_steps || createPlaceCalculationSteps({
+        residentPopulation: Number(profile.resident_population || 0),
+        workingPopulation: Number(profile.working_population || 0),
+        dailyVisitors: Number(profile.daily_visitors || 0),
+        tripGenerationRate: Number(profile.trip_generation_rate || 0),
+        demandWeight: Number(profile.demand_weight || 1),
+        potentialDemand: Number(potentialDemand || 0),
+        robotaxiAdoptionRate: Number(profile.robotaxi_adoption_rate || 0),
+        serviceAcceptanceRate: Number(profile.service_acceptance_rate || 1),
+        expectedDemand: Number(expectedDemand || 0),
+        peakDemandRatio: Number(profile.peak_demand_ratio ?? DEFAULT_PEAK_DEMAND_RATIO),
+        growthRate: Number(profile.growth_rate || 0),
+        forecastYears: Number(profile.forecast_years || DEFAULT_FORECAST_YEARS),
+        growthFactor: calculateGrowthFactor(Number(profile.growth_rate || 0), Number(profile.forecast_years || DEFAULT_FORECAST_YEARS)),
+      }),
+    } : {}),
     profile_field_explanations: profile.profile_field_explanations || createProfileFieldExplanations(targetObjectType),
   };
 }
@@ -305,14 +570,23 @@ export function normalizeDemandProfiles({
 }
 
 export function recalculateDemandProfiles({ demandProfiles = [], places = [], serviceAreas = [], zones = [] } = {}) {
-  const nonZoneProfiles = demandProfiles.filter((profile) => profile.target_object_type !== TargetObjectType.ZONE);
+  const placeProfiles = demandProfiles.filter((profile) => profile.target_object_type === TargetObjectType.PLACE);
+  const serviceAreaProfiles = calculateServiceAreaDemandProfiles({
+    serviceAreas,
+    places,
+    zones,
+    demandProfiles: [
+      ...placeProfiles,
+      ...demandProfiles.filter((profile) => profile.target_object_type === TargetObjectType.SERVICE_AREA),
+    ],
+  });
   const zoneProfiles = calculateZoneDemandProfiles({
     zones,
     places,
     serviceAreas,
-    demandProfiles,
+    demandProfiles: [...placeProfiles, ...serviceAreaProfiles, ...demandProfiles.filter((profile) => profile.target_object_type === TargetObjectType.ZONE)],
   });
-  return [...nonZoneProfiles, ...zoneProfiles];
+  return [...placeProfiles, ...serviceAreaProfiles, ...zoneProfiles];
 }
 
 export function updateDemandProfileConfig({ demandProfiles = [], profileId, patch = {}, places = [], serviceAreas = [], zones = [] } = {}) {
@@ -331,6 +605,10 @@ export function updateDemandProfileConfig({ demandProfiles = [], profileId, patc
       calculated_at: "Day 1 00:00:00",
     };
     if (merged.target_object_type === TargetObjectType.PLACE) {
+      const peakDemandRatio = Number(merged.peak_demand_ratio ?? DEFAULT_PEAK_DEMAND_RATIO);
+      const growthRate = Number(merged.growth_rate || 0);
+      const forecastYears = Number(merged.forecast_years || DEFAULT_FORECAST_YEARS);
+      const growthFactor = calculateGrowthFactor(growthRate, forecastYears);
       const potentialDemand = (
         Number(merged.resident_population || 0)
         + Number(merged.working_population || 0)
@@ -339,9 +617,28 @@ export function updateDemandProfileConfig({ demandProfiles = [], profileId, patc
       const expectedDemand = potentialDemand * Number(merged.robotaxi_adoption_rate || 0) * Number(merged.service_acceptance_rate || 1);
       return {
         ...merged,
+        peak_demand_ratio: peakDemandRatio,
+        growth_rate: growthRate,
+        forecast_years: forecastYears,
+        growth_factor: growthFactor,
         potential_demand: roundValue(potentialDemand),
         expected_robotaxi_demand: roundValue(expectedDemand),
-        peak_hour_demand: roundValue(expectedDemand * 1.2),
+        peak_hour_demand: roundValue(expectedDemand * peakDemandRatio),
+        profile_calculation_steps: createPlaceCalculationSteps({
+          residentPopulation: Number(merged.resident_population || 0),
+          workingPopulation: Number(merged.working_population || 0),
+          dailyVisitors: Number(merged.daily_visitors || 0),
+          tripGenerationRate: Number(merged.trip_generation_rate || 0),
+          demandWeight: Number(merged.demand_weight || 1),
+          potentialDemand,
+          robotaxiAdoptionRate: Number(merged.robotaxi_adoption_rate || 0),
+          serviceAcceptanceRate: Number(merged.service_acceptance_rate || 1),
+          expectedDemand,
+          peakDemandRatio,
+          growthRate,
+          forecastYears,
+          growthFactor,
+        }),
       };
     }
     return merged;

@@ -14,6 +14,8 @@ DemandProfile 用于描述地图空间中某个需求相关对象的需求产生
 
 物理空间对象只描述空间事实；DemandProfile 描述空间对象的经营画像。二者必须分离。
 
+字段解释和详细计算过程以 `05-calculation.md` 为准。本文档定义对象边界、字段归属和系统接入关系。
+
 ## 2. 对象定位
 
 DemandProfile 是独立业务对象，不属于 Place、ServiceArea 或 Zone 的内嵌字段。
@@ -185,6 +187,7 @@ Zone 类型 DemandProfile 不直接配置人口或地点需求字段，而是聚
 |coverage_factor|服务覆盖系数|ZONE|1|服务覆盖修正|
 |competition_factor|竞争影响系数|ZONE|1|竞争影响修正|
 |growth_factor|增长修正|ZONE|1|区域增长修正|
+|forecast_years|预测年数|PLACE / ZONE|1|将增长率转换为增长修正因子的预测周期|
 
 ## 8. 计算字段
 
@@ -193,12 +196,17 @@ Zone 类型 DemandProfile 不直接配置人口或地点需求字段，而是聚
 |字段英文|中文|适用对象|计算逻辑|
 |---|---|---|---|
 |potential_demand|潜在需求|PLACE / ZONE|Place 为人口与访客 × 出行产生率；Zone 为下级画像聚合|
-|expected_robotaxi_demand|预计 Robotaxi 需求|PLACE / ZONE|潜在需求 × Robotaxi 采用率 × 服务接受率，并叠加区域修正|
+|expected_robotaxi_demand|预计 Robotaxi 需求|PLACE / ZONE|Place 为潜在需求 × Robotaxi 采用率 × 服务接受率；Zone 为服务区域需求聚合后叠加区域修正|
+|service_area_demand|服务区域需求|SERVICE_AREA / ZONE|ServiceArea 为关联 Place 需求转换结果；Zone 为下级服务区域需求汇总|
 |peak_hour_demand|峰值需求|PLACE / ZONE|预计 Robotaxi 需求 × 高峰比例|
 |demand_distribution|需求分布|ZONE|下级画像构成摘要|
+|demand_growth_factor|需求增长因子|ZONE|供给需求评分使用的增长因子|
+|peak_demand_factor|高峰需求因子|ZONE|供给需求评分使用的高峰因子|
+|coverage_gap_factor|覆盖缺口因子|ZONE|供给需求评分使用的覆盖缺口因子|
 |supply_need_score|供给需求评分|ZONE|预计需求与服务容量的关系|
 |calculated_from_profile_ids|计算来源画像|ZONE|区域画像引用的下级画像编号|
 |profile_field_explanations|画像字段解释|全部|解释关键字段含义、来源和计算逻辑|
+|profile_calculation_steps|画像计算过程|全部|解释公式、输入值、中间结果和最终结果|
 |calculated_at|计算时间|全部|系统计算时间|
 
 ### 8.1 Place 计算
@@ -217,7 +225,29 @@ expected_robotaxi_demand =
   × service_acceptance_rate
 ```
 
-### 8.2 Zone 计算
+```text
+peak_hour_demand =
+  expected_robotaxi_demand
+  × peak_demand_ratio
+```
+
+```text
+growth_factor =
+  (1 + growth_rate) ^ forecast_years
+```
+
+### 8.2 ServiceArea 计算
+
+ServiceArea 不产生需求，它负责将关联 Place 需求转换为实际可服务需求。
+
+```text
+service_area_demand =
+  Σ 关联 Place DemandProfile.expected_robotaxi_demand
+  × pickup_probability
+  × accessibility_factor
+```
+
+### 8.3 Zone 计算
 
 Zone 画像只对一级 Zone 计算。计算时先读取该 Zone 的 `sub_zone_ids`，再汇总这些 SubZone 绑定的 `place_ids` 与 `service_area_ids`。如果某个 Zone 暂未拆分 SubZone，则兼容使用该 Zone 自身的 `place_ids` 与 `service_area_ids`。
 
@@ -228,16 +258,18 @@ zone potential_demand =
 
 ```text
 zone expected_robotaxi_demand =
-  Σ 子区域内 Place DemandProfile.expected_robotaxi_demand
+  Σ 子区域内 ServiceArea DemandProfile.service_area_demand
   × zone_adjustment_factor
   × coverage_factor
   × competition_factor
-  × growth_factor
 ```
 
 ```text
 supply_need_score =
-  expected_robotaxi_demand / Σ 子区域内 ServiceArea DemandProfile.service_capacity
+  demand_growth_factor
+  × peak_demand_factor
+  × coverage_gap_factor
+  × 100
 ```
 
 ```text
