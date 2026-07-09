@@ -14,7 +14,7 @@
 - Place；
 - Route 所需的空间基础。
 
-人口、需求率、服务容量、增长率、出行产生率等经营画像信息不写入本物理空间模型，统一放入 `doc/02-operation-zone/04-demand-profile-design.md` 的需求画像设计。
+人口、需求率、服务容量、增长率、出行产生率等经营画像信息不写入本物理空间模型，统一放入 `doc/00-business-planning/02-demand-profile-design.md` 的需求画像设计。
 
 ## 2. 核心原则
 
@@ -187,7 +187,7 @@ Place 只维护空间事实：
 |cell_ids|覆盖 Cell|
 |place_status|地点状态|
 
-Place 不保存需求画像字段。Place 的需求产生能力由运营区域画像文档中的 `DemandProfile` 表达，其中 `target_object_type = PLACE`。
+Place 不保存需求画像字段。Place 的需求产生能力由经营规划层需求画像文档中的 `DemandProfile` 表达，其中 `target_object_type = PLACE`。
 
 ## 7. 升级后结构
 

@@ -7,8 +7,8 @@
 需求画像用于描述地图空间中某个需求相关对象的需求产生能力、服务承接能力、需求变化特征和 Robotaxi 服务转化能力，支撑后续：
 
 - 长期需求预测；
-- 供应计划；
-- 供给单；
+- 车队生产计划；
+- 供应执行；
 - 供需投放；
 - 服务区域能力分析；
 - 经营指标诊断。
@@ -23,7 +23,7 @@ v041.1 已实现：
 2. 通过 `target_object_type / target_object_id / target_object_name` 关联 Place、ServiceArea、Zone；
 3. `profile_type` 不再作为主展示和主数据口径，只保留旧数据兼容；
 4. 旧 `placeDemandProfiles / serviceAreaDemandProfiles / zoneDemandProfiles` 可从统一对象拆分得到，用于旧快照和隐藏兼容页面；
-5. 供应管理下“需求画像”页面展示统一对象，支持按对象类型配置；
+5. 经营规划口径下“需求画像”页面展示统一对象，支持按对象类型配置；
 6. 保存任意配置后，按 `Place -> ServiceArea -> Zone` 顺序整体重算；
 7. 人工配置保存和业务初始化默认记录真实计算时间；
 8. 只有未来模拟运行显式传入模拟时间上下文时，才允许记录模拟计算时间。
@@ -39,10 +39,10 @@ DemandProfile
   ↓
 Long-term Demand Forecast
   ↓
-Supply Plan / Supply Order / Deployment Decision
+Fleet Production Plan / Supply Execution
 ```
 
-`DemandProfile` 是供给端画像底座，不是服务订单、履约行驶或经营指标的事实来源。真实经营结果仍以业务单据和经营指标数据池为准。
+`DemandProfile` 是经营规划层画像底座，不是服务订单、履约行驶或经营指标的事实来源。真实经营结果仍以业务单据和经营指标数据池为准。
 
 ## 4. 与物理空间模型的边界
 
@@ -313,7 +313,7 @@ calculated_from_profile_ids =
 
 ## 15. 前端展示规则
 
-供应管理下“需求画像”页面展示统一 `DemandProfile` 对象。
+经营规划口径下“需求画像”页面展示统一 `DemandProfile` 对象。
 
 展示规则：
 
@@ -334,7 +334,7 @@ calculated_from_profile_ids =
 3. SubZone 不生成 DemandProfile；
 4. 初始化值只支撑最小运营闭环，后续可人工配置和整体重算；
 5. 不把画像字段写回 Place、ServiceArea 或 Zone；
-6. 不把需求预测、供应计划和供给单提前接入模拟运行主路径。
+6. 不把需求预测、车队生产计划和供应执行单据提前接入模拟运行主路径。
 
 ## 17. 旧数据兼容
 
@@ -347,16 +347,16 @@ calculated_from_profile_ids =
 
 ## 18. 后续扩展边界
 
-后续长期需求预测、供应计划和供给单应消费 `DemandProfile`：
+后续长期需求预测、车队生产计划和供应执行单据应消费 `DemandProfile`：
 
 ```text
 Zone DemandProfile
   ↓
 Long-term Demand Forecast
   ↓
-Supply Plan
+Fleet Production Plan
   ↓
-Supply Order / Deployment Decision
+Production Batch / Fleet Allocation Strategy
 ```
 
 本轮不把 `DemandProfile` 接入模拟运行主路径。未来如需由模拟运行触发画像重算，必须声明模拟接入合同，并显式传入模拟时间上下文。
