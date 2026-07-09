@@ -4,6 +4,7 @@ import {
   initializeDefaultLongTermDemandForecastStrategies,
   initializeDefaultSupplyProductionProfiles,
 } from "../services/businessPlanningService.js";
+import { initializeDefaultSupplyDemandBalanceStrategies } from "../services/supplyDemandBalanceService.js";
 
 export function initializeSupplyManagement() {
   return {
@@ -18,6 +19,9 @@ export function initializeSupplyManagement() {
     fleetAllocationRuns: [],
     fleetAllocationResults: [],
     robotaxiDeliveryOrders: [],
+    supplyDemandBalanceStrategies: initializeDefaultSupplyDemandBalanceStrategies(),
+    supplyDemandBalanceRuns: [],
+    supplyDemandBalanceResults: [],
     supplyOrders: [],
     dealerSupplies: [],
     ownerSupplies: [],

@@ -1144,6 +1144,9 @@
 |fleetAllocationStrategy|区域分配策略|根据区域供给需求紧急度、需求缺口和可交付车辆等因素分配 Robotaxi 的策略|
 |fleetAllocationRun|区域分配执行|一次区域分配策略执行记录|
 |fleetAllocationResult|区域分配结果|一次区域分配执行生成的区域 / 运营中心 Robotaxi ID 列表|
+|supplyDemandBalanceStrategy|供需平衡策略|运营阶段短期供需投放预测和利润优化策略|
+|supplyDemandBalanceRun|供需平衡执行|一次供需平衡策略执行记录|
+|supplyDemandBalanceResult|供需平衡结果|按 Zone、Place、服务区域形成的 Robotaxi 缺口、优先级和经济性结果|
 |robotaxiDeliveryOrder|区域交付|包含多台 Robotaxi 的区域交付批次，完成后触发运营准入任务|
 
 |属性英文名|中文名|字段性质|含义|
@@ -1231,6 +1234,33 @@
 |allocated_quantity|分配数量|运行态字段|本条分配结果中分配的 Robotaxi 数量|
 |allocated_robotaxi_ids|分配 Robotaxi 列表|运行态字段|本条分配结果中具体 Robotaxi ID 列表|
 |candidate_robotaxi_ids|候选 Robotaxi 列表|运行态字段|本次分配可选 Robotaxi ID 列表|
+|supply_demand_balance_strategy_id|供需平衡策略编号|持久化字段|供需平衡策略唯一编号|
+|supply_demand_balance_run_id|供需平衡执行编号|持久化字段|一次供需平衡策略执行唯一编号|
+|supply_demand_balance_result_id|供需平衡结果编号|持久化字段|供需平衡结果唯一编号|
+|balance_algorithm|平衡算法|配置字段|供需平衡策略使用的短期预测和优化算法|
+|forecast_window_hours|预测窗口（小时）|配置字段|供需平衡覆盖的短期运营窗口|
+|demand_weight|需求权重|配置字段|需求强度在紧迫度评分中的权重|
+|gap_weight|缺口权重|配置字段|Robotaxi 缺口在紧迫度评分中的权重|
+|profit_weight|利润权重|配置字段|预计利润在投放优先级中的权重|
+|vehicle_service_capacity_per_hour|单车每小时履约能力|配置字段|单台 Robotaxi 每小时可完成的服务订单能力|
+|default_average_order_revenue|默认单均收入|配置字段|历史收入不足时使用的单均收入兜底值|
+|deployment_cost_per_km|单公里投放成本|配置字段|调度投放 Robotaxi 的单位距离成本|
+|average_reposition_distance_km|平均调度距离（公里）|配置字段|短期投放中估算空驶调度成本的平均距离|
+|target_object_type|目标对象类型|持久化字段|结果面向 Zone、Place 或服务区域|
+|target_object_id|目标对象编号|持久化字段|结果目标对象编号|
+|target_object_name|目标对象名称|展示字段|结果目标对象名称|
+|forecast_order_count|预计订单数|计算字段|短期窗口内预计订单数量|
+|expected_demand_quantity|预计需求车辆数|计算字段|订单需求换算后的 Robotaxi 需求数量|
+|current_supply_quantity|当前供给车辆数|计算字段|当前目标对象范围内可参与运营的 Robotaxi 数量|
+|robotaxi_gap_quantity|Robotaxi 缺口|计算字段|预计需求车辆数减当前供给车辆数后的缺口|
+|demand_urgency_score|需求紧迫度评分|计算字段|综合需求强度、供给缺口、履约压力和利润形成的评分|
+|deployment_priority_rank|投放优先级|计算字段|按紧迫度和利润排序后的投放顺序|
+|recommended_deployment_quantity|建议投放数量|计算字段|建议投入目标对象的 Robotaxi 数量|
+|expected_revenue_amount|预计收入金额|计算字段|预计订单量乘以单均收入得到的收入|
+|estimated_deployment_cost_amount|预估投放成本|计算字段|建议投放数量乘以平均调度距离和单位投放成本|
+|expected_profit_amount|预计利润金额|计算字段|预计收入金额减预估投放成本|
+|profit_score|利润评分|计算字段|预计利润归一化评分|
+|deployment_demand_order_id|投放需求单编号|关联字段|未来供需平衡结果触发投放需求单后的编号，当前为空|
 |delivery_order_id|交付单编号|持久化字段|区域交付单唯一编号|
 |delivery_order_name|交付单名称|持久化字段|区域交付单名称|
 |delivery_status|交付状态|运行态字段|区域交付单状态|
@@ -1277,6 +1307,12 @@
 |PENDING_DELIVERY|待交付|区域交付相关状态|
 |ZONE_SUPPLY_URGENCY_ALLOCATION|区域供给紧急度分配|区域分配算法|
 |ZONE_GAP_TO_OPS_CENTER|区域缺口分配到运营中心（兼容）|区域分配算法兼容值|
+|SHORT_TERM_PROFIT_PRIORITY|短期利润优先平衡|供需平衡算法|
+|PENDING_DEPLOYMENT_DEMAND|待生成投放需求|供需平衡结果状态|
+|SUPPLY_DEMAND_BALANCE_STRATEGY_NOT_ACTIVE|供需平衡策略未启用|供需平衡执行失败原因|
+|NO_SUPPLY_DEMAND_TARGET|没有供需平衡目标|供需平衡执行失败原因|
+|NO_SUPPLY_DEMAND_RESULT|没有供需平衡结果|供需平衡执行失败原因|
+|SUPPLY_DEMAND_BALANCE_EXECUTE|执行供需平衡策略|供需平衡执行动作|
 |BUSINESS_TARGET_REQUIRED|缺少经营目标|经营目标配置错误|
 |SUPPLY_PLAN_CREATE|创建生产计划|状态时间线动作|
 |SUPPLY_PLAN_CREATED|生产计划已创建|状态时间线结果|

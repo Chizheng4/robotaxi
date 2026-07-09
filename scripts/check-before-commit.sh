@@ -65,6 +65,7 @@ node --check src/services/fleetOperationTaskService.js
 node --check src/services/fleetOperationPolicyService.js
 node --check src/services/taskDispatchStrategyService.js
 node --check src/services/robotaxiTaskPlanningService.js
+node --check src/services/supplyDemandBalanceService.js
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
 node --check src/data/simulationRunBusinessScope.js
@@ -133,6 +134,7 @@ node scripts/verify-v040-29-financial-fact-closure.mjs
 node scripts/verify-v040-30-failure-retirement-closure.mjs
 node scripts/verify-v041-1-demand-profile-unified.mjs
 node scripts/verify-v041-2-business-planning.mjs
+node scripts/verify-v041-2-13-supply-demand-balance.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then
