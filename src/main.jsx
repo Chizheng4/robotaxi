@@ -419,7 +419,7 @@ const tableConfig = {
   businessTargets: {
     title: "经营目标",
     description: "经营目标定义规划周期内的收入、订单、车队规模、资产利用率和履约目标，是需求预测和供应生产规划的上游目标。",
-    columns: ["business_target_id", "target_name", "target_status", "target_version", "planning_horizon_years", "target_zone_ids", "target_revenue_amount", "target_service_order_count", "target_fleet_size", "target_asset_utilization_rate", "target_order_fulfillment_rate", "created_at", "updated_at"],
+    columns: ["business_target_id", "target_name", "target_status", "planning_horizon_years", "forecast_start_date", "forecast_end_date", "target_zone_ids", "target_service_order_count", "target_fleet_size", "target_asset_utilization_rate", "target_order_fulfillment_rate", "target_revenue_amount", "updated_at"],
   },
   supplyProductionProfiles: {
     title: "生产画像",
@@ -489,22 +489,22 @@ const tableConfig = {
   longTermDemandForecasts: {
     title: "需求预测结果",
     description: "需求预测结果记录长期需求预测策略执行后形成的区域 Robotaxi 需求和供给缺口。",
-    columns: ["forecast_result_id", "forecast_name", "forecast_status", "forecast_period", "zone_id", "expected_robotaxi_demand", "required_fleet_quantity", "current_fleet_quantity", "fleet_gap_quantity", "confidence_level", "created_at"],
+    columns: ["forecast_result_id", "forecast_name", "forecast_status", "forecast_period", "business_target_id", "zone_id", "forecast_daily_demand", "forecast_peak_hour_demand", "required_fleet_quantity", "current_fleet_quantity", "fleet_gap_quantity", "planned_production_quantity", "feasible_production_quantity", "production_gap_quantity", "supply_completion_date", "confidence_level", "created_at"],
   },
   longTermDemandForecastStrategies: {
     title: "需求预测策略",
     description: "需求预测策略定义经营目标、需求画像和生产画像如何转化为长期 Robotaxi 需求预测。",
-    columns: ["forecast_strategy_id", "strategy_name", "strategy_type", "strategy_status", "strategy_version", "target_zone_ids", "forecast_horizon_years", "created_at", "updated_at"],
+    columns: ["forecast_strategy_id", "strategy_name", "strategy_type", "strategy_status", "strategy_version", "target_zone_ids", "forecast_horizon_years", "demand_buffer_ratio", "fleet_utilization_target", "vehicle_available_hours_per_day", "average_trip_duration_min", "created_at", "updated_at"],
   },
   longTermDemandForecastRuns: {
     title: "需求预测执行",
     description: "需求预测执行记录一次长期需求预测策略运行的输入、配置快照和执行状态。",
-    columns: ["forecast_run_id", "forecast_strategy_id", "strategy_version", "run_status", "target_zone_ids", "started_at", "completed_at", "result_count", "failure_reason"],
+    columns: ["forecast_run_id", "forecast_strategy_id", "business_target_id", "supply_production_profile_id", "strategy_version", "run_status", "target_zone_ids", "forecast_start_date", "forecast_end_date", "started_at", "completed_at", "result_count", "failure_reason"],
   },
   supplyPlans: {
     title: "生产计划",
     description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
-    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "target_zone_id", "planned_robotaxi_count", "fleet_gap_quantity", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
+    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "target_zone_id", "planned_robotaxi_count", "fleet_gap_quantity", "feasible_production_quantity", "production_gap_quantity", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
   },
   productionBatches: {
     title: "生产批次",
@@ -1188,6 +1188,32 @@ const supplyProductionProfileConfigFields = [
   { key: "effective_to", type: "text" },
 ];
 
+const businessTargetConfigFields = [
+  { key: "target_name", type: "text" },
+  { key: "planning_horizon_years", type: "number", min: 1, step: 1 },
+  { key: "forecast_start_date", type: "text" },
+  { key: "target_revenue_amount", type: "number", min: 0, step: 1000 },
+  { key: "target_service_order_count", type: "number", min: 0, step: 1000 },
+  { key: "target_fleet_size", type: "number", min: 0, step: 1 },
+  { key: "target_asset_utilization_rate", type: "number", min: 0, max: 1, step: 0.01 },
+  { key: "target_order_fulfillment_rate", type: "number", min: 0, max: 1, step: 0.01 },
+];
+
+function createBusinessTargetDraft(businessTarget) {
+  return Object.fromEntries(businessTargetConfigFields.map((field) => [
+    field.key,
+    businessTarget?.[field.key] ?? "",
+  ]));
+}
+
+function normalizeBusinessTargetDraft(draft) {
+  return Object.fromEntries(businessTargetConfigFields.map((field) => {
+    const value = draft[field.key];
+    if (field.type === "number") return [field.key, Number(value || 0)];
+    return [field.key, value || null];
+  }));
+}
+
 function createSupplyProductionProfileDraft(profile) {
   return Object.fromEntries(supplyProductionProfileConfigFields.map((field) => [
     field.key,
@@ -1341,6 +1367,9 @@ function App() {
   const [pendingCostParameterRule, setPendingCostParameterRule] = useState(null);
   const [costParameterModalOpen, setCostParameterModalOpen] = useState(false);
   const [costParameterValue, setCostParameterValue] = useState("");
+  const [pendingBusinessTarget, setPendingBusinessTarget] = useState(null);
+  const [businessTargetModalOpen, setBusinessTargetModalOpen] = useState(false);
+  const [businessTargetDraft, setBusinessTargetDraft] = useState({});
   const [pendingFleetOperationPolicy, setPendingFleetOperationPolicy] = useState(null);
   const [fleetOperationPolicyModalOpen, setFleetOperationPolicyModalOpen] = useState(false);
   const [fleetOperationPolicyDraft, setFleetOperationPolicyDraft] = useState({});
@@ -2536,6 +2565,33 @@ function App() {
     antd.message.success("需求画像配置已保存，区域画像已重新计算");
   }
 
+  function editBusinessTarget(businessTarget) {
+    setPendingBusinessTarget(businessTarget);
+    setBusinessTargetDraft(createBusinessTargetDraft(businessTarget));
+    setBusinessTargetModalOpen(true);
+  }
+
+  function saveBusinessTargetConfig() {
+    if (!pendingBusinessTarget || !businessPlanningService?.updateBusinessTargetConfig) return;
+    const result = businessPlanningService.updateBusinessTargetConfig({
+      businessTarget: pendingBusinessTarget,
+      patch: normalizeBusinessTargetDraft(businessTargetDraft),
+      context: { now },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      businessTargets: replaceCollectionItem(current.businessTargets || [], "business_target_id", result.businessTarget),
+    }));
+    setBusinessTargetModalOpen(false);
+    setPendingBusinessTarget(null);
+    setBusinessTargetDraft({});
+    antd.message.success("经营目标配置已保存");
+  }
+
   function editSupplyProductionProfile(profile) {
     setPendingSupplyProductionProfile(profile);
     setSupplyProductionProfileDraft(createSupplyProductionProfileDraft(profile));
@@ -2567,6 +2623,7 @@ function App() {
     if (!businessPlanningService?.executeLongTermDemandForecastStrategy || !strategy) return;
     const result = businessPlanningService.executeLongTermDemandForecastStrategy({
       strategy,
+      businessTargets: data.businessTargets || [],
       demandProfiles: data.demandProfiles || [],
       supplyProductionProfiles: data.supplyProductionProfiles || [],
       robotaxis: data.robotaxis || [],
@@ -2961,6 +3018,7 @@ function App() {
                   metricCalculationInProgress,
                   editCostParameterRule,
                   editDemandProfile,
+                  editBusinessTarget,
                   editSupplyProductionProfile,
                   clearEndedTimedOperations,
                   requestClearAllTimedOperations,
@@ -3153,6 +3211,39 @@ function App() {
           {pendingDemandProfile?.target_object_type === "ZONE" && (
             <Text type="secondary">区域画像的需求、容量和供给需求评分由包含的地点画像与服务区域画像汇总计算；这里只配置区域修正系数。</Text>
           )}
+        </div>
+      </Modal>
+      <Modal
+        title="配置经营目标"
+        open={businessTargetModalOpen}
+        okText="保存配置"
+        cancelText="取消"
+        width={560}
+        onCancel={() => setBusinessTargetModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setBusinessTargetModalOpen(false)}>取消</Button>,
+          <Button key="save" type="primary" onClick={saveBusinessTargetConfig}>保存配置</Button>,
+        ]}
+      >
+        <div className="timing-rule-editor">
+          <Descriptions size="small" column={1} colon={false}>
+            <Descriptions.Item label="目标编号">{pendingBusinessTarget?.business_target_id || "无"}</Descriptions.Item>
+            <Descriptions.Item label="目标状态">{getDisplayValue(pendingBusinessTarget?.target_status)}</Descriptions.Item>
+          </Descriptions>
+          {businessTargetConfigFields.map((field) => (
+            <label key={field.key}>
+              <span>{getFieldLabel(field.key)}</span>
+              <Input
+                size="small"
+                type={field.type === "number" ? "number" : "text"}
+                min={field.min ?? undefined}
+                max={field.max ?? undefined}
+                step={field.step ?? undefined}
+                value={businessTargetDraft[field.key] ?? ""}
+                onChange={(event) => setBusinessTargetDraft((draft) => ({ ...draft, [field.key]: event.target.value }))}
+              />
+            </label>
+          ))}
         </div>
       </Modal>
       <Modal
@@ -5536,6 +5627,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
   const isDemandProfilePage = page === "demandProfiles";
+  const isBusinessTargetPage = page === "businessTargets";
   const isSupplyProductionProfilePage = page === "supplyProductionProfiles";
   const isLongTermDemandForecastStrategyPage = page === "longTermDemandForecastStrategies";
   const isLongTermDemandForecastPage = page === "longTermDemandForecasts";
@@ -5994,6 +6086,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         fixed: "right",
         width: 120,
         render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editDemandProfile(row)}>配置</RowActionButton>),
+      };
+    }
+    if (isBusinessTargetPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 120,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editBusinessTarget(row)}>配置</RowActionButton>),
       };
     }
     if (isSupplyProductionProfilePage) {

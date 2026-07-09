@@ -46,12 +46,16 @@ export const FleetAllocationStrategyStatus = {
 };
 
 export function initializeDefaultBusinessTargets(now = defaultNow()) {
+  const forecastStartDate = now.slice(0, 10);
+  const planningHorizonYears = 3;
   return [{
     business_target_id: "BT-001",
     target_name: "三年运营增长目标",
     target_status: BusinessTargetStatus.ACTIVE,
     target_version: "1.0.0",
-    planning_horizon_years: 3,
+    planning_horizon_years: planningHorizonYears,
+    forecast_start_date: forecastStartDate,
+    forecast_end_date: addDaysIsoDate(now, planningHorizonYears * 365),
     target_zone_ids: ["Z-001"],
     target_revenue_amount: 1200000,
     target_service_order_count: 50000,
@@ -61,6 +65,41 @@ export function initializeDefaultBusinessTargets(now = defaultNow()) {
     created_at: now,
     updated_at: now,
   }];
+}
+
+export function updateBusinessTargetConfig({
+  businessTarget,
+  patch = {},
+  context = {},
+} = {}) {
+  if (!businessTarget?.business_target_id) return { succeeded: false, reason: "BUSINESS_TARGET_REQUIRED", businessTarget: null };
+  const occurredAt = resolveNow(context);
+  const numericFields = [
+    "planning_horizon_years",
+    "target_revenue_amount",
+    "target_service_order_count",
+    "target_fleet_size",
+    "target_asset_utilization_rate",
+    "target_order_fulfillment_rate",
+  ];
+  const normalizedPatch = { ...patch };
+  numericFields.forEach((field) => {
+    if (field in normalizedPatch) normalizedPatch[field] = Math.max(0, Number(normalizedPatch[field] || 0));
+  });
+  const horizonYears = Math.max(1, Number(normalizedPatch.planning_horizon_years ?? businessTarget.planning_horizon_years ?? 3));
+  const forecastStartDate = normalizedPatch.forecast_start_date || businessTarget.forecast_start_date || occurredAt.slice(0, 10);
+  return {
+    succeeded: true,
+    businessTarget: {
+      ...businessTarget,
+      ...normalizedPatch,
+      planning_horizon_years: horizonYears,
+      forecast_start_date: forecastStartDate,
+      forecast_end_date: addDaysIsoDate(forecastStartDate, horizonYears * 365),
+      target_status: normalizedPatch.target_status || businessTarget.target_status || BusinessTargetStatus.ACTIVE,
+      updated_at: occurredAt,
+    },
+  };
 }
 
 export const FleetAllocationRunStatus = {
@@ -139,6 +178,8 @@ export function initializeDefaultLongTermDemandForecastStrategies(now = defaultN
     forecast_horizon_years: 3,
     demand_buffer_ratio: 0.15,
     fleet_utilization_target: 0.72,
+    vehicle_available_hours_per_day: 12,
+    average_trip_duration_min: 30,
     created_at: now,
     updated_at: now,
   }];
@@ -164,6 +205,7 @@ export function initializeDefaultFleetAllocationStrategies(now = defaultNow()) {
 
 export function executeLongTermDemandForecastStrategy({
   strategy,
+  businessTargets = [],
   demandProfiles = [],
   supplyProductionProfiles = [],
   robotaxis = [],
@@ -186,8 +228,13 @@ export function executeLongTermDemandForecastStrategy({
   const activeProductionProfile = supplyProductionProfiles.find((item) => item.profile_status === SupplyProductionProfileStatus.ACTIVE)
     || supplyProductionProfiles[0]
     || null;
+  const activeBusinessTarget = businessTargets.find((item) => item.target_status === BusinessTargetStatus.ACTIVE)
+    || businessTargets[0]
+    || null;
   const targetZoneIds = Array.isArray(strategy.target_zone_ids) && strategy.target_zone_ids.length
     ? strategy.target_zone_ids
+    : Array.isArray(activeBusinessTarget?.target_zone_ids) && activeBusinessTarget.target_zone_ids.length
+      ? activeBusinessTarget.target_zone_ids
     : unique(demandProfiles.filter((item) => item.target_object_type === "ZONE").map((item) => item.target_object_id));
   const zoneProfiles = demandProfiles.filter((profile) => profile.target_object_type === "ZONE" && targetZoneIds.includes(profile.target_object_id));
   const runId = resolveRunId(context);
@@ -197,6 +244,7 @@ export function executeLongTermDemandForecastStrategy({
     resultId: `${resultBaseId}-${String(index + 1).padStart(3, "0")}`,
     runId,
     strategy,
+    businessTarget: activeBusinessTarget,
     profile,
     productionProfile: activeProductionProfile,
     robotaxis,
@@ -211,6 +259,8 @@ export function executeLongTermDemandForecastStrategy({
     resultCount: results.length,
     failureReason: results.length ? null : "NO_ZONE_DEMAND_PROFILE",
     targetZoneIds,
+    businessTarget: activeBusinessTarget,
+    productionProfile: activeProductionProfile,
   });
   return { run, results };
 }
@@ -224,7 +274,7 @@ export function createSupplyPlanFromForecast({
   if (!forecast?.forecast_result_id) {
     return { succeeded: false, reason: "FORECAST_RESULT_REQUIRED", supplyPlan: null };
   }
-  const plannedRobotaxiCount = Math.max(0, Number(forecast.fleet_gap_quantity ?? forecast.required_fleet_quantity ?? 0));
+  const plannedRobotaxiCount = Math.max(0, Number(forecast.planned_production_quantity ?? forecast.fleet_gap_quantity ?? forecast.required_fleet_quantity ?? 0));
   if (plannedRobotaxiCount <= 0) {
     return { succeeded: false, reason: "NO_FLEET_GAP", supplyPlan: null };
   }
@@ -246,9 +296,11 @@ export function createSupplyPlanFromForecast({
     required_fleet_quantity: forecast.required_fleet_quantity ?? null,
     current_fleet_quantity: forecast.current_fleet_quantity ?? null,
     fleet_gap_quantity: forecast.fleet_gap_quantity ?? plannedRobotaxiCount,
+    feasible_production_quantity: forecast.feasible_production_quantity ?? null,
+    production_gap_quantity: forecast.production_gap_quantity ?? null,
     production_lead_time_days: productionProfile.production_lead_time_days ?? null,
-    planned_start_date: occurredAt.slice(0, 10),
-    planned_end_date: addDaysIsoDate(occurredAt, Number(productionProfile.production_lead_time_days || 180)),
+    planned_start_date: forecast.production_start_date || occurredAt.slice(0, 10),
+    planned_end_date: forecast.supply_completion_date || addDaysIsoDate(occurredAt, Number(productionProfile.production_lead_time_days || 180)),
     created_at: occurredAt,
     updated_at: occurredAt,
   }, {
@@ -588,6 +640,8 @@ export function completeDeliveryOrder({ deliveryOrder, robotaxis = [], readiness
 function createForecastRun({
   runId,
   strategy,
+  businessTarget,
+  productionProfile,
   runStatus,
   startedAt,
   completedAt,
@@ -598,44 +652,100 @@ function createForecastRun({
   return {
     forecast_run_id: runId,
     forecast_strategy_id: strategy?.forecast_strategy_id || null,
+    business_target_id: businessTarget?.business_target_id || null,
+    supply_production_profile_id: productionProfile?.profile_id || null,
     strategy_name: strategy?.strategy_name || null,
     strategy_version: strategy?.strategy_version || null,
     run_status: runStatus,
     target_zone_ids: targetZoneIds,
+    forecast_start_date: businessTarget?.forecast_start_date || startedAt.slice(0, 10),
+    forecast_end_date: businessTarget?.forecast_end_date || addDaysIsoDate(startedAt, Number(strategy?.forecast_horizon_years || 3) * 365),
     started_at: startedAt,
     completed_at: completedAt,
     result_count: resultCount,
     failure_reason: failureReason,
     strategy_snapshot: strategy ? { ...strategy } : null,
+    business_target_snapshot: businessTarget ? { ...businessTarget } : null,
+    production_profile_snapshot: productionProfile ? { ...productionProfile } : null,
   };
 }
 
-function createForecastResult({ resultId, runId, strategy, profile, productionProfile, robotaxis, occurredAt }) {
-  const expectedDemand = Number(profile.expected_robotaxi_demand || profile.service_area_demand || profile.potential_demand || 0);
+function createForecastResult({ resultId, runId, strategy, businessTarget, profile, productionProfile, robotaxis, occurredAt }) {
+  const baselineDailyDemand = Number(profile.expected_robotaxi_demand || profile.service_area_demand || profile.potential_demand || 0);
   const bufferRatio = Number(strategy.demand_buffer_ratio ?? 0.15);
   const utilizationTarget = Math.max(0.1, Number(strategy.fleet_utilization_target ?? 0.72));
-  const requiredFleetQuantity = Math.ceil((expectedDemand * (1 + bufferRatio)) / utilizationTarget);
+  const targetHorizonYears = Math.max(1, Number(businessTarget?.planning_horizon_years || 0));
+  const strategyHorizonYears = Math.max(1, Number(strategy.forecast_horizon_years || 0));
+  const productionLeadTimeDays = Math.max(0, Number(productionProfile?.production_lead_time_days || 0));
+  const productionHorizonYears = Math.max(1, Math.ceil(productionLeadTimeDays / 365));
+  const forecastHorizonYears = Math.max(targetHorizonYears, strategyHorizonYears, productionHorizonYears);
+  const growthRate = Number(profile.growth_rate ?? strategy.growth_rate ?? 0.08);
+  const growthFactor = Number(profile.growth_factor || profile.demand_growth_factor || ((1 + growthRate) ** forecastHorizonYears));
+  const forecastDailyDemand = baselineDailyDemand * growthFactor;
+  const peakDemandRatio = Number(profile.peak_demand_ratio ?? profile.peak_demand_factor ?? 0.15);
+  const forecastPeakHourDemand = forecastDailyDemand * peakDemandRatio;
+  const averageTripDurationMin = Math.max(1, Number(strategy.average_trip_duration_min || 30));
+  const vehicleAvailableHoursPerDay = Math.max(1, Number(strategy.vehicle_available_hours_per_day || 12));
+  const targetDailyOrders = Number(businessTarget?.target_service_order_count || 0) / Math.max(1, forecastHorizonYears * 365);
+  const targetPeakHourDemand = targetDailyOrders * peakDemandRatio;
+  const demandFleetRequirement = Math.ceil((forecastPeakHourDemand * averageTripDurationMin) / 60);
+  const targetServiceFleetRequirement = Math.ceil((targetPeakHourDemand * averageTripDurationMin) / 60);
+  const targetFleetSize = Math.max(0, Number(businessTarget?.target_fleet_size || 0));
+  const productivityFleetRequirement = Math.ceil((forecastDailyDemand * (1 + bufferRatio)) / Math.max(1, (vehicleAvailableHoursPerDay * 60) / averageTripDurationMin) / utilizationTarget);
+  const requiredFleetQuantity = Math.max(demandFleetRequirement, targetServiceFleetRequirement, targetFleetSize, productivityFleetRequirement);
   const currentFleetQuantity = robotaxis.filter((item) => item.target_zone_id === profile.target_object_id || item.service_zone_id === profile.target_object_id || profile.target_object_id === "Z-001").length;
   const fleetGapQuantity = Math.max(0, requiredFleetQuantity - currentFleetQuantity);
+  const annualProductionCapacity = Math.max(0, Number(productionProfile?.annual_production_capacity || 0));
+  const monthlyProductionCapacity = Math.max(0, Number(productionProfile?.monthly_production_capacity || annualProductionCapacity / 12 || 0));
+  const deliveryCapacity = Math.max(0, Number(productionProfile?.delivery_capacity || fleetGapQuantity || 0));
+  const feasibleProductionQuantity = Math.floor(Math.min(
+    annualProductionCapacity * forecastHorizonYears || fleetGapQuantity,
+    monthlyProductionCapacity * 12 * forecastHorizonYears || fleetGapQuantity,
+    Math.max(deliveryCapacity, fleetGapQuantity),
+  ));
+  const plannedProductionQuantity = Math.max(0, Math.min(fleetGapQuantity, feasibleProductionQuantity || fleetGapQuantity));
+  const productionGapQuantity = Math.max(0, fleetGapQuantity - plannedProductionQuantity);
+  const productionStartDate = businessTarget?.forecast_start_date || occurredAt.slice(0, 10);
+  const supplyCompletionDate = addDaysIsoDate(productionStartDate, productionLeadTimeDays);
   return {
     forecast_result_id: resultId,
     forecast_id: resultId,
     forecast_name: `${profile.target_object_name || profile.target_object_id}需求预测`,
     forecast_status: LongTermDemandForecastResultStatus.GENERATED,
-    forecast_period: `${strategy.forecast_horizon_years || 3}年`,
+    forecast_period: `${forecastHorizonYears}年`,
     forecast_strategy_id: strategy.forecast_strategy_id,
     forecast_run_id: runId,
+    business_target_id: businessTarget?.business_target_id || null,
     zone_id: profile.target_object_id,
     zone_name: profile.target_object_name,
     demand_profile_id: profile.profile_id,
     supply_production_profile_id: productionProfile?.profile_id || null,
-    expected_robotaxi_demand: roundNumber(expectedDemand, 2),
+    baseline_daily_demand: roundNumber(baselineDailyDemand, 2),
+    growth_factor: roundNumber(growthFactor, 4),
+    forecast_daily_demand: roundNumber(forecastDailyDemand, 2),
+    forecast_peak_hour_demand: roundNumber(forecastPeakHourDemand, 2),
+    expected_robotaxi_demand: roundNumber(forecastDailyDemand, 2),
+    target_service_order_count: businessTarget?.target_service_order_count ?? null,
+    target_fleet_size: targetFleetSize || null,
+    target_asset_utilization_rate: businessTarget?.target_asset_utilization_rate ?? null,
+    target_order_fulfillment_rate: businessTarget?.target_order_fulfillment_rate ?? null,
+    vehicle_available_hours_per_day: vehicleAvailableHoursPerDay,
+    average_trip_duration_min: averageTripDurationMin,
     required_fleet_quantity: requiredFleetQuantity,
     current_fleet_quantity: currentFleetQuantity,
     fleet_gap_quantity: fleetGapQuantity,
+    production_lead_time_days: productionLeadTimeDays,
+    production_start_date: productionStartDate,
+    supply_completion_date: supplyCompletionDate,
+    feasible_production_quantity: feasibleProductionQuantity,
+    planned_production_quantity: plannedProductionQuantity,
+    production_gap_quantity: productionGapQuantity,
     confidence_level: 0.82,
     demand_buffer_ratio: bufferRatio,
     fleet_utilization_target: utilizationTarget,
+    business_target_snapshot: businessTarget ? { ...businessTarget } : null,
+    demand_profile_snapshot: profile ? { ...profile } : null,
+    production_profile_snapshot: productionProfile ? { ...productionProfile } : null,
     created_at: occurredAt,
   };
 }

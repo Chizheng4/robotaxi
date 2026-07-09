@@ -1153,6 +1153,8 @@
 |target_status|目标状态|运行态字段|经营目标状态|
 |target_version|目标版本|持久化字段|经营目标版本|
 |planning_horizon_years|规划周期（年）|配置字段|经营目标覆盖的规划周期|
+|forecast_start_date|预测开始日期|配置字段|经营目标对应的预测起始日期|
+|forecast_end_date|预测结束日期|计算字段|预测开始日期加规划周期得到的预测结束日期|
 |target_revenue_amount|目标收入金额|配置字段|规划期收入目标|
 |target_service_order_count|目标服务订单数|配置字段|规划期服务订单目标|
 |target_fleet_size|目标车队规模|配置字段|规划期目标 Robotaxi 规模|
@@ -1178,13 +1180,27 @@
 |forecast_horizon_years|预测规划周期（年）|配置字段|长期预测覆盖的年份数|
 |demand_buffer_ratio|需求缓冲比例|配置字段|预测需求转换为车队规模时的安全缓冲比例|
 |fleet_utilization_target|车队利用率目标|配置字段|用于将预计需求换算为目标车队规模的利用率目标|
+|vehicle_available_hours_per_day|单车每日可运营小时|配置字段|长期预测中单台 Robotaxi 每日可用于履约的小时数|
+|average_trip_duration_min|平均履约时长（分钟）|配置字段|长期预测中单次服务订单平均履约耗时|
 |result_count|结果数量|运行态字段|本次预测执行生成的结果数量|
+|baseline_daily_demand|基础日需求|计算字段|由区域需求画像得到的当前日均 Robotaxi 需求|
+|growth_factor|增长因子|计算字段|根据增长率和预测周期得到的需求增长修正|
+|forecast_daily_demand|预测日需求|计算字段|基础日需求乘以增长因子|
+|forecast_peak_hour_demand|预测峰值小时需求|计算字段|预测日需求乘以峰值需求比例|
 |required_fleet_quantity|目标所需车辆数|计算字段|预测周期内目标区域所需 Robotaxi 数量|
 |current_fleet_quantity|当前运营车辆数|计算字段|当前可运营 Robotaxi 数量|
 |fleet_gap_quantity|车辆供给缺口|计算字段|目标所需车辆数减当前运营车辆数|
+|production_start_date|生产开始日期|计算字段|为了满足预测结果建议启动生产的日期|
+|supply_completion_date|供给完成日期|计算字段|生产开始日期加生产提前期得到的供给完成日期|
+|feasible_production_quantity|可生产数量|计算字段|预测周期内生产画像约束下可形成的 Robotaxi 数量|
+|planned_production_quantity|计划生产数量|计算字段|本次预测建议转入生产计划的 Robotaxi 数量|
+|production_gap_quantity|生产缺口|计算字段|车辆供给缺口扣除计划生产数量后的剩余缺口|
 |demand_profile_id|需求画像编号|关联字段|预测结果引用的区域需求画像|
 |supply_production_profile_id|生产画像编号|关联字段|预测结果引用的生产画像|
 |strategy_snapshot|策略快照|持久化字段|预测执行时的策略配置快照|
+|business_target_snapshot|经营目标快照|持久化字段|预测执行时使用的经营目标配置快照|
+|demand_profile_snapshot|需求画像快照|持久化字段|预测执行时使用的需求画像快照|
+|production_profile_snapshot|生产画像快照|持久化字段|预测执行时使用的生产画像快照|
 |supply_plan_id|生产计划编号|持久化字段|生产计划唯一编号|
 |plan_name|计划名称|持久化字段|生产计划名称|
 |plan_status|计划状态|持久化字段|计划状态|
@@ -1261,6 +1277,7 @@
 |PENDING_DELIVERY|待交付|区域交付相关状态|
 |ZONE_SUPPLY_URGENCY_ALLOCATION|区域供给紧急度分配|区域分配算法|
 |ZONE_GAP_TO_OPS_CENTER|区域缺口分配到运营中心（兼容）|区域分配算法兼容值|
+|BUSINESS_TARGET_REQUIRED|缺少经营目标|经营目标配置错误|
 |SUPPLY_PLAN_CREATE|创建生产计划|状态时间线动作|
 |SUPPLY_PLAN_CREATED|生产计划已创建|状态时间线结果|
 |SUPPLY_PLAN_CONFIRM|确认生产计划|状态时间线动作|
