@@ -1130,6 +1130,15 @@
 
 ### 12.1 SupplyManagement：供应管理
 
+当前经营规划与供应管理相关对象：
+
+|对象英文名|中文名|含义|
+|---|---|---|
+|supplyProductionProfile|供应生产画像|描述自有生产形成 Robotaxi 供给能力的配置对象|
+|longTermDemandForecastStrategy|需求预测策略|长期需求预测策略配置|
+|longTermDemandForecastRun|需求预测执行|一次长期需求预测策略执行记录|
+|longTermDemandForecast|需求预测结果|长期需求预测执行生成的区域车队需求结果|
+
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
 |forecast_id|预测编号|持久化字段|长期需求预测唯一编号|
@@ -1150,10 +1159,15 @@
 |strategy_version|策略版本|持久化字段|预测执行时使用的策略版本|
 |target_zone_ids|目标区域列表|配置字段|预测覆盖的目标运营区域集合|
 |forecast_horizon_years|预测规划周期（年）|配置字段|长期预测覆盖的年份数|
+|demand_buffer_ratio|需求缓冲比例|配置字段|预测需求转换为车队规模时的安全缓冲比例|
+|fleet_utilization_target|车队利用率目标|配置字段|用于将预计需求换算为目标车队规模的利用率目标|
 |result_count|结果数量|运行态字段|本次预测执行生成的结果数量|
 |required_fleet_quantity|目标所需车辆数|计算字段|预测周期内目标区域所需 Robotaxi 数量|
 |current_fleet_quantity|当前运营车辆数|计算字段|当前可运营 Robotaxi 数量|
 |fleet_gap_quantity|车辆供给缺口|计算字段|目标所需车辆数减当前运营车辆数|
+|demand_profile_id|需求画像编号|关联字段|预测结果引用的区域需求画像|
+|supply_production_profile_id|供应生产画像编号|关联字段|预测结果引用的供应生产画像|
+|strategy_snapshot|策略快照|持久化字段|预测执行时的策略配置快照|
 |supply_plan_id|供给计划编号|持久化字段|供给计划单唯一编号|
 |plan_name|计划名称|持久化字段|供给计划名称|
 |plan_status|计划状态|持久化字段|计划状态|

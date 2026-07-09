@@ -53,6 +53,7 @@ let fleetOperationPolicyService;
 let fleetOperationDispatchService;
 let taskDispatchStrategyService;
 let robotaxiTaskPlanningService;
+let businessPlanningService;
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
 let fleetOperationPolicyRunSequence = 0;
@@ -64,6 +65,8 @@ let taskDispatchRunSequence = 0;
 let taskDispatchResultSequence = 0;
 let taskPlanningRunSequence = 0;
 let taskPlanningResultSequence = 0;
+let longTermDemandForecastRunSequence = 0;
+let longTermDemandForecastResultSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
@@ -844,6 +847,9 @@ const idFieldByType = {
   placeDemandProfile: "profile_id",
   serviceAreaDemandProfile: "profile_id",
   zoneDemandProfile: "profile_id",
+  supplyProductionProfile: "profile_id",
+  longTermDemandForecastStrategy: "forecast_strategy_id",
+  longTermDemandForecastRun: "forecast_run_id",
   route: "route_id",
   customer: "customer_id",
   demandSimulationStrategy: "demand_simulation_strategy_id",
@@ -853,7 +859,7 @@ const idFieldByType = {
   opsCenter: "ops_center_id",
   worker: "worker_id",
   readinessTask: "task_id",
-  longTermDemandForecast: "forecast_id",
+  longTermDemandForecast: "forecast_result_id",
   supplyPlan: "supply_plan_id",
   supplyOrder: "supply_order_id",
   dealerSupply: "dealer_supply_id",
@@ -2409,6 +2415,32 @@ function App() {
     setDemandProfileDraft({});
     antd.message.success("需求画像配置已保存，区域画像已重新计算");
   }
+
+  function runLongTermDemandForecastStrategy(strategy) {
+    if (!businessPlanningService?.executeLongTermDemandForecastStrategy || !strategy) return;
+    const result = businessPlanningService.executeLongTermDemandForecastStrategy({
+      strategy,
+      demandProfiles: data.demandProfiles || [],
+      supplyProductionProfiles: data.supplyProductionProfiles || [],
+      robotaxis: data.robotaxis || [],
+      context: {
+        now,
+        nextRunId: nextLongTermDemandForecastRunId,
+        nextResultBaseId: nextLongTermDemandForecastResultBaseId,
+      },
+    });
+    setOperationalData((current) => ({
+      ...current,
+      longTermDemandForecastRuns: [result.run, ...(current.longTermDemandForecastRuns || [])],
+      longTermDemandForecasts: [...(result.results || []), ...(current.longTermDemandForecasts || [])],
+    }));
+    if (result.results?.length) {
+      selectForPage("longTermDemandForecasts", "longTermDemandForecast", result.results[0].forecast_result_id);
+      antd.message.success(`需求预测完成，生成 ${result.results.length} 条预测结果`);
+    } else {
+      antd.message.warning("需求预测执行完成，但未生成预测结果");
+    }
+  }
   return (
     <Layout className="ops-shell">
       <Sider className="ops-sider" width={232} collapsedWidth={60} collapsed={collapsed} trigger={null}>
@@ -2492,6 +2524,7 @@ function App() {
                   startFleetOperationWork,
                   completeFleetOperationWork,
                   editFleetOperationPolicy,
+                  runLongTermDemandForecastStrategy,
                   assignWorker,
                   startCheck,
                   submitCheckResult,
@@ -2773,6 +2806,8 @@ function App() {
     taskDispatchResultSequence = 0;
     taskPlanningRunSequence = 0;
     taskPlanningResultSequence = 0;
+    longTermDemandForecastRunSequence = 0;
+    longTermDemandForecastResultSequence = 0;
     deploymentTaskSequence = 0;
     routeExecutionSequence = 0;
     deploymentRouteSequence = 0;
@@ -5078,9 +5113,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
   const isDemandProfilePage = page === "demandProfiles";
+  const isLongTermDemandForecastStrategyPage = page === "longTermDemandForecastStrategies";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
-  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage;
+  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isLongTermDemandForecastStrategyPage;
   const hasEventPanel = isTaskOperationPage || isStrategyExecutionPanelPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
@@ -5135,10 +5171,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isLongTermDemandForecastStrategyPage ? createStrategyRunRows(rowsByPage.longTermDemandForecastRuns || [], displayRows, "forecast_strategy_id") : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const visibleEventRows = eventRows.slice(0, 300);
-  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isFleetOperationDispatchStrategyPage ? tableConfig.fleetOperationDispatchRuns.columns : isRobotaxiTaskPlanningStrategyPage ? tableConfig.robotaxiTaskPlanningRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isFleetOperationDispatchStrategyPage ? "fleet_operation_dispatch_run_id" : isRobotaxiTaskPlanningStrategyPage ? "robotaxi_task_planning_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isLongTermDemandForecastStrategyPage ? tableConfig.longTermDemandForecastRuns.columns : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isFleetOperationDispatchStrategyPage ? tableConfig.fleetOperationDispatchRuns.columns : isRobotaxiTaskPlanningStrategyPage ? tableConfig.robotaxiTaskPlanningRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isLongTermDemandForecastStrategyPage ? "forecast_run_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isFleetOperationDispatchStrategyPage ? "fleet_operation_dispatch_run_id" : isRobotaxiTaskPlanningStrategyPage ? "robotaxi_task_planning_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   useEffect(() => {
     const node = tableSectionRef.current;
     if (!node) return undefined;
@@ -5522,6 +5558,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         fixed: "right",
         width: 120,
         render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editDemandProfile(row)}>配置</RowActionButton>),
+      };
+    }
+    if (isLongTermDemandForecastStrategyPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 120,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runLongTermDemandForecastStrategy(row)}>执行</RowActionButton>),
       };
     }
     if (isRobotaxiPage) {
@@ -7815,6 +7860,7 @@ async function bootstrap() {
 		    fleetOperationDispatchServiceModule,
 		    taskDispatchStrategyServiceModule,
 		    robotaxiTaskPlanningServiceModule,
+		    businessPlanningServiceModule,
 		    supplyManagementInitializationModule,
 		    spatialBusinessProfileInitializationModule,
 		  ] = await Promise.all([
@@ -7871,6 +7917,7 @@ async function bootstrap() {
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
+		    import("./services/businessPlanningService.js?v=20260709-v041-2-1"),
 		    import("./data/supplyManagementInitialization.js"),
 		    import("./data/spatialBusinessProfileInitialization.js"),
 		  ]);
@@ -7927,6 +7974,7 @@ async function bootstrap() {
 		  fleetOperationDispatchService = fleetOperationDispatchServiceModule;
 		  taskDispatchStrategyService = taskDispatchStrategyServiceModule;
 		  robotaxiTaskPlanningService = robotaxiTaskPlanningServiceModule;
+		  businessPlanningService = businessPlanningServiceModule;
 		  initializeSupplyManagement = supplyManagementInitializationModule.initializeSupplyManagement;
 		  initializeSpatialBusinessProfiles = spatialBusinessProfileInitializationModule.initializeSpatialBusinessProfiles;
 		  normalizeDemandProfiles = spatialBusinessProfileInitializationModule.normalizeDemandProfiles;
@@ -9225,6 +9273,16 @@ function nextTaskPlanningResultId() {
   return `TPRS-${String(taskPlanningResultSequence).padStart(4, "0")}`;
 }
 
+function nextLongTermDemandForecastRunId() {
+  longTermDemandForecastRunSequence += 1;
+  return `LDF-RUN-${String(longTermDemandForecastRunSequence).padStart(4, "0")}`;
+}
+
+function nextLongTermDemandForecastResultBaseId() {
+  longTermDemandForecastResultSequence += 1;
+  return `LDF-RES-${String(longTermDemandForecastResultSequence).padStart(4, "0")}`;
+}
+
 function createDefaultPageUiState() {
   return {
     filters: { ...defaultPageFilters },
@@ -9501,6 +9559,8 @@ function loadRuntimeSnapshot(initialData) {
     taskDispatchResultSequence = deriveSequence(taskDispatchResults, "task_dispatch_result_id", "TDRS-");
     taskPlanningRunSequence = deriveSequence(robotaxiTaskPlanningRuns, "robotaxi_task_planning_run_id", "TPR-");
     taskPlanningResultSequence = deriveSequence(robotaxiTaskPlanningResults, "robotaxi_task_planning_result_id", "TPRS-");
+    longTermDemandForecastRunSequence = deriveSequence(operationalData.longTermDemandForecastRuns || [], "forecast_run_id", "LDF-RUN-");
+    longTermDemandForecastResultSequence = deriveSequence(operationalData.longTermDemandForecasts || [], "forecast_result_id", "LDF-RES-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
     routePlanningRunSequence = deriveSequence(routePlanningRuns, "route_planning_run_id", "RPR-");

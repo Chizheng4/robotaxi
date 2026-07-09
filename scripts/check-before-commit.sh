@@ -132,6 +132,7 @@ node scripts/verify-v040-28-business-document-closure.mjs
 node scripts/verify-v040-29-financial-fact-closure.mjs
 node scripts/verify-v040-30-failure-retirement-closure.mjs
 node scripts/verify-v041-1-demand-profile-unified.mjs
+node scripts/verify-v041-2-business-planning.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

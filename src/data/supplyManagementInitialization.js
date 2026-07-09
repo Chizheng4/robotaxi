@@ -1,7 +1,12 @@
+import {
+  initializeDefaultLongTermDemandForecastStrategies,
+  initializeDefaultSupplyProductionProfiles,
+} from "../services/businessPlanningService.js";
+
 export function initializeSupplyManagement() {
   return {
-    supplyProductionProfiles: [],
-    longTermDemandForecastStrategies: [],
+    supplyProductionProfiles: initializeDefaultSupplyProductionProfiles(),
+    longTermDemandForecastStrategies: initializeDefaultLongTermDemandForecastStrategies(),
     longTermDemandForecastRuns: [],
     longTermDemandForecasts: [],
     supplyPlans: [],

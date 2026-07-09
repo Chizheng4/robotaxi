@@ -77,6 +77,7 @@ let fleetOperationPolicyService;
 let fleetOperationDispatchService;
 let taskDispatchStrategyService;
 let robotaxiTaskPlanningService;
+let businessPlanningService;
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
 let fleetOperationPolicyRunSequence = 0;
@@ -88,6 +89,8 @@ let taskDispatchRunSequence = 0;
 let taskDispatchResultSequence = 0;
 let taskPlanningRunSequence = 0;
 let taskPlanningResultSequence = 0;
+let longTermDemandForecastRunSequence = 0;
+let longTermDemandForecastResultSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
@@ -904,6 +907,9 @@ const idFieldByType = {
   placeDemandProfile: "profile_id",
   serviceAreaDemandProfile: "profile_id",
   zoneDemandProfile: "profile_id",
+  supplyProductionProfile: "profile_id",
+  longTermDemandForecastStrategy: "forecast_strategy_id",
+  longTermDemandForecastRun: "forecast_run_id",
   route: "route_id",
   customer: "customer_id",
   demandSimulationStrategy: "demand_simulation_strategy_id",
@@ -913,7 +919,7 @@ const idFieldByType = {
   opsCenter: "ops_center_id",
   worker: "worker_id",
   readinessTask: "task_id",
-  longTermDemandForecast: "forecast_id",
+  longTermDemandForecast: "forecast_result_id",
   supplyPlan: "supply_plan_id",
   supplyOrder: "supply_order_id",
   dealerSupply: "dealer_supply_id",
@@ -2555,6 +2561,31 @@ function App() {
     setDemandProfileDraft({});
     antd.message.success("需求画像配置已保存，区域画像已重新计算");
   }
+  function runLongTermDemandForecastStrategy(strategy) {
+    if (!businessPlanningService?.executeLongTermDemandForecastStrategy || !strategy) return;
+    const result = businessPlanningService.executeLongTermDemandForecastStrategy({
+      strategy,
+      demandProfiles: data.demandProfiles || [],
+      supplyProductionProfiles: data.supplyProductionProfiles || [],
+      robotaxis: data.robotaxis || [],
+      context: {
+        now,
+        nextRunId: nextLongTermDemandForecastRunId,
+        nextResultBaseId: nextLongTermDemandForecastResultBaseId
+      }
+    });
+    setOperationalData(current => ({
+      ...current,
+      longTermDemandForecastRuns: [result.run, ...(current.longTermDemandForecastRuns || [])],
+      longTermDemandForecasts: [...(result.results || []), ...(current.longTermDemandForecasts || [])]
+    }));
+    if (result.results?.length) {
+      selectForPage("longTermDemandForecasts", "longTermDemandForecast", result.results[0].forecast_result_id);
+      antd.message.success(`需求预测完成，生成 ${result.results.length} 条预测结果`);
+    } else {
+      antd.message.warning("需求预测执行完成，但未生成预测结果");
+    }
+  }
   return /*#__PURE__*/React.createElement(Layout, {
     className: "ops-shell"
   }, /*#__PURE__*/React.createElement(Sider, {
@@ -2653,6 +2684,7 @@ function App() {
       startFleetOperationWork,
       completeFleetOperationWork,
       editFleetOperationPolicy,
+      runLongTermDemandForecastStrategy,
       assignWorker,
       startCheck,
       submitCheckResult,
@@ -2956,6 +2988,8 @@ function App() {
     taskDispatchResultSequence = 0;
     taskPlanningRunSequence = 0;
     taskPlanningResultSequence = 0;
+    longTermDemandForecastRunSequence = 0;
+    longTermDemandForecastResultSequence = 0;
     deploymentTaskSequence = 0;
     routeExecutionSequence = 0;
     deploymentRouteSequence = 0;
@@ -5232,9 +5266,10 @@ function RecordTable({
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
   const isDemandProfilePage = page === "demandProfiles";
+  const isLongTermDemandForecastStrategyPage = page === "longTermDemandForecastStrategies";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
-  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage;
+  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isLongTermDemandForecastStrategyPage;
   const hasEventPanel = isTaskOperationPage || isStrategyExecutionPanelPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
@@ -5281,10 +5316,10 @@ function RecordTable({
   }));
   const actionColumn = getActionColumn();
   const finalColumns = actionColumn ? [...columns, actionColumn] : columns;
-  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isLongTermDemandForecastStrategyPage ? createStrategyRunRows(rowsByPage.longTermDemandForecastRuns || [], displayRows, "forecast_strategy_id") : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const visibleEventRows = eventRows.slice(0, 300);
-  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isFleetOperationDispatchStrategyPage ? tableConfig.fleetOperationDispatchRuns.columns : isRobotaxiTaskPlanningStrategyPage ? tableConfig.robotaxiTaskPlanningRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isFleetOperationDispatchStrategyPage ? "fleet_operation_dispatch_run_id" : isRobotaxiTaskPlanningStrategyPage ? "robotaxi_task_planning_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isLongTermDemandForecastStrategyPage ? tableConfig.longTermDemandForecastRuns.columns : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isFleetOperationDispatchStrategyPage ? tableConfig.fleetOperationDispatchRuns.columns : isRobotaxiTaskPlanningStrategyPage ? tableConfig.robotaxiTaskPlanningRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isLongTermDemandForecastStrategyPage ? "forecast_run_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isFleetOperationDispatchStrategyPage ? "fleet_operation_dispatch_run_id" : isRobotaxiTaskPlanningStrategyPage ? "robotaxi_task_planning_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   useEffect(() => {
     const node = tableSectionRef.current;
     if (!node) return undefined;
@@ -5722,6 +5757,17 @@ function RecordTable({
         render: (_, row) => renderActionCell(row, /*#__PURE__*/React.createElement(RowActionButton, {
           onClick: () => actions.editDemandProfile(row)
         }, "\u914D\u7F6E"))
+      };
+    }
+    if (isLongTermDemandForecastStrategyPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 120,
+        render: (_, row) => renderActionCell(row, /*#__PURE__*/React.createElement(RowActionButton, {
+          onClick: () => actions.runLongTermDemandForecastStrategy(row)
+        }, "\u6267\u884C"))
       };
     }
     if (isRobotaxiPage) {
@@ -8213,7 +8259,7 @@ function parseCellId(cellId) {
   };
 }
 async function bootstrap() {
-  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, businessActionServiceModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule, taskDispatchStrategyServiceModule, robotaxiTaskPlanningServiceModule, supplyManagementInitializationModule, spatialBusinessProfileInitializationModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/businessActionService.js?v=20260706-v040-28"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"), import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"), import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"), import("./data/supplyManagementInitialization.js"), import("./data/spatialBusinessProfileInitialization.js")]);
+  const [mapInitialization, mapValidation, operationsCenterInitialization, customerInitialization, demandSimulationInitialization, pricingInitialization, orderMatchingInitialization, operationsCenterValidation, customerValidation, demandSimulationValidation, serviceOrderValidation, pricingValidation, orderMatchingValidation, tripValidation, demandSimulationEngine, pricingEngine, orderMatchingEngine, serviceOrderTypeModule, pricingTypeModule, orderMatchingTypeModule, tripTypeModule, cellContext, fieldDictionary, readinessTaskValidation, deploymentTaskValidation, taskTypeModule, serviceOrderSettlementModule, serviceOrderServiceModule, tripServiceModule, simulationTypesModule, simulationInitializationModule, simulationEngineModule, simulationActionsModule, simulationLoopModule, simulationHandlersModule, simulationWorkflowEngineModule, simulationExecutionEngineModule, businessTimingCalculatorModule, costModelCalculatorModule, revenueCalculatorModule, metricCalculatorModule, simulationRunBusinessScopeModule, routePlanningServiceModule, statusRegistryModule, routePlanningStrategiesModule, timedOperationDiagnosticsModule, businessActionServiceModule, robotaxiTaskPriorityServiceModule, fleetOperationTaskServiceModule, fleetOperationPolicyServiceModule, fleetOperationDispatchServiceModule, taskDispatchStrategyServiceModule, robotaxiTaskPlanningServiceModule, businessPlanningServiceModule, supplyManagementInitializationModule, spatialBusinessProfileInitializationModule] = await Promise.all([import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"), import("./data/customerInitialization.js?v=20260611-v019-1-customer"), import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingInitialization.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingInitialization.js?v=20260611-v019-5-order-matching"), import("./data/operationsCenterValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/customerValidation.js?v=20260611-v019-1-customer"), import("./data/demandSimulationValidation.js?v=20260611-v019-2-demand-simulation"), import("./data/serviceOrderValidation.js?v=20260614-v020-5-settlement"), import("./data/pricingValidation.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingValidation.js?v=20260611-v019-5-order-matching"), import("./data/tripValidation.js?v=20260614-v020-4-trip-flow"), import("./data/demandSimulationEngine.js?v=20260611-v019-2-demand-simulation"), import("./data/pricingEngine.js?v=20260611-v019-4-pricing"), import("./data/orderMatchingEngine.js?v=20260611-v019-5-order-matching"), import("./domain/serviceOrderTypes.js?v=20260614-v020-5-settlement"), import("./domain/pricingTypes.js?v=20260611-v019-4-pricing"), import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"), import("./domain/tripTypes.js?v=20260624-v028-1-5"), import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"), import("./domain/fieldDisplayService.js?v=20260625-v029-2"), import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"), import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"), import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"), import("./domain/serviceOrderSettlement.js?v=20260624-v028-1-5"), import("./services/serviceOrderService.js?v=20260617-v023-1-service-extraction"), import("./services/tripService.js?v=20260624-v028-1-5"), import("./domain/simulationTypes.js?v=20260624-v028-1-2"), import("./data/simulationInitialization.js?v=20260620-v027-4"), import("./data/simulationEngine.js?v=20260630-v036-2"), import("./services/simulationActions.js?v=20260630-v036-2"), import("./data/simulationLoop.js?v=20260630-v036-1"), import("./services/simulationHandlers.js?v=20260630-v036-3"), import("./data/simulationWorkflowEngine.js?v=20260624-v028-1-1"), import("./data/simulationExecutionEngine.js"), import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"), import("./data/costModelCalculator.js?v=20260625-v029-1"), import("./data/revenueCalculator.js?v=20260625-v029-1"), import("./data/metricCalculator.js?v=20260629-v034-6"), import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"), import("./services/routePlanningService.js?v=20260625-v029-4"), import("./domain/statusRegistry.js?v=20260625-v030-1"), import("./domain/routePlanningStrategies.js?v=20260625-v030-3"), import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"), import("./services/businessActionService.js?v=20260706-v040-28"), import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"), import("./services/fleetOperationTaskService.js?v=20260702-v039-7"), import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"), import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"), import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"), import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"), import("./services/businessPlanningService.js?v=20260709-v041-2-1"), import("./data/supplyManagementInitialization.js"), import("./data/spatialBusinessProfileInitialization.js")]);
   initializeMapSpace = mapInitialization.initializeMapSpace;
   validateMapSpace = mapValidation.validateMapSpace;
   initializeOperationsCenter = operationsCenterInitialization.initializeOperationsCenter;
@@ -8266,6 +8312,7 @@ async function bootstrap() {
   fleetOperationDispatchService = fleetOperationDispatchServiceModule;
   taskDispatchStrategyService = taskDispatchStrategyServiceModule;
   robotaxiTaskPlanningService = robotaxiTaskPlanningServiceModule;
+  businessPlanningService = businessPlanningServiceModule;
   initializeSupplyManagement = supplyManagementInitializationModule.initializeSupplyManagement;
   initializeSpatialBusinessProfiles = spatialBusinessProfileInitializationModule.initializeSpatialBusinessProfiles;
   normalizeDemandProfiles = spatialBusinessProfileInitializationModule.normalizeDemandProfiles;
@@ -9415,6 +9462,14 @@ function nextTaskPlanningResultId() {
   taskPlanningResultSequence += 1;
   return `TPRS-${String(taskPlanningResultSequence).padStart(4, "0")}`;
 }
+function nextLongTermDemandForecastRunId() {
+  longTermDemandForecastRunSequence += 1;
+  return `LDF-RUN-${String(longTermDemandForecastRunSequence).padStart(4, "0")}`;
+}
+function nextLongTermDemandForecastResultBaseId() {
+  longTermDemandForecastResultSequence += 1;
+  return `LDF-RES-${String(longTermDemandForecastResultSequence).padStart(4, "0")}`;
+}
 function createDefaultPageUiState() {
   return {
     filters: {
@@ -9684,6 +9739,8 @@ function loadRuntimeSnapshot(initialData) {
     taskDispatchResultSequence = deriveSequence(taskDispatchResults, "task_dispatch_result_id", "TDRS-");
     taskPlanningRunSequence = deriveSequence(robotaxiTaskPlanningRuns, "robotaxi_task_planning_run_id", "TPR-");
     taskPlanningResultSequence = deriveSequence(robotaxiTaskPlanningResults, "robotaxi_task_planning_result_id", "TPRS-");
+    longTermDemandForecastRunSequence = deriveSequence(operationalData.longTermDemandForecastRuns || [], "forecast_run_id", "LDF-RUN-");
+    longTermDemandForecastResultSequence = deriveSequence(operationalData.longTermDemandForecasts || [], "forecast_result_id", "LDF-RES-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
     routePlanningRunSequence = deriveSequence(routePlanningRuns, "route_planning_run_id", "RPR-");
