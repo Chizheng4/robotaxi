@@ -198,6 +198,8 @@ assert.ok(main.includes("businessPlanningService.completeProductionBatch"), "页
 assert.ok(main.includes("businessPlanningService.executeFleetAllocationStrategy"), "页面必须调用服务执行区域分配策略");
 assert.ok(main.includes("createRegionDeliveryOrder"), "区域交付必须支持创建时触发区域分配策略");
 assert.ok(main.includes("businessPlanningService.completeDeliveryOrder"), "页面必须调用服务完成交付并触发准入任务");
+assert.ok(main.includes("actions.fleetAllocationRuns || []"), "区域分配策略事件区必须通过组件 actions 读取执行记录，避免页面白屏");
+assert.equal(main.includes("createStrategyRunRows(rowsByPage.fleetAllocationRuns"), false, "RecordTable 不得越界引用 App 内部 rowsByPage");
 assert.ok(main.includes("longTermDemandForecastRuns: [result.run, ...(current.longTermDemandForecastRuns || [])]"), "执行后必须写入预测执行记录");
 assert.ok(main.includes("longTermDemandForecasts: [...(result.results || []), ...(current.longTermDemandForecasts || [])]"), "执行后必须写入预测结果");
 assert.ok(main.includes("supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || []"), "运行态恢复必须兼容生产画像集合");
