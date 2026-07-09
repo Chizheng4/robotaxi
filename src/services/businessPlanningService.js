@@ -812,6 +812,29 @@ export function completeSupplyManagementLoopFromForecast({
   };
 }
 
+export function createBusinessOperationEvent({
+  page = null,
+  businessObjectType = null,
+  businessObjectId = null,
+  actionType,
+  resultType,
+  eventResult = "SUCCESS",
+  message = "",
+  occurredAt = null,
+} = {}) {
+  return {
+    source_page: page,
+    business_object_type: businessObjectType,
+    business_object_id: businessObjectId,
+    action_type: actionType,
+    result_type: resultType || eventResult,
+    event_type: actionType,
+    event_result: eventResult,
+    message,
+    occurred_at: occurredAt || defaultNow(),
+  };
+}
+
 function createForecastRun({
   runId,
   strategy,
