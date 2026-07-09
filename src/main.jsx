@@ -129,6 +129,23 @@ const pageGroups = [
     ],
   },
   {
+    key: "businessPlanning",
+    label: "经营规划",
+    children: [
+      { key: "demandProfiles", label: "需求画像" },
+      { key: "supplyProductionProfiles", label: "供应生产画像" },
+      {
+        key: "demandForecastManagement",
+        label: "需求预测",
+        children: [
+          { key: "longTermDemandForecastStrategies", label: "预测策略" },
+          { key: "longTermDemandForecastRuns", label: "预测执行" },
+          { key: "longTermDemandForecasts", label: "预测结果" },
+        ],
+      },
+    ],
+  },
+  {
     key: "customer",
     label: "客户管理",
     children: [
@@ -139,8 +156,6 @@ const pageGroups = [
     key: "supplyManagement",
     label: "供应管理",
     children: [
-      { key: "demandProfiles", label: "需求画像" },
-      { key: "longTermDemandForecasts", label: "需求预测" },
       { key: "supplyPlans", label: "供应计划" },
       { key: "supplyOrders", label: "供给单" },
       { key: "readinessTasks", label: "运营准入" },
@@ -348,7 +363,7 @@ const tableConfig = {
   },
   demandProfiles: {
     title: "需求画像",
-    description: "需求画像统一展示地点、服务区和区域画像记录，用于供应管理中的需求预测和供应计划。",
+    description: "需求画像统一展示地点、服务区和区域画像记录，用于经营规划中的长期需求预测和供给规划。",
     columns: [
       "profile_id",
       "profile_name",
@@ -381,6 +396,11 @@ const tableConfig = {
       "profile_status",
       "calculated_at",
     ],
+  },
+  supplyProductionProfiles: {
+    title: "供应生产画像",
+    description: "供应生产画像描述企业自有生产形成 Robotaxi 供给能力的约束、产能和节奏。",
+    columns: ["profile_id", "profile_name", "profile_status", "profile_type", "production_lead_time_days", "annual_production_capacity", "monthly_production_capacity", "ramp_up_months", "delivery_capacity", "inspection_lead_time_days", "effective_from", "effective_to"],
   },
   placeDemandProfiles: {
     title: "地点需求画像",
@@ -443,9 +463,19 @@ const tableConfig = {
     columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "worker_id", "check_result", "issue_type", "created_at", "simulation_created_at"],
   },
   longTermDemandForecasts: {
-    title: "长期需求预测",
-    description: "长期需求预测用于判断未来区域需求变化，是供应管理的上游输入。",
-    columns: ["forecast_id", "forecast_name", "forecast_status", "forecast_period", "zone_id", "expected_robotaxi_demand", "confidence_level", "created_at"],
+    title: "需求预测结果",
+    description: "需求预测结果记录长期需求预测策略执行后形成的区域 Robotaxi 需求和供给缺口。",
+    columns: ["forecast_result_id", "forecast_name", "forecast_status", "forecast_period", "zone_id", "expected_robotaxi_demand", "required_fleet_quantity", "current_fleet_quantity", "fleet_gap_quantity", "confidence_level", "created_at"],
+  },
+  longTermDemandForecastStrategies: {
+    title: "需求预测策略",
+    description: "需求预测策略定义经营目标、需求画像和供应生产画像如何转化为长期 Robotaxi 需求预测。",
+    columns: ["forecast_strategy_id", "strategy_name", "strategy_type", "strategy_status", "strategy_version", "target_zone_ids", "forecast_horizon_years", "created_at", "updated_at"],
+  },
+  longTermDemandForecastRuns: {
+    title: "需求预测执行",
+    description: "需求预测执行记录一次长期需求预测策略运行的输入、配置快照和执行状态。",
+    columns: ["forecast_run_id", "forecast_strategy_id", "strategy_version", "run_status", "target_zone_ids", "started_at", "completed_at", "result_count", "failure_reason"],
   },
   supplyPlans: {
     title: "供给计划单",
@@ -729,6 +759,7 @@ const pageObjectType = {
   serviceAreas: "serviceArea",
   zones: "zone",
   demandProfiles: "demandProfile",
+  supplyProductionProfiles: "supplyProductionProfile",
   placeDemandProfiles: "placeDemandProfile",
   serviceAreaDemandProfiles: "serviceAreaDemandProfile",
   zoneDemandProfiles: "zoneDemandProfile",
@@ -742,6 +773,8 @@ const pageObjectType = {
   workers: "worker",
   readinessTasks: "readinessTask",
   longTermDemandForecasts: "longTermDemandForecast",
+  longTermDemandForecastStrategies: "longTermDemandForecastStrategy",
+  longTermDemandForecastRuns: "longTermDemandForecastRun",
   supplyPlans: "supplyPlan",
   supplyOrders: "supplyOrder",
   dealerSupplies: "dealerSupply",
@@ -881,6 +914,7 @@ const statusFieldByPage = {
   serviceAreas: "service_area_status",
   zones: "zone_status",
   demandProfiles: "profile_status",
+  supplyProductionProfiles: "profile_status",
   placeDemandProfiles: "profile_status",
   serviceAreaDemandProfiles: "profile_status",
   zoneDemandProfiles: "profile_status",
@@ -889,6 +923,8 @@ const statusFieldByPage = {
   workers: "worker_status",
   readinessTasks: "task_status",
   longTermDemandForecasts: "forecast_status",
+  longTermDemandForecastStrategies: "strategy_status",
+  longTermDemandForecastRuns: "run_status",
   supplyPlans: "plan_status",
   supplyOrders: "order_status",
   dealerSupplies: "dealer_status",
@@ -1323,6 +1359,9 @@ function App() {
     opsCenters: data.opsCenters,
     workers: data.workers.map((worker) => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks: readinessTasks.map((task) => attachCostRecords(task, "readinessTask", costRecords)),
+    supplyProductionProfiles: data.supplyProductionProfiles || [],
+    longTermDemandForecastStrategies: data.longTermDemandForecastStrategies || [],
+    longTermDemandForecastRuns: data.longTermDemandForecastRuns || [],
     longTermDemandForecasts: data.longTermDemandForecasts || [],
     supplyPlans: data.supplyPlans || [],
     supplyOrders: data.supplyOrders || [],
@@ -1462,6 +1501,9 @@ function App() {
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: rowsByPage.readinessTasks,
+      supplyProductionProfile: rowsByPage.supplyProductionProfiles,
+      longTermDemandForecastStrategy: rowsByPage.longTermDemandForecastStrategies,
+      longTermDemandForecastRun: rowsByPage.longTermDemandForecastRuns,
       longTermDemandForecast: rowsByPage.longTermDemandForecasts,
       supplyPlan: rowsByPage.supplyPlans,
       supplyOrder: rowsByPage.supplyOrders,
@@ -9429,6 +9471,9 @@ function loadRuntimeSnapshot(initialData) {
     const operationalData = normalizeOperationalRouteStrategies({
       ...initialData,
       ...(snapshot.operationalData || {}),
+      supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || [],
+      longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || [],
+      longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || [],
       longTermDemandForecasts: snapshot.operationalData?.longTermDemandForecasts || initialData.longTermDemandForecasts || [],
       supplyPlans: snapshot.operationalData?.supplyPlans || initialData.supplyPlans || [],
       supplyOrders: snapshot.operationalData?.supplyOrders || initialData.supplyOrders || [],

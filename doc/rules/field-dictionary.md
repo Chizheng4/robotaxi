@@ -1137,6 +1137,23 @@
 |forecast_status|预测状态|持久化字段|预测是否可用|
 |forecast_period|预测周期|配置字段|预测覆盖周期|
 |confidence_level|置信水平|计算字段|预测置信水平|
+|profile_id|画像编号|持久化字段|供应生产画像唯一编号|
+|production_lead_time_days|生产提前期（天）|配置字段|从生产需求确认到 Robotaxi 完成交付的时间|
+|annual_production_capacity|年生产能力|配置字段|自有生产体系年度可形成 Robotaxi 数量|
+|monthly_production_capacity|月生产能力|配置字段|自有生产体系月度可形成 Robotaxi 数量|
+|ramp_up_months|产能爬坡周期（月）|配置字段|生产能力从启动到稳定产能所需月份|
+|delivery_capacity|交付能力|配置字段|生产完成后可交付到运营中心的能力约束|
+|inspection_lead_time_days|准入周期（天）|配置字段|交付后进入运营准入所需周期|
+|forecast_strategy_id|预测策略编号|持久化字段|长期需求预测策略唯一编号|
+|forecast_run_id|预测执行编号|持久化字段|一次长期需求预测执行唯一编号|
+|forecast_result_id|预测结果编号|持久化字段|长期需求预测结果唯一编号|
+|strategy_version|策略版本|持久化字段|预测执行时使用的策略版本|
+|target_zone_ids|目标区域列表|配置字段|预测覆盖的目标运营区域集合|
+|forecast_horizon_years|预测规划周期（年）|配置字段|长期预测覆盖的年份数|
+|result_count|结果数量|运行态字段|本次预测执行生成的结果数量|
+|required_fleet_quantity|目标所需车辆数|计算字段|预测周期内目标区域所需 Robotaxi 数量|
+|current_fleet_quantity|当前运营车辆数|计算字段|当前可运营 Robotaxi 数量|
+|fleet_gap_quantity|车辆供给缺口|计算字段|目标所需车辆数减当前运营车辆数|
 |supply_plan_id|供给计划编号|持久化字段|供给计划单唯一编号|
 |plan_name|计划名称|持久化字段|供给计划名称|
 |plan_status|计划状态|持久化字段|计划状态|
