@@ -637,6 +637,181 @@ export function completeDeliveryOrder({ deliveryOrder, robotaxis = [], readiness
   };
 }
 
+export function completeSupplyManagementLoopFromForecast({
+  forecast,
+  supplyProductionProfiles = [],
+  fleetAllocationStrategies = [],
+  existingRobotaxis = [],
+  existingSupplyPlans = [],
+  opsCenters = [],
+  readinessTasks = [],
+  context = {},
+} = {}) {
+  const supplyPlanResult = createSupplyPlanFromForecast({
+    forecast,
+    supplyProductionProfiles,
+    context,
+  });
+  if (!supplyPlanResult.succeeded) {
+    return { succeeded: false, reason: supplyPlanResult.reason, step: "CREATE_SUPPLY_PLAN", supplyPlan: null };
+  }
+
+  const confirmedPlanResult = confirmSupplyPlan({
+    supplyPlan: supplyPlanResult.supplyPlan,
+    context,
+  });
+  if (!confirmedPlanResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: confirmedPlanResult.reason,
+      step: "CONFIRM_SUPPLY_PLAN",
+      supplyPlan: supplyPlanResult.supplyPlan,
+    };
+  }
+
+  const batchCreateResult = createProductionBatchFromSupplyPlan({
+    supplyPlan: confirmedPlanResult.supplyPlan,
+    context,
+  });
+  if (!batchCreateResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: batchCreateResult.reason,
+      step: "CREATE_PRODUCTION_BATCH",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+    };
+  }
+
+  const startedBatchResult = startProductionBatch({
+    productionBatch: batchCreateResult.productionBatch,
+    context,
+  });
+  if (!startedBatchResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: startedBatchResult.reason,
+      step: "START_PRODUCTION_BATCH",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+      productionBatch: batchCreateResult.productionBatch,
+    };
+  }
+
+  const completedBatchResult = completeProductionBatch({
+    productionBatch: startedBatchResult.productionBatch,
+    existingRobotaxis,
+    opsCenters,
+    context,
+  });
+  if (!completedBatchResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: completedBatchResult.reason,
+      step: "COMPLETE_PRODUCTION_BATCH",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+      productionBatch: startedBatchResult.productionBatch,
+    };
+  }
+
+  const strategy = (fleetAllocationStrategies || []).find((item) => item.strategy_status === FleetAllocationStrategyStatus.ACTIVE)
+    || (fleetAllocationStrategies || [])[0];
+  const allRobotaxisAfterProduction = [
+    ...(completedBatchResult.robotaxis || []),
+    ...(existingRobotaxis || []),
+  ];
+  const allocation = executeFleetAllocationStrategy({
+    strategy,
+    robotaxis: allRobotaxisAfterProduction,
+    supplyPlans: [confirmedPlanResult.supplyPlan, ...(existingSupplyPlans || [])],
+    productionBatches: [completedBatchResult.productionBatch],
+    opsCenters,
+    context,
+  });
+  if (!allocation.results?.length) {
+    return {
+      succeeded: false,
+      reason: allocation.run?.failure_reason || "NO_ELIGIBLE_ROBOTAXI",
+      step: "EXECUTE_FLEET_ALLOCATION",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+      productionBatch: completedBatchResult.productionBatch,
+      robotaxis: allRobotaxisAfterProduction,
+      fleetAllocationRun: allocation.run,
+      fleetAllocationResults: [],
+    };
+  }
+
+  const deliveryCreateResult = createDeliveryOrderFromAllocationResult({
+    allocationResult: allocation.results[0],
+    context,
+  });
+  if (!deliveryCreateResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: deliveryCreateResult.reason,
+      step: "CREATE_DELIVERY_ORDER",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+      productionBatch: completedBatchResult.productionBatch,
+      robotaxis: allRobotaxisAfterProduction,
+      fleetAllocationRun: allocation.run,
+      fleetAllocationResults: allocation.results,
+    };
+  }
+
+  const deliveryStartedResult = startDeliveryOrder({
+    deliveryOrder: deliveryCreateResult.deliveryOrder,
+    robotaxis: allRobotaxisAfterProduction,
+    context,
+  });
+  if (!deliveryStartedResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: deliveryStartedResult.reason,
+      step: "START_DELIVERY_ORDER",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+      productionBatch: completedBatchResult.productionBatch,
+      robotaxis: allRobotaxisAfterProduction,
+      fleetAllocationRun: allocation.run,
+      fleetAllocationResults: allocation.results,
+      deliveryOrder: deliveryCreateResult.deliveryOrder,
+    };
+  }
+
+  const deliveryCompletedResult = completeDeliveryOrder({
+    deliveryOrder: deliveryStartedResult.deliveryOrder,
+    robotaxis: deliveryStartedResult.robotaxis,
+    readinessTasks,
+    context,
+  });
+  if (!deliveryCompletedResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: deliveryCompletedResult.reason,
+      step: "COMPLETE_DELIVERY_ORDER",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+      productionBatch: completedBatchResult.productionBatch,
+      robotaxis: deliveryStartedResult.robotaxis,
+      fleetAllocationRun: allocation.run,
+      fleetAllocationResults: allocation.results,
+      deliveryOrder: deliveryStartedResult.deliveryOrder,
+    };
+  }
+
+  const usedAllocationResults = allocation.results.map((result, index) => (
+    index === 0 ? { ...result, result_status: FleetAllocationResultStatus.USED_FOR_DELIVERY } : result
+  ));
+  return {
+    succeeded: true,
+    supplyPlan: confirmedPlanResult.supplyPlan,
+    productionBatch: completedBatchResult.productionBatch,
+    robotaxis: deliveryCompletedResult.robotaxis,
+    fleetAllocationRun: allocation.run,
+    fleetAllocationResults: usedAllocationResults,
+    deliveryOrder: deliveryCompletedResult.deliveryOrder,
+    readinessTasks: deliveryCompletedResult.readinessTasks,
+    producedRobotaxiIds: completedBatchResult.productionBatch.produced_robotaxi_ids || [],
+    readinessTaskIds: deliveryCompletedResult.deliveryOrder.readiness_task_ids || [],
+  };
+}
+
 function createForecastRun({
   runId,
   strategy,

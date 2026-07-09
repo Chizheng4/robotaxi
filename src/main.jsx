@@ -2665,6 +2665,45 @@ function App() {
     antd.message.success("生产计划已创建");
   }
 
+  function completeSupplyManagementLoopFromForecast(row) {
+    if (!businessPlanningService?.completeSupplyManagementLoopFromForecast || !row) return;
+    const result = businessPlanningService.completeSupplyManagementLoopFromForecast({
+      forecast: row,
+      supplyProductionProfiles: data.supplyProductionProfiles || [],
+      fleetAllocationStrategies: data.fleetAllocationStrategies || [],
+      existingRobotaxis: data.robotaxis || [],
+      existingSupplyPlans: data.supplyPlans || [],
+      opsCenters: data.opsCenters || [],
+      readinessTasks,
+      context: {
+        now,
+        nextSupplyPlanId,
+        nextProductionBatchId,
+        nextRobotaxiId: nextProducedRobotaxiId,
+        nextFleetAllocationRunId,
+        nextFleetAllocationResultId,
+        nextDeliveryOrderId: nextRobotaxiDeliveryOrderId,
+        nextReadinessTaskId: nextTaskId,
+      },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(`供应闭环未完成：${getDisplayValue(result.reason || "操作条件不足")}`);
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
+      productionBatches: [result.productionBatch, ...(current.productionBatches || [])],
+      robotaxis: result.robotaxis,
+      fleetAllocationRuns: [result.fleetAllocationRun, ...(current.fleetAllocationRuns || [])],
+      fleetAllocationResults: [...(result.fleetAllocationResults || []), ...(current.fleetAllocationResults || [])],
+      robotaxiDeliveryOrders: [result.deliveryOrder, ...(current.robotaxiDeliveryOrders || [])],
+    }));
+    setReadinessTasks(result.readinessTasks || readinessTasks);
+    selectForPage("readinessTasks", "readinessTask", result.readinessTaskIds?.[0] || null);
+    antd.message.success(`供应闭环完成，新增 ${result.producedRobotaxiIds?.length || 0} 台 Robotaxi 并进入待准入`);
+  }
+
   function confirmSupplyPlan(row) {
     if (!businessPlanningService?.confirmSupplyPlan || !row) return;
     const result = businessPlanningService.confirmSupplyPlan({ supplyPlan: row, context: { now } });
@@ -2955,6 +2994,7 @@ function App() {
                   editFleetOperationPolicy,
                   runLongTermDemandForecastStrategy,
                   createSupplyPlanFromForecast,
+                  completeSupplyManagementLoopFromForecast,
                   confirmSupplyPlan,
                   createProductionBatchFromSupplyPlan,
                   startProductionBatch,
@@ -3321,7 +3361,7 @@ function App() {
     fleetAllocationRunSequence = 0;
     fleetAllocationResultSequence = 0;
     robotaxiDeliveryOrderSequence = 0;
-    producedRobotaxiSequence = 0;
+    producedRobotaxiSequence = deriveSequence(initialData.robotaxis || [], "robotaxi_id", "RTX-");
     deploymentTaskSequence = 0;
     routeExecutionSequence = 0;
     deploymentRouteSequence = 0;
@@ -6120,8 +6160,13 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         key: "actions",
         title: "操作",
         fixed: "right",
-        width: 150,
-        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.createSupplyPlanFromForecast(row)}>生成生产计划</RowActionButton>),
+        width: 260,
+        render: (_, row) => renderActionCell(row, (
+          <RowActionGroup>
+            <RowActionButton onClick={() => actions.createSupplyPlanFromForecast(row)}>生成生产计划</RowActionButton>
+            <RowActionButton type="default" onClick={() => actions.completeSupplyManagementLoopFromForecast(row)}>执行供应闭环</RowActionButton>
+          </RowActionGroup>
+        )),
       };
     }
     if (isSupplyPlanPage) {
@@ -10135,6 +10180,7 @@ function loadRuntimeSnapshot(initialData) {
     pageSelections: { console: { type: "map", id: initialData.maps[0].map_id } },
     pageUiState: {},
   };
+  deriveInitialRuntimeSequences(fallback);
   if (typeof window === "undefined") return fallback;
   try {
     if (new URLSearchParams(window.location.search).get("resetRuntime") === "1") {
@@ -10326,6 +10372,10 @@ function loadRuntimeSnapshot(initialData) {
   } catch (error) {
     return fallback;
   }
+}
+
+function deriveInitialRuntimeSequences(runtime) {
+  producedRobotaxiSequence = deriveSequence(runtime.operationalData?.robotaxis || [], "robotaxi_id", "RTX-");
 }
 
 function clearRobotaxiRuntimeStorage() {

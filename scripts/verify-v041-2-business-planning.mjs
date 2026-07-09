@@ -3,6 +3,7 @@ import fs from "node:fs";
 import {
   completeDeliveryOrder,
   completeProductionBatch,
+  completeSupplyManagementLoopFromForecast,
   confirmSupplyPlan,
   createDeliveryOrderFromAllocationResult,
   createProductionBatchFromSupplyPlan,
@@ -203,6 +204,46 @@ assert.equal(deliveryCompleted.readinessTasks[0].task_status, "WAITING_ASSIGNMEN
 assert.equal(deliveryCompleted.readinessTasks[0].trigger_object_type, "robotaxiDeliveryOrder", "准入任务必须记录交付单来源");
 assert.equal(deliveryCompleted.robotaxis[0].availability_status, "PENDING_ADMISSION", "交付完成后的 Robotaxi 必须待准入");
 
+let loopSupplyPlanSeq = 10;
+let loopBatchSeq = 10;
+let loopAllocationRunSeq = 10;
+let loopAllocationResultSeq = 10;
+let loopDeliverySeq = 10;
+let loopProducedSeq = 50;
+let loopReadinessSeq = 10;
+const supplyLoop = completeSupplyManagementLoopFromForecast({
+  forecast: execution.results[0],
+  supplyProductionProfiles: [profileUpdate.profile],
+  fleetAllocationStrategies: allocationStrategies,
+  existingRobotaxis: [
+    { robotaxi_id: "RTX-001", target_zone_id: "Z-001", availability_status: "AVAILABLE" },
+    { robotaxi_id: "RTX-002", target_zone_id: "Z-001", availability_status: "AVAILABLE" },
+  ],
+  existingSupplyPlans: [],
+  opsCenters: [{ ops_center_id: "OC-001", cell_ids: ["C-34-32", "C-34-33"] }],
+  readinessTasks: [],
+  context: {
+    now: () => "2026-07-09T08:00:00.000Z",
+    nextSupplyPlanId: () => `FPP-${String(++loopSupplyPlanSeq).padStart(4, "0")}`,
+    nextProductionBatchId: () => `PB-${String(++loopBatchSeq).padStart(4, "0")}`,
+    nextFleetAllocationRunId: () => `FAR-${String(++loopAllocationRunSeq).padStart(4, "0")}`,
+    nextFleetAllocationResultId: () => `FAR-RES-${String(++loopAllocationResultSeq).padStart(4, "0")}`,
+    nextDeliveryOrderId: () => `RDO-${String(++loopDeliverySeq).padStart(4, "0")}`,
+    nextRobotaxiId: () => `RTX-${String(++loopProducedSeq).padStart(3, "0")}`,
+    nextReadinessTaskId: () => `TASK-RC-${String(++loopReadinessSeq).padStart(4, "0")}`,
+  },
+});
+assert.equal(supplyLoop.succeeded, true, "供应管理闭环编排必须成功");
+assert.equal(supplyLoop.supplyPlan.plan_status, "CONFIRMED", "闭环编排必须确认生产计划");
+assert.equal(supplyLoop.productionBatch.batch_status, "COMPLETED", "闭环编排必须完成生产批次");
+assert.equal(supplyLoop.deliveryOrder.delivery_status, "DELIVERED", "闭环编排必须完成区域交付");
+assert.equal(supplyLoop.producedRobotaxiIds.length, supplyLoop.supplyPlan.planned_robotaxi_count, "闭环编排必须按生产计划形成 Robotaxi 资产");
+assert.equal(supplyLoop.readinessTasks.length, supplyLoop.deliveryOrder.robotaxi_count, "闭环编排必须逐车触发运营准入任务");
+assert.equal(supplyLoop.readinessTasks[0].task_status, "WAITING_ASSIGNMENT", "闭环编排生成的准入任务必须待分配");
+const producedAsset = supplyLoop.robotaxis.find((robotaxi) => robotaxi.robotaxi_id === supplyLoop.producedRobotaxiIds[0]);
+assert.equal(producedAsset.availability_status, "PENDING_ADMISSION", "闭环编排后的新 Robotaxi 必须待准入");
+assert.equal(supplyLoop.robotaxis.find((robotaxi) => robotaxi.robotaxi_id === "RTX-001").availability_status, "AVAILABLE", "闭环编排不得破坏已有 Robotaxi 管理状态");
+
 const main = fs.readFileSync("src/main.jsx", "utf8");
 const fieldDictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
@@ -216,6 +257,10 @@ assert.ok(main.includes("businessPlanningService.updateBusinessTargetConfig"), "
 assert.ok(main.includes("businessPlanningService.updateSupplyProductionProfileConfig"), "页面必须调用服务保存生产画像配置");
 assert.ok(main.includes("businessTargets: data.businessTargets || []"), "需求预测执行必须传入经营目标集合");
 assert.ok(main.includes("businessPlanningService.createSupplyPlanFromForecast"), "页面必须调用服务从预测结果创建生产计划");
+assert.ok(main.includes("businessPlanningService.completeSupplyManagementLoopFromForecast"), "页面必须调用服务执行供应管理闭环编排");
+assert.ok(main.includes("执行供应闭环"), "预测结果页必须提供供应闭环人工入口");
+assert.ok(main.includes("deriveInitialRuntimeSequences(fallback)"), "干净启动必须按初始 Robotaxi 派生新车编号序列，避免破坏 Robotaxi 管理");
+assert.ok(main.includes('producedRobotaxiSequence = deriveSequence(initialData.robotaxis || [], "robotaxi_id", "RTX-")'), "重置模拟数据后必须按初始 Robotaxi 派生新车编号序列");
 assert.ok(main.includes("businessPlanningService.completeProductionBatch"), "页面必须调用服务完成生产批次并创建 Robotaxi");
 assert.ok(main.includes("businessPlanningService.executeFleetAllocationStrategy"), "页面必须调用服务执行区域分配策略");
 assert.ok(main.includes("createRegionDeliveryOrder"), "区域交付必须支持创建时触发区域分配策略");
