@@ -278,6 +278,7 @@ function createZones(map, cells, roadSegments, places, serviceAreas) {
     ["Z-001-B", "Z-001", "办公通勤子区", ZoneLevel.SUB_ZONE, ZoneType.OFFICE_ZONE, rectCells(0, 14, 25, 39)],
     ["Z-001-C", "Z-001", "商业交通子区", ZoneLevel.SUB_ZONE, ZoneType.COMMERCIAL_ZONE, rectCells(12, 30, 12, 30)],
     ["Z-001-D", "Z-001", "医院学校子区", ZoneLevel.SUB_ZONE, ZoneType.MIXED_ZONE, rectCells(28, 39, 0, 14)],
+    ["Z-001-E", "Z-001", "运营支持子区", ZoneLevel.SUB_ZONE, ZoneType.SUPPORT_ZONE, rectCells(34, 36, 28, 34)],
   ];
 
   const zoneIds = definitions.map(([zoneId]) => zoneId);

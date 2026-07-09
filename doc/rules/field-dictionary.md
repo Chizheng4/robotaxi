@@ -768,6 +768,10 @@
 |growth_factor|增长修正|计算字段|区域增长修正因子|
 |supply_need_score|供给需求评分|计算字段|用于供给规划和投放判断的需求评分|
 |calculated_from_profile_ids|计算来源画像|计算字段|区域画像计算引用的画像编号|
+|profile_field_explanations|画像字段解释|聚合展示字段|解释画像关键字段的含义、来源和计算逻辑，是 DemandProfile 通用属性|
+|meaning|字段含义|聚合展示字段|画像字段解释中的含义说明|
+|source|来源|聚合展示字段|画像字段解释中的字段来源说明|
+|calculation_logic|计算逻辑|聚合展示字段|画像字段解释中的计算公式或汇总逻辑|
 |calculated_at|计算时间|计算字段|画像计算时间|
 
 ---

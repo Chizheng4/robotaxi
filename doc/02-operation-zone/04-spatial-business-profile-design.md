@@ -72,6 +72,16 @@ DemandProfile 描述：
 |SERVICE_AREA|服务区域需求画像|描述 ServiceArea 的服务承载和上下车能力|
 |ZONE|区域需求画像|描述 Zone 的整体经营需求，部分字段由系统计算|
 
+Zone 画像只面向一级 Zone。二级 SubZone 用于组织 Place 与其周边 ServiceArea 的空间经营关系，不单独生成 DemandProfile。
+
+```text
+Place + 周边 ServiceArea
+  = SubZone（二级子区域，空间组织关系）
+
+多个 SubZone
+  = Zone（一级经营区域，生成 Zone DemandProfile）
+```
+
 ## 5. 生命周期
 
 ```text
@@ -188,6 +198,7 @@ Zone 类型 DemandProfile 不直接配置人口或地点需求字段，而是聚
 |demand_distribution|需求分布|ZONE|下级画像构成摘要|
 |supply_need_score|供给需求评分|ZONE|预计需求与服务容量的关系|
 |calculated_from_profile_ids|计算来源画像|ZONE|区域画像引用的下级画像编号|
+|profile_field_explanations|画像字段解释|全部|解释关键字段含义、来源和计算逻辑|
 |calculated_at|计算时间|全部|系统计算时间|
 
 ### 8.1 Place 计算
@@ -208,22 +219,32 @@ expected_robotaxi_demand =
 
 ### 8.2 Zone 计算
 
+Zone 画像只对一级 Zone 计算。计算时先读取该 Zone 的 `sub_zone_ids`，再汇总这些 SubZone 绑定的 `place_ids` 与 `service_area_ids`。如果某个 Zone 暂未拆分 SubZone，则兼容使用该 Zone 自身的 `place_ids` 与 `service_area_ids`。
+
 ```text
 zone potential_demand =
-  Σ Place DemandProfile.potential_demand
+  Σ 子区域内 Place DemandProfile.potential_demand
 ```
 
 ```text
 zone expected_robotaxi_demand =
-  Σ Place DemandProfile.expected_robotaxi_demand
+  Σ 子区域内 Place DemandProfile.expected_robotaxi_demand
   × zone_adjustment_factor
   × coverage_factor
   × competition_factor
+  × growth_factor
 ```
 
 ```text
 supply_need_score =
-  expected_robotaxi_demand / Σ ServiceArea DemandProfile.service_capacity
+  expected_robotaxi_demand / Σ 子区域内 ServiceArea DemandProfile.service_capacity
+```
+
+```text
+calculated_from_profile_ids =
+  子区域内所有 Place DemandProfile.profile_id
+  +
+  子区域内所有 ServiceArea DemandProfile.profile_id
 ```
 
 ## 9. 初始化设计
@@ -295,14 +316,14 @@ ServiceArea 类型 DemandProfile 与 ServiceArea 一一对应。
 
 ### 9.4 Zone 类型初始化
 
-当前初始化 1 个主 Zone。Zone 类型 DemandProfile 与 Zone 一一对应，但字段主要由系统计算。
+当前只对一级 Zone 初始化 DemandProfile。SubZone 不初始化 DemandProfile，它只维护 Place 与 ServiceArea 的包含关系，供一级 Zone 汇总计算。
 
 计算输入：
 
 ```text
-Place DemandProfile
+SubZone.place_ids -> Place DemandProfile
   +
-ServiceArea DemandProfile
+SubZone.service_area_ids -> ServiceArea DemandProfile
   +
 历史服务数据
   +
@@ -328,6 +349,12 @@ ServiceArea DemandProfile
   "demand_distribution": "COMMUTE_PATTERN",
   "supply_need_score": 1.2,
   "calculated_from_profile_ids": ["DP-P-001", "DP-SA-001"],
+  "profile_field_explanations": {
+    "expected_robotaxi_demand": {
+      "meaning": "一级 Zone 的预计 Robotaxi 需求，是长期需求预测和供应计划的核心输入。",
+      "calculation_logic": "Σ 子区域内 Place 预计 Robotaxi 需求 × 区域调整系数 × 服务覆盖系数 × 竞争影响系数 × 增长修正"
+    }
+  },
   "calculated_at": "Day 1 00:00:00"
 }
 ```

@@ -21,7 +21,12 @@ Zone
 └── SubZone
 ```
 
-一个 Zone 可以包含多个空间对象，也可以继续拆分为多个子 Zone。
+当前业务设计只保留两层 Zone：
+
+- 一级 Zone：面向经营管理、长期需求预测、供应计划和运营投放；
+- 二级 SubZone：由 Place 与其周边 ServiceArea 组成，只用于空间经营组织关系。
+
+SubZone 不再继续拆分，也不单独生成需求画像。
 
 ---
 
@@ -48,11 +53,10 @@ Zone
 
 |zone_level|中文名|含义|
 |---|---|---|
-|CITY|城市级区域|城市整体运营范围|
-|OPERATING_REGION|大片区运营区域|城市内较大运营片区|
 |ZONE|标准运营区域|标准运营管理单元|
 |SUB_ZONE|子运营区域|标准区域下的子区域|
-|MICRO_ZONE|微型运营区域|更细颗粒度的微区域|
+
+历史设计中的 `CITY`、`OPERATING_REGION`、`MICRO_ZONE` 暂不进入当前实现，避免多层结构影响画像汇总和长期需求预测。
 
 ---
 
@@ -124,7 +128,7 @@ Zone
     
 3. Zone 可以覆盖 Cell，也可以引用 RoadSegment、Place 和 ServiceArea；
     
-4. Zone 支持父子层级结构；
+4. Zone 当前只支持一级 Zone 和二级 SubZone 两层结构；
     
 5. 子 Zone 应属于同一个 Map；
     
@@ -136,7 +140,8 @@ Zone
     
 9. 道路通行能力由 RoadSegment 表达；
     
-10. 服务能力由 ServiceArea 表达。
+10. 服务能力由 ServiceArea 表达；
+11. DemandProfile 只对一级 Zone、Place 和 ServiceArea 生成，SubZone 只提供汇总关系。
     
 
 ---

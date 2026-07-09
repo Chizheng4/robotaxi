@@ -47,6 +47,46 @@ function createBaseDemandProfile({ profileId, profileName, targetObjectType, tar
   };
 }
 
+function createProfileFieldExplanations(targetObjectType) {
+  if (targetObjectType === TargetObjectType.PLACE) {
+    return {
+      resident_population: { meaning: "地点覆盖范围内的常住人口，是地点潜在出行需求的输入项。", source: "人工配置或外部导入" },
+      working_population: { meaning: "地点覆盖范围内的工作人口，是办公和通勤需求的输入项。", source: "人工配置或外部导入" },
+      daily_visitors: { meaning: "地点日均访客量，是商业、医院、学校、交通枢纽等访客需求的输入项。", source: "人工配置或外部导入" },
+      trip_generation_rate: { meaning: "人群在一个经营周期内产生出行需求的比例。", source: "人工配置或外部导入" },
+      demand_weight: { meaning: "地点业务强度修正，用于表达同类地点之间的需求差异。", source: "Place 初始化权重或人工配置" },
+      potential_demand: { meaning: "地点潜在需求。", calculation_logic: "(常住人口 + 工作人口 + 日访客量) × 出行产生率 × 需求权重" },
+      expected_robotaxi_demand: { meaning: "地点预计可转化为 Robotaxi 的需求。", calculation_logic: "潜在需求 × Robotaxi 采用率 × 服务接受率" },
+      peak_hour_demand: { meaning: "地点高峰小时需求估计。", calculation_logic: "预计 Robotaxi 需求 × 高峰系数，当前初始化使用 1.2" },
+    };
+  }
+  if (targetObjectType === TargetObjectType.SERVICE_AREA) {
+    return {
+      pickup_probability: { meaning: "服务区域成为上车点的概率，用于解释需求在服务区域的分布。", source: "人工配置或初始化默认值" },
+      dropoff_probability: { meaning: "服务区域成为下车点的概率，用于解释需求在服务区域的分布。", source: "人工配置或初始化默认值" },
+      peak_demand_ratio: { meaning: "服务区域在高峰期承接需求的放大比例。", source: "人工配置或初始化默认值" },
+      service_capacity: { meaning: "服务区域可承载的服务能力。", source: "ServiceArea.capacity 或人工配置" },
+      waiting_capacity: { meaning: "服务区域可等待容量。", source: "ServiceArea.waiting_capacity 或停车网格数量" },
+      turnover_capacity: { meaning: "服务区域单位周期周转能力。", calculation_logic: "当前初始化按 服务容量 × 4 估算，可后续配置" },
+      accessibility_factor: { meaning: "服务区域道路可达性修正。", source: "人工配置或初始化默认值" },
+    };
+  }
+  if (targetObjectType === TargetObjectType.ZONE) {
+    return {
+      potential_demand: { meaning: "一级 Zone 的潜在需求，用于长期需求预测。", calculation_logic: "Σ 子区域内 Place DemandProfile.potential_demand" },
+      expected_robotaxi_demand: { meaning: "一级 Zone 的预计 Robotaxi 需求，是长期需求预测和供应计划的核心输入。", calculation_logic: "Σ 子区域内 Place DemandProfile.expected_robotaxi_demand × 区域调整系数 × 服务覆盖系数 × 竞争影响系数 × 增长修正" },
+      peak_hour_demand: { meaning: "一级 Zone 的峰值需求。", calculation_logic: "预计 Robotaxi 需求 × 高峰系数，当前初始化使用 1.2" },
+      service_capacity: { meaning: "一级 Zone 包含服务区域的服务承载能力。", calculation_logic: "Σ 子区域内 ServiceArea DemandProfile.service_capacity" },
+      waiting_capacity: { meaning: "一级 Zone 包含服务区域的等待能力。", calculation_logic: "Σ 子区域内 ServiceArea DemandProfile.waiting_capacity" },
+      turnover_capacity: { meaning: "一级 Zone 包含服务区域的周转能力。", calculation_logic: "Σ 子区域内 ServiceArea DemandProfile.turnover_capacity" },
+      supply_need_score: { meaning: "供给需求评分，用于判断供给压力。", calculation_logic: "预计 Robotaxi 需求 / 服务容量；没有服务容量时使用预计 Robotaxi 需求" },
+      demand_distribution: { meaning: "一级 Zone 的画像来源构成。", calculation_logic: "统计子区域内参与汇总的 Place 画像数和 ServiceArea 画像数" },
+      calculated_from_profile_ids: { meaning: "一级 Zone 画像的计算来源画像。", calculation_logic: "子区域内所有 Place 与 ServiceArea 画像编号集合" },
+    };
+  }
+  return {};
+}
+
 function createPlaceDemandProfile(place) {
   const typeWeight = {
     RESIDENTIAL: 1.2,
@@ -86,6 +126,7 @@ function createPlaceDemandProfile(place) {
     potential_demand: roundValue(potentialDemand),
     expected_robotaxi_demand: roundValue(expectedDemand),
     peak_hour_demand: roundValue(expectedDemand * 1.2),
+    profile_field_explanations: createProfileFieldExplanations(TargetObjectType.PLACE),
     calculated_at: "Day 1 00:00:00",
   };
 }
@@ -107,6 +148,23 @@ function createServiceAreaDemandProfile(serviceArea) {
     waiting_capacity: Number(serviceArea.waiting_capacity || serviceArea.parking_cell_ids?.length || 0),
     turnover_capacity: Math.max(1, capacity * 4),
     accessibility_factor: 1,
+    profile_field_explanations: createProfileFieldExplanations(TargetObjectType.SERVICE_AREA),
+  };
+}
+
+function topLevelZones(zones = []) {
+  return zones.filter((zone) => !zone.parent_zone_id);
+}
+
+function zoneComponentIds(zone, zones = []) {
+  const children = (zone.sub_zone_ids || [])
+    .map((subZoneId) => zones.find((item) => item.zone_id === subZoneId))
+    .filter(Boolean);
+  const sourceZones = children.length ? children : [zone];
+  return {
+    placeIds: [...new Set(sourceZones.flatMap((item) => item.place_ids || []))],
+    serviceAreaIds: [...new Set(sourceZones.flatMap((item) => item.service_area_ids || []))],
+    subZoneIds: children.map((item) => item.zone_id),
   };
 }
 
@@ -117,14 +175,15 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
   const serviceAreaProfileById = new Map(demandProfiles
     .filter((profile) => profile.target_object_type === TargetObjectType.SERVICE_AREA)
     .map((profile) => [profile.target_object_id, profile]));
-  return zones.map((zone) => {
+  return topLevelZones(zones).map((zone) => {
     const existingZoneProfile = demandProfiles.find((profile) => (
       profile.target_object_type === TargetObjectType.ZONE && profile.target_object_id === zone.zone_id
     )) || {};
-    const zonePlaceProfiles = (zone.place_ids || [])
+    const components = zoneComponentIds(zone, zones);
+    const zonePlaceProfiles = components.placeIds
       .map((placeId) => placeProfileById.get(placeId))
       .filter(Boolean);
-    const zoneServiceAreaProfiles = (zone.service_area_ids || [])
+    const zoneServiceAreaProfiles = components.serviceAreaIds
       .map((serviceAreaId) => serviceAreaProfileById.get(serviceAreaId))
       .filter(Boolean);
     const potentialDemand = zonePlaceProfiles.reduce((sum, profile) => sum + Number(profile.potential_demand || 0), 0);
@@ -166,6 +225,7 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
       expected_robotaxi_demand: roundValue(adjustedExpectedDemand),
       peak_hour_demand: roundValue(adjustedExpectedDemand * 1.2),
       demand_distribution: {
+        sub_zone_count: components.subZoneIds.length,
         place_count: zonePlaceProfiles.length,
         service_area_count: zoneServiceAreaProfiles.length,
       },
@@ -174,6 +234,7 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
         ...zonePlaceProfiles.map((profile) => profile.profile_id),
         ...zoneServiceAreaProfiles.map((profile) => profile.profile_id),
       ],
+      profile_field_explanations: createProfileFieldExplanations(TargetObjectType.ZONE),
       calculated_at: "Day 1 00:00:00",
     };
   });
@@ -215,6 +276,7 @@ function migrateLegacyProfile(profile, targetObjectType, targetObjectId, context
     effective_to: profile.effective_to ?? base.effective_to,
     ...(potentialDemand == null ? {} : { potential_demand: roundValue(potentialDemand) }),
     ...(expectedDemand == null ? {} : { expected_robotaxi_demand: roundValue(expectedDemand) }),
+    profile_field_explanations: profile.profile_field_explanations || createProfileFieldExplanations(targetObjectType),
   };
 }
 
@@ -239,12 +301,7 @@ export function normalizeDemandProfiles({
       ...serviceAreaDemandProfiles.map((profile) => migrateLegacyProfile(profile, TargetObjectType.SERVICE_AREA, profile.service_area_id, context)),
       ...zoneDemandProfiles.map((profile) => migrateLegacyProfile(profile, TargetObjectType.ZONE, profile.zone_id, context)),
     ].filter((profile) => profile.target_object_id);
-  const hasZoneProfiles = normalized.some((profile) => profile.target_object_type === TargetObjectType.ZONE);
-  if (hasZoneProfiles) return normalized;
-  return [
-    ...normalized,
-    ...calculateZoneDemandProfiles({ zones, places, serviceAreas, demandProfiles: normalized }),
-  ];
+  return recalculateDemandProfiles({ demandProfiles: normalized, places, serviceAreas, zones });
 }
 
 export function recalculateDemandProfiles({ demandProfiles = [], places = [], serviceAreas = [], zones = [] } = {}) {

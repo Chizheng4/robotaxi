@@ -1051,7 +1051,17 @@ const legacyRouteStrategyIdMap = {
   "RPS-ABNORMAL-SAME-SA": "RPS-002"
 };
 function createDemandProfileRows(data) {
-  return normalizeDemandProfiles ? normalizeDemandProfiles(data) : data.demandProfiles || [];
+  const rows = normalizeDemandProfiles ? normalizeDemandProfiles(data) : data.demandProfiles || [];
+  const order = {
+    ZONE: 0,
+    PLACE: 1,
+    SERVICE_AREA: 2
+  };
+  return [...rows].sort((left, right) => {
+    const typeDelta = (order[left.target_object_type] ?? 9) - (order[right.target_object_type] ?? 9);
+    if (typeDelta !== 0) return typeDelta;
+    return String(left.target_object_id || left.profile_id || "").localeCompare(String(right.target_object_id || right.profile_id || ""));
+  });
 }
 function getDemandProfileConfigFields(profile) {
   if (!profile) return [];
@@ -6418,6 +6428,10 @@ function getDemandProfileDetailTabs(profile) {
       key: "calculated",
       label: "自动计算",
       keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "calculated_at"]
+    }, {
+      key: "explanation",
+      label: "字段解释",
+      keys: ["profile_field_explanations"]
     }];
   }
   if (profile?.target_object_type === "SERVICE_AREA") {
@@ -6429,6 +6443,10 @@ function getDemandProfileDetailTabs(profile) {
       key: "calculated",
       label: "自动计算",
       keys: ["calculated_at"]
+    }, {
+      key: "explanation",
+      label: "字段解释",
+      keys: ["profile_field_explanations"]
     }];
   }
   if (profile?.target_object_type === "ZONE") {
@@ -6440,6 +6458,10 @@ function getDemandProfileDetailTabs(profile) {
       key: "calculated",
       label: "自动汇总",
       keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_distribution", "calculated_from_profile_ids", "calculated_at"]
+    }, {
+      key: "explanation",
+      label: "字段解释",
+      keys: ["profile_field_explanations"]
     }];
   }
   return [basic];
