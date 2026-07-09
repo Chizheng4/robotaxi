@@ -198,6 +198,70 @@ function createServiceAreaDemandProfile(serviceArea) {
   };
 }
 
+function calculatePlaceDemandProfiles({ places = [], demandProfiles = [] } = {}) {
+  const placeProfileById = new Map(demandProfiles
+    .filter((profile) => profile.target_object_type === TargetObjectType.PLACE)
+    .map((profile) => [profile.target_object_id, profile]));
+  return places.map((place) => {
+    const baseProfile = createPlaceDemandProfile(place);
+    const existingProfile = placeProfileById.get(place.place_id) || {};
+    const residentPopulation = Number(existingProfile.resident_population ?? baseProfile.resident_population);
+    const workingPopulation = Number(existingProfile.working_population ?? baseProfile.working_population);
+    const dailyVisitors = Number(existingProfile.daily_visitors ?? baseProfile.daily_visitors);
+    const tripGenerationRate = Number(existingProfile.trip_generation_rate ?? baseProfile.trip_generation_rate);
+    const demandWeight = Number(existingProfile.demand_weight ?? baseProfile.demand_weight);
+    const robotaxiAdoptionRate = Number(existingProfile.robotaxi_adoption_rate ?? baseProfile.robotaxi_adoption_rate);
+    const serviceAcceptanceRate = Number(existingProfile.service_acceptance_rate ?? baseProfile.service_acceptance_rate);
+    const peakDemandRatio = Number(existingProfile.peak_demand_ratio ?? baseProfile.peak_demand_ratio);
+    const growthRate = Number(existingProfile.growth_rate ?? baseProfile.growth_rate);
+    const forecastYears = Number(existingProfile.forecast_years || baseProfile.forecast_years || DEFAULT_FORECAST_YEARS);
+    const growthFactor = calculateGrowthFactor(growthRate, forecastYears);
+    const potentialDemand = (residentPopulation + workingPopulation + dailyVisitors) * tripGenerationRate * demandWeight;
+    const expectedDemand = potentialDemand * robotaxiAdoptionRate * serviceAcceptanceRate;
+    return {
+      ...baseProfile,
+      profile_id: existingProfile.profile_id || baseProfile.profile_id,
+      profile_name: existingProfile.profile_name || baseProfile.profile_name,
+      profile_version: Number(existingProfile.profile_version || baseProfile.profile_version),
+      profile_status: existingProfile.profile_status || baseProfile.profile_status,
+      effective_from: existingProfile.effective_from || baseProfile.effective_from,
+      effective_to: existingProfile.effective_to ?? baseProfile.effective_to,
+      resident_population: residentPopulation,
+      working_population: workingPopulation,
+      daily_visitors: dailyVisitors,
+      trip_generation_rate: tripGenerationRate,
+      demand_weight: demandWeight,
+      peak_pattern: existingProfile.peak_pattern || baseProfile.peak_pattern,
+      peak_demand_ratio: peakDemandRatio,
+      growth_rate: growthRate,
+      forecast_years: forecastYears,
+      robotaxi_adoption_rate: robotaxiAdoptionRate,
+      service_acceptance_rate: serviceAcceptanceRate,
+      growth_factor: growthFactor,
+      potential_demand: roundValue(potentialDemand),
+      expected_robotaxi_demand: roundValue(expectedDemand),
+      peak_hour_demand: roundValue(expectedDemand * peakDemandRatio),
+      profile_field_explanations: createProfileFieldExplanations(TargetObjectType.PLACE),
+      profile_calculation_steps: createPlaceCalculationSteps({
+        residentPopulation,
+        workingPopulation,
+        dailyVisitors,
+        tripGenerationRate,
+        demandWeight,
+        potentialDemand,
+        robotaxiAdoptionRate,
+        serviceAcceptanceRate,
+        expectedDemand,
+        peakDemandRatio,
+        growthRate,
+        forecastYears,
+        growthFactor,
+      }),
+      calculated_at: "Day 1 00:00:00",
+    };
+  });
+}
+
 function createPlaceCalculationSteps({
   residentPopulation,
   workingPopulation,
@@ -298,7 +362,11 @@ function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zo
     .filter((profile) => profile.target_object_type === TargetObjectType.SERVICE_AREA)
     .map((profile) => [profile.target_object_id, profile]));
   return serviceAreas.map((serviceArea) => {
-    const existingProfile = serviceAreaProfileById.get(serviceArea.service_area_id) || createServiceAreaDemandProfile(serviceArea);
+    const baseProfile = createServiceAreaDemandProfile(serviceArea);
+    const existingProfile = {
+      ...baseProfile,
+      ...(serviceAreaProfileById.get(serviceArea.service_area_id) || {}),
+    };
     const placeProfiles = serviceAreaPlaceProfiles(serviceArea, places, placeProfileById, zones);
     const placeExpectedDemand = placeProfiles.reduce((sum, profile) => sum + Number(profile.expected_robotaxi_demand || 0), 0);
     const pickupProbability = Number(existingProfile.pickup_probability ?? 0.5);
@@ -306,8 +374,24 @@ function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zo
     const serviceAreaDemand = placeExpectedDemand * pickupProbability * accessibilityFactor;
     return {
       ...existingProfile,
+      profile_id: existingProfile.profile_id || baseProfile.profile_id,
+      profile_name: existingProfile.profile_name || baseProfile.profile_name,
+      profile_version: Number(existingProfile.profile_version || baseProfile.profile_version),
+      profile_status: existingProfile.profile_status || baseProfile.profile_status,
+      effective_from: existingProfile.effective_from || baseProfile.effective_from,
+      effective_to: existingProfile.effective_to ?? baseProfile.effective_to,
+      target_object_type: TargetObjectType.SERVICE_AREA,
+      target_object_id: serviceArea.service_area_id,
+      target_object_name: baseProfile.target_object_name,
+      pickup_probability: pickupProbability,
+      dropoff_probability: Number(existingProfile.dropoff_probability ?? baseProfile.dropoff_probability),
+      peak_demand_ratio: Number(existingProfile.peak_demand_ratio ?? baseProfile.peak_demand_ratio),
+      service_capacity: Number(existingProfile.service_capacity ?? baseProfile.service_capacity),
+      waiting_capacity: Number(existingProfile.waiting_capacity ?? baseProfile.waiting_capacity),
+      turnover_capacity: Number(existingProfile.turnover_capacity ?? baseProfile.turnover_capacity),
+      accessibility_factor: accessibilityFactor,
       service_area_demand: roundValue(serviceAreaDemand),
-      profile_field_explanations: existingProfile.profile_field_explanations || createProfileFieldExplanations(TargetObjectType.SERVICE_AREA),
+      profile_field_explanations: createProfileFieldExplanations(TargetObjectType.SERVICE_AREA),
       profile_calculation_steps: createServiceAreaCalculationSteps({
         placeProfiles,
         pickupProbability,
@@ -570,7 +654,7 @@ export function normalizeDemandProfiles({
 }
 
 export function recalculateDemandProfiles({ demandProfiles = [], places = [], serviceAreas = [], zones = [] } = {}) {
-  const placeProfiles = demandProfiles.filter((profile) => profile.target_object_type === TargetObjectType.PLACE);
+  const placeProfiles = calculatePlaceDemandProfiles({ places, demandProfiles });
   const serviceAreaProfiles = calculateServiceAreaDemandProfiles({
     serviceAreas,
     places,
