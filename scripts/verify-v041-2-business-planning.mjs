@@ -9,29 +9,44 @@ import {
   createSupplyPlanFromForecast,
   executeFleetAllocationStrategy,
   executeLongTermDemandForecastStrategy,
+  initializeDefaultBusinessTargets,
   initializeDefaultFleetAllocationStrategies,
   initializeDefaultLongTermDemandForecastStrategies,
   initializeDefaultSupplyProductionProfiles,
   startDeliveryOrder,
   startProductionBatch,
+  updateSupplyProductionProfileConfig,
 } from "../src/services/businessPlanningService.js";
 
+const businessTargets = initializeDefaultBusinessTargets("2026-07-09T00:00:00.000Z");
 const supplyProfiles = initializeDefaultSupplyProductionProfiles("2026-07-09T00:00:00.000Z");
 const strategies = initializeDefaultLongTermDemandForecastStrategies("2026-07-09T00:00:00.000Z");
 const allocationStrategies = initializeDefaultFleetAllocationStrategies("2026-07-09T00:00:00.000Z");
 
-assert.equal(supplyProfiles.length, 1, "必须初始化默认供应生产画像");
-assert.equal(supplyProfiles[0].profile_status, "ACTIVE", "供应生产画像默认必须可用");
+assert.equal(businessTargets.length, 1, "必须初始化默认经营目标");
+assert.equal(businessTargets[0].target_status, "ACTIVE", "经营目标默认必须可用");
+assert.equal(supplyProfiles.length, 1, "必须初始化默认生产画像");
+assert.equal(supplyProfiles[0].profile_status, "ACTIVE", "生产画像默认必须可用");
 assert.equal(strategies.length, 1, "必须初始化默认长期需求预测策略");
 assert.equal(strategies[0].strategy_status, "ACTIVE", "长期需求预测策略默认必须可用");
-assert.equal(allocationStrategies.length, 1, "必须初始化默认车队分配策略");
-assert.equal(allocationStrategies[0].strategy_status, "ACTIVE", "车队分配策略默认必须可用");
+assert.equal(allocationStrategies.length, 1, "必须初始化默认区域分配策略");
+assert.equal(allocationStrategies[0].strategy_status, "ACTIVE", "区域分配策略默认必须可用");
+assert.equal(allocationStrategies[0].allocation_algorithm, "ZONE_SUPPLY_URGENCY_ALLOCATION", "区域分配策略必须使用供给紧急度算法");
+
+const profileUpdate = updateSupplyProductionProfileConfig({
+  profile: supplyProfiles[0],
+  patch: { monthly_production_capacity: 12, delivery_capacity: 24 },
+  context: { now: () => "2026-07-09T00:30:00.000Z" },
+});
+assert.equal(profileUpdate.succeeded, true, "生产画像必须通过服务化能力保存配置");
+assert.equal(profileUpdate.profile.monthly_production_capacity, 12, "生产画像配置必须更新月生产能力");
+assert.equal(profileUpdate.profile.delivery_capacity, 24, "生产画像配置必须更新交付能力");
 
 let runSeq = 0;
 let resultSeq = 0;
 const execution = executeLongTermDemandForecastStrategy({
   strategy: strategies[0],
-  supplyProductionProfiles: supplyProfiles,
+  supplyProductionProfiles: [profileUpdate.profile],
   demandProfiles: [{
     profile_id: "DP-Z-Z-001",
     target_object_type: "ZONE",
@@ -57,7 +72,7 @@ assert.equal(execution.results[0].forecast_run_id, execution.run.forecast_run_id
 assert.equal(execution.results[0].zone_id, "Z-001", "预测结果必须记录目标区域");
 assert.ok(execution.results[0].required_fleet_quantity > 0, "预测结果必须计算目标所需车辆数");
 assert.ok(execution.results[0].fleet_gap_quantity >= 0, "预测结果必须计算车辆供给缺口");
-assert.equal(execution.results[0].supply_production_profile_id, "SPP-001", "预测结果必须关联供应生产画像");
+assert.equal(execution.results[0].supply_production_profile_id, "SPP-001", "预测结果必须关联生产画像");
 
 let supplyPlanSeq = 0;
 let batchSeq = 0;
@@ -69,13 +84,13 @@ let readinessSeq = 0;
 
 const supplyPlanResult = createSupplyPlanFromForecast({
   forecast: execution.results[0],
-  supplyProductionProfiles: supplyProfiles,
+  supplyProductionProfiles: [profileUpdate.profile],
   context: {
     now: () => "2026-07-09T02:00:00.000Z",
     nextSupplyPlanId: () => `FPP-${String(++supplyPlanSeq).padStart(4, "0")}`,
   },
 });
-assert.equal(supplyPlanResult.succeeded, true, "预测结果必须能创建车队生产计划");
+assert.equal(supplyPlanResult.succeeded, true, "预测结果必须能创建生产计划");
 assert.equal(supplyPlanResult.supplyPlan.plan_status, "DRAFT", "生产计划首态必须是草稿");
 assert.equal(supplyPlanResult.supplyPlan.simulation_status_transition_history.length, 1, "生产计划创建必须记录首态时间线");
 
@@ -114,7 +129,7 @@ const completedBatchResult = completeProductionBatch({
 assert.equal(completedBatchResult.succeeded, true, "生产中批次必须能完成");
 assert.equal(completedBatchResult.productionBatch.batch_status, "COMPLETED", "生产批次完成后必须进入已完成");
 assert.equal(completedBatchResult.robotaxis.length, confirmedPlan.planned_robotaxi_count, "生产批次必须按计划数量创建 Robotaxi");
-assert.equal(completedBatchResult.robotaxis[0].availability_status, "PENDING_ADMISSION", "新 Robotaxi 必须待准入");
+assert.equal(completedBatchResult.robotaxis[0].availability_status, "PENDING_DELIVERY", "新 Robotaxi 必须待交付");
 assert.ok(completedBatchResult.productionBatch.produced_robotaxi_ids.includes(completedBatchResult.robotaxis[0].robotaxi_id), "生产批次必须记录创建的 Robotaxi ID");
 
 const allocation = executeFleetAllocationStrategy({
@@ -129,9 +144,9 @@ const allocation = executeFleetAllocationStrategy({
     nextFleetAllocationResultId: () => `FAR-RES-${String(++allocationResultSeq).padStart(4, "0")}`,
   },
 });
-assert.equal(allocation.run.run_status, "SUCCEEDED", "车队分配策略执行必须成功");
-assert.equal(allocation.results.length, 1, "车队分配必须生成结果");
-assert.ok(allocation.results[0].allocated_quantity > 0, "车队分配结果必须记录分配数量");
+assert.equal(allocation.run.run_status, "SUCCEEDED", "区域分配策略执行必须成功");
+assert.equal(allocation.results.length, 1, "区域分配必须生成结果");
+assert.ok(allocation.results[0].allocated_quantity > 0, "区域分配结果必须记录分配数量");
 assert.equal(allocation.results[0].allocated_quantity, allocation.results[0].allocated_robotaxi_ids.length, "分配数量必须等于 Robotaxi ID 数量");
 
 const deliveryCreate = createDeliveryOrderFromAllocationResult({
@@ -173,21 +188,27 @@ const fieldDictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8")
 const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
 
 assert.ok(main.includes('label: "经营规划"'), "前端必须存在经营规划一级菜单");
-assert.ok(main.includes('{ key: "supplyProductionProfiles", label: "供应生产画像" }'), "经营规划必须包含供应生产画像菜单");
+assert.ok(main.includes('{ key: "businessTargets", label: "经营目标" }'), "经营规划必须包含经营目标菜单");
+assert.ok(main.includes('{ key: "supplyProductionProfiles", label: "生产画像" }'), "经营规划必须包含生产画像菜单");
 assert.ok(main.includes('{ key: "longTermDemandForecastStrategies", label: "预测策略" }'), "需求预测必须包含预测策略三级菜单");
 assert.ok(main.includes("businessPlanningService.executeLongTermDemandForecastStrategy"), "页面只能调用经营规划服务执行预测，不得自行拼预测结果");
+assert.ok(main.includes("businessPlanningService.updateSupplyProductionProfileConfig"), "页面必须调用服务保存生产画像配置");
 assert.ok(main.includes("businessPlanningService.createSupplyPlanFromForecast"), "页面必须调用服务从预测结果创建生产计划");
 assert.ok(main.includes("businessPlanningService.completeProductionBatch"), "页面必须调用服务完成生产批次并创建 Robotaxi");
-assert.ok(main.includes("businessPlanningService.executeFleetAllocationStrategy"), "页面必须调用服务执行车队分配策略");
+assert.ok(main.includes("businessPlanningService.executeFleetAllocationStrategy"), "页面必须调用服务执行区域分配策略");
+assert.ok(main.includes("createRegionDeliveryOrder"), "区域交付必须支持创建时触发区域分配策略");
 assert.ok(main.includes("businessPlanningService.completeDeliveryOrder"), "页面必须调用服务完成交付并触发准入任务");
 assert.ok(main.includes("longTermDemandForecastRuns: [result.run, ...(current.longTermDemandForecastRuns || [])]"), "执行后必须写入预测执行记录");
 assert.ok(main.includes("longTermDemandForecasts: [...(result.results || []), ...(current.longTermDemandForecasts || [])]"), "执行后必须写入预测结果");
-assert.ok(main.includes("supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || []"), "运行态恢复必须兼容供应生产画像集合");
+assert.ok(main.includes("supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || []"), "运行态恢复必须兼容生产画像集合");
 assert.ok(main.includes("longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || []"), "运行态恢复必须兼容预测策略集合");
 assert.ok(main.includes("longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || []"), "运行态恢复必须兼容预测执行集合");
+assert.equal(main.includes('{ key: "supplyOrders", label: "供给单" }'), false, "当前菜单不得继续展示无效供给单");
+assert.equal(main.includes('{ key: "dealerSupplies", label: "车商供应" }'), false, "当前菜单不得继续展示无效车商供应");
 
 [
   "supplyProductionProfile",
+  "businessTarget",
   "longTermDemandForecastStrategy",
   "longTermDemandForecastRun",
   "forecast_strategy_id",
@@ -200,6 +221,7 @@ assert.ok(main.includes("longTermDemandForecastRuns: snapshot.operationalData?.l
   "fleetAllocationResult",
   "robotaxiDeliveryOrder",
   "supply_plan_id",
+  "business_target_id",
   "production_batch_id",
   "fleet_allocation_strategy_id",
   "fleet_allocation_run_id",
@@ -207,6 +229,8 @@ assert.ok(main.includes("longTermDemandForecastRuns: snapshot.operationalData?.l
   "delivery_order_id",
   "required_fleet_quantity",
   "fleet_gap_quantity",
+  "urgency_weight",
+  "ZONE_SUPPLY_URGENCY_ALLOCATION",
 ].forEach((token) => {
   assert.ok(fieldDictionary.includes(token), `代码字段字典必须包含 ${token}`);
   assert.ok(dictionaryDoc.includes(token), `文档字段字典必须包含 ${token}`);

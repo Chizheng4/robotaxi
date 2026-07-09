@@ -5,6 +5,12 @@ export const SupplyProductionProfileStatus = {
   ARCHIVED: "ARCHIVED",
 };
 
+export const BusinessTargetStatus = {
+  ACTIVE: "ACTIVE",
+  DRAFT: "DRAFT",
+  ARCHIVED: "ARCHIVED",
+};
+
 export const LongTermDemandForecastStrategyStatus = {
   ACTIVE: "ACTIVE",
   DRAFT: "DRAFT",
@@ -39,6 +45,24 @@ export const FleetAllocationStrategyStatus = {
   ARCHIVED: "ARCHIVED",
 };
 
+export function initializeDefaultBusinessTargets(now = defaultNow()) {
+  return [{
+    business_target_id: "BT-001",
+    target_name: "三年运营增长目标",
+    target_status: BusinessTargetStatus.ACTIVE,
+    target_version: "1.0.0",
+    planning_horizon_years: 3,
+    target_zone_ids: ["Z-001"],
+    target_revenue_amount: 1200000,
+    target_service_order_count: 50000,
+    target_fleet_size: 35,
+    target_asset_utilization_rate: 0.72,
+    target_order_fulfillment_rate: 0.85,
+    created_at: now,
+    updated_at: now,
+  }];
+}
+
 export const FleetAllocationRunStatus = {
   SUCCEEDED: "SUCCEEDED",
   FAILED: "FAILED",
@@ -60,7 +84,6 @@ export function initializeDefaultSupplyProductionProfiles(now = defaultNow()) {
   return [{
     profile_id: "SPP-001",
     profile_name: "自有生产能力画像",
-    profile_type: "SELF_PRODUCTION",
     profile_status: SupplyProductionProfileStatus.ACTIVE,
     production_lead_time_days: 180,
     annual_production_capacity: 120,
@@ -73,6 +96,36 @@ export function initializeDefaultSupplyProductionProfiles(now = defaultNow()) {
     created_at: now,
     updated_at: now,
   }];
+}
+
+export function updateSupplyProductionProfileConfig({
+  profile,
+  patch = {},
+  context = {},
+} = {}) {
+  if (!profile?.profile_id) return { succeeded: false, reason: "SUPPLY_PRODUCTION_PROFILE_REQUIRED", profile: null };
+  const occurredAt = resolveNow(context);
+  const numericFields = [
+    "production_lead_time_days",
+    "annual_production_capacity",
+    "monthly_production_capacity",
+    "ramp_up_months",
+    "delivery_capacity",
+    "inspection_lead_time_days",
+  ];
+  const normalizedPatch = { ...patch };
+  numericFields.forEach((field) => {
+    if (field in normalizedPatch) normalizedPatch[field] = Math.max(0, Number(normalizedPatch[field] || 0));
+  });
+  return {
+    succeeded: true,
+    profile: {
+      ...profile,
+      ...normalizedPatch,
+      profile_status: normalizedPatch.profile_status || profile.profile_status || SupplyProductionProfileStatus.ACTIVE,
+      updated_at: occurredAt,
+    },
+  };
 }
 
 export function initializeDefaultLongTermDemandForecastStrategies(now = defaultNow()) {
@@ -94,12 +147,15 @@ export function initializeDefaultLongTermDemandForecastStrategies(now = defaultN
 export function initializeDefaultFleetAllocationStrategies(now = defaultNow()) {
   return [{
     fleet_allocation_strategy_id: "FAS-001",
-    strategy_name: "车队分配策略",
+    strategy_name: "区域分配策略",
     strategy_status: FleetAllocationStrategyStatus.ACTIVE,
     strategy_version: "1.0.0",
-    allocation_algorithm: "ZONE_GAP_TO_OPS_CENTER",
+    allocation_algorithm: "ZONE_SUPPLY_URGENCY_ALLOCATION",
     target_zone_ids: ["Z-001"],
     target_ops_center_ids: ["OC-001"],
+    urgency_weight: 0.5,
+    demand_gap_weight: 0.3,
+    production_ready_weight: 0.2,
     max_robotaxi_per_delivery_order: 20,
     created_at: now,
     updated_at: now,
@@ -178,7 +234,7 @@ export function createSupplyPlanFromForecast({
     || {};
   const supplyPlan = withLifecycleStatus({
     supply_plan_id: resolveSupplyPlanId(context),
-    plan_name: `${forecast.zone_name || forecast.zone_id || "区域"}车队生产计划`,
+    plan_name: `${forecast.zone_name || forecast.zone_id || "区域"}生产计划`,
     plan_status: SupplyPlanStatus.DRAFT,
     forecast_id: forecast.forecast_result_id,
     forecast_result_id: forecast.forecast_result_id,
@@ -372,11 +428,10 @@ export function executeFleetAllocationStrategy({
       results: [],
     };
   }
-  const deliveredIds = new Set();
   const allocatedIds = new Set();
   const eligibleRobotaxis = (robotaxis || []).filter((robotaxi) => {
-    if (deliveredIds.has(robotaxi.robotaxi_id) || allocatedIds.has(robotaxi.robotaxi_id)) return false;
-    return ["PENDING_ADMISSION", "PENDING_DELIVERY", "IN_DELIVERY"].includes(robotaxi.availability_status);
+    if (allocatedIds.has(robotaxi.robotaxi_id)) return false;
+    return robotaxi.availability_status === "PENDING_DELIVERY";
   });
   const opsCenter = opsCenters[0] || {};
   const targetZoneIds = Array.isArray(strategy.target_zone_ids) && strategy.target_zone_ids.length ? strategy.target_zone_ids : unique(supplyPlans.map((item) => item.target_zone_id));
@@ -431,7 +486,7 @@ export function createDeliveryOrderFromAllocationResult({ allocationResult, cont
   }
   const deliveryOrder = withLifecycleStatus({
     delivery_order_id: resolveDeliveryOrderId(context),
-    delivery_order_name: `${allocationResult.target_zone_id || "区域"} Robotaxi 交付单`,
+    delivery_order_name: `${allocationResult.target_zone_id || "区域"}区域交付单`,
     delivery_status: RobotaxiDeliveryOrderStatus.CREATED,
     fleet_allocation_result_id: allocationResult.fleet_allocation_result_id,
     fleet_allocation_run_id: allocationResult.fleet_allocation_run_id,
@@ -617,7 +672,7 @@ function createProducedRobotaxi({ robotaxiId, productionBatch, opsCenter, occurr
     battery_percent: batteryPercent,
     current_battery_kwh: 75,
     estimated_range_km: 400,
-    availability_status: "PENDING_ADMISSION",
+    availability_status: "PENDING_DELIVERY",
     motion_status: "PARKED",
     current_cell_id: currentCellId,
     current_route_id: null,

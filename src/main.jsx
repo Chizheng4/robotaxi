@@ -141,8 +141,9 @@ const pageGroups = [
     key: "businessPlanning",
     label: "经营规划",
     children: [
+      { key: "businessTargets", label: "经营目标" },
       { key: "demandProfiles", label: "需求画像" },
-      { key: "supplyProductionProfiles", label: "供应生产画像" },
+      { key: "supplyProductionProfiles", label: "生产画像" },
       {
         key: "demandForecastManagement",
         label: "需求预测",
@@ -165,21 +166,19 @@ const pageGroups = [
     key: "supplyManagement",
     label: "供应管理",
     children: [
-      { key: "supplyPlans", label: "车队生产计划" },
+      { key: "supplyPlans", label: "生产计划" },
       { key: "productionBatches", label: "生产批次" },
       {
         key: "fleetAllocationManagement",
-        label: "车队分配策略",
+        label: "区域分配策略",
         children: [
           { key: "fleetAllocationStrategies", label: "分配策略配置" },
           { key: "fleetAllocationRuns", label: "分配策略执行" },
           { key: "fleetAllocationResults", label: "分配策略结果" },
         ],
       },
-      { key: "robotaxiDeliveryOrders", label: "Robotaxi 交付" },
-      { key: "supplyOrders", label: "供给单" },
+      { key: "robotaxiDeliveryOrders", label: "区域交付" },
       { key: "readinessTasks", label: "运营准入" },
-      { key: "dealerSupplies", label: "车商供应" },
       { key: "ownerSupplies", label: "车主供应" },
     ],
   },
@@ -417,10 +416,15 @@ const tableConfig = {
       "calculated_at",
     ],
   },
+  businessTargets: {
+    title: "经营目标",
+    description: "经营目标定义规划周期内的收入、订单、车队规模、资产利用率和履约目标，是需求预测和供应生产规划的上游目标。",
+    columns: ["business_target_id", "target_name", "target_status", "target_version", "planning_horizon_years", "target_zone_ids", "target_revenue_amount", "target_service_order_count", "target_fleet_size", "target_asset_utilization_rate", "target_order_fulfillment_rate", "created_at", "updated_at"],
+  },
   supplyProductionProfiles: {
-    title: "供应生产画像",
-    description: "供应生产画像描述企业自有生产形成 Robotaxi 供给能力的约束、产能和节奏。",
-    columns: ["profile_id", "profile_name", "profile_status", "profile_type", "production_lead_time_days", "annual_production_capacity", "monthly_production_capacity", "ramp_up_months", "delivery_capacity", "inspection_lead_time_days", "effective_from", "effective_to"],
+    title: "生产画像",
+    description: "生产画像描述企业自有生产形成 Robotaxi 供给能力的约束、产能和节奏。",
+    columns: ["profile_id", "profile_name", "profile_status", "annual_production_capacity", "monthly_production_capacity", "delivery_capacity", "production_lead_time_days", "ramp_up_months", "inspection_lead_time_days", "effective_from", "effective_to"],
   },
   placeDemandProfiles: {
     title: "地点需求画像",
@@ -489,7 +493,7 @@ const tableConfig = {
   },
   longTermDemandForecastStrategies: {
     title: "需求预测策略",
-    description: "需求预测策略定义经营目标、需求画像和供应生产画像如何转化为长期 Robotaxi 需求预测。",
+    description: "需求预测策略定义经营目标、需求画像和生产画像如何转化为长期 Robotaxi 需求预测。",
     columns: ["forecast_strategy_id", "strategy_name", "strategy_type", "strategy_status", "strategy_version", "target_zone_ids", "forecast_horizon_years", "created_at", "updated_at"],
   },
   longTermDemandForecastRuns: {
@@ -498,8 +502,8 @@ const tableConfig = {
     columns: ["forecast_run_id", "forecast_strategy_id", "strategy_version", "run_status", "target_zone_ids", "started_at", "completed_at", "result_count", "failure_reason"],
   },
   supplyPlans: {
-    title: "车队生产计划",
-    description: "车队生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
+    title: "生产计划",
+    description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
     columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "target_zone_id", "planned_robotaxi_count", "fleet_gap_quantity", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
   },
   productionBatches: {
@@ -508,23 +512,23 @@ const tableConfig = {
     columns: ["production_batch_id", "batch_name", "batch_status", "supply_plan_id", "target_zone_id", "planned_robotaxi_count", "produced_robotaxi_count", "produced_robotaxi_ids", "production_started_at", "production_completed_at", "created_at"],
   },
   fleetAllocationStrategies: {
-    title: "车队分配策略",
-    description: "车队分配策略将已生产 Robotaxi 按区域和运营中心分配为具体车辆 ID 列表。",
-    columns: ["fleet_allocation_strategy_id", "strategy_name", "strategy_status", "strategy_version", "allocation_algorithm", "target_zone_ids", "target_ops_center_ids", "max_robotaxi_per_delivery_order", "created_at", "updated_at"],
+    title: "区域分配策略",
+    description: "区域分配策略根据区域供给需求紧急度、需求缺口和可交付车辆等因素，将待交付 Robotaxi 分配到目标运营区域。",
+    columns: ["fleet_allocation_strategy_id", "strategy_name", "strategy_status", "strategy_version", "allocation_algorithm", "target_zone_ids", "target_ops_center_ids", "urgency_weight", "demand_gap_weight", "production_ready_weight", "max_robotaxi_per_delivery_order", "created_at", "updated_at"],
   },
   fleetAllocationRuns: {
-    title: "车队分配执行",
-    description: "记录每次车队分配策略执行过程、配置快照和结果数量。",
+    title: "区域分配执行",
+    description: "记录每次区域分配策略执行过程、配置快照和结果数量。",
     columns: ["fleet_allocation_run_id", "fleet_allocation_strategy_id", "strategy_version", "run_status", "target_zone_ids", "target_ops_center_ids", "started_at", "completed_at", "result_count", "failure_reason"],
   },
   fleetAllocationResults: {
-    title: "车队分配结果",
+    title: "区域分配结果",
     description: "按区域和运营中心记录本次分配出的 Robotaxi ID 列表，可用于创建交付单。",
     columns: ["fleet_allocation_result_id", "fleet_allocation_run_id", "result_status", "target_zone_id", "target_ops_center_id", "supply_plan_id", "allocated_quantity", "allocated_robotaxi_ids", "candidate_robotaxi_ids", "created_at"],
   },
   robotaxiDeliveryOrders: {
-    title: "Robotaxi 交付单",
-    description: "Robotaxi 交付单是一张包含多台 Robotaxi 的物流交付批次，完成后逐车触发运营准入任务。",
+    title: "区域交付",
+    description: "区域交付是一张把待交付 Robotaxi 交付到区域分配目标运营区域的批次单，完成后逐车触发运营准入任务。",
     columns: ["delivery_order_id", "delivery_order_name", "delivery_status", "fleet_allocation_result_id", "target_zone_id", "target_ops_center_id", "robotaxi_count", "robotaxi_ids", "delivered_robotaxi_ids", "readiness_task_ids", "created_at", "delivery_completed_at"],
   },
   supplyOrders: {
@@ -804,6 +808,7 @@ const pageObjectType = {
   serviceAreas: "serviceArea",
   zones: "zone",
   demandProfiles: "demandProfile",
+  businessTargets: "businessTarget",
   supplyProductionProfiles: "supplyProductionProfile",
   placeDemandProfiles: "placeDemandProfile",
   serviceAreaDemandProfiles: "serviceAreaDemandProfile",
@@ -891,6 +896,7 @@ const idFieldByType = {
   serviceArea: "service_area_id",
   zone: "zone_id",
   demandProfile: "profile_id",
+  businessTarget: "business_target_id",
   placeDemandProfile: "profile_id",
   serviceAreaDemandProfile: "profile_id",
   zoneDemandProfile: "profile_id",
@@ -972,6 +978,7 @@ const statusFieldByPage = {
   serviceAreas: "service_area_status",
   zones: "zone_status",
   demandProfiles: "profile_status",
+  businessTargets: "target_status",
   supplyProductionProfiles: "profile_status",
   placeDemandProfiles: "profile_status",
   serviceAreaDemandProfiles: "profile_status",
@@ -1169,6 +1176,33 @@ function normalizeDemandProfileDraft(profile, draft) {
   }));
 }
 
+const supplyProductionProfileConfigFields = [
+  { key: "profile_name", type: "text" },
+  { key: "production_lead_time_days", type: "number", min: 0, step: 1 },
+  { key: "annual_production_capacity", type: "number", min: 0, step: 1 },
+  { key: "monthly_production_capacity", type: "number", min: 0, step: 1 },
+  { key: "ramp_up_months", type: "number", min: 0, step: 1 },
+  { key: "delivery_capacity", type: "number", min: 0, step: 1 },
+  { key: "inspection_lead_time_days", type: "number", min: 0, step: 1 },
+  { key: "effective_from", type: "text" },
+  { key: "effective_to", type: "text" },
+];
+
+function createSupplyProductionProfileDraft(profile) {
+  return Object.fromEntries(supplyProductionProfileConfigFields.map((field) => [
+    field.key,
+    profile?.[field.key] ?? "",
+  ]));
+}
+
+function normalizeSupplyProductionProfileDraft(draft) {
+  return Object.fromEntries(supplyProductionProfileConfigFields.map((field) => {
+    const value = draft[field.key];
+    if (field.type === "number") return [field.key, Number(value || 0)];
+    return [field.key, value || null];
+  }));
+}
+
 function App() {
   const initialData = useMemo(() => {
     const baseData = {
@@ -1313,6 +1347,9 @@ function App() {
   const [pendingDemandProfile, setPendingDemandProfile] = useState(null);
   const [demandProfileModalOpen, setDemandProfileModalOpen] = useState(false);
   const [demandProfileDraft, setDemandProfileDraft] = useState({});
+  const [pendingSupplyProductionProfile, setPendingSupplyProductionProfile] = useState(null);
+  const [supplyProductionProfileModalOpen, setSupplyProductionProfileModalOpen] = useState(false);
+  const [supplyProductionProfileDraft, setSupplyProductionProfileDraft] = useState({});
   const [metricPeriodType, setMetricPeriodType] = useState(initialRuntime.metricPeriodType || "ALL");
   const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
@@ -1322,7 +1359,21 @@ function App() {
     let cancelled = false;
     loadPersistedRuntimeSnapshot().then((snapshot) => {
       if (cancelled || !snapshot) return;
-      setOperationalData(normalizeOperationalRouteStrategies(snapshot.operationalData || initialData));
+      setOperationalData(normalizeOperationalRouteStrategies({
+        ...initialData,
+        ...(snapshot.operationalData || {}),
+        businessTargets: snapshot.operationalData?.businessTargets || initialData.businessTargets || [],
+        supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || [],
+        longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || [],
+        longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || [],
+        longTermDemandForecasts: snapshot.operationalData?.longTermDemandForecasts || initialData.longTermDemandForecasts || [],
+        supplyPlans: snapshot.operationalData?.supplyPlans || initialData.supplyPlans || [],
+        productionBatches: snapshot.operationalData?.productionBatches || initialData.productionBatches || [],
+        fleetAllocationStrategies: snapshot.operationalData?.fleetAllocationStrategies || initialData.fleetAllocationStrategies || [],
+        fleetAllocationRuns: snapshot.operationalData?.fleetAllocationRuns || initialData.fleetAllocationRuns || [],
+        fleetAllocationResults: snapshot.operationalData?.fleetAllocationResults || initialData.fleetAllocationResults || [],
+        robotaxiDeliveryOrders: snapshot.operationalData?.robotaxiDeliveryOrders || initialData.robotaxiDeliveryOrders || [],
+      }));
       setReadinessTasks(Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : []);
       setCleaningTasks(Array.isArray(snapshot.cleaningTasks) ? snapshot.cleaningTasks : []);
       setChargingTasks(Array.isArray(snapshot.chargingTasks) ? snapshot.chargingTasks : []);
@@ -1409,6 +1460,7 @@ function App() {
     places: data.places,
     serviceAreas: data.serviceAreas,
     zones: data.zones,
+    businessTargets: data.businessTargets || [],
     demandProfiles: demandProfileRows,
     placeDemandProfiles: legacyDemandProfileRows.placeDemandProfiles,
     serviceAreaDemandProfiles: legacyDemandProfileRows.serviceAreaDemandProfiles,
@@ -1569,6 +1621,7 @@ function App() {
       opsCenter: data.opsCenters,
       worker: data.workers,
       readinessTask: rowsByPage.readinessTasks,
+      businessTarget: rowsByPage.businessTargets,
       supplyProductionProfile: rowsByPage.supplyProductionProfiles,
       longTermDemandForecastStrategy: rowsByPage.longTermDemandForecastStrategies,
       longTermDemandForecastRun: rowsByPage.longTermDemandForecastRuns,
@@ -2483,6 +2536,33 @@ function App() {
     antd.message.success("需求画像配置已保存，区域画像已重新计算");
   }
 
+  function editSupplyProductionProfile(profile) {
+    setPendingSupplyProductionProfile(profile);
+    setSupplyProductionProfileDraft(createSupplyProductionProfileDraft(profile));
+    setSupplyProductionProfileModalOpen(true);
+  }
+
+  function saveSupplyProductionProfileConfig() {
+    if (!pendingSupplyProductionProfile || !businessPlanningService?.updateSupplyProductionProfileConfig) return;
+    const result = businessPlanningService.updateSupplyProductionProfileConfig({
+      profile: pendingSupplyProductionProfile,
+      patch: normalizeSupplyProductionProfileDraft(supplyProductionProfileDraft),
+      context: { now },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      supplyProductionProfiles: replaceCollectionItem(current.supplyProductionProfiles || [], "profile_id", result.profile),
+    }));
+    setSupplyProductionProfileModalOpen(false);
+    setPendingSupplyProductionProfile(null);
+    setSupplyProductionProfileDraft({});
+    antd.message.success("生产画像配置已保存");
+  }
+
   function runLongTermDemandForecastStrategy(strategy) {
     if (!businessPlanningService?.executeLongTermDemandForecastStrategy || !strategy) return;
     const result = businessPlanningService.executeLongTermDemandForecastStrategy({
@@ -2525,7 +2605,7 @@ function App() {
       supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
     }));
     selectForPage("supplyPlans", "supplyPlan", result.supplyPlan.supply_plan_id);
-    antd.message.success("车队生产计划已创建");
+    antd.message.success("生产计划已创建");
   }
 
   function confirmSupplyPlan(row) {
@@ -2539,7 +2619,7 @@ function App() {
       ...current,
       supplyPlans: replaceCollectionItem(current.supplyPlans || [], "supply_plan_id", result.supplyPlan),
     }));
-    antd.message.success("车队生产计划已确认");
+    antd.message.success("生产计划已确认");
   }
 
   function createProductionBatchFromSupplyPlan(row) {
@@ -2615,7 +2695,7 @@ function App() {
     }));
     if (result.results?.length) {
       selectForPage("fleetAllocationResults", "fleetAllocationResult", result.results[0].fleet_allocation_result_id);
-      antd.message.success(`车队分配完成，生成 ${result.results.length} 条分配结果`);
+      antd.message.success(`区域分配完成，生成 ${result.results.length} 条分配结果`);
     } else {
       antd.message.warning(getDisplayValue(result.run.failure_reason || "NO_ELIGIBLE_ROBOTAXI"));
     }
@@ -2640,7 +2720,57 @@ function App() {
       }),
     }));
     selectForPage("robotaxiDeliveryOrders", "robotaxiDeliveryOrder", result.deliveryOrder.delivery_order_id);
-    antd.message.success("Robotaxi 交付单已创建");
+    antd.message.success("区域交付单已创建");
+  }
+
+  function createRegionDeliveryOrder() {
+    if (!businessPlanningService?.executeFleetAllocationStrategy || !businessPlanningService?.createDeliveryOrderFromAllocationResult) return;
+    const strategy = (data.fleetAllocationStrategies || []).find((item) => item.strategy_status === "ACTIVE")
+      || (data.fleetAllocationStrategies || [])[0];
+    if (!strategy) {
+      antd.message.warning("没有可用的区域分配策略");
+      return;
+    }
+    const allocation = businessPlanningService.executeFleetAllocationStrategy({
+      strategy,
+      robotaxis: data.robotaxis || [],
+      supplyPlans: data.supplyPlans || [],
+      productionBatches: data.productionBatches || [],
+      opsCenters: data.opsCenters || [],
+      context: {
+        now,
+        nextFleetAllocationRunId,
+        nextFleetAllocationResultId,
+      },
+    });
+    if (!allocation.results?.length) {
+      setOperationalData((current) => ({
+        ...current,
+        fleetAllocationRuns: [allocation.run, ...(current.fleetAllocationRuns || [])],
+      }));
+      antd.message.warning(getDisplayValue(allocation.run.failure_reason || "NO_ELIGIBLE_ROBOTAXI"));
+      return;
+    }
+    const delivery = businessPlanningService.createDeliveryOrderFromAllocationResult({
+      allocationResult: allocation.results[0],
+      context: { now, nextDeliveryOrderId: nextRobotaxiDeliveryOrderId },
+    });
+    if (!delivery.succeeded) {
+      antd.message.warning(getDisplayValue(delivery.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      fleetAllocationRuns: [allocation.run, ...(current.fleetAllocationRuns || [])],
+      fleetAllocationResults: [
+        { ...allocation.results[0], result_status: "USED_FOR_DELIVERY" },
+        ...(allocation.results || []).slice(1),
+        ...(current.fleetAllocationResults || []),
+      ],
+      robotaxiDeliveryOrders: [delivery.deliveryOrder, ...(current.robotaxiDeliveryOrders || [])],
+    }));
+    selectForPage("robotaxiDeliveryOrders", "robotaxiDeliveryOrder", delivery.deliveryOrder.delivery_order_id);
+    antd.message.success("区域交付单已创建");
   }
 
   function startDeliveryOrder(row) {
@@ -2659,7 +2789,7 @@ function App() {
       robotaxiDeliveryOrders: replaceCollectionItem(current.robotaxiDeliveryOrders || [], "delivery_order_id", result.deliveryOrder),
       robotaxis: result.robotaxis,
     }));
-    antd.message.success("Robotaxi 交付已开始");
+    antd.message.success("区域交付已开始");
   }
 
   function completeDeliveryOrder(row) {
@@ -2774,6 +2904,7 @@ function App() {
                   completeProductionBatch,
                   runFleetAllocationStrategy,
                   createDeliveryOrderFromAllocationResult,
+                  createRegionDeliveryOrder,
                   startDeliveryOrder,
                   completeDeliveryOrder,
                   assignWorker,
@@ -2828,6 +2959,7 @@ function App() {
                   metricCalculationInProgress,
                   editCostParameterRule,
                   editDemandProfile,
+                  editSupplyProductionProfile,
                   clearEndedTimedOperations,
                   requestClearAllTimedOperations,
                   businessTimingCalculationRuns,
@@ -3019,6 +3151,38 @@ function App() {
           {pendingDemandProfile?.target_object_type === "ZONE" && (
             <Text type="secondary">区域画像的需求、容量和供给需求评分由包含的地点画像与服务区域画像汇总计算；这里只配置区域修正系数。</Text>
           )}
+        </div>
+      </Modal>
+      <Modal
+        title="配置生产画像"
+        open={supplyProductionProfileModalOpen}
+        okText="保存配置"
+        cancelText="取消"
+        width={560}
+        onCancel={() => setSupplyProductionProfileModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setSupplyProductionProfileModalOpen(false)}>取消</Button>,
+          <Button key="save" type="primary" onClick={saveSupplyProductionProfileConfig}>保存配置</Button>,
+        ]}
+      >
+        <div className="timing-rule-editor">
+          <Descriptions size="small" column={1} colon={false}>
+            <Descriptions.Item label="画像编号">{pendingSupplyProductionProfile?.profile_id || "无"}</Descriptions.Item>
+            <Descriptions.Item label="画像状态">{getDisplayValue(pendingSupplyProductionProfile?.profile_status)}</Descriptions.Item>
+          </Descriptions>
+          {supplyProductionProfileConfigFields.map((field) => (
+            <label key={field.key}>
+              <span>{getFieldLabel(field.key)}</span>
+              <Input
+                size="small"
+                type={field.type === "number" ? "number" : "text"}
+                min={field.min ?? undefined}
+                step={field.step ?? undefined}
+                value={supplyProductionProfileDraft[field.key] ?? ""}
+                onChange={(event) => setSupplyProductionProfileDraft((draft) => ({ ...draft, [field.key]: event.target.value }))}
+              />
+            </label>
+          ))}
         </div>
       </Modal>
     </Layout>
@@ -5370,6 +5534,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isSimulationEventPage = page === "simulationEvents";
   const isTimedOperationPage = page === "timedOperations";
   const isDemandProfilePage = page === "demandProfiles";
+  const isSupplyProductionProfilePage = page === "supplyProductionProfiles";
   const isLongTermDemandForecastStrategyPage = page === "longTermDemandForecastStrategies";
   const isLongTermDemandForecastPage = page === "longTermDemandForecasts";
   const isSupplyPlanPage = page === "supplyPlans";
@@ -5572,6 +5737,11 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <Button size="small" type="primary" onClick={() => actions.runFleetOperationPolicyForPage(page)}>
             {getFleetOperationTaskActionLabel(page)}
           </Button>
+        </div>
+      )}
+      {isRobotaxiDeliveryOrderPage && (
+        <div className="list-action-bar">
+          <Button size="small" type="primary" onClick={actions.createRegionDeliveryOrder}>创建区域交付</Button>
         </div>
       )}
       {isServiceOrderPage && (
@@ -5822,6 +5992,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         fixed: "right",
         width: 120,
         render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editDemandProfile(row)}>配置</RowActionButton>),
+      };
+    }
+    if (isSupplyProductionProfilePage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 120,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.editSupplyProductionProfile(row)}>配置</RowActionButton>),
       };
     }
     if (isLongTermDemandForecastStrategyPage) {
@@ -9927,6 +10106,7 @@ function loadRuntimeSnapshot(initialData) {
     const operationalData = normalizeOperationalRouteStrategies({
       ...initialData,
       ...(snapshot.operationalData || {}),
+      businessTargets: snapshot.operationalData?.businessTargets || initialData.businessTargets || [],
       supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || [],
       longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || [],
       longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || [],

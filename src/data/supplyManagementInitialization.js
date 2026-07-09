@@ -1,4 +1,5 @@
 import {
+  initializeDefaultBusinessTargets,
   initializeDefaultFleetAllocationStrategies,
   initializeDefaultLongTermDemandForecastStrategies,
   initializeDefaultSupplyProductionProfiles,
@@ -6,6 +7,7 @@ import {
 
 export function initializeSupplyManagement() {
   return {
+    businessTargets: initializeDefaultBusinessTargets(),
     supplyProductionProfiles: initializeDefaultSupplyProductionProfiles(),
     longTermDemandForecastStrategies: initializeDefaultLongTermDemandForecastStrategies(),
     longTermDemandForecastRuns: [],
