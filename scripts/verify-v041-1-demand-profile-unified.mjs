@@ -29,6 +29,8 @@ assert.equal(initialized.demandProfiles.filter((profile) => profile.target_objec
 assert.ok(initialized.demandProfiles.every((profile) => profile.target_object_id && profile.target_object_name), "DemandProfile 必须包含目标对象编号和名称");
 assert.ok(initialized.demandProfiles.every((profile) => profile.profile_field_explanations), "DemandProfile 必须包含通用字段解释属性");
 assert.ok(initialized.demandProfiles.every((profile) => Array.isArray(profile.profile_calculation_steps)), "DemandProfile 必须包含通用计算过程属性");
+assert.ok(initialized.demandProfiles.every((profile) => !String(profile.calculated_at || "").startsWith("Day ")), "业务初始化计算时间不得使用模拟时间占位");
+assert.ok(initialized.demandProfiles.every((profile) => Number.isFinite(Date.parse(profile.calculated_at))), "业务初始化计算时间必须是真实时间");
 assert.equal(initialized.demandProfiles.some((profile) => Object.hasOwn(profile, "profile_type")), false, "新初始化不得写入 profile_type 主字段");
 const zoneProfile = initialized.demandProfiles.find((profile) => profile.target_object_type === "ZONE");
 const serviceAreaProfile = initialized.demandProfiles.find((profile) => profile.target_object_type === "SERVICE_AREA");
@@ -75,6 +77,7 @@ const updatedByPlaceConfig = updateDemandProfileConfig({
 const recalculatedZone = updatedByPlaceConfig.find((profile) => profile.target_object_type === "ZONE");
 assert.equal(recalculatedZone.potential_demand, 3200, "配置 Place 后 Zone 潜在需求必须自动重算");
 assert.equal(recalculatedZone.expected_robotaxi_demand, 800, "配置 Place 后 Zone 预计 Robotaxi 需求必须经过 ServiceArea Demand 自动重算");
+assert.ok(updatedByPlaceConfig.every((profile) => Number.isFinite(Date.parse(profile.calculated_at))), "人工保存配置后所有画像必须记录真实计算时间");
 
 const updatedByServiceAreaConfig = updateDemandProfileConfig({
   ...context,
@@ -87,6 +90,16 @@ const zoneAfterServiceAreaConfig = updatedByServiceAreaConfig.find((profile) => 
 assert.equal(serviceAreaAdjusted.service_capacity, 20, "配置 ServiceArea 后服务容量必须保存为配置值");
 assert.equal(zoneAfterServiceAreaConfig.service_capacity, 20, "配置 ServiceArea 后 Zone 服务容量必须整体重算");
 assert.ok(zoneAfterServiceAreaConfig.expected_robotaxi_demand < zoneProfile.expected_robotaxi_demand, "配置 ServiceArea 需求转换参数后 Zone 预计需求必须整体重算");
+
+const simulatedCalculationTime = "Day 8 10:30:00";
+const updatedBySimulationContext = updateDemandProfileConfig({
+  ...context,
+  demandProfiles: initialized.demandProfiles,
+  profileId: placeProfile.profile_id,
+  patch: { daily_visitors: 1800 },
+  calculatedAt: simulatedCalculationTime,
+});
+assert.ok(updatedBySimulationContext.every((profile) => profile.calculated_at === simulatedCalculationTime), "只有模拟触发显式传入模拟时间时，画像才允许记录模拟计算时间");
 
 const updatedByZoneConfig = updateDemandProfileConfig({
   ...context,

@@ -31,6 +31,10 @@ function calculateGrowthFactor(growthRate = 0, forecastYears = DEFAULT_FORECAST_
   return roundValue(Math.pow(1 + Number(growthRate || 0), Number(forecastYears || DEFAULT_FORECAST_YEARS)), 4);
 }
 
+function currentRealCalculationTime() {
+  return new Date().toISOString();
+}
+
 function weightedAverage(items = [], field, weightField, fallback = 0) {
   const totalWeight = items.reduce((sum, item) => sum + Number(item?.[weightField] || 0), 0);
   if (totalWeight <= 0) return fallback;
@@ -109,7 +113,7 @@ function createProfileFieldExplanations(targetObjectType) {
   return {};
 }
 
-function createPlaceDemandProfile(place) {
+function createPlaceDemandProfile(place, { calculatedAt = currentRealCalculationTime() } = {}) {
   const typeWeight = {
     RESIDENTIAL: 1.2,
     OFFICE: 1.1,
@@ -171,11 +175,11 @@ function createPlaceDemandProfile(place) {
       forecastYears,
       growthFactor,
     }),
-    calculated_at: "Day 1 00:00:00",
+    calculated_at: calculatedAt,
   };
 }
 
-function createServiceAreaDemandProfile(serviceArea) {
+function createServiceAreaDemandProfile(serviceArea, { calculatedAt = currentRealCalculationTime() } = {}) {
   const capacity = Number(serviceArea.capacity || 0);
   return {
     ...createBaseDemandProfile({
@@ -195,16 +199,18 @@ function createServiceAreaDemandProfile(serviceArea) {
     service_area_demand: 0,
     profile_field_explanations: createProfileFieldExplanations(TargetObjectType.SERVICE_AREA),
     profile_calculation_steps: [],
+    calculated_at: calculatedAt,
   };
 }
 
-function calculatePlaceDemandProfiles({ places = [], demandProfiles = [] } = {}) {
+function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calculatedAt = null } = {}) {
   const placeProfileById = new Map(demandProfiles
     .filter((profile) => profile.target_object_type === TargetObjectType.PLACE)
     .map((profile) => [profile.target_object_id, profile]));
   return places.map((place) => {
     const baseProfile = createPlaceDemandProfile(place);
     const existingProfile = placeProfileById.get(place.place_id) || {};
+    const nextCalculatedAt = calculatedAt || existingProfile.calculated_at || baseProfile.calculated_at;
     const residentPopulation = Number(existingProfile.resident_population ?? baseProfile.resident_population);
     const workingPopulation = Number(existingProfile.working_population ?? baseProfile.working_population);
     const dailyVisitors = Number(existingProfile.daily_visitors ?? baseProfile.daily_visitors);
@@ -257,7 +263,7 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [] } = {})
         forecastYears,
         growthFactor,
       }),
-      calculated_at: "Day 1 00:00:00",
+      calculated_at: nextCalculatedAt,
     };
   });
 }
@@ -354,7 +360,7 @@ function createServiceAreaCalculationSteps({ placeProfiles, pickupProbability, a
   ];
 }
 
-function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zones = [], demandProfiles = [] }) {
+function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zones = [], demandProfiles = [], calculatedAt = null }) {
   const placeProfileById = new Map(demandProfiles
     .filter((profile) => profile.target_object_type === TargetObjectType.PLACE)
     .map((profile) => [profile.target_object_id, profile]));
@@ -367,6 +373,7 @@ function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zo
       ...baseProfile,
       ...(serviceAreaProfileById.get(serviceArea.service_area_id) || {}),
     };
+    const nextCalculatedAt = calculatedAt || existingProfile.calculated_at || baseProfile.calculated_at;
     const placeProfiles = serviceAreaPlaceProfiles(serviceArea, places, placeProfileById, zones);
     const placeExpectedDemand = placeProfiles.reduce((sum, profile) => sum + Number(profile.expected_robotaxi_demand || 0), 0);
     const pickupProbability = Number(existingProfile.pickup_probability ?? 0.5);
@@ -399,7 +406,7 @@ function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zo
         serviceAreaDemand,
       }),
       calculated_from_profile_ids: placeProfiles.map((profile) => profile.profile_id),
-      calculated_at: "Day 1 00:00:00",
+      calculated_at: nextCalculatedAt,
     };
   });
 }
@@ -472,7 +479,7 @@ function createZoneCalculationSteps({
   ];
 }
 
-export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAreas = [], demandProfiles = [] }) {
+export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAreas = [], demandProfiles = [], calculatedAt = null }) {
   const placeProfileById = new Map(demandProfiles
     .filter((profile) => profile.target_object_type === TargetObjectType.PLACE)
     .map((profile) => [profile.target_object_id, profile]));
@@ -483,6 +490,7 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
     const existingZoneProfile = demandProfiles.find((profile) => (
       profile.target_object_type === TargetObjectType.ZONE && profile.target_object_id === zone.zone_id
     )) || {};
+    const nextCalculatedAt = calculatedAt || existingZoneProfile.calculated_at || currentRealCalculationTime();
     const components = zoneComponentIds(zone, zones);
     const zonePlaceProfiles = components.placeIds
       .map((placeId) => placeProfileById.get(placeId))
@@ -564,7 +572,7 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
         supplyNeedScore,
         demandDistribution,
       }),
-      calculated_at: "Day 1 00:00:00",
+      calculated_at: nextCalculatedAt,
     };
   });
 }
@@ -653,12 +661,13 @@ export function normalizeDemandProfiles({
   return recalculateDemandProfiles({ demandProfiles: normalized, places, serviceAreas, zones });
 }
 
-export function recalculateDemandProfiles({ demandProfiles = [], places = [], serviceAreas = [], zones = [] } = {}) {
-  const placeProfiles = calculatePlaceDemandProfiles({ places, demandProfiles });
+export function recalculateDemandProfiles({ demandProfiles = [], places = [], serviceAreas = [], zones = [], calculatedAt = null } = {}) {
+  const placeProfiles = calculatePlaceDemandProfiles({ places, demandProfiles, calculatedAt });
   const serviceAreaProfiles = calculateServiceAreaDemandProfiles({
     serviceAreas,
     places,
     zones,
+    calculatedAt,
     demandProfiles: [
       ...placeProfiles,
       ...demandProfiles.filter((profile) => profile.target_object_type === TargetObjectType.SERVICE_AREA),
@@ -668,12 +677,13 @@ export function recalculateDemandProfiles({ demandProfiles = [], places = [], se
     zones,
     places,
     serviceAreas,
+    calculatedAt,
     demandProfiles: [...placeProfiles, ...serviceAreaProfiles, ...demandProfiles.filter((profile) => profile.target_object_type === TargetObjectType.ZONE)],
   });
   return [...placeProfiles, ...serviceAreaProfiles, ...zoneProfiles];
 }
 
-export function updateDemandProfileConfig({ demandProfiles = [], profileId, patch = {}, places = [], serviceAreas = [], zones = [] } = {}) {
+export function updateDemandProfileConfig({ demandProfiles = [], profileId, patch = {}, places = [], serviceAreas = [], zones = [], calculatedAt = currentRealCalculationTime() } = {}) {
   const normalized = normalizeDemandProfiles({
     demandProfiles,
     places,
@@ -686,7 +696,7 @@ export function updateDemandProfileConfig({ demandProfiles = [], profileId, patc
       ...profile,
       ...patch,
       profile_version: Number(profile.profile_version || 1) + 1,
-      calculated_at: "Day 1 00:00:00",
+      calculated_at: calculatedAt,
     };
     if (merged.target_object_type === TargetObjectType.PLACE) {
       const peakDemandRatio = Number(merged.peak_demand_ratio ?? DEFAULT_PEAK_DEMAND_RATIO);
@@ -732,6 +742,7 @@ export function updateDemandProfileConfig({ demandProfiles = [], profileId, patc
     places,
     serviceAreas,
     zones,
+    calculatedAt,
   });
 }
 
@@ -750,9 +761,10 @@ export function splitDemandProfilesByTarget(demandProfiles = []) {
 }
 
 export function initializeSpatialBusinessProfiles({ places = [], serviceAreas = [], zones = [] } = {}) {
+  const calculatedAt = currentRealCalculationTime();
   const baseDemandProfiles = [
-    ...places.map(createPlaceDemandProfile),
-    ...serviceAreas.map(createServiceAreaDemandProfile),
+    ...places.map((place) => createPlaceDemandProfile(place, { calculatedAt })),
+    ...serviceAreas.map((serviceArea) => createServiceAreaDemandProfile(serviceArea, { calculatedAt })),
   ];
   const demandProfiles = normalizeDemandProfiles({
     demandProfiles: baseDemandProfiles,
