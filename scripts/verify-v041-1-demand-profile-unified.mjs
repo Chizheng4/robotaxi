@@ -92,6 +92,10 @@ assert.ok(main.includes('"pickup_probability",\n      "dropoff_probability",\n  
 assert.ok(main.includes("function editDemandProfile(profile)"), "需求画像必须提供配置入口");
 assert.ok(main.includes("function saveDemandProfileConfig()"), "需求画像必须提供保存配置动作");
 assert.ok(main.includes("function getDetailTabs(selectedType, selectedObject)"), "详情标签必须接收选中对象，避免需求画像详情白屏");
+assert.ok(main.includes("function DetailFieldContent({ selectedObject, keys })"), "详情模块必须通过统一入口区分简单字段和复杂字段");
+assert.ok(main.includes("function isComplexDetailField(key, value)"), "详情模块必须识别复杂字段");
+assert.ok(main.includes('className="detail-block-list"'), "复杂详情字段必须整行块级展示，不能塞入 Descriptions 内容格");
+assert.ok(main.includes("function getStructuredKeyLabel(key)"), "结构化详情 key 必须统一走字段字典或枚举字典展示");
 assert.ok(main.includes('if (selectedType === "demandProfile") {\n    return getDemandProfileDetailTabs(selectedObject);'), "需求画像详情必须使用当前选中画像生成详情标签");
 assert.ok(main.includes('{ key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] }'), "需求画像详情必须展示字段解释");
 assert.ok(main.includes('{ key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] }'), "需求画像详情必须展示计算过程");
@@ -108,10 +112,12 @@ assert.ok(fieldDictionary.includes('target_object_type: "目标对象类型"'), 
 assert.ok(fieldDictionary.includes('target_object_id: "目标对象编号"'), "代码字段字典必须包含目标对象编号");
 assert.ok(fieldDictionary.includes('profile_field_explanations: "画像字段解释"'), "代码字段字典必须包含画像字段解释");
 assert.ok(fieldDictionary.includes('profile_calculation_steps: "画像计算过程"'), "代码字段字典必须包含画像计算过程");
+assert.ok(fieldDictionary.includes('related_place_profile_ids: "关联地点画像"'), "代码字段字典必须包含计算过程嵌套字段");
 assert.ok(fieldDictionary.includes('SERVICE_AREA: "服务区域"'), "代码值字典必须包含 SERVICE_AREA 中文");
 assert.ok(dictionaryDoc.includes("target_object_type") && dictionaryDoc.includes("目标对象类型"), "文档字段字典必须包含目标对象类型");
 assert.ok(dictionaryDoc.includes("profile_field_explanations") && dictionaryDoc.includes("画像字段解释"), "文档字段字典必须包含画像字段解释");
 assert.ok(dictionaryDoc.includes("service_area_demand"), "文档字段字典必须包含服务区域需求");
+assert.ok(dictionaryDoc.includes("related_place_profile_ids"), "文档字段字典必须包含计算过程嵌套字段");
 assert.ok(dictionaryDoc.includes("profile_type") && dictionaryDoc.includes("画像类型（兼容）"), "文档字段字典必须标记 profile_type 为兼容字段");
 
 console.log("v041.1 需求画像统一对象合同验证通过");

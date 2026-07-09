@@ -5926,16 +5926,9 @@ function DetailPanel({
   }, "\u203A")), hasTabbedDetail(selectedType) ? /*#__PURE__*/React.createElement(TabbedDetail, {
     selectedObject: selectedObject,
     selectedType: selectedType
-  }) : /*#__PURE__*/React.createElement(Descriptions, {
-    className: "compact-descriptions",
-    column: 1,
-    size: "small",
-    colon: false,
-    items: Object.entries(selectedObject).map(([key, value]) => ({
-      key,
-      label: getFieldLabel(key),
-      children: renderDetailValue(key, value, selectedObject)
-    }))
+  }) : /*#__PURE__*/React.createElement(DetailFieldContent, {
+    selectedObject: selectedObject,
+    keys: Object.keys(selectedObject)
   }));
 }
 function hasTabbedDetail(selectedType) {
@@ -5958,19 +5951,44 @@ function TabbedDetail({
         history: selectedObject.simulation_status_transition_history,
         statusField: getDetailStatusField(selectedType),
         row: selectedObject
-      }) : /*#__PURE__*/React.createElement(Descriptions, {
-        className: "compact-descriptions",
-        column: 1,
-        size: "small",
-        colon: false,
-        items: tab.keys.map(key => ({
-          key,
-          label: getFieldLabel(key),
-          children: renderDetailValue(key, selectedObject[key], selectedObject)
-        }))
+      }) : /*#__PURE__*/React.createElement(DetailFieldContent, {
+        selectedObject: selectedObject,
+        keys: tab.keys
       })
     }))
   });
+}
+function DetailFieldContent({
+  selectedObject,
+  keys
+}) {
+  const visibleKeys = (keys || []).filter(key => selectedObject[key] !== undefined);
+  const simpleKeys = visibleKeys.filter(key => !isComplexDetailField(key, selectedObject[key]));
+  const complexKeys = visibleKeys.filter(key => isComplexDetailField(key, selectedObject[key]));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, simpleKeys.length > 0 && /*#__PURE__*/React.createElement(Descriptions, {
+    className: "compact-descriptions",
+    column: 1,
+    size: "small",
+    colon: false,
+    items: simpleKeys.map(key => ({
+      key,
+      label: getFieldLabel(key),
+      children: renderDetailValue(key, selectedObject[key], selectedObject)
+    }))
+  }), complexKeys.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "detail-block-list"
+  }, complexKeys.map(key => /*#__PURE__*/React.createElement("section", {
+    className: "detail-block",
+    key: key
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "detail-block-label"
+  }, getFieldLabel(key)), /*#__PURE__*/React.createElement("div", {
+    className: "detail-block-content"
+  }, renderDetailValue(key, selectedObject[key], selectedObject))))));
+}
+function isComplexDetailField(key, value) {
+  if (["profile_field_explanations", "profile_calculation_steps", "route_steps", "route_links_detail", "pending_task_queue"].includes(key)) return true;
+  return Array.isArray(value) || Boolean(value && typeof value === "object");
 }
 function getDetailTabs(selectedType, selectedObject) {
   if (selectedType === "robotaxi") {
@@ -7805,7 +7823,7 @@ function DemandProfileFieldExplanations({
   }, entries.map(([fieldKey, explanation]) => /*#__PURE__*/React.createElement("details", {
     className: "structured-detail-group",
     key: fieldKey
-  }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", null, getFieldLabel(fieldKey)), /*#__PURE__*/React.createElement("span", null, explanation?.calculation_logic ? "含计算逻辑" : "配置说明")), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", null, getStructuredKeyLabel(fieldKey)), /*#__PURE__*/React.createElement("span", null, explanation?.calculation_logic ? "含计算逻辑" : "配置说明")), /*#__PURE__*/React.createElement("div", {
     className: "structured-detail-group-body"
   }, /*#__PURE__*/React.createElement("dl", {
     className: "structured-detail-fields"
@@ -7942,12 +7960,12 @@ function StructuredDetailNode({
   }, scalarEntries.map(([key, itemValue]) => /*#__PURE__*/React.createElement("div", {
     className: "structured-detail-field",
     key: key
-  }, /*#__PURE__*/React.createElement("dt", null, getFieldLabel(key)), /*#__PURE__*/React.createElement("dd", null, formatStructuredScalar(itemValue, key, value))))), complexEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("dt", null, getStructuredKeyLabel(key)), /*#__PURE__*/React.createElement("dd", null, formatStructuredScalar(itemValue, key, value))))), complexEntries.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "structured-detail-groups"
   }, complexEntries.map(([key, itemValue]) => /*#__PURE__*/React.createElement("details", {
     className: "structured-detail-group",
     key: key
-  }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", null, getFieldLabel(key)), /*#__PURE__*/React.createElement("span", null, summarizeStructuredValue(itemValue))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("summary", null, /*#__PURE__*/React.createElement("span", null, getStructuredKeyLabel(key)), /*#__PURE__*/React.createElement("span", null, summarizeStructuredValue(itemValue))), /*#__PURE__*/React.createElement("div", {
     className: "structured-detail-group-body"
   }, /*#__PURE__*/React.createElement(StructuredDetailNode, {
     value: itemValue,
@@ -7961,7 +7979,7 @@ function summarizeStructuredValue(value) {
   const nameKey = ["policy_name", "profile_name", "strategy_name", "simulation_name", "name"].find(key => value[key]);
   const enabledCount = entries.filter(([, itemValue]) => itemValue === true).length;
   const parts = [];
-  if (nameKey) parts.push(String(value[nameKey]));
+  if (nameKey) parts.push(formatStructuredScalar(value[nameKey], nameKey, value));
   parts.push(`${entries.length} 项`);
   if (enabledCount > 0) parts.push(`启用 ${enabledCount} 项`);
   return parts.join(" · ");
@@ -7969,12 +7987,17 @@ function summarizeStructuredValue(value) {
 function getStructuredItemTitle(item, index) {
   if (!item || typeof item !== "object") return `第 ${index + 1} 项`;
   const key = ["policy_name", "profile_name", "strategy_name", "simulation_name", "name", "time_window", "demand_profile_id", "route_id", "task_id", "event_id"].find(candidate => item[candidate]);
-  return key ? String(item[key]) : `第 ${index + 1} 项`;
+  return key ? formatStructuredScalar(item[key], key, item) : `第 ${index + 1} 项`;
 }
 function formatStructuredScalar(value, key = null, row = null) {
   if (value === null || value === undefined || value === "") return "无";
   if (typeof value === "boolean") return value ? "是" : "否";
   return String(getFieldDisplayValue(key, value, row));
+}
+function getStructuredKeyLabel(key) {
+  const fieldLabel = getFieldLabel(key);
+  if (fieldLabel && fieldLabel !== key) return fieldLabel;
+  return getDisplayValue(key) || key;
 }
 function summarizeObject(value) {
   const enabled = Object.entries(value).filter(([, itemValue]) => itemValue === true).map(([key]) => getFieldLabel(key));

@@ -779,6 +779,9 @@
 | formula                     | 公式             | 聚合展示字段 | 画像计算过程中的公式                               |
 | input_values                | 输入值            | 聚合展示字段 | 画像计算过程中的输入字段和值                           |
 | output_value                | 计算结果           | 聚合展示字段 | 画像计算过程中的步骤输出值                            |
+| related_place_profile_ids   | 关联地点画像         | 聚合展示字段 | 服务区域需求转换中引用的地点画像编号集合                     |
+| related_place_expected_robotaxi_demand | 关联地点预计 Robotaxi 需求 | 聚合展示字段 | 服务区域需求转换中关联地点画像的预计 Robotaxi 需求汇总 |
+| service_area_profile_ids    | 服务区域画像         | 聚合展示字段 | 区域画像计算中引用的服务区域画像编号集合                     |
 | meaning                     | 字段含义           | 聚合展示字段 | 画像字段解释中的含义说明                             |
 | source                      | 来源             | 聚合展示字段 | 画像字段解释中的字段来源说明                           |
 | calculation_logic           | 计算逻辑           | 聚合展示字段 | 画像字段解释中的计算公式或汇总逻辑                        |

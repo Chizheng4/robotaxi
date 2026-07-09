@@ -5706,17 +5706,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
       {hasTabbedDetail(selectedType) ? (
         <TabbedDetail selectedObject={selectedObject} selectedType={selectedType} />
       ) : (
-      <Descriptions
-        className="compact-descriptions"
-        column={1}
-        size="small"
-        colon={false}
-        items={Object.entries(selectedObject).map(([key, value]) => ({
-          key,
-          label: getFieldLabel(key),
-          children: renderDetailValue(key, value, selectedObject),
-        }))}
-      />
+        <DetailFieldContent selectedObject={selectedObject} keys={Object.keys(selectedObject)} />
       )}
     </section>
   );
@@ -5741,21 +5731,50 @@ function TabbedDetail({ selectedObject, selectedType }) {
         ) : tab.timeline ? (
           <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
         ) : (
-          <Descriptions
-            className="compact-descriptions"
-            column={1}
-            size="small"
-            colon={false}
-            items={tab.keys.map((key) => ({
-              key,
-              label: getFieldLabel(key),
-              children: renderDetailValue(key, selectedObject[key], selectedObject),
-            }))}
-          />
+          <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
         ),
       }))}
     />
   );
+}
+
+function DetailFieldContent({ selectedObject, keys }) {
+  const visibleKeys = (keys || []).filter((key) => selectedObject[key] !== undefined);
+  const simpleKeys = visibleKeys.filter((key) => !isComplexDetailField(key, selectedObject[key]));
+  const complexKeys = visibleKeys.filter((key) => isComplexDetailField(key, selectedObject[key]));
+
+  return (
+    <>
+      {simpleKeys.length > 0 && (
+        <Descriptions
+          className="compact-descriptions"
+          column={1}
+          size="small"
+          colon={false}
+          items={simpleKeys.map((key) => ({
+            key,
+            label: getFieldLabel(key),
+            children: renderDetailValue(key, selectedObject[key], selectedObject),
+          }))}
+        />
+      )}
+      {complexKeys.length > 0 && (
+        <div className="detail-block-list">
+          {complexKeys.map((key) => (
+            <section className="detail-block" key={key}>
+              <div className="detail-block-label">{getFieldLabel(key)}</div>
+              <div className="detail-block-content">{renderDetailValue(key, selectedObject[key], selectedObject)}</div>
+            </section>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function isComplexDetailField(key, value) {
+  if (["profile_field_explanations", "profile_calculation_steps", "route_steps", "route_links_detail", "pending_task_queue"].includes(key)) return true;
+  return Array.isArray(value) || Boolean(value && typeof value === "object");
 }
 
 function getDetailTabs(selectedType, selectedObject) {
@@ -7210,7 +7229,7 @@ function DemandProfileFieldExplanations({ explanations }) {
       {entries.map(([fieldKey, explanation]) => (
         <details className="structured-detail-group" key={fieldKey}>
           <summary>
-            <span>{getFieldLabel(fieldKey)}</span>
+            <span>{getStructuredKeyLabel(fieldKey)}</span>
             <span>{explanation?.calculation_logic ? "含计算逻辑" : "配置说明"}</span>
           </summary>
           <div className="structured-detail-group-body">
@@ -7399,7 +7418,7 @@ function StructuredDetailNode({ value, fieldKey }) {
         <dl className="structured-detail-fields">
           {scalarEntries.map(([key, itemValue]) => (
             <div className="structured-detail-field" key={key}>
-              <dt>{getFieldLabel(key)}</dt>
+              <dt>{getStructuredKeyLabel(key)}</dt>
               <dd>{formatStructuredScalar(itemValue, key, value)}</dd>
             </div>
           ))}
@@ -7410,7 +7429,7 @@ function StructuredDetailNode({ value, fieldKey }) {
           {complexEntries.map(([key, itemValue]) => (
             <details className="structured-detail-group" key={key}>
               <summary>
-                <span>{getFieldLabel(key)}</span>
+                <span>{getStructuredKeyLabel(key)}</span>
                 <span>{summarizeStructuredValue(itemValue)}</span>
               </summary>
               <div className="structured-detail-group-body">
@@ -7431,7 +7450,7 @@ function summarizeStructuredValue(value) {
   const nameKey = ["policy_name", "profile_name", "strategy_name", "simulation_name", "name"].find((key) => value[key]);
   const enabledCount = entries.filter(([, itemValue]) => itemValue === true).length;
   const parts = [];
-  if (nameKey) parts.push(String(value[nameKey]));
+  if (nameKey) parts.push(formatStructuredScalar(value[nameKey], nameKey, value));
   parts.push(`${entries.length} 项`);
   if (enabledCount > 0) parts.push(`启用 ${enabledCount} 项`);
   return parts.join(" · ");
@@ -7443,13 +7462,19 @@ function getStructuredItemTitle(item, index) {
     "policy_name", "profile_name", "strategy_name", "simulation_name", "name",
     "time_window", "demand_profile_id", "route_id", "task_id", "event_id",
   ].find((candidate) => item[candidate]);
-  return key ? String(item[key]) : `第 ${index + 1} 项`;
+  return key ? formatStructuredScalar(item[key], key, item) : `第 ${index + 1} 项`;
 }
 
 function formatStructuredScalar(value, key = null, row = null) {
   if (value === null || value === undefined || value === "") return "无";
   if (typeof value === "boolean") return value ? "是" : "否";
   return String(getFieldDisplayValue(key, value, row));
+}
+
+function getStructuredKeyLabel(key) {
+  const fieldLabel = getFieldLabel(key);
+  if (fieldLabel && fieldLabel !== key) return fieldLabel;
+  return getDisplayValue(key) || key;
 }
 
 function summarizeObject(value) {
