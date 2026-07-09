@@ -1138,6 +1138,12 @@
 |longTermDemandForecastStrategy|需求预测策略|长期需求预测策略配置|
 |longTermDemandForecastRun|需求预测执行|一次长期需求预测策略执行记录|
 |longTermDemandForecast|需求预测结果|长期需求预测执行生成的区域车队需求结果|
+|supplyPlan|车队生产计划|把需求预测结果转化为自有生产 Robotaxi 数量和交付节奏的业务单据|
+|productionBatch|生产批次|自有工厂生产 Robotaxi 的执行单据，完成后形成具体 Robotaxi 资产|
+|fleetAllocationStrategy|车队分配策略|将已生产 Robotaxi 按区域和运营中心分配为具体车辆 ID 列表的策略|
+|fleetAllocationRun|车队分配执行|一次车队分配策略执行记录|
+|fleetAllocationResult|车队分配结果|一次分配执行生成的区域 / 运营中心 Robotaxi ID 列表|
+|robotaxiDeliveryOrder|Robotaxi 交付单|包含多台 Robotaxi 的物流交付批次，完成后触发运营准入任务|
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
@@ -1168,13 +1174,42 @@
 |demand_profile_id|需求画像编号|关联字段|预测结果引用的区域需求画像|
 |supply_production_profile_id|供应生产画像编号|关联字段|预测结果引用的供应生产画像|
 |strategy_snapshot|策略快照|持久化字段|预测执行时的策略配置快照|
-|supply_plan_id|供给计划编号|持久化字段|供给计划单唯一编号|
-|plan_name|计划名称|持久化字段|供给计划名称|
+|supply_plan_id|车队生产计划编号|持久化字段|车队生产计划唯一编号|
+|plan_name|计划名称|持久化字段|车队生产计划名称|
 |plan_status|计划状态|持久化字段|计划状态|
 |target_zone_id|目标区域|持久化字段|计划覆盖的目标区域|
 |planned_robotaxi_count|计划 Robotaxi 数|配置字段|计划形成的 Robotaxi 数量|
 |planned_start_date|计划开始日期|配置字段|计划开始日期|
 |planned_end_date|计划结束日期|配置字段|计划结束日期|
+|confirmed_at|确认时间|运行态字段|车队生产计划确认时间|
+|cancelled_at|取消时间|运行态字段|车队生产计划取消时间|
+|production_batch_id|生产批次编号|持久化字段|生产批次唯一编号|
+|batch_name|批次名称|持久化字段|生产批次名称|
+|batch_status|批次状态|运行态字段|生产批次状态|
+|produced_robotaxi_count|已生产 Robotaxi 数量|运行态字段|生产批次完成后形成的车辆数量|
+|produced_robotaxi_ids|已生产 Robotaxi 列表|运行态字段|生产批次完成后创建的 Robotaxi ID 列表|
+|production_started_at|生产开始时间|运行态字段|生产批次开始生产的真实时间|
+|production_completed_at|生产完成时间|运行态字段|生产批次完成并创建 Robotaxi 的真实时间|
+|fleet_allocation_strategy_id|车队分配策略编号|持久化字段|车队分配策略唯一编号|
+|fleet_allocation_run_id|车队分配执行编号|持久化字段|一次车队分配执行唯一编号|
+|fleet_allocation_result_id|车队分配结果编号|持久化字段|车队分配结果唯一编号|
+|allocation_algorithm|分配算法|配置字段|车队分配策略使用的算法|
+|target_ops_center_ids|目标运营中心列表|配置字段|策略覆盖的目标运营中心集合|
+|max_robotaxi_per_delivery_order|单交付单最大车辆数|配置字段|每张交付单最多包含的 Robotaxi 数量|
+|result_status|结果状态|运行态字段|车队分配结果状态|
+|target_ops_center_id|目标运营中心|持久化字段|分配或交付目标运营中心|
+|allocated_quantity|分配数量|运行态字段|本条分配结果中分配的 Robotaxi 数量|
+|allocated_robotaxi_ids|分配 Robotaxi 列表|运行态字段|本条分配结果中具体 Robotaxi ID 列表|
+|candidate_robotaxi_ids|候选 Robotaxi 列表|运行态字段|本次分配可选 Robotaxi ID 列表|
+|delivery_order_id|交付单编号|持久化字段|Robotaxi 交付单唯一编号|
+|delivery_order_name|交付单名称|持久化字段|Robotaxi 交付单名称|
+|delivery_status|交付状态|运行态字段|Robotaxi 交付单状态|
+|robotaxi_ids|Robotaxi 列表|持久化字段|交付单包含的 Robotaxi ID 列表|
+|robotaxi_count|Robotaxi 数量|运行态字段|交付单包含的 Robotaxi 数量|
+|delivered_robotaxi_ids|已交付 Robotaxi 列表|运行态字段|交付完成的 Robotaxi ID 列表|
+|readiness_task_ids|准入任务列表|运行态字段|交付完成后触发的运营准入任务 ID 列表|
+|delivery_started_at|交付开始时间|运行态字段|交付单开始交付的真实时间|
+|delivery_completed_at|交付完成时间|运行态字段|交付单完成并触发运营准入任务的真实时间|
 |supply_order_id|供给单编号|持久化字段|供给单唯一编号|
 |supply_source_type|供给来源类型|持久化字段|车商供给、自有生产或车主供给|
 |supplier_id|供应方编号|持久化字段|供应方对象编号|
@@ -1192,6 +1227,41 @@
 |owner_status|车主状态|持久化字段|车主供给状态|
 |vehicle_count|车辆数|运行态字段|车主名下车辆数|
 |qualified_vehicle_count|合格车辆数|运行态字段|满足 Robotaxi 接入条件的车辆数|
+
+供应管理枚举中文：
+
+|英文值|中文名|用途|
+|---|---|---|
+|DRAFT|草稿|车队生产计划状态|
+|CONFIRMED|已确认|车队生产计划状态|
+|CANCELLED|已取消|计划、批次或交付单状态|
+|PLANNED|规划中|生产批次状态|
+|IN_PRODUCTION|生产中|生产批次状态|
+|COMPLETED|已完成|生产批次状态|
+|SUCCEEDED|已成功|策略执行状态|
+|FAILED|已失败|策略执行状态|
+|GENERATED|已生成|预测或分配结果状态|
+|USED_FOR_DELIVERY|已用于交付|车队分配结果状态|
+|IN_DELIVERY|交付中|Robotaxi 交付单状态|
+|DELIVERED|已交付|Robotaxi 交付单状态|
+|PENDING_DELIVERY|待交付|Robotaxi 交付相关状态|
+|ZONE_GAP_TO_OPS_CENTER|区域缺口分配到运营中心|车队分配算法|
+|SUPPLY_PLAN_CREATE|创建生产计划|状态时间线动作|
+|SUPPLY_PLAN_CREATED|生产计划已创建|状态时间线结果|
+|SUPPLY_PLAN_CONFIRM|确认生产计划|状态时间线动作|
+|SUPPLY_PLAN_CONFIRMED|生产计划已确认|状态时间线结果|
+|PRODUCTION_BATCH_CREATE|创建生产批次|状态时间线动作|
+|PRODUCTION_BATCH_CREATED|生产批次已创建|状态时间线结果|
+|PRODUCTION_BATCH_START|开始生产|状态时间线动作|
+|PRODUCTION_BATCH_STARTED|生产已开始|状态时间线结果|
+|PRODUCTION_BATCH_COMPLETE|生产完成|状态时间线动作|
+|PRODUCTION_BATCH_COMPLETED|生产批次已完成|状态时间线结果|
+|DELIVERY_ORDER_CREATE|创建交付单|状态时间线动作|
+|DELIVERY_ORDER_CREATED|交付单已创建|状态时间线结果|
+|DELIVERY_ORDER_START|开始交付|状态时间线动作|
+|DELIVERY_ORDER_STARTED|交付已开始|状态时间线结果|
+|DELIVERY_ORDER_COMPLETE|交付完成|状态时间线动作|
+|DELIVERY_ORDER_DELIVERED|交付单已交付|状态时间线结果|
 
 ---
 

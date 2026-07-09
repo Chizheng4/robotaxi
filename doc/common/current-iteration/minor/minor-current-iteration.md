@@ -4,13 +4,13 @@
 
 暂无独立小迭代执行中。
 
-当前主线进入 v041.2 大版本自动执行计划：
+最近主线已完成 v041.2 大版本自动执行计划：
 
-`doc/common/current-iteration/major/v041.2-business-planning-supply-auto-execution-plan.md`
+`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
 
-最新完成版本：v041.2.1 经营规划底座。
+最新完成版本：v041.2.7 交付到运营准入回归。
 
-当前执行指针：v041.2.2 计划收口。
+当前执行指针：暂无。
 
 ## 使用规则
 

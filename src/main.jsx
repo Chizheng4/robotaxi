@@ -67,6 +67,12 @@ let taskPlanningRunSequence = 0;
 let taskPlanningResultSequence = 0;
 let longTermDemandForecastRunSequence = 0;
 let longTermDemandForecastResultSequence = 0;
+let supplyPlanSequence = 0;
+let productionBatchSequence = 0;
+let fleetAllocationRunSequence = 0;
+let fleetAllocationResultSequence = 0;
+let robotaxiDeliveryOrderSequence = 0;
+let producedRobotaxiSequence = 0;
 let deploymentTaskSequence = 0;
 let routeExecutionSequence = 0;
 let deploymentRouteSequence = 0;
@@ -159,7 +165,18 @@ const pageGroups = [
     key: "supplyManagement",
     label: "供应管理",
     children: [
-      { key: "supplyPlans", label: "供应计划" },
+      { key: "supplyPlans", label: "车队生产计划" },
+      { key: "productionBatches", label: "生产批次" },
+      {
+        key: "fleetAllocationManagement",
+        label: "车队分配策略",
+        children: [
+          { key: "fleetAllocationStrategies", label: "分配策略配置" },
+          { key: "fleetAllocationRuns", label: "分配策略执行" },
+          { key: "fleetAllocationResults", label: "分配策略结果" },
+        ],
+      },
+      { key: "robotaxiDeliveryOrders", label: "Robotaxi 交付" },
       { key: "supplyOrders", label: "供给单" },
       { key: "readinessTasks", label: "运营准入" },
       { key: "dealerSupplies", label: "车商供应" },
@@ -481,9 +498,34 @@ const tableConfig = {
     columns: ["forecast_run_id", "forecast_strategy_id", "strategy_version", "run_status", "target_zone_ids", "started_at", "completed_at", "result_count", "failure_reason"],
   },
   supplyPlans: {
-    title: "供给计划单",
-    description: "供给计划单用于把长期需求预测转化为未来 Robotaxi 供给规模和节奏。",
-    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_id", "target_zone_id", "planned_robotaxi_count", "planned_start_date", "planned_end_date", "created_at"],
+    title: "车队生产计划",
+    description: "车队生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
+    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "target_zone_id", "planned_robotaxi_count", "fleet_gap_quantity", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
+  },
+  productionBatches: {
+    title: "生产批次",
+    description: "生产批次记录自有工厂生产 Robotaxi 的执行过程，完成后形成具体 Robotaxi 资产。",
+    columns: ["production_batch_id", "batch_name", "batch_status", "supply_plan_id", "target_zone_id", "planned_robotaxi_count", "produced_robotaxi_count", "produced_robotaxi_ids", "production_started_at", "production_completed_at", "created_at"],
+  },
+  fleetAllocationStrategies: {
+    title: "车队分配策略",
+    description: "车队分配策略将已生产 Robotaxi 按区域和运营中心分配为具体车辆 ID 列表。",
+    columns: ["fleet_allocation_strategy_id", "strategy_name", "strategy_status", "strategy_version", "allocation_algorithm", "target_zone_ids", "target_ops_center_ids", "max_robotaxi_per_delivery_order", "created_at", "updated_at"],
+  },
+  fleetAllocationRuns: {
+    title: "车队分配执行",
+    description: "记录每次车队分配策略执行过程、配置快照和结果数量。",
+    columns: ["fleet_allocation_run_id", "fleet_allocation_strategy_id", "strategy_version", "run_status", "target_zone_ids", "target_ops_center_ids", "started_at", "completed_at", "result_count", "failure_reason"],
+  },
+  fleetAllocationResults: {
+    title: "车队分配结果",
+    description: "按区域和运营中心记录本次分配出的 Robotaxi ID 列表，可用于创建交付单。",
+    columns: ["fleet_allocation_result_id", "fleet_allocation_run_id", "result_status", "target_zone_id", "target_ops_center_id", "supply_plan_id", "allocated_quantity", "allocated_robotaxi_ids", "candidate_robotaxi_ids", "created_at"],
+  },
+  robotaxiDeliveryOrders: {
+    title: "Robotaxi 交付单",
+    description: "Robotaxi 交付单是一张包含多台 Robotaxi 的物流交付批次，完成后逐车触发运营准入任务。",
+    columns: ["delivery_order_id", "delivery_order_name", "delivery_status", "fleet_allocation_result_id", "target_zone_id", "target_ops_center_id", "robotaxi_count", "robotaxi_ids", "delivered_robotaxi_ids", "readiness_task_ids", "created_at", "delivery_completed_at"],
   },
   supplyOrders: {
     title: "供给单",
@@ -779,6 +821,11 @@ const pageObjectType = {
   longTermDemandForecastStrategies: "longTermDemandForecastStrategy",
   longTermDemandForecastRuns: "longTermDemandForecastRun",
   supplyPlans: "supplyPlan",
+  productionBatches: "productionBatch",
+  fleetAllocationStrategies: "fleetAllocationStrategy",
+  fleetAllocationRuns: "fleetAllocationRun",
+  fleetAllocationResults: "fleetAllocationResult",
+  robotaxiDeliveryOrders: "robotaxiDeliveryOrder",
   supplyOrders: "supplyOrder",
   dealerSupplies: "dealerSupply",
   ownerSupplies: "ownerSupply",
@@ -861,6 +908,11 @@ const idFieldByType = {
   readinessTask: "task_id",
   longTermDemandForecast: "forecast_result_id",
   supplyPlan: "supply_plan_id",
+  productionBatch: "production_batch_id",
+  fleetAllocationStrategy: "fleet_allocation_strategy_id",
+  fleetAllocationRun: "fleet_allocation_run_id",
+  fleetAllocationResult: "fleet_allocation_result_id",
+  robotaxiDeliveryOrder: "delivery_order_id",
   supplyOrder: "supply_order_id",
   dealerSupply: "dealer_supply_id",
   ownerSupply: "owner_supply_id",
@@ -932,6 +984,11 @@ const statusFieldByPage = {
   longTermDemandForecastStrategies: "strategy_status",
   longTermDemandForecastRuns: "run_status",
   supplyPlans: "plan_status",
+  productionBatches: "batch_status",
+  fleetAllocationStrategies: "strategy_status",
+  fleetAllocationRuns: "run_status",
+  fleetAllocationResults: "result_status",
+  robotaxiDeliveryOrders: "delivery_status",
   supplyOrders: "order_status",
   dealerSupplies: "dealer_status",
   ownerSupplies: "owner_status",
@@ -1370,6 +1427,11 @@ function App() {
     longTermDemandForecastRuns: data.longTermDemandForecastRuns || [],
     longTermDemandForecasts: data.longTermDemandForecasts || [],
     supplyPlans: data.supplyPlans || [],
+    productionBatches: data.productionBatches || [],
+    fleetAllocationStrategies: data.fleetAllocationStrategies || [],
+    fleetAllocationRuns: data.fleetAllocationRuns || [],
+    fleetAllocationResults: data.fleetAllocationResults || [],
+    robotaxiDeliveryOrders: data.robotaxiDeliveryOrders || [],
     supplyOrders: data.supplyOrders || [],
     dealerSupplies: data.dealerSupplies || [],
     ownerSupplies: data.ownerSupplies || [],
@@ -1512,6 +1574,11 @@ function App() {
       longTermDemandForecastRun: rowsByPage.longTermDemandForecastRuns,
       longTermDemandForecast: rowsByPage.longTermDemandForecasts,
       supplyPlan: rowsByPage.supplyPlans,
+      productionBatch: rowsByPage.productionBatches,
+      fleetAllocationStrategy: rowsByPage.fleetAllocationStrategies,
+      fleetAllocationRun: rowsByPage.fleetAllocationRuns,
+      fleetAllocationResult: rowsByPage.fleetAllocationResults,
+      robotaxiDeliveryOrder: rowsByPage.robotaxiDeliveryOrders,
       supplyOrder: rowsByPage.supplyOrders,
       dealerSupply: rowsByPage.dealerSupplies,
       ownerSupply: rowsByPage.ownerSupplies,
@@ -2441,6 +2508,181 @@ function App() {
       antd.message.warning("需求预测执行完成，但未生成预测结果");
     }
   }
+
+  function createSupplyPlanFromForecast(row) {
+    if (!businessPlanningService?.createSupplyPlanFromForecast || !row) return;
+    const result = businessPlanningService.createSupplyPlanFromForecast({
+      forecast: row,
+      supplyProductionProfiles: data.supplyProductionProfiles || [],
+      context: { now, nextSupplyPlanId },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
+    }));
+    selectForPage("supplyPlans", "supplyPlan", result.supplyPlan.supply_plan_id);
+    antd.message.success("车队生产计划已创建");
+  }
+
+  function confirmSupplyPlan(row) {
+    if (!businessPlanningService?.confirmSupplyPlan || !row) return;
+    const result = businessPlanningService.confirmSupplyPlan({ supplyPlan: row, context: { now } });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      supplyPlans: replaceCollectionItem(current.supplyPlans || [], "supply_plan_id", result.supplyPlan),
+    }));
+    antd.message.success("车队生产计划已确认");
+  }
+
+  function createProductionBatchFromSupplyPlan(row) {
+    if (!businessPlanningService?.createProductionBatchFromSupplyPlan || !row) return;
+    const result = businessPlanningService.createProductionBatchFromSupplyPlan({
+      supplyPlan: row,
+      context: { now, nextProductionBatchId },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      productionBatches: [result.productionBatch, ...(current.productionBatches || [])],
+    }));
+    selectForPage("productionBatches", "productionBatch", result.productionBatch.production_batch_id);
+    antd.message.success("生产批次已创建");
+  }
+
+  function startProductionBatch(row) {
+    if (!businessPlanningService?.startProductionBatch || !row) return;
+    const result = businessPlanningService.startProductionBatch({ productionBatch: row, context: { now } });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
+    }));
+    antd.message.success("生产批次已开始");
+  }
+
+  function completeProductionBatch(row) {
+    if (!businessPlanningService?.completeProductionBatch || !row) return;
+    const result = businessPlanningService.completeProductionBatch({
+      productionBatch: row,
+      existingRobotaxis: data.robotaxis || [],
+      opsCenters: data.opsCenters || [],
+      context: { now, nextRobotaxiId: nextProducedRobotaxiId },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
+      robotaxis: [...(result.robotaxis || []), ...(current.robotaxis || [])],
+    }));
+    antd.message.success(`生产完成，新增 ${result.robotaxis.length} 台 Robotaxi`);
+  }
+
+  function runFleetAllocationStrategy(row) {
+    if (!businessPlanningService?.executeFleetAllocationStrategy || !row) return;
+    const result = businessPlanningService.executeFleetAllocationStrategy({
+      strategy: row,
+      robotaxis: data.robotaxis || [],
+      supplyPlans: data.supplyPlans || [],
+      productionBatches: data.productionBatches || [],
+      opsCenters: data.opsCenters || [],
+      context: {
+        now,
+        nextFleetAllocationRunId,
+        nextFleetAllocationResultId,
+      },
+    });
+    setOperationalData((current) => ({
+      ...current,
+      fleetAllocationRuns: [result.run, ...(current.fleetAllocationRuns || [])],
+      fleetAllocationResults: [...(result.results || []), ...(current.fleetAllocationResults || [])],
+    }));
+    if (result.results?.length) {
+      selectForPage("fleetAllocationResults", "fleetAllocationResult", result.results[0].fleet_allocation_result_id);
+      antd.message.success(`车队分配完成，生成 ${result.results.length} 条分配结果`);
+    } else {
+      antd.message.warning(getDisplayValue(result.run.failure_reason || "NO_ELIGIBLE_ROBOTAXI"));
+    }
+  }
+
+  function createDeliveryOrderFromAllocationResult(row) {
+    if (!businessPlanningService?.createDeliveryOrderFromAllocationResult || !row) return;
+    const result = businessPlanningService.createDeliveryOrderFromAllocationResult({
+      allocationResult: row,
+      context: { now, nextDeliveryOrderId: nextRobotaxiDeliveryOrderId },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      robotaxiDeliveryOrders: [result.deliveryOrder, ...(current.robotaxiDeliveryOrders || [])],
+      fleetAllocationResults: replaceCollectionItem(current.fleetAllocationResults || [], "fleet_allocation_result_id", {
+        ...row,
+        result_status: "USED_FOR_DELIVERY",
+      }),
+    }));
+    selectForPage("robotaxiDeliveryOrders", "robotaxiDeliveryOrder", result.deliveryOrder.delivery_order_id);
+    antd.message.success("Robotaxi 交付单已创建");
+  }
+
+  function startDeliveryOrder(row) {
+    if (!businessPlanningService?.startDeliveryOrder || !row) return;
+    const result = businessPlanningService.startDeliveryOrder({
+      deliveryOrder: row,
+      robotaxis: data.robotaxis || [],
+      context: { now },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      robotaxiDeliveryOrders: replaceCollectionItem(current.robotaxiDeliveryOrders || [], "delivery_order_id", result.deliveryOrder),
+      robotaxis: result.robotaxis,
+    }));
+    antd.message.success("Robotaxi 交付已开始");
+  }
+
+  function completeDeliveryOrder(row) {
+    if (!businessPlanningService?.completeDeliveryOrder || !row) return;
+    const result = businessPlanningService.completeDeliveryOrder({
+      deliveryOrder: row,
+      robotaxis: data.robotaxis || [],
+      readinessTasks,
+      context: { now, nextReadinessTaskId: nextTaskId },
+    });
+    if (!result.succeeded) {
+      antd.message.warning(getDisplayValue(result.reason));
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      robotaxiDeliveryOrders: replaceCollectionItem(current.robotaxiDeliveryOrders || [], "delivery_order_id", result.deliveryOrder),
+      robotaxis: result.robotaxis,
+    }));
+    setReadinessTasks(result.readinessTasks);
+    selectForPage("readinessTasks", "readinessTask", result.deliveryOrder.readiness_task_ids?.[0] || null);
+    antd.message.success(`交付完成，已触发 ${result.deliveryOrder.readiness_task_ids.length} 个运营准入任务`);
+  }
   return (
     <Layout className="ops-shell">
       <Sider className="ops-sider" width={232} collapsedWidth={60} collapsed={collapsed} trigger={null}>
@@ -2525,6 +2767,15 @@ function App() {
                   completeFleetOperationWork,
                   editFleetOperationPolicy,
                   runLongTermDemandForecastStrategy,
+                  createSupplyPlanFromForecast,
+                  confirmSupplyPlan,
+                  createProductionBatchFromSupplyPlan,
+                  startProductionBatch,
+                  completeProductionBatch,
+                  runFleetAllocationStrategy,
+                  createDeliveryOrderFromAllocationResult,
+                  startDeliveryOrder,
+                  completeDeliveryOrder,
                   assignWorker,
                   startCheck,
                   submitCheckResult,
@@ -2808,6 +3059,12 @@ function App() {
     taskPlanningResultSequence = 0;
     longTermDemandForecastRunSequence = 0;
     longTermDemandForecastResultSequence = 0;
+    supplyPlanSequence = 0;
+    productionBatchSequence = 0;
+    fleetAllocationRunSequence = 0;
+    fleetAllocationResultSequence = 0;
+    robotaxiDeliveryOrderSequence = 0;
+    producedRobotaxiSequence = 0;
     deploymentTaskSequence = 0;
     routeExecutionSequence = 0;
     deploymentRouteSequence = 0;
@@ -5114,10 +5371,17 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isTimedOperationPage = page === "timedOperations";
   const isDemandProfilePage = page === "demandProfiles";
   const isLongTermDemandForecastStrategyPage = page === "longTermDemandForecastStrategies";
+  const isLongTermDemandForecastPage = page === "longTermDemandForecasts";
+  const isSupplyPlanPage = page === "supplyPlans";
+  const isProductionBatchPage = page === "productionBatches";
+  const isFleetAllocationStrategyPage = page === "fleetAllocationStrategies";
+  const isFleetAllocationResultPage = page === "fleetAllocationResults";
+  const isRobotaxiDeliveryOrderPage = page === "robotaxiDeliveryOrders";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
+  const isSupplyDocumentPage = isSupplyPlanPage || isProductionBatchPage || isRobotaxiDeliveryOrderPage;
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
-  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isLongTermDemandForecastStrategyPage;
-  const hasEventPanel = isTaskOperationPage || isStrategyExecutionPanelPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
+  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isLongTermDemandForecastStrategyPage || isFleetAllocationStrategyPage;
+  const hasEventPanel = isTaskOperationPage || isSupplyDocumentPage || isStrategyExecutionPanelPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   if (!config || !objectType) {
@@ -5171,10 +5435,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     actionColumn,
   ] : columns;
-  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isLongTermDemandForecastStrategyPage ? createStrategyRunRows(rowsByPage.longTermDemandForecastRuns || [], displayRows, "forecast_strategy_id") : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isSupplyDocumentPage ? createLifecycleEventRows(displayRows, objectType, idField) : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isLongTermDemandForecastStrategyPage ? createStrategyRunRows(rowsByPage.longTermDemandForecastRuns || [], displayRows, "forecast_strategy_id") : isFleetAllocationStrategyPage ? createStrategyRunRows(rowsByPage.fleetAllocationRuns || [], displayRows, "fleet_allocation_strategy_id") : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const visibleEventRows = eventRows.slice(0, 300);
-  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isLongTermDemandForecastStrategyPage ? tableConfig.longTermDemandForecastRuns.columns : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isFleetOperationDispatchStrategyPage ? tableConfig.fleetOperationDispatchRuns.columns : isRobotaxiTaskPlanningStrategyPage ? tableConfig.robotaxiTaskPlanningRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isTripPage ? "event_id" : isLongTermDemandForecastStrategyPage ? "forecast_run_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isFleetOperationDispatchStrategyPage ? "fleet_operation_dispatch_run_id" : isRobotaxiTaskPlanningStrategyPage ? "robotaxi_task_planning_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isSupplyDocumentPage ? ["event_id", "occurred_at", "business_object_type", "business_object_id", "action_type", "result_type", "from_status", "to_status"] : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isLongTermDemandForecastStrategyPage ? tableConfig.longTermDemandForecastRuns.columns : isFleetAllocationStrategyPage ? tableConfig.fleetAllocationRuns.columns : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isFleetOperationDispatchStrategyPage ? tableConfig.fleetOperationDispatchRuns.columns : isRobotaxiTaskPlanningStrategyPage ? tableConfig.robotaxiTaskPlanningRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isSupplyDocumentPage ? "event_id" : isTripPage ? "event_id" : isLongTermDemandForecastStrategyPage ? "forecast_run_id" : isFleetAllocationStrategyPage ? "fleet_allocation_run_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isFleetOperationDispatchStrategyPage ? "fleet_operation_dispatch_run_id" : isRobotaxiTaskPlanningStrategyPage ? "robotaxi_task_planning_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   useEffect(() => {
     const node = tableSectionRef.current;
     if (!node) return undefined;
@@ -5569,6 +5833,60 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runLongTermDemandForecastStrategy(row)}>执行</RowActionButton>),
       };
     }
+    if (isLongTermDemandForecastPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 150,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.createSupplyPlanFromForecast(row)}>生成生产计划</RowActionButton>),
+      };
+    }
+    if (isSupplyPlanPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 260,
+        render: (_, row) => renderActionCell(row, renderSupplyPlanActions(row, actions)),
+      };
+    }
+    if (isProductionBatchPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 220,
+        render: (_, row) => renderActionCell(row, renderProductionBatchActions(row, actions)),
+      };
+    }
+    if (isFleetAllocationStrategyPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 120,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runFleetAllocationStrategy(row)}>执行</RowActionButton>),
+      };
+    }
+    if (isFleetAllocationResultPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 150,
+        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.createDeliveryOrderFromAllocationResult(row)}>生成交付单</RowActionButton>),
+      };
+    }
+    if (isRobotaxiDeliveryOrderPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 220,
+        render: (_, row) => renderActionCell(row, renderRobotaxiDeliveryOrderActions(row, actions)),
+      };
+    }
     if (isRobotaxiPage) {
       return {
         key: "actions",
@@ -5734,6 +6052,22 @@ function createFleetTaskEventRows(eventLogs = [], tasks = [], page = null) {
       return page && event.source_page === page;
     })
     .sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
+}
+
+function createLifecycleEventRows(rows = [], objectType, idField) {
+  return (rows || []).flatMap((row) => {
+    const history = Array.isArray(row.simulation_status_transition_history) ? row.simulation_status_transition_history : [];
+    return history.map((transition, index) => ({
+      event_id: `${row[idField] || objectType}-${transition.status_transition_id || index + 1}`,
+      occurred_at: transition.occurred_at || row.updated_at || row.created_at,
+      business_object_type: transition.business_object_type || objectType,
+      business_object_id: transition.business_object_id || row[idField],
+      action_type: transition.action_type,
+      result_type: transition.result_type,
+      from_status: transition.from_status,
+      to_status: transition.to_status,
+    }));
+  }).sort((left, right) => String(right.occurred_at || "").localeCompare(String(left.occurred_at || "")));
 }
 
 function createFleetOperationPolicyRunRows(policyRuns = [], policies = []) {
@@ -6831,6 +7165,36 @@ function renderViewDetailAction(row, actions) {
       查看详情
     </RowActionButton>
   );
+}
+
+function renderSupplyPlanActions(row, actions) {
+  if (row.plan_status === "DRAFT") {
+    return <RowActionButton onClick={() => actions.confirmSupplyPlan(row)}>确认计划</RowActionButton>;
+  }
+  if (row.plan_status === "CONFIRMED") {
+    return <RowActionButton onClick={() => actions.createProductionBatchFromSupplyPlan(row)}>生成生产批次</RowActionButton>;
+  }
+  return renderViewDetailAction(row, actions);
+}
+
+function renderProductionBatchActions(row, actions) {
+  if (row.batch_status === "PLANNED") {
+    return <RowActionButton onClick={() => actions.startProductionBatch(row)}>开始生产</RowActionButton>;
+  }
+  if (row.batch_status === "IN_PRODUCTION") {
+    return <RowActionButton onClick={() => actions.completeProductionBatch(row)}>生产完成</RowActionButton>;
+  }
+  return renderViewDetailAction(row, actions);
+}
+
+function renderRobotaxiDeliveryOrderActions(row, actions) {
+  if (row.delivery_status === "CREATED") {
+    return <RowActionButton onClick={() => actions.startDeliveryOrder(row)}>开始交付</RowActionButton>;
+  }
+  if (row.delivery_status === "IN_DELIVERY") {
+    return <RowActionButton onClick={() => actions.completeDeliveryOrder(row)}>交付完成</RowActionButton>;
+  }
+  return renderViewDetailAction(row, actions);
 }
 
 function renderReadinessActions(row, actions) {
@@ -9283,6 +9647,36 @@ function nextLongTermDemandForecastResultBaseId() {
   return `LDF-RES-${String(longTermDemandForecastResultSequence).padStart(4, "0")}`;
 }
 
+function nextSupplyPlanId() {
+  supplyPlanSequence += 1;
+  return `FPP-${String(supplyPlanSequence).padStart(4, "0")}`;
+}
+
+function nextProductionBatchId() {
+  productionBatchSequence += 1;
+  return `PB-${String(productionBatchSequence).padStart(4, "0")}`;
+}
+
+function nextFleetAllocationRunId() {
+  fleetAllocationRunSequence += 1;
+  return `FAR-${String(fleetAllocationRunSequence).padStart(4, "0")}`;
+}
+
+function nextFleetAllocationResultId() {
+  fleetAllocationResultSequence += 1;
+  return `FAR-RES-${String(fleetAllocationResultSequence).padStart(4, "0")}`;
+}
+
+function nextRobotaxiDeliveryOrderId() {
+  robotaxiDeliveryOrderSequence += 1;
+  return `RDO-${String(robotaxiDeliveryOrderSequence).padStart(4, "0")}`;
+}
+
+function nextProducedRobotaxiId() {
+  producedRobotaxiSequence += 1;
+  return `RTX-${String(producedRobotaxiSequence).padStart(3, "0")}`;
+}
+
 function createDefaultPageUiState() {
   return {
     filters: { ...defaultPageFilters },
@@ -9399,6 +9793,10 @@ function addWorkspacePage(pages, page) {
 function mergeCalculatedObjects(current = [], updates = [], idField) {
   const updateById = new Map((updates || []).map((item) => [item[idField], item]));
   return current.map((item) => updateById.get(item[idField]) || item);
+}
+
+function replaceCollectionItem(collection = [], idField, nextItem) {
+  return collection.map((item) => item[idField] === nextItem?.[idField] ? nextItem : item);
 }
 
 function loadRuntimeSnapshot(initialData) {
@@ -9534,6 +9932,11 @@ function loadRuntimeSnapshot(initialData) {
       longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || [],
       longTermDemandForecasts: snapshot.operationalData?.longTermDemandForecasts || initialData.longTermDemandForecasts || [],
       supplyPlans: snapshot.operationalData?.supplyPlans || initialData.supplyPlans || [],
+      productionBatches: snapshot.operationalData?.productionBatches || initialData.productionBatches || [],
+      fleetAllocationStrategies: snapshot.operationalData?.fleetAllocationStrategies || initialData.fleetAllocationStrategies || [],
+      fleetAllocationRuns: snapshot.operationalData?.fleetAllocationRuns || initialData.fleetAllocationRuns || [],
+      fleetAllocationResults: snapshot.operationalData?.fleetAllocationResults || initialData.fleetAllocationResults || [],
+      robotaxiDeliveryOrders: snapshot.operationalData?.robotaxiDeliveryOrders || initialData.robotaxiDeliveryOrders || [],
       supplyOrders: snapshot.operationalData?.supplyOrders || initialData.supplyOrders || [],
       dealerSupplies: snapshot.operationalData?.dealerSupplies || initialData.dealerSupplies || [],
       ownerSupplies: snapshot.operationalData?.ownerSupplies || initialData.ownerSupplies || [],
@@ -9561,6 +9964,12 @@ function loadRuntimeSnapshot(initialData) {
     taskPlanningResultSequence = deriveSequence(robotaxiTaskPlanningResults, "robotaxi_task_planning_result_id", "TPRS-");
     longTermDemandForecastRunSequence = deriveSequence(operationalData.longTermDemandForecastRuns || [], "forecast_run_id", "LDF-RUN-");
     longTermDemandForecastResultSequence = deriveSequence(operationalData.longTermDemandForecasts || [], "forecast_result_id", "LDF-RES-");
+    supplyPlanSequence = deriveSequence(operationalData.supplyPlans || [], "supply_plan_id", "FPP-");
+    productionBatchSequence = deriveSequence(operationalData.productionBatches || [], "production_batch_id", "PB-");
+    fleetAllocationRunSequence = deriveSequence(operationalData.fleetAllocationRuns || [], "fleet_allocation_run_id", "FAR-");
+    fleetAllocationResultSequence = deriveSequence(operationalData.fleetAllocationResults || [], "fleet_allocation_result_id", "FAR-RES-");
+    robotaxiDeliveryOrderSequence = deriveSequence(operationalData.robotaxiDeliveryOrders || [], "delivery_order_id", "RDO-");
+    producedRobotaxiSequence = deriveSequence(operationalData.robotaxis || [], "robotaxi_id", "RTX-");
     deploymentTaskSequence = deriveSequence(deploymentTasks, "task_id", "TASK-DP-");
     routeExecutionSequence = deriveSequence(routeExecutions, "route_execution_id", "REX-");
     routePlanningRunSequence = deriveSequence(routePlanningRuns, "route_planning_run_id", "RPR-");
@@ -9947,6 +10356,15 @@ function restoreRuntimeSequences(snapshot) {
   taskDispatchResultSequence = deriveSequence(snapshot.taskDispatchResults || [], "task_dispatch_result_id", "TDRS-");
   taskPlanningRunSequence = deriveSequence(snapshot.robotaxiTaskPlanningRuns || [], "robotaxi_task_planning_run_id", "TPR-");
   taskPlanningResultSequence = deriveSequence(snapshot.robotaxiTaskPlanningResults || [], "robotaxi_task_planning_result_id", "TPRS-");
+  const operationalData = snapshot.operationalData || {};
+  longTermDemandForecastRunSequence = deriveSequence(operationalData.longTermDemandForecastRuns || [], "forecast_run_id", "LDF-RUN-");
+  longTermDemandForecastResultSequence = deriveSequence(operationalData.longTermDemandForecasts || [], "forecast_result_id", "LDF-RES-");
+  supplyPlanSequence = deriveSequence(operationalData.supplyPlans || [], "supply_plan_id", "FPP-");
+  productionBatchSequence = deriveSequence(operationalData.productionBatches || [], "production_batch_id", "PB-");
+  fleetAllocationRunSequence = deriveSequence(operationalData.fleetAllocationRuns || [], "fleet_allocation_run_id", "FAR-");
+  fleetAllocationResultSequence = deriveSequence(operationalData.fleetAllocationResults || [], "fleet_allocation_result_id", "FAR-RES-");
+  robotaxiDeliveryOrderSequence = deriveSequence(operationalData.robotaxiDeliveryOrders || [], "delivery_order_id", "RDO-");
+  producedRobotaxiSequence = deriveSequence(operationalData.robotaxis || [], "robotaxi_id", "RTX-");
   deploymentTaskSequence = deriveSequence(snapshot.deploymentTasks || [], "task_id", "TASK-DP-");
   routeExecutionSequence = deriveSequence(snapshot.routeExecutions || [], "route_execution_id", "REX-");
   routePlanningRunSequence = deriveSequence(snapshot.routePlanningRuns || [], "route_planning_run_id", "RPR-");

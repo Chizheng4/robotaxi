@@ -2,11 +2,11 @@
 
 当前大版本：v041 供给端能力建设。
 
-当前状态：执行中。v041 从经营规划与供给端业务底座开始，先收敛经营目标、需求画像、供给生产画像、长期需求预测，再进入自有生产、车队分配、交付、运营准入和 Robotaxi 资产进入运营的闭环。
+当前状态：暂无执行中大版本计划。v041.2 经营规划到供应执行自动化计划已完成并归档。
 
-当前自动化执行计划：`doc/common/current-iteration/major/v041.2-business-planning-supply-auto-execution-plan.md`
+最近完成自动化执行计划：`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
 
-当前执行指针：v041.2.2 计划收口。v041.2.1 已完成并提交 tag，后续按自动执行计划推进，不再把大版本执行队列只散写在本入口文件中。
+最新完成版本：v041.2.7 交付到运营准入回归。v041.2.1 到 v041.2.7 已完成并提交 tag。
 
 最近完成大版本：v040 Robotaxi 运维状态治理与任务优先级调度。
 
@@ -54,10 +54,10 @@
 2. 大版本计划需要明确对象、状态机、服务边界、字段字典、前端入口、验证合同和模拟运行边界；
 3. 计划版本先提交，再按计划拆分小版本迭代，避免菜单、对象、服务和模拟边界混在一次修改中。
 
-## v041.2 经营规划到供应执行自动化大版本
+## v041.2 经营规划到供应执行自动化大版本（已完成）
 
-正式计划文件：`doc/common/current-iteration/major/v041.2-business-planning-supply-auto-execution-plan.md`
+历史计划文件：`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
 
 v041.2 目标是把经营规划层从菜单入口升级为可复盘的业务对象闭环，并逐步实现自有生产供给执行主路径：车队生产计划、生产批次、车队分配、Robotaxi 交付、运营准入。
 
-本入口文件只记录当前大版本状态和计划文件位置；详细子版本队列、验收标准、暂停条件和执行指针以正式计划文件为准。
+本入口文件只记录当前大版本状态和历史计划文件位置；v041.2 子版本队列、验收标准和完成记录以历史计划文件为准。
