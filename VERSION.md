@@ -1,4 +1,13 @@
 
+## v041.1.3
+
+核心：收敛需求画像正式设计文档。
+
+- 将 `doc/02-operation-zone/04-spatial-business-profile-design.md` 重命名为 `doc/02-operation-zone/04-demand-profile-design.md`，文档标题统一为“需求画像设计”。
+- 将原 `05-calculation.md` 的有效计算逻辑合并进“需求画像设计”，删除独立计算草稿，避免形成第二套方案来源。
+- 文档内容对齐当前 v041.1 实现：统一 `DemandProfile`、Place -> ServiceArea -> Zone 整体重算、Zone 汇总、旧画像兼容、真实计算时间和未来模拟时间边界。
+- 修正空间模型升级文档中的旧名称引用，明确经营画像信息归入需求画像设计。
+
 ## v041.1.2
 
 核心：修正需求画像计算时间的业务边界。
