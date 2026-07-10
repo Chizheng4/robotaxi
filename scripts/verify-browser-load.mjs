@@ -93,6 +93,33 @@ try {
   await send("Page.navigate", { url: targetUrl });
   await delay(5000);
 
+  const entryResult = await send("Runtime.evaluate", {
+    expression: `JSON.stringify({
+      hasLogin: Boolean(document.querySelector(".platform-login-shell")),
+      hasWorkbench: Boolean(document.querySelector(".workbench"))
+    })`,
+    returnByValue: true,
+  });
+  const entryState = JSON.parse(entryResult.result?.result?.value || "{}");
+  assert(entryState.hasLogin || entryState.hasWorkbench, `页面既未渲染登录入口也未渲染工作台：${JSON.stringify(entryState)}`);
+  if (entryState.hasLogin) {
+    const loginResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const input = document.querySelector(".platform-login-form input");
+        const form = document.querySelector(".platform-login-form");
+        if (!input || !form) return { submitted: false };
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        valueSetter?.call(input, "金星");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        form.requestSubmit();
+        return { submitted: true };
+      })()`,
+      returnByValue: true,
+    });
+    assert(loginResult.result?.result?.value?.submitted, "登录入口缺少可提交的输入框或表单");
+    await delay(2500);
+  }
+
   const result = await send("Runtime.evaluate", {
     expression: `JSON.stringify({
       title: document.title,

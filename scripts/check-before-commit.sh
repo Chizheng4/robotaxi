@@ -51,6 +51,9 @@ node --check src/main.bundle.js
 node --check scripts/build-github-pages.mjs
 node --check scripts/verify-github-pages-build.mjs
 node --check scripts/serve-github-pages-preview.mjs
+node --check scripts/generate-release-history.mjs
+node --check src/ui/platformExperience.js
+node --check src/ui/releaseHistory.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js
@@ -90,6 +93,7 @@ node scripts/verify-simulation-strategy-execution.mjs
 node scripts/verify-status-workflow-contract.mjs
 node scripts/verify-route-planning-strategy-registry.mjs
 node scripts/verify-field-display-contract.mjs
+node scripts/generate-release-history.mjs --check
 node scripts/verify-current-iteration-archive.mjs
 node scripts/verify-automated-plan-closure.mjs
 node scripts/verify-business-action-source-contract.mjs

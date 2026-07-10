@@ -55,6 +55,8 @@ let taskDispatchStrategyService;
 let robotaxiTaskPlanningService;
 let businessPlanningService;
 let supplyDemandBalanceService;
+let platformExperience;
+let releaseHistory = [];
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
 let fleetOperationPolicyRunSequence = 0;
@@ -1265,7 +1267,112 @@ function normalizeSupplyProductionProfileDraft(draft) {
   }));
 }
 
-function App() {
+function PlatformEntry() {
+  const [accessSession, setAccessSession] = useState(() => platformExperience.readAccessSession());
+
+  useEffect(() => {
+    if (!accessSession) return undefined;
+    const remainingMs = Math.max(0, accessSession.expires_at - Date.now());
+    const timeoutId = window.setTimeout(() => {
+      platformExperience.clearAccessSession();
+      setAccessSession(null);
+    }, Math.min(remainingMs, 2_147_483_647));
+    const handleStorage = (event) => {
+      if (event.key !== platformExperience.getAccessSessionStorageKey()) return;
+      setAccessSession(platformExperience.readAccessSession());
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [accessSession]);
+
+  function enterPlatform(userName) {
+    const result = platformExperience.createAccessSession(userName);
+    if (result.succeeded) setAccessSession(result.session);
+    return result;
+  }
+
+  function exitPlatform() {
+    platformExperience.clearAccessSession();
+    setAccessSession(null);
+  }
+
+  if (!accessSession) return <PlatformLogin onEnter={enterPlatform} />;
+  return <App currentUser={accessSession.user_name} onLogout={exitPlatform} />;
+}
+
+function PlatformLogin({ onEnter }) {
+  const [userName, setUserName] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  function attemptLogin(value) {
+    const result = onEnter(value);
+    setErrorMessage(result.succeeded ? "" : result.reason);
+  }
+
+  function submitLogin(event) {
+    event.preventDefault();
+    attemptLogin(userName);
+  }
+
+  return (
+    <main className="platform-login-shell">
+      <section className="platform-login-panel" aria-labelledby="platform-login-title">
+        <div className="platform-login-brand">
+          <h1 id="platform-login-title">Robotaxi 运营平台</h1>
+        </div>
+        <form className="platform-login-form" onSubmit={submitLogin}>
+          <input
+            autoFocus
+            aria-label="登录名称"
+            className={errorMessage ? "platform-login-input error" : "platform-login-input"}
+            value={userName}
+            placeholder={`请输入：${platformExperience.getDemoUserName()}`}
+            onChange={(event) => {
+              setUserName(event.target.value);
+              if (errorMessage) setErrorMessage("");
+            }}
+          />
+          <button className="platform-login-submit" type="submit">进入</button>
+        </form>
+        <div className={errorMessage ? "platform-login-feedback visible" : "platform-login-feedback"} role="status">
+          {errorMessage || "登录名称校验"}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function ReleaseHistoryPanel({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <section className="release-history-panel" role="dialog" aria-label="迭代记录">
+      <header className="release-history-header">
+        <div>
+          <strong>迭代记录</strong>
+          <span>{releaseHistory.length} 个稳定版本</span>
+        </div>
+        <Button type="text" size="small" aria-label="关闭迭代记录" onClick={onClose}>×</Button>
+      </header>
+      <div className="release-history-scroll">
+        {releaseHistory.map((release, index) => (
+          <article className={index === 0 ? "release-history-item current" : "release-history-item"} key={release.version}>
+            <div className="release-history-item-heading">
+              <strong>{release.version}</strong>
+              {index === 0 && <span>当前版本</span>}
+            </div>
+            <p>{release.title}</p>
+            {release.changes[0] && <small>{release.changes[0]}</small>}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function App({ currentUser, onLogout }) {
   const initialData = useMemo(() => {
     const baseData = {
       ...initializeMapSpace(),
@@ -1388,6 +1495,7 @@ function App() {
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
+  const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [openMenuKeys, setOpenMenuKeys] = useState(getOpenKeysForPage(initialRuntime.activePage));
   const [workspacePages, setWorkspacePages] = useState(initialRuntime.workspacePages);
   const [detailCollapsedByPage, setDetailCollapsedByPage] = useState(initialRuntime.detailCollapsedByPage);
@@ -1431,7 +1539,16 @@ function App() {
     applyMobileWorkspace(mobileViewport);
     mobileViewport.addEventListener?.("change", applyMobileWorkspace);
     return () => mobileViewport.removeEventListener?.("change", applyMobileWorkspace);
-  }, [activePage]);
+  }, [activePage, runtimeHydrated]);
+
+  useEffect(() => {
+    if (!releaseHistoryOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setReleaseHistoryOpen(false);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [releaseHistoryOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3124,23 +3241,38 @@ function App() {
             <Text strong>{topTitle}</Text>
             {topDescription && <Text type="secondary">{topDescription}</Text>}
           </div>
-          <div className="top-strip-metrics">
-            {showConsoleSummary ? (
-              <>
-                <Tag bordered={false}>{data.maps[0].grid_cols} x {data.maps[0].grid_rows} / {data.maps[0].cell_size_m}m</Tag>
-                <Tag bordered={false}>地图 {data.maps.length}</Tag>
-                <Tag bordered={false}>网格 {data.cells.length}</Tag>
-                <Tag bordered={false}>Robotaxi {data.robotaxis.length}</Tag>
-                <Tag bordered={false}>作业人员 {data.workers.length}</Tag>
-                <Tag bordered={false} color={failedCount === 0 ? "success" : "error"}>
-                  校验 {failedCount === 0 ? "全部通过" : `${failedCount} 项异常`}
-                </Tag>
-              </>
-            ) : (
-              <Tag bordered={false}>记录 {activeRows.length}</Tag>
-            )}
-            <Button size="small" onClick={resetRuntime}>重置模拟数据</Button>
+          <div className="top-strip-tools">
+            <div className="top-strip-metrics">
+              {showConsoleSummary ? (
+                <>
+                  <Tag bordered={false}>{data.maps[0].grid_cols} x {data.maps[0].grid_rows} / {data.maps[0].cell_size_m}m</Tag>
+                  <Tag bordered={false}>地图 {data.maps.length}</Tag>
+                  <Tag bordered={false}>网格 {data.cells.length}</Tag>
+                  <Tag bordered={false}>Robotaxi {data.robotaxis.length}</Tag>
+                  <Tag bordered={false}>作业人员 {data.workers.length}</Tag>
+                  <Tag bordered={false} color={failedCount === 0 ? "success" : "error"}>
+                    校验 {failedCount === 0 ? "全部通过" : `${failedCount} 项异常`}
+                  </Tag>
+                </>
+              ) : (
+                <Tag bordered={false}>记录 {activeRows.length}</Tag>
+              )}
+              <Button size="small" onClick={resetRuntime}>重置模拟数据</Button>
+            </div>
+            <div className="platform-utilities" aria-label="平台工具">
+              <Button
+                type="text"
+                size="small"
+                aria-expanded={releaseHistoryOpen}
+                onClick={() => setReleaseHistoryOpen((current) => !current)}
+              >
+                迭代记录
+              </Button>
+              <span className="platform-current-user" aria-label={`当前登录用户：${currentUser}`}>{currentUser}</span>
+              <Button type="text" size="small" onClick={onLogout}>退出</Button>
+            </div>
           </div>
+          <ReleaseHistoryPanel open={releaseHistoryOpen} onClose={() => setReleaseHistoryOpen(false)} />
         </div>
 
         <WorkspaceBar
@@ -8820,6 +8952,8 @@ async function bootstrap() {
 		    supplyDemandBalanceServiceModule,
 		    supplyManagementInitializationModule,
 		    spatialBusinessProfileInitializationModule,
+		    platformExperienceModule,
+		    releaseHistoryModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
@@ -8878,6 +9012,8 @@ async function bootstrap() {
 		    import("./services/supplyDemandBalanceService.js?v=20260710-v041-2-13"),
 		    import("./data/supplyManagementInitialization.js"),
 		    import("./data/spatialBusinessProfileInitialization.js"),
+		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
+		    import("./ui/releaseHistory.js?v=20260710-v041-2-15"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -8939,6 +9075,8 @@ async function bootstrap() {
 		  normalizeDemandProfiles = spatialBusinessProfileInitializationModule.normalizeDemandProfiles;
 		  splitDemandProfilesByTarget = spatialBusinessProfileInitializationModule.splitDemandProfilesByTarget;
 		  updateDemandProfileConfig = spatialBusinessProfileInitializationModule.updateDemandProfileConfig;
+		  platformExperience = platformExperienceModule;
+		  releaseHistory = releaseHistoryModule.releaseHistory;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {
@@ -8967,7 +9105,7 @@ async function bootstrap() {
     });
   }
 
-	  ReactDOM.createRoot(document.querySelector("#app")).render(<App />);
+	  ReactDOM.createRoot(document.querySelector("#app")).render(<PlatformEntry />);
 }
 
 bootstrap();

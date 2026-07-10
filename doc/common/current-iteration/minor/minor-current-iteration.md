@@ -2,11 +2,11 @@
 
 ## 状态
 
-暂无独立小迭代执行中。
+当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v041.2.14-github-pages-public-demo.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v041.2.15-platform-visual-access-experience.md`。
 
-最新完成版本：v041.2.14 GitHub Pages 免费公开演示发布能力。
+最新完成版本：v041.2.15 平台视觉与演示访问体验。
 
 当前执行指针：暂无。
 
@@ -23,4 +23,4 @@
 
 ## 当前输入
 
-暂无。
+当前暂无输入。
