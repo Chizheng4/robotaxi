@@ -2,3 +2,6 @@
 
 # Robotaxi server logs
 .robotaxi-server.log
+
+# Generated production site
+dist/

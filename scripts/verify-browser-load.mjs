@@ -4,6 +4,9 @@ import { spawn } from "node:child_process";
 
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const targetUrl = process.env.ROBOTAXI_BROWSER_VERIFY_URL || "http://127.0.0.1:4173/?verifyBrowserLoad=1";
+const viewport = process.env.ROBOTAXI_BROWSER_VIEWPORT || "1280,720";
+const mobileAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MOBILE === "1";
+const [viewportWidth, viewportHeight] = viewport.split(",").map(Number);
 
 assert(fs.existsSync(chromePath), "未找到 Google Chrome，无法执行真实浏览器白屏检查");
 
@@ -14,7 +17,7 @@ const chrome = spawn(chromePath, [
   "--hide-scrollbars",
   "--remote-debugging-port=0",
   `--user-data-dir=/private/tmp/robotaxi-browser-load-${Date.now()}`,
-  "--window-size=1280,720",
+  `--window-size=${viewport}`,
   targetUrl,
 ], { stdio: ["ignore", "ignore", "pipe"] });
 
@@ -79,6 +82,14 @@ try {
   await send("Runtime.enable");
   await send("Log.enable");
   await send("Page.enable");
+  if (mobileAssertionEnabled) {
+    await send("Emulation.setDeviceMetricsOverride", {
+      width: viewportWidth,
+      height: viewportHeight,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+  }
   await send("Page.navigate", { url: targetUrl });
   await delay(5000);
 
@@ -87,6 +98,9 @@ try {
       title: document.title,
       hasApp: Boolean(document.querySelector("#app")),
       hasWorkbench: Boolean(document.querySelector(".workbench")),
+      viewportWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      siderWidth: document.querySelector(".ops-sider")?.getBoundingClientRect().width || 0,
       bodyText: document.body.innerText.slice(0, 500)
     })`,
     returnByValue: true,
@@ -97,6 +111,11 @@ try {
   assert(pageState.hasApp, `页面缺少 #app 容器：${JSON.stringify(pageState)}`);
   assert(pageState.hasWorkbench, `页面未渲染工作台主体，可能白屏：${JSON.stringify(pageState)}\n${exceptions.join("\n")}\n${messages.join("\n")}`);
   assert.equal(exceptions.length, 0, `浏览器运行时异常：${exceptions.join("\n")}`);
+  if (mobileAssertionEnabled) {
+    assert(pageState.viewportWidth <= 480, `手机验证视口未生效：${JSON.stringify(pageState)}`);
+    assert(pageState.siderWidth <= 64, `手机首屏菜单未收起：${JSON.stringify(pageState)}`);
+    assert(pageState.documentWidth <= pageState.viewportWidth + 1, `手机页面出现全局横向溢出：${JSON.stringify(pageState)}`);
+  }
   console.log("真实浏览器加载验证通过");
 } finally {
   chrome.kill("SIGTERM");

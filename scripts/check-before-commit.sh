@@ -27,6 +27,8 @@ test -f src/main.bundle.js || fail "缺少 src/main.bundle.js"
 test -f vendor/babel.min.js || fail "缺少 vendor/babel.min.js"
 test -f VERSION.md || fail "缺少 VERSION.md"
 test -f scripts/verify-server-readiness.py || fail "缺少启动就绪检查脚本"
+test -f scripts/build-github-pages.mjs || fail "缺少 GitHub Pages 生产构建脚本"
+test -f .github/workflows/deploy-pages.yml || fail "缺少 GitHub Pages 自动部署工作流"
 
 print_step "检查生成后的 bundle 是否与源码一致"
 TMP_BUNDLE="$(mktemp "${TMPDIR:-/tmp}/robotaxi-main-bundle.XXXXXX.js")"
@@ -46,6 +48,9 @@ rm -f "$TMP_BUNDLE"
 
 print_step "检查 JavaScript 语法"
 node --check src/main.bundle.js
+node --check scripts/build-github-pages.mjs
+node --check scripts/verify-github-pages-build.mjs
+node --check scripts/serve-github-pages-preview.mjs
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js
@@ -135,6 +140,8 @@ node scripts/verify-v040-30-failure-retirement-closure.mjs
 node scripts/verify-v041-1-demand-profile-unified.mjs
 node scripts/verify-v041-2-business-planning.mjs
 node scripts/verify-v041-2-13-supply-demand-balance.mjs
+node scripts/build-github-pages.mjs
+node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
 
 if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then

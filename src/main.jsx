@@ -1421,6 +1421,19 @@ function App() {
   const autoMetricCalculationRunIdsRef = useRef(new Set());
 
   useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mobileViewport = window.matchMedia("(max-width: 767px)");
+    const applyMobileWorkspace = (event) => {
+      if (!event.matches) return;
+      setCollapsed(true);
+      setDetailCollapsedByPage((current) => ({ ...current, [activePage]: true }));
+    };
+    applyMobileWorkspace(mobileViewport);
+    mobileViewport.addEventListener?.("change", applyMobileWorkspace);
+    return () => mobileViewport.removeEventListener?.("change", applyMobileWorkspace);
+  }, [activePage]);
+
+  useEffect(() => {
     let cancelled = false;
     loadPersistedRuntimeSnapshot().then((snapshot) => {
       if (cancelled || !snapshot) return;
@@ -3502,6 +3515,9 @@ function App() {
   function handleMenuClick(key) {
     if (!isRenderablePage(key)) return;
     activateWorkspacePage(key);
+    if (typeof window !== "undefined" && window.matchMedia?.("(max-width: 767px)").matches) {
+      setCollapsed(true);
+    }
   }
 
   function handleMenuOpenChange(keys) {

@@ -4,11 +4,9 @@
 
 暂无独立小迭代执行中。
 
-最近主线已完成 v041.2 大版本自动执行计划：
+最近完成小版本：`doc/common/iteration-history/minor/v041.2.14-github-pages-public-demo.md`。
 
-`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
-
-最新完成版本：v041.2.7 交付到运营准入回归。
+最新完成版本：v041.2.14 GitHub Pages 免费公开演示发布能力。
 
 当前执行指针：暂无。
 
