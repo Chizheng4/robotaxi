@@ -808,16 +808,6 @@
   stroke-width: 0.16;
 }
 
-.robotaxi-map-cluster-count {
-  fill: #ffffff;
-  stroke: #245fba;
-  stroke-width: 0.08;
-  paint-order: stroke;
-  pointer-events: none;
-  font-size: 0.54px;
-  font-weight: 700;
-}
-
 .robotaxi-map-image {
   filter: drop-shadow(0 0.08px 0.1px rgba(28, 45, 61, 0.35));
   pointer-events: none;
@@ -4170,4 +4160,74 @@ body {
   .platform-login-submit {
     min-width: 0;
   }
+}
+
+/* v041.3.1 interaction and lightweight map projection refinements */
+.platform-login-brand h1 {
+  text-align: center;
+}
+
+.platform-login-form {
+  gap: 6px;
+}
+
+.platform-login-input {
+  text-align: center;
+  caret-color: #5d7890;
+}
+
+.platform-login-submit {
+  border-color: #c8d4df;
+  color: #405a71;
+  background: #e9eff4;
+}
+
+.platform-login-submit:hover,
+.platform-login-submit:focus-visible {
+  border-color: #aebfce;
+  color: #294a65;
+  background: #e1e9f0;
+}
+
+.system-brand.collapsed {
+  gap: 2px;
+  padding-inline: 4px;
+}
+
+.system-brand.collapsed .brand-title-button.ant-btn {
+  width: 22px;
+  min-width: 22px;
+  flex: none;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.menu-group-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.ops-menu.ant-menu-inline-collapsed > .ant-menu-item,
+.ops-menu.ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title {
+  width: 46px;
+  margin-inline: 0;
+  padding-inline: 14px !important;
+}
+
+.ops-menu.ant-menu-inline-collapsed .menu-group-icon {
+  margin-inline: 0 !important;
+}
+
+.top-strip-metric {
+  color: #718296;
+  font-size: var(--font-xs);
+  font-weight: 400;
+  white-space: nowrap;
 }

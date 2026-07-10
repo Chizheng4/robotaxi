@@ -53,6 +53,7 @@ node --check scripts/verify-github-pages-build.mjs
 node --check scripts/serve-github-pages-preview.mjs
 node --check scripts/generate-release-history.mjs
 node --check src/ui/platformExperience.js
+node --check src/ui/robotaxiMapProjection.js
 node --check src/ui/releaseHistory.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
@@ -144,6 +145,7 @@ node scripts/verify-v040-30-failure-retirement-closure.mjs
 node scripts/verify-v041-1-demand-profile-unified.mjs
 node scripts/verify-v041-2-business-planning.mjs
 node scripts/verify-v041-2-13-supply-demand-balance.mjs
+node scripts/verify-v041-3-1-map-projection.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

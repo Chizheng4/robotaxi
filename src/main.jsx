@@ -56,6 +56,7 @@ let robotaxiTaskPlanningService;
 let businessPlanningService;
 let supplyDemandBalanceService;
 let platformExperience;
+let robotaxiMapProjection;
 let releaseHistory = [];
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
@@ -338,6 +339,20 @@ const pageGroups = [
     ],
   },
 ];
+
+const menuGroupIcons = {
+  console: "⌁",
+  businessAnalysis: "◫",
+  financialManagement: "¥",
+  businessPlanning: "◇",
+  customer: "○",
+  supplyManagement: "⇧",
+  robotaxi: "R",
+  operationsManagement: "↔",
+  operationOrganization: "⊙",
+  space: "⌖",
+  simulation: "▷",
+};
 
 const hiddenWorkspacePages = new Set([
   "simulationEvents",
@@ -1334,6 +1349,11 @@ function PlatformLogin({ onEnter }) {
               setUserName(event.target.value);
               if (errorMessage) setErrorMessage("");
             }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              attemptLogin(event.currentTarget.value);
+            }}
           />
           <button className="platform-login-submit" type="submit">进入</button>
         </form>
@@ -1859,14 +1879,15 @@ function App({ currentUser, onLogout }) {
   }, [allFleetOperationTasks, costRecords, data, deploymentTasks, readinessTasks, routeExecutions, rowsByPage, selected, simulationPolicies, simulationRuns, simulationEvents, taskEventLogs, timedOperations, validations]);
 
   const menuItems = pageGroups.map((group) => {
-    if (group.key === "console") return { key: "console", label: "运营中控台" };
+    const icon = <span className="menu-group-icon" aria-hidden="true">{menuGroupIcons[group.key] || "·"}</span>;
+    if (group.key === "console") return { key: "console", label: "运营中控台", icon };
     return {
       key: group.key,
       label: group.label,
+      icon,
       children: createMenuItems(group.children || []),
     };
   });
-  const failedCount = validations.filter((item) => item.result !== "PASS").length;
   const activeConfig = tableConfig[activePage];
   const activeObjectType = pageObjectType[activePage];
   const detailSelectedObject = activePage === "console"
@@ -3219,7 +3240,7 @@ function App({ currentUser, onLogout }) {
     <Layout className="ops-shell">
       <header className="global-system-bar">
         <div className={collapsed ? "system-brand collapsed" : "system-brand"}>
-          <Button className="brand-title-button" type="text" onClick={goToConsole}>{collapsed ? "RT" : "Robotaxi 运营平台"}</Button>
+          <Button className="brand-title-button" type="text" onClick={goToConsole}>{collapsed ? "R" : "Robotaxi 运营平台"}</Button>
           <Button type="text" size="small" aria-label={collapsed ? "展开菜单" : "收起菜单"} onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? "≡" : "‹"}
           </Button>
@@ -3233,14 +3254,11 @@ function App({ currentUser, onLogout }) {
             <div className="top-strip-metrics">
               {showConsoleSummary ? (
                 <>
-                  <Tag bordered={false}>{data.maps[0].grid_cols} x {data.maps[0].grid_rows} / {data.maps[0].cell_size_m}m</Tag>
-                  <Tag bordered={false}>地图 {data.maps.length}</Tag>
-                  <Tag bordered={false}>网格 {data.cells.length}</Tag>
-                  <Tag bordered={false}>Robotaxi {data.robotaxis.length}</Tag>
-                  <Tag bordered={false}>作业人员 {data.workers.length}</Tag>
-                  <Tag bordered={false} color={failedCount === 0 ? "success" : "error"}>
-                    校验 {failedCount === 0 ? "全部通过" : `${failedCount} 项异常`}
-                  </Tag>
+                  <span className="top-strip-metric">{data.maps[0].grid_cols} x {data.maps[0].grid_rows} / {data.maps[0].cell_size_m}m</span>
+                  <span className="top-strip-metric">地图 {data.maps.length}</span>
+                  <span className="top-strip-metric">网格 {data.cells.length}</span>
+                  <span className="top-strip-metric">Robotaxi {data.robotaxis.length}</span>
+                  <span className="top-strip-metric">作业人员 {data.workers.length}</span>
                 </>
               ) : (
                 <Tag bordered={false}>记录 {activeRows.length}</Tag>
@@ -3285,6 +3303,7 @@ function App({ currentUser, onLogout }) {
         <Sider className="ops-sider" width={200} collapsedWidth={60} collapsed={collapsed} trigger={null}>
           <Menu
             mode="inline"
+            inlineCollapsed={collapsed}
             className="ops-menu"
             selectedKeys={[activePage]}
             openKeys={openMenuKeys}
@@ -7491,33 +7510,27 @@ function RoadNodes({ roadNodes, selected }) {
 }
 
 function Robotaxis({ robotaxis, selected, onSelect }) {
-  const groups = [...robotaxis.reduce((map, item) => {
-    if (!item.current_cell_id) return map;
-    const group = map.get(item.current_cell_id) || [];
-    group.push(item);
-    map.set(item.current_cell_id, group);
-    return map;
-  }, new Map()).entries()];
+  const projections = useMemo(
+    () => robotaxiMapProjection.createRobotaxiMapProjections(robotaxis),
+    [robotaxis],
+  );
   return (
     <g className="robotaxi-map-layer">
-      {groups.map(([cellId, items]) => {
-        const selectedItem = selected?.type === "robotaxi"
-          ? items.find((item) => item.robotaxi_id === selected.id)
-          : null;
-        const item = selectedItem || items[0];
+      {projections.map(({ vehicle: item, cellId, offsetX, offsetY }) => {
         const { row, col } = parseCellId(cellId);
-        const active = Boolean(selectedItem);
+        const centerX = col + 0.5 + offsetX;
+        const centerY = row + 0.5 + offsetY;
+        const active = selected?.type === "robotaxi" && selected.id === item.robotaxi_id;
         const batteryPercent = Number(item.battery_percent || 0);
         return (
           <g
             className={`robotaxi-map-object status-${getStatusTone(item.availability_status)}`}
             data-active={active}
-            key={cellId}
+            data-cell-id={cellId}
+            key={item.robotaxi_id}
             role="button"
             tabIndex="0"
-            aria-label={items.length > 1
-              ? `${cellId} 共 ${items.length} 台 Robotaxi，当前显示 ${item.robotaxi_id}`
-              : `${item.robotaxi_id}，${getDisplayValue(item.availability_status)}，当前电量 ${batteryPercent.toFixed(0)}%`}
+            aria-label={`${item.robotaxi_id}，${getDisplayValue(item.availability_status)}，当前位置 ${cellId}，当前电量 ${batteryPercent.toFixed(0)}%`}
             onClick={(event) => {
               event.stopPropagation();
               onSelect("robotaxi", item.robotaxi_id);
@@ -7528,24 +7541,19 @@ function Robotaxis({ robotaxis, selected, onSelect }) {
               onSelect("robotaxi", item.robotaxi_id);
             }}
           >
-            <circle className="robotaxi-map-halo" cx={col + 0.5} cy={row + 0.5} r="1.38" />
+            <circle className="robotaxi-map-halo" cx={centerX} cy={centerY} r="0.48" />
             <image
               className="robotaxi-map-image"
               href="./src/assets/robotaxi-map-marker.png"
-              x={col - 0.45}
-              y={row - 0.74}
-              width="1.9"
-              height="2.48"
+              x={centerX - 0.35}
+              y={centerY - 0.46}
+              width="0.7"
+              height="0.92"
               preserveAspectRatio="xMidYMid meet"
             />
-            <text className="robotaxi-map-label" x={col + 0.5} y={row - 1.02} textAnchor="middle">
-              {items.length > 1 ? `${items.length} 台 · ${cellId}` : `${item.robotaxi_id} · ${batteryPercent.toFixed(0)}%`}
+            <text className="robotaxi-map-label" x={centerX} y={centerY - 0.58} textAnchor="middle">
+              {item.robotaxi_id} · {batteryPercent.toFixed(0)}%
             </text>
-            {items.length > 1 && (
-              <text className="robotaxi-map-cluster-count" x={col + 1.18} y={row - 0.18} textAnchor="middle">
-                {items.length}
-              </text>
-            )}
           </g>
         );
       })}
@@ -9076,6 +9084,7 @@ async function bootstrap() {
 		    supplyManagementInitializationModule,
 		    spatialBusinessProfileInitializationModule,
 		    platformExperienceModule,
+		    robotaxiMapProjectionModule,
 		    releaseHistoryModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
@@ -9136,7 +9145,8 @@ async function bootstrap() {
 		    import("./data/supplyManagementInitialization.js"),
 		    import("./data/spatialBusinessProfileInitialization.js"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
-		    import("./ui/releaseHistory.js?v=20260710-v041-3-0"),
+		    import("./ui/robotaxiMapProjection.js?v=20260710-v041-3-1"),
+		    import("./ui/releaseHistory.js?v=20260710-v041-3-1"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -9199,6 +9209,7 @@ async function bootstrap() {
 		  splitDemandProfilesByTarget = spatialBusinessProfileInitializationModule.splitDemandProfilesByTarget;
 		  updateDemandProfileConfig = spatialBusinessProfileInitializationModule.updateDemandProfileConfig;
 		  platformExperience = platformExperienceModule;
+		  robotaxiMapProjection = robotaxiMapProjectionModule;
 		  releaseHistory = releaseHistoryModule.releaseHistory;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine

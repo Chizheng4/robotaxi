@@ -1,6 +1,16 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v041.3.1",
+    "title": "优化登录交互、折叠菜单和中控台全量车辆地图投影",
+    "changes": [
+      "登录页标题、输入内容和光标统一居中，输入框与按钮间距收紧，进入按钮使用接近平台背景的轻量灰蓝色。",
+      "登录输入明确支持回车提交，继续与鼠标点击复用同一访问会话服务和校验逻辑。",
+      "折叠菜单接入真正的 `inlineCollapsed` 模式，一级菜单使用统一图标并通过悬停显示完整中文；顶部折叠品牌不再裁切。",
+      "中控台空间规模和对象数量与地图说明统一为 12px，移除常态“校验全部通过”信息。"
+    ]
+  },
+  {
     "version": "v041.3.0",
     "title": "将平台视觉升级为面向真实运营对象的 Autonomous Mobility Operating System",
     "changes": [
@@ -570,14 +580,6 @@ export const releaseHistory = [
       "补齐运维调度策略、执行、结果在运行态恢复、持久化和序列恢复中的默认结构。",
       "修复 Fleet Operation 路径推进和到达确认函数被错误嵌套导致的运行时动作不可用风险。",
       "新增 v039 运行态恢复合同验证，并纳入提交前检查。"
-    ]
-  },
-  {
-    "version": "v039.4",
-    "title": "v039 大版本归档收口",
-    "changes": [
-      "大版本计划 v039-auto-execution-plan.md 已归档至历史。",
-      "当前 major 入口恢复为待定。"
     ]
   }
 ];
