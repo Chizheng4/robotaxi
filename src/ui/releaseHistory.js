@@ -1,6 +1,16 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v041.2.16",
+    "title": "收敛全局导航宽度并重组顶部平台工具",
+    "changes": [
+      "左侧导航按现有菜单层级和最长文案由 232px 收敛为 200px，减少无效留白，同时保留完整三级缩进和手机展开能力。",
+      "顶部工具重新划分为页面记录与重置、最新版本、登录用户三组，统一字号、字重、间距和 28px 控件高度。",
+      "迭代记录入口直接显示最新版本号；退出操作收纳到“金星”账户展开菜单中，减少常驻占用并明确操作关系。",
+      "保持业务页面、菜单层级、表格、详情、运行态和模拟运行逻辑不变，并验证版本浮层与账户浮层互斥显示。"
+    ]
+  },
+  {
     "version": "v041.2.15",
     "title": "升级公开演示的视觉框架、登录入口和迭代记录体验",
     "changes": [
@@ -567,15 +577,6 @@ export const releaseHistory = [
       "新增 advanceFleetOperationRouteExecution 和 confirmFleetOperationArrival 动作。",
       "行驶记录推进复用现有 advanceRouteExecution。",
       "到达后任务单状态切换为 ARRIVED_OPS_CENTER 等对应已到达状态。"
-    ]
-  },
-  {
-    "version": "v039.2",
-    "title": "Fleet Operations 路径规划与行驶记录闭环",
-    "changes": [
-      "五种任务单 WAITING_ROUTE 状态接入路径规划动作，复用 routePlanningService。",
-      "路径规划成功后自动创建运营行驶记录，任务单状态变为 MOVING_TO_OPS_CENTER 等对应移动状态。",
-      "行驶记录复用现有路由执行闭环（WAITING_START → MOVING → ARRIVED）。"
     ]
   }
 ];

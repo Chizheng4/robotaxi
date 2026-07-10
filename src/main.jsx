@@ -3217,7 +3217,7 @@ function App({ currentUser, onLogout }) {
   }
   return (
     <Layout className="ops-shell">
-      <Sider className="ops-sider" width={232} collapsedWidth={60} collapsed={collapsed} trigger={null}>
+      <Sider className="ops-sider" width={200} collapsedWidth={60} collapsed={collapsed} trigger={null}>
         <div className="brand-bar">
           <Button className="brand-title-button" type="text" onClick={goToConsole}>{collapsed ? "RT" : "Robotaxi 运营平台"}</Button>
           <Button type="text" size="small" aria-label={collapsed ? "展开菜单" : "收起菜单"} onClick={() => setCollapsed((value) => !value)}>
@@ -3261,15 +3261,32 @@ function App({ currentUser, onLogout }) {
             </div>
             <div className="platform-utilities" aria-label="平台工具">
               <Button
+                className="release-history-trigger"
                 type="text"
                 size="small"
                 aria-expanded={releaseHistoryOpen}
+                aria-label={`打开迭代记录，当前版本 ${releaseHistory[0]?.version || "未知"}`}
                 onClick={() => setReleaseHistoryOpen((current) => !current)}
               >
-                迭代记录
+                {releaseHistory[0]?.version || "版本"}
               </Button>
-              <span className="platform-current-user" aria-label={`当前登录用户：${currentUser}`}>{currentUser}</span>
-              <Button type="text" size="small" onClick={onLogout}>退出</Button>
+              <Popover
+                placement="bottomRight"
+                trigger="click"
+                overlayClassName="platform-user-popover"
+                content={<Button className="platform-logout-action" type="text" size="small" onClick={onLogout}>退出</Button>}
+              >
+                <Button
+                  className="platform-user-trigger"
+                  type="text"
+                  size="small"
+                  aria-haspopup="menu"
+                  aria-label={`当前登录用户：${currentUser}，打开账户菜单`}
+                >
+                  <span>{currentUser}</span>
+                  <span className="platform-user-indicator" aria-hidden="true">⌄</span>
+                </Button>
+              </Popover>
             </div>
           </div>
           <ReleaseHistoryPanel open={releaseHistoryOpen} onClose={() => setReleaseHistoryOpen(false)} />
@@ -9013,7 +9030,7 @@ async function bootstrap() {
 		    import("./data/supplyManagementInitialization.js"),
 		    import("./data/spatialBusinessProfileInitialization.js"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
-		    import("./ui/releaseHistory.js?v=20260710-v041-2-15"),
+		    import("./ui/releaseHistory.js?v=20260710-v041-2-16"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
