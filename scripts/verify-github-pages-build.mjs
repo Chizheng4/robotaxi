@@ -10,6 +10,7 @@ const bundlePath = path.join(outputDir, "src/main.bundle.js");
 
 assert(fs.existsSync(indexPath), "生产站点缺少 index.html");
 assert(fs.existsSync(bundlePath), "生产站点缺少 src/main.bundle.js");
+assert(fs.existsSync(path.join(outputDir, "src/assets/robotaxi-map-marker.png")), "生产站点缺少 Robotaxi 地图资产");
 assert(fs.existsSync(path.join(outputDir, ".nojekyll")), "生产站点缺少 .nojekyll");
 assert(fs.existsSync(path.join(outputDir, "deployment-manifest.json")), "生产站点缺少发布清单");
 assert(!fs.existsSync(path.join(outputDir, "doc")), "生产站点不应发布设计文档");

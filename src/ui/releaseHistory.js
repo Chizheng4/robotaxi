@@ -1,6 +1,16 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v041.3.0",
+    "title": "将平台视觉升级为面向真实运营对象的 Autonomous Mobility Operating System",
+    "changes": [
+      "将平台品牌、页面上下文、运行摘要、版本和用户入口整合为贯通全宽的系统栏，侧栏从系统栏下方开始，保持多层菜单、页签和业务工作区能力不变。",
+      "登录页升级为同一品牌调性的完整轻量画布，输入框与进入按钮纵向等宽排列并上移视觉重心，继续支持“金星”校验、退出和会话失效。",
+      "运营中控台升级为地图优先界面，使用现有 Robotaxi 当前网格位置展示真实车辆对象和同网格聚合数量，不伪造城市底图、热力或轨迹数据。",
+      "地图 Robotaxi 可进入现有详情链路，右侧对象检查器优先展示身份、位置、状态、当前任务和下一任务，同时保留原字段字典和详情 Tabs。"
+    ]
+  },
+  {
     "version": "v041.2.16",
     "title": "收敛全局导航宽度并重组顶部平台工具",
     "changes": [
@@ -568,15 +578,6 @@ export const releaseHistory = [
     "changes": [
       "大版本计划 v039-auto-execution-plan.md 已归档至历史。",
       "当前 major 入口恢复为待定。"
-    ]
-  },
-  {
-    "version": "v039.3",
-    "title": "Fleet Operations 行驶推进与到达确认",
-    "changes": [
-      "新增 advanceFleetOperationRouteExecution 和 confirmFleetOperationArrival 动作。",
-      "行驶记录推进复用现有 advanceRouteExecution。",
-      "到达后任务单状态切换为 ARRIVED_OPS_CENTER 等对应已到达状态。"
     ]
   }
 ];

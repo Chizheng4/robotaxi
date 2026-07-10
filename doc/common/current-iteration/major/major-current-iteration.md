@@ -1,16 +1,16 @@
 # 当前大版本迭代
 
-当前大版本：v041.3 Autonomous Mobility OS 视觉升级。
+当前大版本：暂无执行中的大版本。
 
-当前状态：执行中。
+当前状态：v041.3.0 已完成并进入版本归档。
 
-方案设计与自动化执行计划：`doc/common/current-iteration/major/v041.3-autonomous-mobility-os-visual-upgrade-plan.md`
+最近完成方案设计与自动化执行计划：`doc/common/iteration-history/major/v041.3-autonomous-mobility-os-visual-upgrade-plan.md`
 
-当前执行指针：贯通全局系统栏、登录页纵向等宽控件、地图对象化和对象检查器。
+当前执行指针：暂无。
 
 最近完成自动化执行计划：`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
 
-最新完成版本：v041.2.7 交付到运营准入回归。v041.2.1 到 v041.2.7 已完成并提交 tag。
+最新完成版本：v041.3.0 Autonomous Mobility OS 视觉升级。
 
 最近完成大版本：v040 Robotaxi 运维状态治理与任务优先级调度。
 

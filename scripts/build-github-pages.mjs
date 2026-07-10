@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir = path.join(rootDir, "dist");
-const runtimeDirectories = ["components", "data", "domain", "services", "ui"];
+const runtimeDirectories = ["assets", "components", "data", "domain", "services", "ui"];
 
 const babel = await import(path.join(rootDir, "vendor/babel.min.js"));
 const source = fs.readFileSync(path.join(rootDir, "src/main.jsx"), "utf8");

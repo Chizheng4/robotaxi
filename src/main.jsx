@@ -3217,25 +3217,13 @@ function App({ currentUser, onLogout }) {
   }
   return (
     <Layout className="ops-shell">
-      <Sider className="ops-sider" width={200} collapsedWidth={60} collapsed={collapsed} trigger={null}>
-        <div className="brand-bar">
+      <header className="global-system-bar">
+        <div className={collapsed ? "system-brand collapsed" : "system-brand"}>
           <Button className="brand-title-button" type="text" onClick={goToConsole}>{collapsed ? "RT" : "Robotaxi 运营平台"}</Button>
           <Button type="text" size="small" aria-label={collapsed ? "展开菜单" : "收起菜单"} onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? "≡" : "‹"}
           </Button>
         </div>
-        <Menu
-          mode="inline"
-          className="ops-menu"
-          selectedKeys={[activePage]}
-          openKeys={openMenuKeys}
-          items={menuItems}
-          onOpenChange={handleMenuOpenChange}
-          onClick={({ key }) => handleMenuClick(key)}
-        />
-      </Sider>
-
-      <Layout className="ops-main-layout">
         <div className="top-strip">
           <div className="top-strip-title">
             <Text strong>{topTitle}</Text>
@@ -3291,20 +3279,36 @@ function App({ currentUser, onLogout }) {
           </div>
           <ReleaseHistoryPanel open={releaseHistoryOpen} onClose={() => setReleaseHistoryOpen(false)} />
         </div>
+      </header>
 
-        <WorkspaceBar
-          pages={workspacePages}
-          activePage={activePage}
-          onActivate={activateWorkspacePage}
-          onClose={closeWorkspacePage}
-        />
+      <Layout className="ops-workspace-shell">
+        <Sider className="ops-sider" width={200} collapsedWidth={60} collapsed={collapsed} trigger={null}>
+          <Menu
+            mode="inline"
+            className="ops-menu"
+            selectedKeys={[activePage]}
+            openKeys={openMenuKeys}
+            items={menuItems}
+            onOpenChange={handleMenuOpenChange}
+            onClick={({ key }) => handleMenuClick(key)}
+          />
+        </Sider>
 
-        <Layout className={detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
-          <Content className="work-content">
-            {activePage === "console" ? (
-              <MapCanvas data={data} selected={selected} onSelect={(type, id) => selectForPage("console", type, id)} />
-            ) : (
-              <RecordTable
+        <Layout className="ops-main-layout">
+
+          <WorkspaceBar
+            pages={workspacePages}
+            activePage={activePage}
+            onActivate={activateWorkspacePage}
+            onClose={closeWorkspacePage}
+          />
+
+          <Layout className={detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
+            <Content className="work-content">
+              {activePage === "console" ? (
+                <MapCanvas data={data} selected={selected} onSelect={(type, id) => selectForPage("console", type, id)} />
+              ) : (
+                <RecordTable
                 key={activePage}
                 page={activePage}
                 rows={rowsByPage[activePage] || []}
@@ -3415,20 +3419,21 @@ function App({ currentUser, onLogout }) {
                   simulationEvents,
                   timedOperations,
                 }}
-              />
-            )}
-          </Content>
-          <aside className="detail-rail">
-            {detailCollapsed ? (
-              <Button className="detail-toggle-button" size="small" aria-label="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>‹</Button>
-            ) : (
-              <DetailPanel
-                selectedObject={detailSelectedObject}
-                selectedType={detailSelectedType}
-                onCollapse={() => setDetailCollapsedForPage(activePage, true)}
-              />
-            )}
-          </aside>
+                />
+              )}
+            </Content>
+            <aside className="detail-rail">
+              {detailCollapsed ? (
+                <Button className="detail-toggle-button" size="small" aria-label="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>‹</Button>
+              ) : (
+                <DetailPanel
+                  selectedObject={detailSelectedObject}
+                  selectedType={detailSelectedType}
+                  onCollapse={() => setDetailCollapsedForPage(activePage, true)}
+                />
+              )}
+            </aside>
+          </Layout>
         </Layout>
       </Layout>
       <Modal
@@ -6865,11 +6870,38 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
         <span>{getDetailTitle(selectedType)}</span>
         <Button size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
       </div>
+      {selectedType === "robotaxi" && <RobotaxiObjectSummary robotaxi={selectedObject} />}
       {hasTabbedDetail(selectedType) ? (
         <TabbedDetail selectedObject={selectedObject} selectedType={selectedType} />
       ) : (
         <DetailFieldContent selectedObject={selectedObject} keys={Object.keys(selectedObject)} />
       )}
+    </section>
+  );
+}
+
+function RobotaxiObjectSummary({ robotaxi }) {
+  const currentTask = robotaxi.current_task_type
+    ? `${getDisplayValue(robotaxi.current_task_type)}${robotaxi.current_task_id ? ` · ${robotaxi.current_task_id}` : ""}`
+    : "空闲";
+  const nextTask = robotaxi.pending_task_queue?.[0];
+  const nextTaskText = nextTask
+    ? `${getDisplayValue(nextTask.task_type || nextTask.business_object_type)}${nextTask.task_id ? ` · ${nextTask.task_id}` : ""}`
+    : "暂无排队任务";
+  return (
+    <section className="object-inspector-summary" aria-label={`${robotaxi.robotaxi_id} 运营摘要`}>
+      <div className="object-inspector-identity">
+        <div>
+          <strong>{robotaxi.robotaxi_id}</strong>
+          <span>{getDisplayValue(robotaxi.availability_status)} · {getDisplayValue(robotaxi.motion_status)}</span>
+        </div>
+        <span className="object-inspector-battery">{Number(robotaxi.battery_percent || 0).toFixed(0)}%</span>
+      </div>
+      <dl className="object-inspector-facts">
+        <div><dt>当前位置</dt><dd>{robotaxi.location_summary || robotaxi.current_cell_id || "暂无位置"}</dd></div>
+        <div><dt>当前任务</dt><dd>{currentTask}</dd></div>
+        <div><dt>下一任务</dt><dd>{nextTaskText}</dd></div>
+      </dl>
     </section>
   );
 }
@@ -7276,8 +7308,12 @@ function MapCanvas({ data, selected, onSelect }) {
   const dragRef = useRef(null);
   const [viewport, setViewport] = useState({ zoom: 1, panX: 0, panY: 0 });
   const placeTypeByCellId = createPlaceTypeByCellId(data.places);
-  const selectedRoute = selected?.type === "route"
-    ? data.routes.find((route) => route.route_id === selected.id)
+  const selectedRobotaxi = selected?.type === "robotaxi"
+    ? data.robotaxis?.find((robotaxi) => robotaxi.robotaxi_id === selected.id)
+    : null;
+  const selectedRouteId = selected?.type === "route" ? selected.id : selectedRobotaxi?.current_route_id;
+  const selectedRoute = selectedRouteId
+    ? data.routes.find((route) => route.route_id === selectedRouteId)
     : null;
   const highlightedCells = new Set(selectedRoute ? routeCellIds(selectedRoute, data.roadSegments) : []);
 
@@ -7328,6 +7364,12 @@ function MapCanvas({ data, selected, onSelect }) {
   return (
     <section className="map-page-new">
       <div className="map-stage">
+        <div className="map-network-summary" aria-label="运营网络对象概览">
+          <strong>全网运营</strong>
+          <span>Robotaxi {data.robotaxis?.length || 0}</span>
+          <span>服务区域 {data.serviceAreas?.length || 0}</span>
+          <span>运营中心 {data.opsCenters?.length || 0}</span>
+        </div>
         <div className="map-floating-actions">
           <Button size="small" onClick={() => changeZoom(viewport.zoom + 0.2)}>放大</Button>
           <Button size="small" onClick={() => changeZoom(viewport.zoom - 0.2)}>缩小</Button>
@@ -7364,6 +7406,7 @@ function MapCanvas({ data, selected, onSelect }) {
             <ServiceAreas serviceAreas={data.serviceAreas} selected={selected} />
             <OpsCenters opsCenters={data.opsCenters || []} selected={selected} />
             <RoadNodes roadNodes={data.roadNodes} selected={selected} />
+            <Robotaxis robotaxis={data.robotaxis || []} selected={selected} onSelect={onSelect} />
             <rect
               x="0"
               y="0"
@@ -7443,6 +7486,69 @@ function RoadNodes({ roadNodes, selected }) {
           data-active={selected?.type === "roadNode" && selected?.id === node.road_node_id}
         />
       ))}
+    </g>
+  );
+}
+
+function Robotaxis({ robotaxis, selected, onSelect }) {
+  const groups = [...robotaxis.reduce((map, item) => {
+    if (!item.current_cell_id) return map;
+    const group = map.get(item.current_cell_id) || [];
+    group.push(item);
+    map.set(item.current_cell_id, group);
+    return map;
+  }, new Map()).entries()];
+  return (
+    <g className="robotaxi-map-layer">
+      {groups.map(([cellId, items]) => {
+        const selectedItem = selected?.type === "robotaxi"
+          ? items.find((item) => item.robotaxi_id === selected.id)
+          : null;
+        const item = selectedItem || items[0];
+        const { row, col } = parseCellId(cellId);
+        const active = Boolean(selectedItem);
+        const batteryPercent = Number(item.battery_percent || 0);
+        return (
+          <g
+            className={`robotaxi-map-object status-${getStatusTone(item.availability_status)}`}
+            data-active={active}
+            key={cellId}
+            role="button"
+            tabIndex="0"
+            aria-label={items.length > 1
+              ? `${cellId} 共 ${items.length} 台 Robotaxi，当前显示 ${item.robotaxi_id}`
+              : `${item.robotaxi_id}，${getDisplayValue(item.availability_status)}，当前电量 ${batteryPercent.toFixed(0)}%`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect("robotaxi", item.robotaxi_id);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              onSelect("robotaxi", item.robotaxi_id);
+            }}
+          >
+            <circle className="robotaxi-map-halo" cx={col + 0.5} cy={row + 0.5} r="1.38" />
+            <image
+              className="robotaxi-map-image"
+              href="./src/assets/robotaxi-map-marker.png"
+              x={col - 0.45}
+              y={row - 0.74}
+              width="1.9"
+              height="2.48"
+              preserveAspectRatio="xMidYMid meet"
+            />
+            <text className="robotaxi-map-label" x={col + 0.5} y={row - 1.02} textAnchor="middle">
+              {items.length > 1 ? `${items.length} 台 · ${cellId}` : `${item.robotaxi_id} · ${batteryPercent.toFixed(0)}%`}
+            </text>
+            {items.length > 1 && (
+              <text className="robotaxi-map-cluster-count" x={col + 1.18} y={row - 0.18} textAnchor="middle">
+                {items.length}
+              </text>
+            )}
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -9030,7 +9136,7 @@ async function bootstrap() {
 		    import("./data/supplyManagementInitialization.js"),
 		    import("./data/spatialBusinessProfileInitialization.js"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
-		    import("./ui/releaseHistory.js?v=20260710-v041-2-16"),
+		    import("./ui/releaseHistory.js?v=20260710-v041-3-0"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
