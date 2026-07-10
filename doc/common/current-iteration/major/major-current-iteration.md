@@ -1,8 +1,12 @@
 # 当前大版本迭代
 
-当前大版本：v041 供给端能力建设。
+当前大版本：v041.3 Autonomous Mobility OS 视觉升级。
 
-当前状态：暂无执行中大版本计划。v041.2 经营规划到供应执行自动化计划已完成并归档。
+当前状态：执行中。
+
+方案设计与自动化执行计划：`doc/common/current-iteration/major/v041.3-autonomous-mobility-os-visual-upgrade-plan.md`
+
+当前执行指针：贯通全局系统栏、登录页纵向等宽控件、地图对象化和对象检查器。
 
 最近完成自动化执行计划：`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
 
