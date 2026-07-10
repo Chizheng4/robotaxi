@@ -4231,3 +4231,72 @@ body {
   font-weight: 400;
   white-space: nowrap;
 }
+
+/* v041.3.2 user-facing update history */
+.release-history-item summary {
+  position: relative;
+  padding-right: 18px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.release-history-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.release-history-item summary::after {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  color: #8191a2;
+  content: "›";
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.release-history-item details[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.release-history-item summary:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid rgba(47, 111, 228, 0.28);
+  outline-offset: 2px;
+}
+
+.release-history-item summary p {
+  margin: 5px 0 0;
+  color: #465a6f;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.release-history-item details > ul {
+  margin: 8px 0 1px 2px;
+  padding-left: 14px;
+  border-left: 1px solid #dce5ed;
+  color: #66788a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.release-history-item details > ul li + li {
+  margin-top: 4px;
+}
+
+.release-history-more.ant-btn {
+  width: 100%;
+  height: 34px;
+  margin-top: 6px;
+  color: #4e667d;
+  font-size: var(--font-xs);
+  font-weight: 500;
+}
+
+.release-history-more.ant-btn:hover,
+.release-history-more.ant-btn:focus-visible {
+  color: #274d72;
+  background: var(--surface-muted);
+}

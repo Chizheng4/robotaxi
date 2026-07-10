@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v041.3.1-platform-map-projection-refinement.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v041.3.2-user-friendly-release-history.md`。
 
-最新完成版本：v041.3.1 平台交互与地图车辆投影优化。
+最新完成版本：v041.3.2 用户友好更新记录。
 
 当前执行指针：暂无。
 

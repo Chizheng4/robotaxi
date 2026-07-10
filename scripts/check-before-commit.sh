@@ -95,6 +95,7 @@ node scripts/verify-status-workflow-contract.mjs
 node scripts/verify-route-planning-strategy-registry.mjs
 node scripts/verify-field-display-contract.mjs
 node scripts/generate-release-history.mjs --check
+node scripts/verify-release-history-user-display.mjs
 node scripts/verify-current-iteration-archive.mjs
 node scripts/verify-automated-plan-closure.mjs
 node scripts/verify-business-action-source-contract.mjs

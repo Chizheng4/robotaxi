@@ -1366,27 +1366,52 @@ function PlatformLogin({ onEnter }) {
 }
 
 function ReleaseHistoryPanel({ open, onClose }) {
+  const [showAllReleases, setShowAllReleases] = useState(false);
+  const initialVisibleCount = 8;
+  const visibleReleases = showAllReleases ? releaseHistory : releaseHistory.slice(0, initialVisibleCount);
+
+  useEffect(() => {
+    if (!open) setShowAllReleases(false);
+  }, [open]);
+
   if (!open) return null;
   return (
-    <section className="release-history-panel" role="dialog" aria-label="迭代记录">
+    <section className="release-history-panel" role="dialog" aria-label="更新记录">
       <header className="release-history-header">
         <div>
-          <strong>迭代记录</strong>
-          <span>{releaseHistory.length} 个稳定版本</span>
+          <strong>更新记录</strong>
+          <span>持续更新 · 当前 {releaseHistory[0]?.version || "版本"}</span>
         </div>
-        <Button type="text" size="small" aria-label="关闭迭代记录" onClick={onClose}>×</Button>
+        <Button type="text" size="small" aria-label="关闭更新记录" onClick={onClose}>×</Button>
       </header>
       <div className="release-history-scroll">
-        {releaseHistory.map((release, index) => (
+        {visibleReleases.map((release, index) => (
           <article className={index === 0 ? "release-history-item current" : "release-history-item"} key={release.version}>
-            <div className="release-history-item-heading">
-              <strong>{release.version}</strong>
-              {index === 0 && <span>当前版本</span>}
-            </div>
-            <p>{release.title}</p>
-            {release.changes[0] && <small>{release.changes[0]}</small>}
+            <details open={index === 0}>
+              <summary>
+                <div className="release-history-item-heading">
+                  <strong>{release.version}</strong>
+                  {index === 0 && <span>当前版本</span>}
+                </div>
+                <p>{release.audienceTitle}</p>
+              </summary>
+              {release.audienceChanges.length > 0 && (
+                <ul>
+                  {release.audienceChanges.map((change) => <li key={change}>{change}</li>)}
+                </ul>
+              )}
+            </details>
           </article>
         ))}
+        {releaseHistory.length > initialVisibleCount && (
+          <Button
+            className="release-history-more"
+            type="text"
+            onClick={() => setShowAllReleases((current) => !current)}
+          >
+            {showAllReleases ? "收起历史更新" : `查看更多更新（${releaseHistory.length - initialVisibleCount}）`}
+          </Button>
+        )}
       </div>
     </section>
   );
@@ -3271,7 +3296,7 @@ function App({ currentUser, onLogout }) {
                 type="text"
                 size="small"
                 aria-expanded={releaseHistoryOpen}
-                aria-label={`打开迭代记录，当前版本 ${releaseHistory[0]?.version || "未知"}`}
+                aria-label={`打开更新记录，当前版本 ${releaseHistory[0]?.version || "未知"}`}
                 onClick={() => setReleaseHistoryOpen((current) => !current)}
               >
                 {releaseHistory[0]?.version || "版本"}
@@ -9146,7 +9171,7 @@ async function bootstrap() {
 		    import("./data/spatialBusinessProfileInitialization.js"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260710-v041-3-1"),
-		    import("./ui/releaseHistory.js?v=20260710-v041-3-1"),
+		    import("./ui/releaseHistory.js?v=20260710-v041-3-2"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
