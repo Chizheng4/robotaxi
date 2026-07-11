@@ -6,12 +6,14 @@ export function calculateResponsiveViewport({
   width,
   layoutHeight,
   visualHeight,
+  visualOffsetLeft = 0,
   visualOffsetTop = 0,
   stableHeight = layoutHeight,
   editableFocused = false,
 }) {
   const viewportWidth = Math.max(0, Math.round(Number(width) || 0));
   const viewportHeight = Math.max(0, Math.round(Number(visualHeight || layoutHeight) || 0));
+  const offsetLeft = Math.max(0, Math.round(Number(visualOffsetLeft) || 0));
   const offsetTop = Math.max(0, Math.round(Number(visualOffsetTop) || 0));
   const keyboardInset = editableFocused
     ? Math.max(0, Math.round((Number(stableHeight) || viewportHeight) - viewportHeight - offsetTop))
@@ -19,6 +21,7 @@ export function calculateResponsiveViewport({
   return {
     width: viewportWidth,
     height: viewportHeight,
+    offsetLeft,
     offsetTop,
     keyboardInset,
     keyboardOpen: editableFocused && keyboardInset >= KEYBOARD_MIN_INSET,
@@ -55,12 +58,15 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
       width: visualViewport?.width || windowRef.innerWidth,
       layoutHeight: windowRef.innerHeight,
       visualHeight,
+      visualOffsetLeft: visualViewport?.offsetLeft || 0,
       visualOffsetTop,
       stableHeight,
       editableFocused: editableFocused || keyboardTransitionActive,
     });
 
+    root.style.setProperty("--app-viewport-width", `${snapshot.width}px`);
     root.style.setProperty("--app-viewport-height", `${snapshot.height}px`);
+    root.style.setProperty("--app-viewport-offset-left", `${snapshot.offsetLeft}px`);
     root.style.setProperty("--app-viewport-offset-top", `${snapshot.offsetTop}px`);
     root.style.setProperty("--keyboard-inset", `${snapshot.keyboardInset}px`);
     root.dataset.viewportMode = snapshot.mode;

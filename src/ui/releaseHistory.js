@@ -1,6 +1,25 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v041.4.4",
+    "title": "建立 WebView 可视视口二维投影与根页面水平边界，统一修复微信中的聚焦偏移、横向移动和登录控件贴边",
+    "changes": [
+      "响应式视口服务新增可视宽度与 `offsetLeft`，统一输出真实可见窗口的横纵坐标和尺寸。",
+      "登录画布按照 Visual Viewport 的 `left / top / width / height` 投影，微信聚焦输入框造成窗口平移时画布仍跟随真实可见区域。",
+      "登录面板移除 `50% + translateX` 居中计算，改为左右安全边距与最大宽度约束，输入框和按钮不再贴住屏幕边缘。",
+      "根页面、应用根节点和平台外壳统一禁止横向溢出；表格等指定业务容器继续保留独立横向浏览。",
+      "明确设置 WebKit `text-size-adjust: 100%`，避免微信 WebView 自动文字膨胀改变页面比例。",
+      "README 更新为当前项目定位，并补充公开演示、一键发布和零 Codex 使用量说明。"
+    ],
+    "audienceTitle": "微信内登录和平台宽度更加稳定",
+    "audienceChanges": [
+      "微信内输入时，页面会跟随真实可见窗口，不再因为水平偏移而向右移动。",
+      "输入框和进入按钮恢复稳定的左右留白，不会紧贴或看似被屏幕截断。",
+      "平台根页面不再左右漂移，业务表格仍可在自己的区域内横向查看。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v041.4.3",
     "title": "将手机登录页从键盘驱动重排改为稳定首屏锚定，消除 Safari 与微信 WebView 的双重滚动控制",
     "changes": [
