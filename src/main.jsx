@@ -1341,9 +1341,10 @@ function PlatformLogin({ onEnter }) {
         </div>
         <form className="platform-login-form" onSubmit={submitLogin}>
           <input
-            autoFocus
             aria-label="登录名称"
+            autoComplete="name"
             className={errorMessage ? "platform-login-input error" : "platform-login-input"}
+            enterKeyHint="go"
             value={userName}
             placeholder={`请输入：${platformExperience.getDemoUserName()}`}
             onChange={(event) => {
@@ -9176,7 +9177,7 @@ async function bootstrap() {
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260710-v041-3-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
-		    import("./ui/releaseHistory.js?v=20260711-v041-4-2"),
+		    import("./ui/releaseHistory.js?v=20260711-v041-4-3"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;

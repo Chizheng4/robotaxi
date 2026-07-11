@@ -4348,30 +4348,33 @@ body {
 }
 
 .platform-login-shell {
+  position: fixed;
+  inset: 0;
   width: 100%;
-  height: var(--app-viewport-height);
-  min-height: var(--app-viewport-height);
-  place-items: start center;
+  height: auto;
+  min-height: 0;
+  display: block;
   padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  scroll-padding-bottom: calc(var(--keyboard-inset) + 20px);
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .platform-login-panel {
-  margin-top: clamp(112px, 24vh, 220px);
-  transform: none;
+  position: absolute;
+  top: clamp(96px, 16svh, 156px);
+  left: 50%;
+  margin-top: 0;
+  transform: translateX(-50%);
 }
 
 html[data-keyboard-open="true"] .platform-login-shell {
-  padding-top: max(16px, env(safe-area-inset-top));
-  padding-bottom: calc(var(--keyboard-inset) + 16px);
-  scroll-behavior: auto;
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
 html[data-keyboard-open="true"] .platform-login-panel {
   margin-top: 0;
+  top: clamp(96px, 16svh, 156px);
 }
 
 .ops-menu,
@@ -4544,20 +4547,13 @@ html[data-keyboard-open="true"] .platform-login-panel {
 
   .platform-login-panel {
     width: min(100%, 420px);
-    margin-top: clamp(72px, 16svh, 132px);
+    top: clamp(72px, 12svh, 108px);
+    margin-top: 0;
   }
 
   .platform-login-input,
   .platform-login-submit {
     font-size: 16px;
-  }
-
-  html[data-keyboard-open="true"] .platform-login-brand {
-    margin-bottom: 14px;
-  }
-
-  html[data-keyboard-open="true"] .platform-login-brand h1 {
-    font-size: 20px;
   }
 
   .release-history-panel {

@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v041.4.2-mobile-login-keyboard-cycle.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v041.4.3-mobile-login-stable-anchor.md`。
 
-最新完成版本：v041.4.2 手机登录键盘周期修复。
+最新完成版本：v041.4.3 手机登录稳定锚定。
 
 当前执行指针：暂无。
 

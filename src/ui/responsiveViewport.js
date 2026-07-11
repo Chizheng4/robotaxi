@@ -72,13 +72,7 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
         focusedElement?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
       }
     }
-    if (!snapshot.keyboardOpen && keyboardWasOpen) resetLoginScroll();
     keyboardWasOpen = snapshot.keyboardOpen;
-  };
-
-  const resetLoginScroll = () => {
-    const loginShell = documentRef.querySelector?.(".platform-login-shell");
-    if (loginShell) loginShell.scrollTop = 0;
   };
 
   const scheduleViewport = () => {
@@ -89,14 +83,12 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
   const resetStableHeight = () => {
     stableHeight = Math.max(windowRef.innerHeight || 0, visualViewport?.height || 0);
     keyboardWasOpen = false;
-    resetLoginScroll();
     scheduleViewport();
   };
 
   const settleAfterFocus = () => {
     windowRef.clearTimeout(settleTimer);
     settleTimer = windowRef.setTimeout(() => {
-      resetLoginScroll();
       scheduleViewport();
     }, 320);
   };

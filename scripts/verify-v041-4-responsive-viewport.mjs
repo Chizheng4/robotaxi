@@ -52,10 +52,16 @@ assert.equal(compact.mode, "compact");
 
 const styles = fs.readFileSync("src/styles.css", "utf8");
 const mainSource = fs.readFileSync("src/main.jsx", "utf8");
+const indexSource = fs.readFileSync("index.html", "utf8");
 assert(styles.includes("--app-viewport-height"), "缺少统一可视高度变量");
 assert(styles.includes('html[data-keyboard-open="true"] .platform-login-panel'), "登录页缺少键盘打开状态");
 assert(styles.includes("font-size: 16px"), "手机输入框必须避免浏览器自动放大");
 assert(!styles.includes('padding-top: calc(var(--app-viewport-offset-top) + max(16px, env(safe-area-inset-top)))'), "登录页不得重复补偿浏览器可视视口平移");
+assert(styles.includes("position: fixed;\n  inset: 0;"), "登录画布必须脱离可滚动页面并稳定覆盖首屏");
+assert(styles.includes("top: clamp(72px, 12svh, 108px)"), "手机登录表单必须锚定在首屏上半部安全区");
+assert(!styles.includes("\n  padding-bottom: calc(var(--keyboard-inset) + 16px)"), "登录页不得在可视高度内再次增加键盘高度");
+assert(!mainSource.includes("autoFocus"), "登录页不得自动聚焦并触发 WebView 原生滚动");
+assert(!indexSource.includes("interactive-widget=resizes-content"), "不得同时要求浏览器重排布局视口和平台计算可视视口");
 assert(mainSource.includes("responsiveViewport.attachResponsiveViewport()"), "平台启动前必须接入统一视口服务");
 
 const cycle = createViewportCycleHarness();
@@ -68,7 +74,6 @@ cycle.blurInput();
 cycle.resizeViewport(844, 0);
 cycle.flushFocusSettle();
 assert.equal(cycle.root.dataset.keyboardOpen, "false", "键盘关闭后必须恢复关闭状态");
-assert.equal(cycle.loginShell.scrollTop, 0, "键盘关闭后必须清除登录页历史滚动位置");
 cycle.focusInput();
 cycle.resizeViewport(490, 28);
 assert.equal(cycle.root.dataset.keyboardOpen, "true", "再次聚焦必须从稳定视口重新计算");
@@ -124,7 +129,6 @@ function createViewportCycleHarness() {
   };
   return {
     root,
-    loginShell,
     detach,
     focusInput() {
       documentRef.activeElement = input;
