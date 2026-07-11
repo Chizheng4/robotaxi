@@ -1,12 +1,14 @@
 # 当前大版本迭代
 
-当前大版本：暂无执行中的大版本。
+当前大版本：v041.4 手机响应式基础与版本化发布。
 
-当前状态：v041.3.0 已完成并进入版本归档。
+当前状态：执行中。
+
+方案设计与自动化执行计划：`doc/common/current-iteration/major/v041.4-mobile-responsive-and-versioned-release-plan.md`
 
 最近完成方案设计与自动化执行计划：`doc/common/iteration-history/major/v041.3-autonomous-mobility-os-visual-upgrade-plan.md`
 
-当前执行指针：暂无。
+当前执行指针：统一可视视口服务、手机平台框架和版本标签驱动发布。
 
 最近完成自动化执行计划：`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
 
