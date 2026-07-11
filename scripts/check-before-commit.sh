@@ -52,8 +52,11 @@ node --check scripts/build-github-pages.mjs
 node --check scripts/verify-github-pages-build.mjs
 node --check scripts/serve-github-pages-preview.mjs
 node --check scripts/generate-release-history.mjs
+node --check scripts/verify-release-version.mjs
+node --check scripts/verify-versioned-pages-workflow.mjs
 node --check src/ui/platformExperience.js
 node --check src/ui/robotaxiMapProjection.js
+node --check src/ui/responsiveViewport.js
 node --check src/ui/releaseHistory.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
@@ -96,6 +99,8 @@ node scripts/verify-route-planning-strategy-registry.mjs
 node scripts/verify-field-display-contract.mjs
 node scripts/generate-release-history.mjs --check
 node scripts/verify-release-history-user-display.mjs
+node scripts/verify-release-version.mjs "$(sed -n 's/^## \(v[^ ]*\).*/\1/p' VERSION.md | head -n 1)"
+node scripts/verify-versioned-pages-workflow.mjs
 node scripts/verify-current-iteration-archive.mjs
 node scripts/verify-automated-plan-closure.mjs
 node scripts/verify-business-action-source-contract.mjs
@@ -147,6 +152,7 @@ node scripts/verify-v041-1-demand-profile-unified.mjs
 node scripts/verify-v041-2-business-planning.mjs
 node scripts/verify-v041-2-13-supply-demand-balance.mjs
 node scripts/verify-v041-3-1-map-projection.mjs
+node scripts/verify-v041-4-responsive-viewport.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

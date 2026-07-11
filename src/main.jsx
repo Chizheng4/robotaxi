@@ -57,6 +57,7 @@ let businessPlanningService;
 let supplyDemandBalanceService;
 let platformExperience;
 let robotaxiMapProjection;
+let responsiveViewport;
 let releaseHistory = [];
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
@@ -1540,6 +1541,7 @@ function App({ currentUser, onLogout }) {
   const [activePage, setActivePage] = useState(initialRuntime.activePage);
   const [selected, setSelected] = useState(initialRuntime.pageSelections[initialRuntime.activePage] || getDefaultSelection(initialRuntime.activePage, data));
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileLayout, setMobileLayout] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 767px)").matches);
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [openMenuKeys, setOpenMenuKeys] = useState(getOpenKeysForPage(initialRuntime.activePage));
   const [workspacePages, setWorkspacePages] = useState(initialRuntime.workspacePages);
@@ -1577,6 +1579,7 @@ function App({ currentUser, onLogout }) {
     if (typeof window === "undefined" || !window.matchMedia) return undefined;
     const mobileViewport = window.matchMedia("(max-width: 767px)");
     const applyMobileWorkspace = (event) => {
+      setMobileLayout(event.matches);
       if (!event.matches) return;
       setCollapsed(true);
       setDetailCollapsedByPage((current) => ({ ...current, [activePage]: true }));
@@ -3325,7 +3328,7 @@ function App({ currentUser, onLogout }) {
       </header>
 
       <Layout className="ops-workspace-shell">
-        <Sider className="ops-sider" width={200} collapsedWidth={60} collapsed={collapsed} trigger={null}>
+        <Sider className="ops-sider" width={200} collapsedWidth={mobileLayout ? 52 : 60} collapsed={collapsed} trigger={null}>
           <Menu
             mode="inline"
             inlineCollapsed={collapsed}
@@ -9110,6 +9113,7 @@ async function bootstrap() {
 		    spatialBusinessProfileInitializationModule,
 		    platformExperienceModule,
 		    robotaxiMapProjectionModule,
+		    responsiveViewportModule,
 		    releaseHistoryModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
@@ -9171,7 +9175,8 @@ async function bootstrap() {
 		    import("./data/spatialBusinessProfileInitialization.js"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260710-v041-3-1"),
-		    import("./ui/releaseHistory.js?v=20260710-v041-3-2"),
+		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
+		    import("./ui/releaseHistory.js?v=20260711-v041-4-0"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -9235,6 +9240,7 @@ async function bootstrap() {
 		  updateDemandProfileConfig = spatialBusinessProfileInitializationModule.updateDemandProfileConfig;
 		  platformExperience = platformExperienceModule;
 		  robotaxiMapProjection = robotaxiMapProjectionModule;
+		  responsiveViewport = responsiveViewportModule;
 		  releaseHistory = releaseHistoryModule.releaseHistory;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
@@ -9264,6 +9270,7 @@ async function bootstrap() {
     });
   }
 
+	  responsiveViewport.attachResponsiveViewport();
 	  ReactDOM.createRoot(document.querySelector("#app")).render(<PlatformEntry />);
 }
 

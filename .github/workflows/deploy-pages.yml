@@ -1,9 +1,16 @@
 name: Deploy Robotaxi to GitHub Pages
+run-name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }} · Deploy Robotaxi to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    tags:
+      - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "要发布的版本号，例如 v041.4.0"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,6 +30,11 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
+      - name: Verify release version
+        env:
+          RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+        run: node scripts/verify-release-version.mjs "$RELEASE_VERSION"
 
       - name: Build static site
         run: node scripts/build-github-pages.mjs
