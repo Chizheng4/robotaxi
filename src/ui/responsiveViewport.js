@@ -34,6 +34,7 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
   let stableHeight = Math.max(windowRef.innerHeight || 0, visualViewport?.height || 0);
   let animationFrame = 0;
   let keyboardWasOpen = false;
+  let settleTimer = 0;
 
   const isEditableFocused = () => {
     const element = documentRef.activeElement;
@@ -44,14 +45,19 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
     animationFrame = 0;
     const editableFocused = isEditableFocused();
     const visualHeight = visualViewport?.height || windowRef.innerHeight || stableHeight;
-    if (!editableFocused) stableHeight = Math.max(visualHeight, windowRef.innerHeight || 0);
+    const visualOffsetTop = visualViewport?.offsetTop || 0;
+    const compressedInset = Math.max(0, stableHeight - visualHeight - visualOffsetTop);
+    const keyboardTransitionActive = keyboardWasOpen && compressedInset >= KEYBOARD_MIN_INSET;
+    if (!editableFocused && !keyboardTransitionActive) {
+      stableHeight = Math.max(stableHeight, visualHeight, windowRef.innerHeight || 0);
+    }
     const snapshot = calculateResponsiveViewport({
       width: visualViewport?.width || windowRef.innerWidth,
       layoutHeight: windowRef.innerHeight,
       visualHeight,
-      visualOffsetTop: visualViewport?.offsetTop || 0,
+      visualOffsetTop,
       stableHeight,
-      editableFocused,
+      editableFocused: editableFocused || keyboardTransitionActive,
     });
 
     root.style.setProperty("--app-viewport-height", `${snapshot.height}px`);
@@ -66,7 +72,13 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
         focusedElement?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
       }
     }
+    if (!snapshot.keyboardOpen && keyboardWasOpen) resetLoginScroll();
     keyboardWasOpen = snapshot.keyboardOpen;
+  };
+
+  const resetLoginScroll = () => {
+    const loginShell = documentRef.querySelector?.(".platform-login-shell");
+    if (loginShell) loginShell.scrollTop = 0;
   };
 
   const scheduleViewport = () => {
@@ -76,7 +88,17 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
 
   const resetStableHeight = () => {
     stableHeight = Math.max(windowRef.innerHeight || 0, visualViewport?.height || 0);
+    keyboardWasOpen = false;
+    resetLoginScroll();
     scheduleViewport();
+  };
+
+  const settleAfterFocus = () => {
+    windowRef.clearTimeout(settleTimer);
+    settleTimer = windowRef.setTimeout(() => {
+      resetLoginScroll();
+      scheduleViewport();
+    }, 320);
   };
 
   windowRef.addEventListener("resize", scheduleViewport, { passive: true });
@@ -84,16 +106,17 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
   visualViewport?.addEventListener("resize", scheduleViewport, { passive: true });
   visualViewport?.addEventListener("scroll", scheduleViewport, { passive: true });
   documentRef.addEventListener("focusin", scheduleViewport);
-  documentRef.addEventListener("focusout", scheduleViewport);
+  documentRef.addEventListener("focusout", settleAfterFocus);
   applyViewport();
 
   return () => {
     if (animationFrame) windowRef.cancelAnimationFrame(animationFrame);
+    windowRef.clearTimeout(settleTimer);
     windowRef.removeEventListener("resize", scheduleViewport);
     windowRef.removeEventListener("orientationchange", resetStableHeight);
     visualViewport?.removeEventListener("resize", scheduleViewport);
     visualViewport?.removeEventListener("scroll", scheduleViewport);
     documentRef.removeEventListener("focusin", scheduleViewport);
-    documentRef.removeEventListener("focusout", scheduleViewport);
+    documentRef.removeEventListener("focusout", settleAfterFocus);
   };
 }

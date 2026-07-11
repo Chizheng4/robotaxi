@@ -9176,7 +9176,7 @@ async function bootstrap() {
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260710-v041-3-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
-		    import("./ui/releaseHistory.js?v=20260711-v041-4-1"),
+		    import("./ui/releaseHistory.js?v=20260711-v041-4-2"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;

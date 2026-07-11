@@ -4365,8 +4365,9 @@ body {
 }
 
 html[data-keyboard-open="true"] .platform-login-shell {
-  padding-top: calc(var(--app-viewport-offset-top) + max(16px, env(safe-area-inset-top)));
+  padding-top: max(16px, env(safe-area-inset-top));
   padding-bottom: calc(var(--keyboard-inset) + 16px);
+  scroll-behavior: auto;
 }
 
 html[data-keyboard-open="true"] .platform-login-panel {
