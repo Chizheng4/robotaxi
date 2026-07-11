@@ -1,6 +1,25 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v041.4.1",
+    "title": "将版本提交、GitHub Contribution、自动部署和公网版本验收收敛为一条稳定的一键发布流程",
+    "changes": [
+      "GitHub Pages 恢复由 `main` 的正式版本提交触发，避免工作流与新标签首次同时推送时标签事件未被 GitHub 接收。",
+      "Actions 运行标题直接使用版本提交说明，统一显示“版本号 + 本次更新说明”。",
+      "发布前强制校验 `VERSION.md`、HEAD 标签和提交标题三者一致，并运行完整提交前检查。",
+      "`publish-robotaxi.command` 推送后自动等待 Actions 成功，再校验公网 `deployment-manifest.json` 的版本和提交；线上仍为旧版本时不会报告成功。",
+      "移除旧的重复发布入口，发布者只需双击一个文件，不需要再次创建 Commit，也不消耗 Codex 使用量。",
+      "仓库后续提交使用 GitHub noreply 邮箱，使进入默认分支的版本提交可正确归属 GitHub Contribution。"
+    ],
+    "audienceTitle": "正式版本现在可以一键可靠上线",
+    "audienceChanges": [
+      "每个版本会在 GitHub 中显示清楚的版本号和更新说明。",
+      "双击发布后会自动完成推送、构建和线上版本确认，不需要重复操作。",
+      "只有朋友访问到的公开网站已经切换到最新版，发布流程才会提示成功。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v041.4.0",
     "title": "建立平台级手机响应式基础，并将 GitHub Pages 发布升级为明确的版本标签流程",
     "changes": [

@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v041.3.2-user-friendly-release-history.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v041.4.1-one-click-verified-release.md`。
 
-最新完成版本：v041.3.2 用户友好更新记录。
+最新完成版本：v041.4.1 一键验证发布流程。
 
 当前执行指针：暂无。
 

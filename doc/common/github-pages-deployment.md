@@ -10,18 +10,20 @@ Robotaxi 运营平台通过 GitHub Pages 发布为公开静态演示站点。Git
 
 ```mermaid
 flowchart LR
-  A[本地开发与验证] --> B[提交 main]
-  B --> C[GitHub Actions]
-  C --> D[生成 dist 生产站点]
-  D --> E[发布产物合同检查]
-  E --> F[GitHub Pages]
-  F --> G[github.io 公开地址]
+  A[本地开发与验证] --> B[版本提交和标签]
+  B --> C[双击一键发布]
+  C --> D[推送 main 和标签]
+  D --> E[GitHub Actions]
+  E --> F[生成并检查生产站点]
+  F --> G[GitHub Pages]
+  G --> H[校验公网版本和提交]
 ```
 
 - 本地入口：`start-robotaxi.command`，继续使用本地并发静态服务。
 - 生产构建：`node scripts/build-github-pages.mjs`。
 - 产物检查：`node scripts/verify-github-pages-build.mjs`。
 - 自动部署：`.github/workflows/deploy-pages.yml`。
+- 一键发布：`publish-robotaxi.command`。
 - 发布目录：`dist/`，为生成目录，不提交 Git。
 
 生产构建只复制页面运行需要的 `index.html`、`vendor` 和运行时 `src`。设计文档、验证脚本、本地日志和 JSX 入口不会进入公开站点。
@@ -34,15 +36,16 @@ flowchart LR
 2. 免费账户使用 GitHub Pages 时，将仓库设为公开。
 3. 打开仓库 `Settings` → `Pages`。
 4. 在 `Build and deployment` 的 `Source` 中选择 `GitHub Actions`。
-5. 推送 `main` 或在 Actions 中人工运行 `Deploy Robotaxi to GitHub Pages`。
+5. 完成版本提交和标签后，双击 `publish-robotaxi.command`。
 6. 部署完成后，通过 `https://<用户名>.github.io/<仓库名>/` 访问。
 
 若仓库名称为 `<用户名>.github.io`，访问地址为 `https://<用户名>.github.io/`。
 
 ## 4. 持续更新与回退
 
-- 正式更新：完成本地验证、版本提交和标签后推送 `main`，GitHub 自动发布。
-- 发布验收：确认 Actions 的 build 和 deploy 均成功，再用电脑与手机访问正式地址。
+- 正式更新：Codex 完成本地验证、版本提交和标签后，只需双击 `publish-robotaxi.command`；不要再次点击 Commit。
+- 自动验收：发布命令等待 Actions 成功，并校验公网部署清单的版本与提交一致后才报告上线完成。
+- Contribution：版本提交进入 `main` 后形成贡献记录；提交邮箱必须是 GitHub 账号已验证邮箱或 GitHub noreply 邮箱。
 - 回退：将需要恢复的稳定提交重新发布到 `main`，或在 GitHub Pages 部署记录中重新运行对应版本。不得删除历史标签。
 
 ## 5. 手机与桌面

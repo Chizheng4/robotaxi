@@ -54,6 +54,7 @@ node --check scripts/serve-github-pages-preview.mjs
 node --check scripts/generate-release-history.mjs
 node --check scripts/verify-release-version.mjs
 node --check scripts/verify-versioned-pages-workflow.mjs
+node --check scripts/wait-for-github-pages.mjs
 node --check src/ui/platformExperience.js
 node --check src/ui/robotaxiMapProjection.js
 node --check src/ui/responsiveViewport.js
