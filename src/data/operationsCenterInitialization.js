@@ -10,6 +10,7 @@ import {
   createRobotaxi,
   createWorker,
 } from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
+import { ZONE1_OPS_CENTER_CELL_IDS } from "./spatialReferenceData.js?v=20260712-v042-0-5";
 
 const ROBOTAXI_COUNT = 20;
 const WORKER_COUNT = 10;
@@ -20,14 +21,14 @@ export function initializeOperationsCenter() {
     ops_center_name: "最小运营测试中心",
     place_id: "P-006",
     map_id: "M-001",
-    cell_ids: ["C-34-32", "C-34-33", "C-35-32", "C-35-33"],
+    cell_ids: ZONE1_OPS_CENTER_CELL_IDS,
     service_area_ids: ["SA-006"],
     operation_capability_zones: [
-      createOperationCapabilityZone("CLEANING", ["C-34-32", "C-34-33"], ["C-34-32"]),
-      createOperationCapabilityZone("CHARGING", ["C-35-32"], ["C-35-32"]),
-      createOperationCapabilityZone("MAINTENANCE", ["C-35-33"], ["C-35-33"]),
-      createOperationCapabilityZone("FAILURE_HANDLING", ["C-35-33"], ["C-35-33"]),
-      createOperationCapabilityZone("RETIREMENT", ["C-34-33"], ["C-34-33"]),
+      createOperationCapabilityZone("CLEANING", ["C-33-32", "C-33-33", "C-33-34", "C-33-35", "C-34-32"], ["C-34-32"]),
+      createOperationCapabilityZone("CHARGING", ["C-34-33", "C-35-32"], ["C-35-32"]),
+      createOperationCapabilityZone("MAINTENANCE", ["C-34-34", "C-34-35", "C-35-33"], ["C-35-33"]),
+      createOperationCapabilityZone("FAILURE_HANDLING", ["C-35-33", "C-35-34", "C-35-35"], ["C-35-33"]),
+      createOperationCapabilityZone("RETIREMENT", ["C-34-33", "C-35-32", "C-35-33"], ["C-34-33"]),
     ],
     capacity: 20,
     ops_center_status: OpsCenterStatus.ACTIVE,

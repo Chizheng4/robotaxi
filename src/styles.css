@@ -795,7 +795,6 @@
 .map-zone-anchor text { fill: #334b43; font-size: 0.6px; }
 .map-road-anchor,
 .map-service-area-anchor { display: none; }
-.map-stage[data-zoom-band="district"] .map-service-area-anchor,
 .map-stage[data-zoom-band="detail"] .map-road-anchor,
 .map-stage[data-zoom-band="detail"] .map-service-area-anchor { display: block; }
 .map-stage[data-zoom-band="detail"] .map-zone-anchor,
@@ -987,7 +986,6 @@
   display: none;
 }
 
-.map-stage[data-zoom-band="district"] .map-service-area-anchor,
 .map-stage[data-zoom-band="detail"] .map-road-anchor,
 .map-stage[data-zoom-band="detail"] .map-service-area-anchor {
   display: block;
@@ -5316,7 +5314,6 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .map-zone-anchor text { fill: #334b43; font-size: 0.6px; }
 .map-road-anchor,
 .map-service-area-anchor { display: none; }
-.map-stage[data-zoom-band="district"] .map-service-area-anchor,
 .map-stage[data-zoom-band="detail"] .map-road-anchor,
 .map-stage[data-zoom-band="detail"] .map-service-area-anchor { display: block; }
 .map-stage[data-zoom-band="detail"] .map-zone-anchor,

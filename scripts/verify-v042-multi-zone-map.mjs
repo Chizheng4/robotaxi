@@ -37,6 +37,9 @@ assert.deepEqual(exactIds(data.places, "place_id", "P-"), ["P-001", "P-002", "P-
 assert.deepEqual(exactIds(data.serviceAreas, "service_area_id", "SA-"), ["SA-001", "SA-002", "SA-003", "SA-004", "SA-005", "SA-006"], "Zone 1 服务区域编号不得改写");
 
 assert(data.places.filter((place) => place.place_id.startsWith("P-1")).every((place) => place.place_status === "Planned"), "Zone 2 地点必须保持规划态");
+const zone1OpsCenterPlace = data.places.find((place) => place.place_id === "P-006");
+assert.equal(zone1OpsCenterPlace.cell_ids.length, 12, "Zone 1 运营中心必须使用 3 × 4 的空间范围");
+assert(zone1OpsCenterPlace.cell_ids.every((cellId) => data.cells.find((cell) => cell.cell_id === cellId)?.base_cell_type === "PLACE"), "运营中心扩容 Cell 必须保持地点空间类型");
 assert(data.serviceAreas.filter((area) => area.service_area_id.startsWith("SA-1")).every((area) => area.service_area_status === "PLANNED"), "Zone 2 服务区域必须保持规划态");
 assert(data.demandProfiles.filter((profile) => /-(?:P|SA)-1|Z-002/.test(`${profile.target_object_type}-${profile.target_object_id}`)).every((profile) => profile.profile_status === "DRAFT"), "Zone 2 画像必须保持草稿态");
 

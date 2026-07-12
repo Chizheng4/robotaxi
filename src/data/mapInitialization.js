@@ -24,6 +24,7 @@ import {
   createServiceArea,
   createZone,
 } from "../domain/types.js?v=20260608-v018-bfs-route-planning";
+import { ZONE1_OPS_CENTER_CELL_IDS } from "./spatialReferenceData.js?v=20260712-v042-0-5";
 
 const MAP_ID = "M-001";
 const CELL_SIZE_M = 50;
@@ -255,7 +256,7 @@ function createPlaces(map) {
     ["P-003", "商业中心", PlaceType.COMMERCIAL, rectCells(15, 23, 15, 23), 0.75, PeakPattern.ALL_DAY_STABLE],
     ["P-004", "医院学校片区", PlaceType.HOSPITAL, rectCells(30, 37, 2, 9), 0.55, PeakPattern.ALL_DAY_STABLE],
     ["P-005", "地铁接驳点", PlaceType.METRO_STATION, rectCells(24, 27, 27, 31), 0.8, PeakPattern.ALL_DAY_STABLE],
-    ["P-006", "最小运营测试中心", PlaceType.OPS_CENTER, rectCells(34, 35, 32, 33), 0.2, PeakPattern.MORNING_OUTBOUND],
+    ["P-006", "最小运营测试中心", PlaceType.OPS_CENTER, ZONE1_OPS_CENTER_CELL_IDS, 0.2, PeakPattern.MORNING_OUTBOUND],
     ["P-101", "东部滨水居住区", PlaceType.RESIDENTIAL, rectCells(2, 10, 46, 52), 0.82, PeakPattern.MORNING_OUTBOUND],
     ["P-102", "东部科技办公区", PlaceType.OFFICE, rectCells(2, 10, 72, 81), 0.92, PeakPattern.EVENING_OUTBOUND],
     ["P-103", "东部城市商业中心", PlaceType.COMMERCIAL, rectCells(15, 23, 59, 67), 0.78, PeakPattern.ALL_DAY_STABLE],
@@ -346,7 +347,7 @@ function createZones(map, cells, roadSegments, places, serviceAreas) {
     ["Z-001-B", "Z-001", "办公通勤子区", ZoneLevel.SUB_ZONE, ZoneType.OFFICE_ZONE, rectCells(0, 14, 25, 39)],
     ["Z-001-C", "Z-001", "商业交通子区", ZoneLevel.SUB_ZONE, ZoneType.COMMERCIAL_ZONE, rectCells(12, 30, 12, 30)],
     ["Z-001-D", "Z-001", "医院学校子区", ZoneLevel.SUB_ZONE, ZoneType.MIXED_ZONE, rectCells(28, 39, 0, 14)],
-    ["Z-001-E", "Z-001", "运营支持子区", ZoneLevel.SUB_ZONE, ZoneType.SUPPORT_ZONE, rectCells(34, 36, 28, 34)],
+    ["Z-001-E", "Z-001", "运营支持子区", ZoneLevel.SUB_ZONE, ZoneType.SUPPORT_ZONE, rectCells(33, 36, 28, 35)],
     ["Z-002", null, "东部规划运营区", ZoneLevel.ZONE, ZoneType.MIXED_ZONE, rectCells(0, 39, 44, 83)],
     ["Z-002-A", "Z-002", "东部居住子区", ZoneLevel.SUB_ZONE, ZoneType.RESIDENTIAL_ZONE, rectCells(0, 14, 44, 57)],
     ["Z-002-B", "Z-002", "东部办公子区", ZoneLevel.SUB_ZONE, ZoneType.OFFICE_ZONE, rectCells(0, 14, 69, 83)],

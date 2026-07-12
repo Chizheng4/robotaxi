@@ -192,6 +192,8 @@ try {
       robotaxiMarkerCount: document.querySelectorAll(".robotaxi-map-marker").length,
       selectedCellCount: document.querySelectorAll(".map-selected-cell").length,
       selectedRobotaxiCount: document.querySelectorAll('.robotaxi-map-object[data-active="true"]').length,
+      robotaxiInspectorVisible: Boolean(document.querySelector('.object-inspector-summary[aria-label*="运营摘要"]')),
+      robotaxiDetailTabLabels: [...document.querySelectorAll(".detail-tabs .ant-tabs-tab")].map((node) => node.textContent.trim()),
       hoverCardVisible: Boolean(document.querySelector(".map-hover-card")),
       visibleMapAnchorCount: [...document.querySelectorAll(".map-zone-anchor, .map-place-anchor")].filter((node) => {
         const rect = node.getBoundingClientRect();
@@ -229,6 +231,8 @@ try {
     assert(pageState.zoneLabels.includes("东部规划运营区"), `地图缺少 Zone 2：${JSON.stringify(pageState)}`);
     assert.equal(pageState.robotaxiMarkerCount, 20, `存在当前位置的 20 辆 Robotaxi 必须全部生成地图点位：${JSON.stringify(pageState)}`);
     assert.equal(pageState.selectedRobotaxiCount, 1, `点击 Robotaxi 后必须切换到唯一车辆详情：${JSON.stringify(pageState)}`);
+    assert(pageState.robotaxiInspectorVisible, `Robotaxi 详情必须显示专用运营摘要：${JSON.stringify(pageState)}`);
+    assert(["基础信息", "资产事实", "任务状态", "位置上下文", "行驶记录"].every((label) => pageState.robotaxiDetailTabLabels.includes(label)), `Robotaxi 详情必须保留完整分类：${JSON.stringify(pageState)}`);
     assert.equal(pageState.hoverCardVisible, false, `点击 Cell 后不得残留其他对象悬浮提示：${JSON.stringify(pageState)}`);
     assert(pageState.documentWidth <= pageState.viewportWidth + 1, `地图页面出现全局横向溢出：${JSON.stringify(pageState)}`);
   }

@@ -9374,7 +9374,7 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-4"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-5"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
