@@ -1,5 +1,8 @@
 .obsidian/
 
+# macOS Finder metadata
+.DS_Store
+
 # Robotaxi server logs
 .robotaxi-server.log
 
