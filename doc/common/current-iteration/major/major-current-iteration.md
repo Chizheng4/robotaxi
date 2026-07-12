@@ -1,14 +1,14 @@
 # 当前大版本迭代
 
-当前大版本：暂无执行中的大版本。
+当前大版本：v042.0 多区域运营空间与地图体验升级。
 
-当前状态：v041.4 已完成。
+当前状态：执行中。
 
-最近完成方案设计与自动化执行计划：`doc/common/iteration-history/major/v041.4-mobile-responsive-and-versioned-release-plan.md`
+方案设计与自动化执行计划：`doc/common/current-iteration/major/v042.0-multi-zone-map-experience-plan.md`
 
 最近完成方案设计与自动化执行计划：`doc/common/iteration-history/major/v041.3-autonomous-mobility-os-visual-upgrade-plan.md`
 
-当前执行指针：等待下一轮大版本规划。
+当前执行指针：Zone 1 兼容基线、空间目录迁移与 Zone 2 规划隔离。
 
 最近完成自动化执行计划：`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
 
