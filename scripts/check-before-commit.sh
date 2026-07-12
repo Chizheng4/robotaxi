@@ -49,6 +49,7 @@ rm -f "$TMP_BUNDLE"
 print_step "检查 JavaScript 语法"
 node --check src/main.bundle.js
 node --check scripts/build-github-pages.mjs
+node --check scripts/verify-browser-load.mjs
 node --check scripts/verify-github-pages-build.mjs
 node --check scripts/serve-github-pages-preview.mjs
 node --check scripts/generate-release-history.mjs
@@ -59,6 +60,7 @@ node --check src/ui/platformExperience.js
 node --check src/ui/robotaxiMapProjection.js
 node --check src/ui/responsiveViewport.js
 node --check src/ui/releaseHistory.js
+node --check src/ui/mapSceneService.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js
@@ -79,6 +81,7 @@ node --check src/services/fleetOperationPolicyService.js
 node --check src/services/taskDispatchStrategyService.js
 node --check src/services/robotaxiTaskPlanningService.js
 node --check src/services/supplyDemandBalanceService.js
+node --check src/services/spatialCatalogService.js
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
 node --check src/data/simulationRunBusinessScope.js
@@ -154,6 +157,7 @@ node scripts/verify-v041-2-business-planning.mjs
 node scripts/verify-v041-2-13-supply-demand-balance.mjs
 node scripts/verify-v041-3-1-map-projection.mjs
 node scripts/verify-v041-4-responsive-viewport.mjs
+node scripts/verify-v042-multi-zone-map.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

@@ -332,10 +332,12 @@ function resolveProfileDemand(profile) {
 function resolveTargetZoneIds(strategy, demandProfiles, zones) {
   if (Array.isArray(strategy.target_zone_ids) && strategy.target_zone_ids.length) return strategy.target_zone_ids;
   const zoneProfileIds = (demandProfiles || [])
-    .filter((profile) => profile.target_object_type === TargetObjectType.ZONE)
+    .filter((profile) => profile.target_object_type === TargetObjectType.ZONE && profile.profile_status === "ACTIVE")
     .map((profile) => profile.target_object_id);
   if (zoneProfileIds.length) return unique(zoneProfileIds);
-  return (zones || []).filter((zone) => !zone.parent_zone_id).map((zone) => zone.zone_id);
+  return (zones || [])
+    .filter((zone) => !zone.parent_zone_id && ["Testing", "Active"].includes(zone.zone_status))
+    .map((zone) => zone.zone_id);
 }
 
 function calculateAverageRevenue(orderFacts = []) {

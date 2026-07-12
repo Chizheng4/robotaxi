@@ -235,7 +235,7 @@ export function executeLongTermDemandForecastStrategy({
     ? strategy.target_zone_ids
     : Array.isArray(activeBusinessTarget?.target_zone_ids) && activeBusinessTarget.target_zone_ids.length
       ? activeBusinessTarget.target_zone_ids
-    : unique(demandProfiles.filter((item) => item.target_object_type === "ZONE").map((item) => item.target_object_id));
+    : unique(demandProfiles.filter((item) => item.target_object_type === "ZONE" && item.profile_status === "ACTIVE").map((item) => item.target_object_id));
   const zoneProfiles = demandProfiles.filter((profile) => profile.target_object_type === "ZONE" && targetZoneIds.includes(profile.target_object_id));
   const runId = resolveRunId(context);
   const resultBaseId = resolveResultBaseId(context);

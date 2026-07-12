@@ -6,13 +6,13 @@ Map（地图）是 Robotaxi 运营模拟中的空间容器。
 
 Map 由 Cell（网格单元）组成，Cell 是 Map 的最小空间单元。
 
-第一阶段采用规则网格地图：
+当前实现采用规则网格双区域地图：
 
 ```text
-地图尺寸：2000m × 2000m
+地图尺寸：4200m × 2000m
 Cell尺寸：50m × 50m
-网格规模：40 × 40
-Cell总数：1600
+网格规模：84 × 40
+Cell总数：3360
 ```
 
 ---
@@ -36,13 +36,13 @@ Cell总数：1600
 ```json
 {
   "map_id": "M-001",
-  "map_name": "20台Robotaxi最小运营模拟地图",
-  "map_width_m": 2000,
+  "map_name": "双区域 Robotaxi 运营网络地图",
+  "map_width_m": 4200,
   "map_height_m": 2000,
   "cell_size_m": 50,
-  "grid_cols": 40,
+  "grid_cols": 84,
   "grid_rows": 40,
-  "total_cells": 1600,
+  "total_cells": 3360,
   "coordinate_type": "SIMULATION_GRID"
 }
 ```
@@ -58,7 +58,7 @@ Cell（网格单元）是 Map 的最小空间单元。
 ```text
 cell_id = C-row-col
 row = 0 ~ 39
-col = 0 ~ 39
+col = 0 ~ 83
 ```
 
 示例：
@@ -67,6 +67,7 @@ col = 0 ~ 39
 C-00-00
 C-10-15
 C-39-39
+C-12-83
 ```
 
 ### Cell 基础类型

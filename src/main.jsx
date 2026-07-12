@@ -58,6 +58,8 @@ let supplyDemandBalanceService;
 let platformExperience;
 let robotaxiMapProjection;
 let responsiveViewport;
+let spatialCatalogService;
+let mapSceneService;
 let releaseHistory = [];
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
@@ -7353,9 +7355,17 @@ function formatCostAmount(amount, currencyCode = "CNY") {
 
 function MapCanvas({ data, selected, onSelect }) {
   const map = data.maps[0];
+  const scene = useMemo(
+    () => mapSceneService.createMapScene(data),
+    [data.maps, data.zones, data.places, data.serviceAreas, data.roads, data.roadSegments],
+  );
   const dragRef = useRef(null);
+  const didDragRef = useRef(false);
+  const sceneRef = useRef(null);
+  const frameRef = useRef(0);
   const [viewport, setViewport] = useState({ zoom: 1, panX: 0, panY: 0 });
-  const placeTypeByCellId = createPlaceTypeByCellId(data.places);
+  const [hovered, setHovered] = useState(null);
+  const [layersOpen, setLayersOpen] = useState(false);
   const selectedRobotaxi = selected?.type === "robotaxi"
     ? data.robotaxis?.find((robotaxi) => robotaxi.robotaxi_id === selected.id)
     : null;
@@ -7364,6 +7374,29 @@ function MapCanvas({ data, selected, onSelect }) {
     ? data.routes.find((route) => route.route_id === selectedRouteId)
     : null;
   const highlightedCells = new Set(selectedRoute ? routeCellIds(selectedRoute, data.roadSegments) : []);
+  const highlightedRoutePoints = [...highlightedCells].map((cellId) => {
+    const { row, col } = parseCellId(cellId);
+    return `${col + 0.5},${row + 0.5}`;
+  }).join(" ");
+  const zoomBand = viewport.zoom >= 2 ? "detail" : viewport.zoom >= 1.25 ? "district" : "network";
+  const hoverPresentation = hovered
+    ? mapSceneService.getMapObjectPresentation(hovered.type, hovered.id, data)
+    : null;
+
+  useEffect(() => {
+    applySceneTransform(viewport);
+  }, [viewport]);
+
+  useEffect(() => () => {
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+  }, []);
+
+  function applySceneTransform(nextViewport) {
+    sceneRef.current?.setAttribute(
+      "transform",
+      `translate(${nextViewport.panX} ${nextViewport.panY}) scale(${nextViewport.zoom})`,
+    );
+  }
 
   function changeZoom(nextZoom) {
     setViewport((current) => ({
@@ -7383,11 +7416,14 @@ function MapCanvas({ data, selected, onSelect }) {
   }
 
   function handlePointerDown(event) {
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    didDragRef.current = false;
     dragRef.current = {
       x: event.clientX,
       y: event.clientY,
       panX: viewport.panX,
       panY: viewport.panY,
+      next: viewport,
     };
   }
 
@@ -7398,63 +7434,167 @@ function MapCanvas({ data, selected, onSelect }) {
     const unitY = map.grid_rows / rect.height / viewport.zoom;
     const deltaX = (event.clientX - dragRef.current.x) * unitX;
     const deltaY = (event.clientY - dragRef.current.y) * unitY;
-    setViewport({
+    if (Math.hypot(event.clientX - dragRef.current.x, event.clientY - dragRef.current.y) > 4) {
+      didDragRef.current = true;
+      setHovered(null);
+    }
+    dragRef.current.next = {
       zoom: viewport.zoom,
       panX: dragRef.current.panX + deltaX,
       panY: dragRef.current.panY + deltaY,
+    };
+    if (frameRef.current) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0;
+      if (dragRef.current?.next) applySceneTransform(dragRef.current.next);
     });
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(event) {
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (dragRef.current?.next) setViewport(dragRef.current.next);
     dragRef.current = null;
+  }
+
+  function showHover(event, type, id) {
+    if (event.pointerType === "touch") return;
+    const rect = event.currentTarget.closest(".map-stage")?.getBoundingClientRect();
+    const pointerX = event.clientX - (rect?.left || 0);
+    const pointerY = event.clientY - (rect?.top || 0);
+    const x = Math.max(8, Math.min(pointerX + 12, (rect?.width || 260) - 248));
+    const y = Math.max(8, Math.min(pointerY + 12, (rect?.height || 180) - 172));
+    setHovered({ type, id, x, y });
+  }
+
+  function selectMapObject(event, type, id) {
+    event.stopPropagation();
+    setHovered(null);
+    onSelect(type, id);
+  }
+
+  function handleMapClick(event) {
+    if (didDragRef.current) {
+      didDragRef.current = false;
+      return;
+    }
+    const svg = event.currentTarget;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const coordinates = point.matrixTransform(sceneRef.current?.getScreenCTM()?.inverse());
+    const cellId = mapSceneService.resolveCellAtPoint({ x: coordinates.x, y: coordinates.y, map });
+    if (cellId) onSelect("cell", cellId);
   }
 
   return (
     <section className="map-page-new">
-      <div className="map-stage">
-        <div className="map-network-summary" aria-label="运营网络对象概览">
-          <strong>全网运营</strong>
-          <span>Robotaxi {data.robotaxis?.length || 0}</span>
-          <span>服务区域 {data.serviceAreas?.length || 0}</span>
-          <span>运营中心 {data.opsCenters?.length || 0}</span>
-        </div>
+      <div className="map-stage" data-zoom-band={zoomBand}>
         <div className="map-floating-actions">
-          <Button size="small" onClick={() => changeZoom(viewport.zoom + 0.2)}>放大</Button>
-          <Button size="small" onClick={() => changeZoom(viewport.zoom - 0.2)}>缩小</Button>
-          <Button size="small" onClick={resetViewport}>复位</Button>
+          <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeZoom(viewport.zoom + 0.2)}>+</Button>
+          <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeZoom(viewport.zoom - 0.2)}>−</Button>
+          <Button size="small" aria-label="复位地图" title="复位" onClick={resetViewport}>⌖</Button>
+          <Button size="small" aria-label="地图图层" title="图层" onClick={() => setLayersOpen((current) => !current)}>▤</Button>
         </div>
+        {layersOpen && (
+          <div className="map-layer-panel" role="dialog" aria-label="地图图层说明">
+            {legendItems.map(([className, label]) => (
+              <span className="legend-item" key={className}><span className={`legend-dot ${className}`} />{label}</span>
+            ))}
+          </div>
+        )}
         <svg
           className="zone-canvas-new"
           viewBox={`0 0 ${map.grid_cols} ${map.grid_rows}`}
-          preserveAspectRatio="xMidYMid meet"
+          preserveAspectRatio="xMidYMid slice"
           role="img"
-          aria-label="Robotaxi simulation map"
+          aria-label="Robotaxi 双区域运营地图"
           onWheel={handleWheel}
-          onMouseDown={handlePointerDown}
-          onMouseMove={handlePointerMove}
-          onMouseUp={handlePointerUp}
-          onMouseLeave={handlePointerUp}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onClick={handleMapClick}
         >
-          <g transform={`translate(${viewport.panX} ${viewport.panY}) scale(${viewport.zoom})`}>
-            <g className="map-cells">
-              {data.cells.map((cell) => (
-                <rect
-                  key={cell.cell_id}
-                  x={cell.col}
-                  y={cell.row}
-                  width="1"
-                  height="1"
-                  className={`map-cell ${getCellClass(cell, placeTypeByCellId)}`}
-                  data-active={selected?.type === "cell" && selected?.id === cell.cell_id}
-                  data-route={highlightedCells.has(cell.cell_id)}
-                  onClick={() => onSelect("cell", cell.cell_id)}
-                />
+          <defs>
+            <pattern id="map-grid-pattern" width="1" height="1" patternUnits="userSpaceOnUse">
+              <path d="M 1 0 L 0 0 0 1" className="map-grid-line" />
+            </pattern>
+          </defs>
+          <g ref={sceneRef} transform={`translate(${viewport.panX} ${viewport.panY}) scale(${viewport.zoom})`}>
+            <rect className="map-ground" x="0" y="0" width={map.grid_cols} height={map.grid_rows} />
+            <rect className="map-grid" x="0" y="0" width={map.grid_cols} height={map.grid_rows} fill="url(#map-grid-pattern)" />
+            <g className="zone-layer">
+              {scene.zones.map((zone) => (
+                <g key={zone.zone_id} className="map-zone-object" data-planned={zone.zone_status === "Planned"}>
+                  <rect className="map-zone-fill" x={zone.bounds.x} y={zone.bounds.y} width={zone.bounds.width} height={zone.bounds.height} />
+                  <rect
+                    className="map-zone-boundary"
+                    x={zone.bounds.x + 0.18}
+                    y={zone.bounds.y + 0.18}
+                    width={zone.bounds.width - 0.36}
+                    height={zone.bounds.height - 0.36}
+                    data-active={selected?.type === "zone" && selected?.id === zone.zone_id}
+                    onPointerEnter={(event) => showHover(event, "zone", zone.zone_id)}
+                    onPointerLeave={() => setHovered(null)}
+                    onClick={(event) => selectMapObject(event, "zone", zone.zone_id)}
+                  />
+                  <text className="map-zone-label" x={zone.labelX} y={zone.bounds.y + 2.2} textAnchor="middle">{zone.zone_name}</text>
+                  <text className="map-zone-status" x={zone.labelX} y={zone.bounds.y + 3.6} textAnchor="middle">{getDisplayValue(zone.zone_status)}</text>
+                </g>
               ))}
             </g>
-            <ServiceAreas serviceAreas={data.serviceAreas} selected={selected} />
-            <OpsCenters opsCenters={data.opsCenters || []} selected={selected} />
+            <g className="place-layer">
+              {scene.places.map((place) => (
+                <g key={place.place_id} className={`map-place-object map-place-${String(place.place_type).toLowerCase().replaceAll("_", "-")}`} data-planned={place.place_status === "Planned"}>
+                  <rect
+                    x={place.bounds.x}
+                    y={place.bounds.y}
+                    width={place.bounds.width}
+                    height={place.bounds.height}
+                    data-active={selected?.type === "place" && selected?.id === place.place_id}
+                    onPointerEnter={(event) => showHover(event, "place", place.place_id)}
+                    onPointerLeave={() => setHovered(null)}
+                    onClick={(event) => selectMapObject(event, "place", place.place_id)}
+                  />
+                  <text className="map-place-label" x={place.bounds.centerX} y={place.bounds.centerY} textAnchor="middle">{place.place_name}</text>
+                </g>
+              ))}
+            </g>
+            <g className="road-layer">
+              {scene.roads.flatMap((road) => road.paths.map((points, index) => (
+                <polyline
+                  key={`${road.road_id}-${index}`}
+                  className="map-road-line"
+                  data-planned={road.road_status === "Planned"}
+                  points={points}
+                  onPointerEnter={(event) => showHover(event, "road", road.road_id)}
+                  onPointerLeave={() => setHovered(null)}
+                  onClick={(event) => selectMapObject(event, "road", road.road_id)}
+                />
+              )))}
+              {scene.roads.map((road) => road.bounds.width > 0 && (
+                <text className="map-road-label" key={`${road.road_id}-label`} x={road.bounds.centerX} y={road.bounds.centerY - 0.45} textAnchor="middle">{road.road_name}</text>
+              ))}
+            </g>
+            <g className="service-area-layer">
+              {scene.serviceAreas.map((area) => (
+                <g key={area.service_area_id} className="map-service-area-object" data-planned={area.service_area_status === "PLANNED"}>
+                  <path
+                    className="service-area-cell"
+                    d={area.path}
+                    data-active={selected?.type === "serviceArea" && selected?.id === area.service_area_id}
+                    onPointerEnter={(event) => showHover(event, "serviceArea", area.service_area_id)}
+                    onPointerLeave={() => setHovered(null)}
+                    onClick={(event) => selectMapObject(event, "serviceArea", area.service_area_id)}
+                  />
+                  <text className="map-service-area-label" x={area.bounds.centerX} y={area.bounds.centerY - 0.5} textAnchor="middle">{area.service_area_name}</text>
+                </g>
+              ))}
+            </g>
+            {highlightedRoutePoints && <polyline className="map-selected-route" points={highlightedRoutePoints} />}
+            <OpsCenters opsCenters={data.opsCenters || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={() => setHovered(null)} />
             <RoadNodes roadNodes={data.roadNodes} selected={selected} />
-            <Robotaxis robotaxis={data.robotaxis || []} selected={selected} onSelect={onSelect} />
+            <Robotaxis robotaxis={data.robotaxi || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={() => setHovered(null)} />
             <rect
               x="0"
               y="0"
@@ -7465,42 +7605,23 @@ function MapCanvas({ data, selected, onSelect }) {
             />
           </g>
         </svg>
-      </div>
-
-      <div className="legend-new">
-        {legendItems.map(([className, label]) => (
-          <span className="legend-item" key={className}>
-            <span className={`legend-dot ${className}`} />
-            {label}
-          </span>
-        ))}
+        {hoverPresentation && (
+          <div className="map-hover-card" style={{ left: hovered.x, top: hovered.y }} role="status">
+            <strong>{hoverPresentation.title}</strong>
+            {hoverPresentation.subtitle && <span>{getDisplayValue(hoverPresentation.subtitle)}</span>}
+            <dl>
+              {hoverPresentation.fields.map(({ field, value }) => (
+                <div key={field}><dt>{getFieldLabel(field)}</dt><dd>{getFieldDisplayValue(field, value, {})}</dd></div>
+              ))}
+            </dl>
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-function ServiceAreas({ serviceAreas, selected }) {
-  return (
-    <g className="service-area-layer">
-      {serviceAreas.flatMap((area) => (area.cell_ids || area.covered_cell_ids || []).map((cellId) => {
-        const { row, col } = parseCellId(cellId);
-        return (
-          <rect
-            key={`${area.service_area_id}-${cellId}`}
-            x={col + 0.12}
-            y={row + 0.12}
-            width="0.76"
-            height="0.76"
-            className="service-area-cell"
-            data-active={selected?.type === "serviceArea" && selected?.id === area.service_area_id}
-          />
-        );
-      }))}
-    </g>
-  );
-}
-
-function OpsCenters({ opsCenters, selected }) {
+function OpsCenters({ opsCenters, selected, onSelect, onHover, onHoverEnd }) {
   return (
     <g className="ops-center-layer">
       {opsCenters.flatMap((opsCenter) => opsCenter.cell_ids.map((cellId) => {
@@ -7514,6 +7635,9 @@ function OpsCenters({ opsCenters, selected }) {
             height="0.88"
             className="ops-center-cell"
             data-active={selected?.type === "opsCenter" && selected?.id === opsCenter.ops_center_id}
+            onPointerEnter={(event) => onHover(event, "opsCenter", opsCenter.ops_center_id)}
+            onPointerLeave={onHoverEnd}
+            onClick={(event) => onSelect(event, "opsCenter", opsCenter.ops_center_id)}
           />
         );
       }))}
@@ -7538,7 +7662,7 @@ function RoadNodes({ roadNodes, selected }) {
   );
 }
 
-function Robotaxis({ robotaxis, selected, onSelect }) {
+function Robotaxis({ robotaxis, selected, onSelect, onHover, onHoverEnd }) {
   const projections = useMemo(
     () => robotaxiMapProjection.createRobotaxiMapProjections(robotaxis),
     [robotaxis],
@@ -7560,14 +7684,15 @@ function Robotaxis({ robotaxis, selected, onSelect }) {
             role="button"
             tabIndex="0"
             aria-label={`${item.robotaxi_id}，${getDisplayValue(item.availability_status)}，当前位置 ${cellId}，当前电量 ${batteryPercent.toFixed(0)}%`}
+            onPointerEnter={(event) => onHover(event, "robotaxi", item.robotaxi_id)}
+            onPointerLeave={onHoverEnd}
             onClick={(event) => {
-              event.stopPropagation();
-              onSelect("robotaxi", item.robotaxi_id);
+              onSelect(event, "robotaxi", item.robotaxi_id);
             }}
             onKeyDown={(event) => {
               if (event.key !== "Enter" && event.key !== " ") return;
               event.preventDefault();
-              onSelect("robotaxi", item.robotaxi_id);
+              onSelect(event, "robotaxi", item.robotaxi_id);
             }}
           >
             <circle className="robotaxi-map-halo" cx={centerX} cy={centerY} r="0.48" />
@@ -9115,10 +9240,12 @@ async function bootstrap() {
 		    platformExperienceModule,
 		    robotaxiMapProjectionModule,
 		    responsiveViewportModule,
+		    spatialCatalogServiceModule,
+		    mapSceneServiceModule,
 		    releaseHistoryModule,
 		  ] = await Promise.all([
-    import("./data/mapInitialization.js?v=20260608-v018-bfs-route-planning"),
-    import("./data/mapValidation.js?v=20260608-v018-bfs-route-planning"),
+    import("./data/mapInitialization.js?v=20260712-v042-0-0"),
+    import("./data/mapValidation.js?v=20260712-v042-0-0"),
     import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/customerInitialization.js?v=20260611-v019-1-customer"),
     import("./data/demandSimulationInitialization.js?v=20260611-v019-2-demand-simulation"),
@@ -9159,7 +9286,7 @@ async function bootstrap() {
 		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
 		    import("./data/metricCalculator.js?v=20260629-v034-6"),
 		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
-		    import("./services/routePlanningService.js?v=20260625-v029-4"),
+		    import("./services/routePlanningService.js?v=20260712-v042-0-0"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
 		    import("./domain/routePlanningStrategies.js?v=20260625-v030-3"),
 		    import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"),
@@ -9170,14 +9297,16 @@ async function bootstrap() {
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
-		    import("./services/businessPlanningService.js?v=20260709-v041-2-1"),
-		    import("./services/supplyDemandBalanceService.js?v=20260710-v041-2-13"),
+		    import("./services/businessPlanningService.js?v=20260712-v042-0-0"),
+		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
 		    import("./data/supplyManagementInitialization.js"),
-		    import("./data/spatialBusinessProfileInitialization.js"),
+		    import("./data/spatialBusinessProfileInitialization.js?v=20260712-v042-0-0"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260710-v041-3-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
-		    import("./ui/releaseHistory.js?v=20260711-v041-4-4"),
+		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
+		    import("./ui/mapSceneService.js?v=20260712-v042-0-0"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-0"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -9242,6 +9371,8 @@ async function bootstrap() {
 		  platformExperience = platformExperienceModule;
 		  robotaxiMapProjection = robotaxiMapProjectionModule;
 		  responsiveViewport = responsiveViewportModule;
+		  spatialCatalogService = spatialCatalogServiceModule;
+		  mapSceneService = mapSceneServiceModule;
 		  releaseHistory = releaseHistoryModule.releaseHistory;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
@@ -10835,7 +10966,7 @@ function loadRuntimeSnapshot(initialData) {
     const simulationRuns = Array.isArray(snapshot.simulationRuns) ? snapshot.simulationRuns : [];
     const simulationEvents = Array.isArray(snapshot.simulationEvents) ? snapshot.simulationEvents : [];
     const timedOperations = Array.isArray(snapshot.timedOperations) ? snapshot.timedOperations : [];
-    const operationalData = normalizeOperationalRouteStrategies({
+    const operationalData = normalizeOperationalRouteStrategies(spatialCatalogService.mergeSpatialCatalog({
       ...initialData,
       ...(snapshot.operationalData || {}),
       businessTargets: snapshot.operationalData?.businessTargets || initialData.businessTargets || [],
@@ -10859,7 +10990,7 @@ function loadRuntimeSnapshot(initialData) {
       placeDemandProfiles: snapshot.operationalData?.placeDemandProfiles || initialData.placeDemandProfiles || [],
       serviceAreaDemandProfiles: snapshot.operationalData?.serviceAreaDemandProfiles || initialData.serviceAreaDemandProfiles || [],
       zoneDemandProfiles: snapshot.operationalData?.zoneDemandProfiles || initialData.zoneDemandProfiles || [],
-    });
+    }, initialData));
     taskSequence = deriveSequence(readinessTasks, "task_id", "TASK-RC-");
     fleetOperationTaskSequence = Math.max(
       deriveSequence(cleaningTasks, "task_id", "TASK-CLN-"),

@@ -453,6 +453,351 @@
   }
 }
 
+/* v042.0 multi-zone operational map scene */
+.map-page-new {
+  display: block;
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-soft);
+}
+
+.map-stage {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #eef3f6;
+}
+
+.zone-canvas-new {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #eef3f6;
+  box-shadow: none;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.zone-canvas-new:active {
+  cursor: grabbing;
+}
+
+.map-ground {
+  fill: #f7f9fb;
+}
+
+.map-grid {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.map-grid-line {
+  fill: none;
+  stroke: #e5ebf0;
+  stroke-width: 0.045;
+}
+
+.map-zone-fill {
+  fill: rgba(177, 211, 194, 0.2);
+  pointer-events: none;
+}
+
+.map-zone-object[data-planned="true"] .map-zone-fill {
+  fill: rgba(222, 204, 154, 0.18);
+}
+
+.map-zone-boundary {
+  fill: transparent;
+  stroke: #6f9f88;
+  stroke-width: 0.18;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.map-zone-object[data-planned="true"] .map-zone-boundary {
+  stroke: #b49a61;
+  stroke-dasharray: 0.8 0.5;
+}
+
+.map-zone-boundary[data-active="true"] {
+  stroke: var(--accent);
+  stroke-width: 0.32;
+}
+
+.map-zone-label,
+.map-zone-status,
+.map-place-label,
+.map-service-area-label,
+.map-road-label {
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(247, 249, 251, 0.96);
+  stroke-width: 0.24;
+  stroke-linejoin: round;
+  letter-spacing: 0;
+}
+
+.map-zone-label {
+  fill: #284638;
+  font-size: 1.25px;
+  font-weight: 600;
+}
+
+.map-zone-status {
+  fill: #6f7e75;
+  font-size: 0.72px;
+}
+
+.map-place-object rect {
+  fill: rgba(221, 232, 226, 0.88);
+  stroke: rgba(105, 139, 121, 0.4);
+  stroke-width: 0.12;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.map-place-residential rect { fill: rgba(207, 235, 216, 0.92); }
+.map-place-office rect { fill: rgba(211, 226, 243, 0.92); }
+.map-place-commercial rect { fill: rgba(247, 226, 183, 0.92); }
+.map-place-hospital rect { fill: rgba(242, 213, 216, 0.92); }
+.map-place-metro-station rect,
+.map-place-transport-hub rect { fill: rgba(198, 231, 231, 0.92); }
+.map-place-hotel rect { fill: rgba(235, 218, 232, 0.92); }
+.map-place-ops-center rect { fill: rgba(221, 217, 235, 0.92); }
+
+.map-place-object[data-planned="true"] rect {
+  opacity: 0.68;
+  stroke-dasharray: 0.55 0.35;
+}
+
+.map-place-object rect[data-active="true"],
+.service-area-cell[data-active="true"],
+.ops-center-cell[data-active="true"] {
+  stroke: var(--accent);
+  stroke-width: 0.3;
+}
+
+.map-place-label {
+  fill: #405548;
+  font-size: 0.78px;
+  font-weight: 550;
+}
+
+.map-road-line {
+  fill: none;
+  stroke: #aab8c4;
+  stroke-width: 0.62;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.map-road-line[data-planned="true"] {
+  stroke: #c7b991;
+  stroke-dasharray: 1.2 0.7;
+}
+
+.map-road-label {
+  display: none;
+  fill: #657585;
+  font-size: 0.56px;
+}
+
+.service-area-cell {
+  fill: rgba(49, 155, 137, 0.54);
+  stroke: rgba(31, 117, 103, 0.82);
+  stroke-width: 0.12;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.map-service-area-object[data-planned="true"] .service-area-cell {
+  fill: rgba(191, 163, 95, 0.38);
+  stroke: #a78d55;
+  stroke-dasharray: 0.45 0.3;
+}
+
+.map-service-area-label {
+  display: none;
+  fill: #285f58;
+  font-size: 0.54px;
+}
+
+.map-selected-route {
+  fill: none;
+  stroke: var(--route);
+  stroke-width: 0.28;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.map-stage[data-zoom-band="district"] .map-service-area-label,
+.map-stage[data-zoom-band="detail"] .map-service-area-label,
+.map-stage[data-zoom-band="detail"] .map-road-label {
+  display: block;
+}
+
+.map-stage[data-zoom-band="detail"] .map-zone-label { font-size: 0.72px; }
+.map-stage[data-zoom-band="detail"] .map-zone-status { font-size: 0.46px; }
+.map-stage[data-zoom-band="detail"] .map-place-label { font-size: 0.5px; }
+
+.map-floating-actions {
+  inset: auto 12px 12px auto !important;
+  width: max-content;
+  height: auto;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(201, 214, 226, 0.9);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 14px rgba(39, 61, 82, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.map-floating-actions .ant-btn {
+  min-width: 28px;
+  height: 28px;
+  padding-inline: 8px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.map-layer-panel {
+  position: absolute;
+  top: 52px;
+  right: 12px;
+  z-index: 7;
+  display: grid;
+  width: 176px;
+  max-height: min(360px, calc(100% - 64px));
+  gap: 8px;
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 22px rgba(39, 61, 82, 0.12);
+}
+
+.map-hover-card {
+  position: absolute;
+  z-index: 8;
+  width: 236px;
+  max-width: calc(100% - 24px);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 8px 22px rgba(39, 61, 82, 0.13);
+  pointer-events: none;
+}
+
+.map-hover-card > strong,
+.map-hover-card > span {
+  display: block;
+}
+
+.map-hover-card > strong {
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.map-hover-card > span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.map-hover-card dl {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+}
+
+.map-hover-card dl > div {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 10px;
+  font-size: var(--font-xs);
+}
+
+.map-hover-card dt { color: var(--muted); }
+.map-hover-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.legend-new,
+.map-network-summary {
+  display: none;
+}
+
+.map-layer-panel {
+  inset: auto 12px 52px auto !important;
+}
+
+@media (max-width: 560px) {
+  .map-floating-actions {
+    inset: auto 8px 8px auto !important;
+  }
+
+  .map-layer-panel {
+    inset: auto 8px 48px auto !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .map-zone-label,
+  .map-zone-status,
+  .map-place-label,
+  .map-service-area-label,
+  .map-road-label,
+  .robotaxi-map-label {
+    display: none !important;
+  }
+
+  .map-floating-actions {
+    top: 10px;
+    right: 8px;
+  }
+
+  .map-layer-panel {
+    top: 50px;
+    right: 8px;
+    width: min(176px, calc(100% - 16px));
+  }
+}
+
+@media (max-width: 767px) {
+  .map-floating-actions {
+    top: 8px;
+    right: 8px;
+  }
+
+  .map-layer-panel {
+    top: 46px;
+    right: 8px;
+  }
+
+  .map-hover-card {
+    display: none;
+  }
+}
+
 /* v041.3 Autonomous Mobility OS visual foundation */
 :root {
   --bg: #f1f5f9;
@@ -4600,4 +4945,62 @@ html[data-keyboard-open="true"] .platform-login-panel {
     max-height: calc(var(--app-viewport-height) - 24px);
     overflow-y: auto;
   }
+}
+
+/* v042.0 final map-scene ownership overrides */
+.map-page-new {
+  display: block;
+  position: relative;
+  height: 100%;
+  grid-template-rows: none;
+  overflow: hidden;
+  background: var(--surface-soft);
+}
+
+.map-stage {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #eef3f6;
+}
+
+.zone-canvas-new {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #eef3f6;
+  box-shadow: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.map-floating-actions {
+  top: 12px;
+  right: 12px;
+  border-color: rgba(201, 214, 226, 0.9);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 14px rgba(39, 61, 82, 0.08);
+}
+
+.map-floating-actions .ant-btn {
+  min-width: 28px;
+  height: 28px;
+  padding-inline: 8px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.service-area-cell {
+  fill: rgba(49, 155, 137, 0.54);
+  stroke: rgba(31, 117, 103, 0.82);
+}
+
+.legend-new,
+.map-network-summary {
+  display: none;
 }

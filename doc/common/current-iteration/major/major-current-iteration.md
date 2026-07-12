@@ -1,18 +1,16 @@
 # 当前大版本迭代
 
-当前大版本：v042.0 多区域运营空间与地图体验升级。
+当前大版本：暂无，v042.0 多区域运营空间与地图体验升级已完成。
 
-当前状态：执行中。
+当前状态：已完成并归档。
 
-方案设计与自动化执行计划：`doc/common/current-iteration/major/v042.0-multi-zone-map-experience-plan.md`
+最近完成方案设计与自动化执行计划：`doc/common/iteration-history/major/v042.0-multi-zone-map-experience-plan.md`
 
-最近完成方案设计与自动化执行计划：`doc/common/iteration-history/major/v041.3-autonomous-mobility-os-visual-upgrade-plan.md`
-
-当前执行指针：Zone 1 兼容基线、空间目录迁移与 Zone 2 规划隔离。
+当前执行指针：等待下一次大版本规划。
 
 最近完成自动化执行计划：`doc/common/iteration-history/major/v041.2-business-planning-supply-auto-execution-plan.md`
 
-最新完成版本：v041.4.0 手机响应式基础与版本化发布。
+最新完成版本：v042.0.0 双区域运营空间与对象驱动地图。
 
 最近完成大版本：v040 Robotaxi 运维状态治理与任务优先级调度。
 

@@ -28,13 +28,13 @@ import {
 const MAP_ID = "M-001";
 const CELL_SIZE_M = 50;
 const GRID_ROWS = 40;
-const GRID_COLS = 40;
+const GRID_COLS = 84;
 
 export function initializeMapSpace() {
   const map = createMap({
     map_id: MAP_ID,
-    map_name: "20台Robotaxi最小运营模拟地图",
-    map_width_m: 2000,
+    map_name: "双区域 Robotaxi 运营网络地图",
+    map_width_m: GRID_COLS * CELL_SIZE_M,
     map_height_m: 2000,
     cell_size_m: CELL_SIZE_M,
     grid_cols: GRID_COLS,
@@ -103,6 +103,12 @@ function createRoads(map, roadSegments) {
     ["RD-003", "北侧横向主路", RoadType.MAIN_ROAD],
     ["RD-004", "南侧横向主路", RoadType.SECONDARY_ROAD],
     ["RD-005", "运营中心接入道路", RoadType.ACCESS_ROAD],
+    ["RD-006", "区域连接通道", RoadType.MAIN_ROAD],
+    ["RD-101", "东部西侧纵向主路", RoadType.MAIN_ROAD],
+    ["RD-102", "东部东侧纵向主路", RoadType.MAIN_ROAD],
+    ["RD-103", "东部北侧横向主路", RoadType.MAIN_ROAD],
+    ["RD-104", "东部南侧横向主路", RoadType.SECONDARY_ROAD],
+    ["RD-105", "东部运营中心接入道路", RoadType.ACCESS_ROAD],
   ];
 
   return definitions.map(([roadId, roadName, roadType]) => createRoad({
@@ -110,7 +116,7 @@ function createRoads(map, roadSegments) {
     map_id: map.map_id,
     road_name: roadName,
     road_type: roadType,
-    road_status: Status.ACTIVE,
+    road_status: roadId.startsWith("RD-1") || roadId === "RD-006" ? Status.PLANNED : Status.ACTIVE,
     road_segment_ids: roadSegments
       .filter((segment) => segment.road_id === roadId)
       .map((segment) => segment.road_segment_id),
@@ -133,6 +139,20 @@ function createRoadNodes(map) {
     ["RN-012", 28, 39, NodeType.ROAD_ENDPOINT],
     ["RN-013", 35, 25, NodeType.INTERSECTION],
     ["RN-014", 35, 31, NodeType.ENTRANCE_EXIT],
+    ["RN-101", 0, 54, NodeType.ROAD_ENDPOINT],
+    ["RN-102", 12, 54, NodeType.INTERSECTION],
+    ["RN-103", 28, 54, NodeType.INTERSECTION],
+    ["RN-104", 39, 54, NodeType.ROAD_ENDPOINT],
+    ["RN-105", 0, 69, NodeType.ROAD_ENDPOINT],
+    ["RN-106", 12, 69, NodeType.INTERSECTION],
+    ["RN-107", 28, 69, NodeType.INTERSECTION],
+    ["RN-108", 39, 69, NodeType.ROAD_ENDPOINT],
+    ["RN-109", 12, 44, NodeType.ROAD_ENDPOINT],
+    ["RN-110", 12, 83, NodeType.ROAD_ENDPOINT],
+    ["RN-111", 28, 44, NodeType.ROAD_ENDPOINT],
+    ["RN-112", 28, 83, NodeType.ROAD_ENDPOINT],
+    ["RN-113", 35, 69, NodeType.INTERSECTION],
+    ["RN-114", 35, 77, NodeType.ENTRANCE_EXIT],
   ];
 
   return definitions.map(([roadNodeId, row, col, nodeType]) => createRoadNode({
@@ -144,7 +164,7 @@ function createRoadNodes(map) {
     x: col * map.cell_size_m,
     y: row * map.cell_size_m,
     node_type: nodeType,
-    node_status: Status.ACTIVE,
+    node_status: roadNodeId.startsWith("RN-1") && Number(roadNodeId.slice(3)) >= 100 ? Status.PLANNED : Status.ACTIVE,
   }));
 }
 
@@ -165,6 +185,21 @@ function createRoadSegments(map, roadNodes) {
     ["RS-012", "RD-004", "RN-007", "RN-012", rangeCells({ row: 28, colStart: 25, colEnd: 39 })],
     ["RS-013", "RD-002", "RN-013", "RN-008", rangeCells({ col: 25, rowStart: 35, rowEnd: 39 })],
     ["RS-014", "RD-005", "RN-013", "RN-014", rangeCells({ row: 35, colStart: 25, colEnd: 31 })],
+    ["RS-015", "RD-006", "RN-010", "RN-109", rangeCells({ row: 12, colStart: 39, colEnd: 44 })],
+    ["RS-101", "RD-101", "RN-101", "RN-102", rangeCells({ col: 54, rowStart: 0, rowEnd: 12 })],
+    ["RS-102", "RD-101", "RN-102", "RN-103", rangeCells({ col: 54, rowStart: 12, rowEnd: 28 })],
+    ["RS-103", "RD-101", "RN-103", "RN-104", rangeCells({ col: 54, rowStart: 28, rowEnd: 39 })],
+    ["RS-104", "RD-102", "RN-105", "RN-106", rangeCells({ col: 69, rowStart: 0, rowEnd: 12 })],
+    ["RS-105", "RD-102", "RN-106", "RN-107", rangeCells({ col: 69, rowStart: 12, rowEnd: 28 })],
+    ["RS-106", "RD-102", "RN-107", "RN-113", rangeCells({ col: 69, rowStart: 28, rowEnd: 35 })],
+    ["RS-107", "RD-103", "RN-109", "RN-102", rangeCells({ row: 12, colStart: 44, colEnd: 54 })],
+    ["RS-108", "RD-103", "RN-102", "RN-106", rangeCells({ row: 12, colStart: 54, colEnd: 69 })],
+    ["RS-109", "RD-103", "RN-106", "RN-110", rangeCells({ row: 12, colStart: 69, colEnd: 83 })],
+    ["RS-110", "RD-104", "RN-111", "RN-103", rangeCells({ row: 28, colStart: 44, colEnd: 54 })],
+    ["RS-111", "RD-104", "RN-103", "RN-107", rangeCells({ row: 28, colStart: 54, colEnd: 69 })],
+    ["RS-112", "RD-104", "RN-107", "RN-112", rangeCells({ row: 28, colStart: 69, colEnd: 83 })],
+    ["RS-113", "RD-102", "RN-113", "RN-108", rangeCells({ col: 69, rowStart: 35, rowEnd: 39 })],
+    ["RS-114", "RD-105", "RN-113", "RN-114", rangeCells({ row: 35, colStart: 69, colEnd: 77 })],
   ];
 
   return definitions.map(([segmentId, roadId, startNodeId, endNodeId, cellIds]) => {
@@ -186,7 +221,7 @@ function createRoadSegments(map, roadNodes) {
       allowed_direction: AllowedDirection.BIDIRECTIONAL,
       speed_limit_kmh: 40,
       traversable: true,
-      segment_status: SegmentStatus.ACTIVE,
+      segment_status: segmentId.startsWith("RS-1") || segmentId === "RS-015" ? SegmentStatus.PLANNED : SegmentStatus.ACTIVE,
       service_area_ids: [],
     });
   });
@@ -200,6 +235,12 @@ function createPlaces(map) {
     ["P-004", "医院学校片区", PlaceType.HOSPITAL, rectCells(30, 37, 2, 9), 0.55, PeakPattern.ALL_DAY_STABLE],
     ["P-005", "地铁接驳点", PlaceType.METRO_STATION, rectCells(24, 27, 27, 31), 0.8, PeakPattern.ALL_DAY_STABLE],
     ["P-006", "最小运营测试中心", PlaceType.OPS_CENTER, rectCells(34, 35, 32, 33), 0.2, PeakPattern.MORNING_OUTBOUND],
+    ["P-101", "东部滨水居住区", PlaceType.RESIDENTIAL, rectCells(2, 10, 46, 52), 0.82, PeakPattern.MORNING_OUTBOUND],
+    ["P-102", "东部科技办公区", PlaceType.OFFICE, rectCells(2, 10, 72, 81), 0.92, PeakPattern.EVENING_OUTBOUND],
+    ["P-103", "东部城市商业中心", PlaceType.COMMERCIAL, rectCells(15, 23, 59, 67), 0.78, PeakPattern.ALL_DAY_STABLE],
+    ["P-104", "东部综合交通枢纽", PlaceType.TRANSPORT_HUB, rectCells(30, 37, 46, 52), 0.88, PeakPattern.ALL_DAY_STABLE],
+    ["P-105", "东部酒店会展区", PlaceType.HOTEL, rectCells(29, 33, 72, 81), 0.68, PeakPattern.EVENT_DRIVEN],
+    ["P-106", "东部规划运营中心", PlaceType.OPS_CENTER, rectCells(34, 35, 78, 79), 0.2, PeakPattern.LOW_DEMAND],
   ];
 
   return definitions.map(([placeId, placeName, placeType, cellIds, demandWeight, peakPattern]) => createPlace({
@@ -207,7 +248,7 @@ function createPlaces(map) {
     map_id: map.map_id,
     place_name: placeName,
     place_type: placeType,
-    place_status: Status.ACTIVE,
+    place_status: placeId.startsWith("P-1") ? Status.PLANNED : Status.ACTIVE,
     cell_ids: cellIds,
     demand_weight: demandWeight,
     peak_pattern: peakPattern,
@@ -223,6 +264,12 @@ function createServiceAreas(map) {
     ["SA-004", "医院学校东侧上下客区", ServiceAreaType.PICKUP_DROPOFF, ["RS-010"], rangeCells({ row: 28, colStart: 5, colEnd: 8 }), "service", 4],
     ["SA-005", "地铁站南侧接驳区", ServiceAreaType.MIXED, ["RS-012"], rangeCells({ row: 28, colStart: 26, colEnd: 27 }), "service", 2],
     ["SA-006", "运营中心接入道路待命区", ServiceAreaType.OPS_CENTER_AREA, ["RS-014"], rangeCells({ row: 35, colStart: 28, colEnd: 30 }), "stage", 6],
+    ["SA-101", "东部居住区接驾区", ServiceAreaType.PICKUP_DROPOFF, ["RS-101"], rangeCells({ col: 54, rowStart: 5, rowEnd: 7 }), "service", 3],
+    ["SA-102", "东部办公区接驾区", ServiceAreaType.PICKUP_DROPOFF, ["RS-104"], rangeCells({ col: 69, rowStart: 5, rowEnd: 7 }), "service", 3],
+    ["SA-103", "东部商业中心上下客区", ServiceAreaType.MIXED, ["RS-108"], rangeCells({ row: 12, colStart: 61, colEnd: 64 }), "service", 4],
+    ["SA-104", "东部交通枢纽接驳区", ServiceAreaType.MIXED, ["RS-110"], rangeCells({ row: 28, colStart: 49, colEnd: 52 }), "service", 4],
+    ["SA-105", "东部会展区上下客区", ServiceAreaType.PICKUP_DROPOFF, ["RS-112"], rangeCells({ row: 28, colStart: 74, colEnd: 76 }), "service", 3],
+    ["SA-106", "东部运营中心规划待命区", ServiceAreaType.OPS_CENTER_AREA, ["RS-114"], rangeCells({ row: 35, colStart: 72, colEnd: 74 }), "stage", 6],
   ];
 
   return definitions.map(([serviceAreaId, serviceAreaName, serviceAreaType, segmentIds, cellIds, capabilityMode, capacity]) => {
@@ -237,12 +284,12 @@ function createServiceAreas(map) {
       map_id: map.map_id,
       service_area_name: serviceAreaName,
       service_area_type: serviceAreaType,
-      service_area_status: ServiceAreaStatus.ACTIVE,
+      service_area_status: serviceAreaId.startsWith("SA-1") ? ServiceAreaStatus.PLANNED : ServiceAreaStatus.ACTIVE,
       cell_ids: cellIds,
       segment_ids: segmentIds,
       road_segment_ids: segmentIds,
       place_ids: [],
-      zone_id: null,
+      zone_id: serviceAreaId.startsWith("SA-1") ? "Z-002" : "Z-001",
       pickup_cell_ids: pickupCellIds,
       dropoff_cell_ids: dropoffCellIds,
       temp_stop_cell_ids: tempStopCellIds,
@@ -279,6 +326,12 @@ function createZones(map, cells, roadSegments, places, serviceAreas) {
     ["Z-001-C", "Z-001", "商业交通子区", ZoneLevel.SUB_ZONE, ZoneType.COMMERCIAL_ZONE, rectCells(12, 30, 12, 30)],
     ["Z-001-D", "Z-001", "医院学校子区", ZoneLevel.SUB_ZONE, ZoneType.MIXED_ZONE, rectCells(28, 39, 0, 14)],
     ["Z-001-E", "Z-001", "运营支持子区", ZoneLevel.SUB_ZONE, ZoneType.SUPPORT_ZONE, rectCells(34, 36, 28, 34)],
+    ["Z-002", null, "东部规划运营区", ZoneLevel.ZONE, ZoneType.MIXED_ZONE, rectCells(0, 39, 44, 83)],
+    ["Z-002-A", "Z-002", "东部居住子区", ZoneLevel.SUB_ZONE, ZoneType.RESIDENTIAL_ZONE, rectCells(0, 14, 44, 57)],
+    ["Z-002-B", "Z-002", "东部办公子区", ZoneLevel.SUB_ZONE, ZoneType.OFFICE_ZONE, rectCells(0, 14, 69, 83)],
+    ["Z-002-C", "Z-002", "东部商业子区", ZoneLevel.SUB_ZONE, ZoneType.COMMERCIAL_ZONE, rectCells(12, 27, 57, 69)],
+    ["Z-002-D", "Z-002", "东部枢纽会展子区", ZoneLevel.SUB_ZONE, ZoneType.TRANSPORT_ZONE, rectCells(28, 39, 44, 83)],
+    ["Z-002-E", "Z-002", "东部运营支持子区", ZoneLevel.SUB_ZONE, ZoneType.SUPPORT_ZONE, rectCells(34, 36, 69, 79)],
   ];
 
   const zoneIds = definitions.map(([zoneId]) => zoneId);
@@ -293,7 +346,7 @@ function createZones(map, cells, roadSegments, places, serviceAreas) {
       zone_name: zoneName,
       zone_level: zoneLevel,
       zone_type: zoneType,
-      zone_status: ZoneStatus.TESTING,
+      zone_status: zoneId.startsWith("Z-002") ? ZoneStatus.PLANNED : ZoneStatus.TESTING,
       cell_ids: cells.filter((cell) => cellSet.has(cell.cell_id)).map((cell) => cell.cell_id),
       road_segment_ids: roadSegments
         .filter((segment) => segment.cell_sequence.some((cellId) => cellSet.has(cellId)))
@@ -304,7 +357,7 @@ function createZones(map, cells, roadSegments, places, serviceAreas) {
       service_area_ids: serviceAreas
         .filter((area) => area.cell_ids.some((cellId) => cellSet.has(cellId)))
         .map((area) => area.service_area_id),
-      sub_zone_ids: parentZoneId ? [] : zoneIds.filter((id) => id !== zoneId),
+      sub_zone_ids: parentZoneId ? [] : definitions.filter(([, parentId]) => parentId === zoneId).map(([id]) => id),
     });
   });
 }
@@ -355,6 +408,12 @@ function attachServiceAreasToPlaces(places, serviceAreas) {
     "P-004": ["SA-004"],
     "P-005": ["SA-005"],
     "P-006": ["SA-006"],
+    "P-101": ["SA-101"],
+    "P-102": ["SA-102"],
+    "P-103": ["SA-103"],
+    "P-104": ["SA-104"],
+    "P-105": ["SA-105"],
+    "P-106": ["SA-106"],
   };
 
   places.forEach((place) => {

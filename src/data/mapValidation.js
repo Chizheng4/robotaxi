@@ -15,7 +15,12 @@ export function validateMapSpace(data) {
   const zoneById = new Map(data.zones.map((zone) => [zone.zone_id, zone]));
 
   return [
-    check("CELL_COUNT", "网格单元总数必须为 1600", data.cells.length === 1600, `当前 ${data.cells.length} 个网格单元`),
+    check(
+      "CELL_COUNT",
+      "网格单元总数必须与地图行列一致",
+      data.cells.length === data.maps.reduce((sum, map) => sum + Number(map.grid_rows || 0) * Number(map.grid_cols || 0), 0),
+      `当前 ${data.cells.length} 个网格单元`,
+    ),
     check("CELL_TYPE_EXCLUSIVE", "每个网格单元只能有一个基础空间类型", data.cells.every((cell) => typeof cell.base_cell_type === "string")),
     check(
       "ROAD_SEGMENT_ROAD_REF",

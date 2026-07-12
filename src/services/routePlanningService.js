@@ -761,7 +761,7 @@ function createBfsRoutePlan(data, originCellId, targetCellId) {
 function buildRoadCellGraph(roadSegments) {
   const graph = new Map();
   roadSegments
-    .filter((segment) => segment.segment_status !== "BLOCKED" && segment.segment_status !== "CLOSED" && segment.allowed_direction !== "CLOSED")
+    .filter((segment) => !["PLANNED", "BLOCKED", "CLOSED"].includes(segment.segment_status) && segment.allowed_direction !== "CLOSED")
     .forEach((segment) => {
       const cellSequence = segment.cell_sequence || segment.cell_ids || [];
       cellSequence.forEach((cellId) => ensureGraphNode(graph, cellId));
@@ -863,6 +863,7 @@ function getCandidateServiceAreaCellIds(serviceArea) {
 function getDeploymentTargetCandidates(data, originCellId) {
   const zones = data.zones || [];
   return (data.serviceAreas || []).flatMap((serviceArea) => {
+    if (serviceArea.service_area_status === "PLANNED") return [];
     const capabilities = serviceArea.vehicle_capabilities || {};
     if (!capabilities.can_stage && !capabilities.can_short_wait && !capabilities.can_park) return [];
     const targetZoneId = zones.find((zone) => zone.service_area_ids?.includes(serviceArea.service_area_id))?.zone_id || null;
