@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v042.0.7-real-map-hit-testing.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v042.0.8-unified-object-inspector-cell-focus.md`。
 
-最新完成版本：v042.0.7 地图真实命中与 Cell 选择。
+最新完成版本：v042.0.8 统一对象详情与 Cell 聚焦。
 
 当前执行指针：暂无。
 

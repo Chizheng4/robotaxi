@@ -1222,7 +1222,11 @@ export const fieldDictionary = {
 };
 
 export function getFieldLabel(field) {
-  return fieldDictionary[field] || field;
+  if (fieldDictionary[field]) return fieldDictionary[field];
+  if (typeof console !== "undefined" && /[A-Za-z_]/.test(String(field || ""))) {
+    console.warn(`[字段字典] 缺少字段中文名：${field}`);
+  }
+  return "未定义字段";
 }
 
 export function getDetailTitle(type) {

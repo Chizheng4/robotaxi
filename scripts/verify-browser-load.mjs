@@ -195,6 +195,22 @@ try {
         returnByValue: true,
       });
       assert(hoverVisibleResult.result?.result?.value, "桌面地点悬浮摘要必须可用");
+      await send("Input.dispatchMouseEvent", { type: "mousePressed", x: hoverPoint.x, y: hoverPoint.y, button: "left", clickCount: 1 });
+      await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: hoverPoint.x, y: hoverPoint.y, button: "left", clickCount: 1 });
+      await delay(150);
+      const placeSelectionResult = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const simple = document.querySelector(".object-inspector-content .compact-descriptions")?.getBoundingClientRect();
+          const complex = document.querySelector(".object-inspector-content .detail-block-list")?.getBoundingClientRect();
+          return {
+            selectedCells: document.querySelectorAll(".map-selected-cell").length,
+            aligned: Boolean(simple && complex && Math.abs(simple.left - complex.left) <= 1),
+          };
+        })()`,
+        returnByValue: true,
+      });
+      assert.equal(placeSelectionResult.result?.result?.value?.selectedCells, 1, "点击地点后必须保留精确 Cell 选中框");
+      assert(placeSelectionResult.result?.result?.value?.aligned, "详情简单字段与复杂字段必须共享统一左侧基线");
       for (const [label, mapX, mapY, expectedClass] of [
         ["道路", 14.5, 12.5, "map-road-cells"],
         ["服务区域", 18.5, 12.5, "service-area-cell"],
@@ -223,6 +239,11 @@ try {
         });
         assert(objectHoverResult.result?.result?.value, `桌面${label}悬浮摘要必须可用`);
       }
+      await send("Runtime.evaluate", {
+        expression: `document.querySelector(".detail-panel-new .panel-title button")?.click()`,
+        returnByValue: true,
+      });
+      await delay(150);
     }
     const robotaxiPointResult = await send("Runtime.evaluate", {
       expression: `(() => {
@@ -335,6 +356,7 @@ try {
     assert(pageState.zoneLabels.includes("最小运营测试区"), `地图缺少 Zone 1：${JSON.stringify(pageState)}`);
     assert(pageState.zoneLabels.includes("东部规划运营区"), `地图缺少 Zone 2：${JSON.stringify(pageState)}`);
     assert.equal(pageState.robotaxiMarkerCount, 20, `存在当前位置的 20 辆 Robotaxi 必须全部生成地图点位：${JSON.stringify(pageState)}`);
+    assert.equal(pageState.selectedCellCount, 1, `点击业务对象后必须同时保留唯一 Cell 选中框：${JSON.stringify(pageState)}`);
     assert.equal(pageState.selectedRobotaxiCount, 1, `点击 Robotaxi 后必须切换到唯一车辆详情：${JSON.stringify(pageState)}`);
     assert(pageState.robotaxiInspectorVisible, `Robotaxi 详情必须显示专用运营摘要：${JSON.stringify(pageState)}`);
     assert(["基础信息", "资产事实", "任务状态", "位置上下文", "行驶记录"].every((label) => pageState.robotaxiDetailTabLabels.includes(label)), `Robotaxi 详情必须保留完整分类：${JSON.stringify(pageState)}`);

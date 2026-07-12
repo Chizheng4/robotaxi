@@ -2330,12 +2330,8 @@ body {
   font-weight: 800;
 }
 
-.compact-descriptions {
-  padding: 8px 10px 12px;
-}
-
 .detail-tabs.ant-tabs {
-  padding: 0 10px;
+  padding: 0;
 }
 
 .detail-tabs .ant-tabs-nav {
@@ -2347,9 +2343,16 @@ body {
   font-size: var(--font-xs);
 }
 
-.detail-tabs .compact-descriptions {
-  padding: 4px 0 12px;
+.detail-tabs .ant-tabs-nav { padding-inline: 14px; }
+
+.object-inspector-content {
+  min-width: 0;
+  padding: 12px 14px 18px;
 }
+
+.object-inspector-tab-content { padding-top: 4px; }
+
+.object-inspector-fields { min-width: 0; }
 
 .cost-detail {
   display: grid;
@@ -3681,7 +3684,7 @@ body {
 }
 
 .detail-tabs.ant-tabs {
-  padding: 0 14px;
+  padding: 0;
 }
 
 .detail-tabs .ant-tabs-nav {
@@ -3698,9 +3701,7 @@ body {
   font-weight: 500;
 }
 
-.compact-descriptions {
-  padding: 12px 14px 18px;
-}
+.compact-descriptions { padding: 0; }
 
 .compact-descriptions .ant-descriptions-item {
   padding-bottom: 9px !important;

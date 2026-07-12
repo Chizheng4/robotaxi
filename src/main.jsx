@@ -6937,7 +6937,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
   }
 
   return (
-    <section className="detail-panel-new">
+    <section className="detail-panel-new object-inspector">
       <div className="panel-title">
         <span>{getDetailTitle(selectedType)}</span>
         <Button size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
@@ -6946,10 +6946,16 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
       {hasTabbedDetail(selectedType) ? (
         <TabbedDetail selectedObject={selectedObject} selectedType={selectedType} />
       ) : (
-        <DetailFieldContent selectedObject={selectedObject} keys={Object.keys(selectedObject)} />
+        <DetailContentViewport>
+          <DetailFieldContent selectedObject={selectedObject} keys={Object.keys(selectedObject)} />
+        </DetailContentViewport>
       )}
     </section>
   );
+}
+
+function DetailContentViewport({ children, className = "" }) {
+  return <div className={`object-inspector-content ${className}`.trim()}>{children}</div>;
 }
 
 function RobotaxiObjectSummary({ robotaxi }) {
@@ -6992,12 +6998,16 @@ function TabbedDetail({ selectedObject, selectedType }) {
       items={tabs.map((tab) => ({
         key: tab.key,
         label: tab.label,
-        children: tab.cost ? (
-          <CostDetail selectedObject={selectedObject} />
-        ) : tab.timeline ? (
-          <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
-        ) : (
-          <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
+        children: (
+          <DetailContentViewport className="object-inspector-tab-content">
+            {tab.cost ? (
+              <CostDetail selectedObject={selectedObject} />
+            ) : tab.timeline ? (
+              <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
+            ) : (
+              <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
+            )}
+          </DetailContentViewport>
         ),
       }))}
     />
@@ -7010,7 +7020,7 @@ function DetailFieldContent({ selectedObject, keys }) {
   const complexKeys = visibleKeys.filter((key) => isComplexDetailField(key, selectedObject[key]));
 
   return (
-    <>
+    <div className="object-inspector-fields">
       {simpleKeys.length > 0 && (
         <Descriptions
           className="compact-descriptions"
@@ -7034,7 +7044,7 @@ function DetailFieldContent({ selectedObject, keys }) {
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -7391,6 +7401,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   const [stageSize, setStageSize] = useState({ width: compactMapViewport ? 320 : 960, height: 720 });
   const [viewport, setViewport] = useState(defaultViewport);
   const [hovered, setHovered] = useState(null);
+  const [focusedCellId, setFocusedCellId] = useState(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const selectedRobotaxi = selected?.type === "robotaxi"
     ? data.robotaxis?.find((robotaxi) => robotaxi.robotaxi_id === selected.id)
@@ -7531,6 +7542,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
 
   function selectMapObject(event, type, id) {
     event.stopPropagation();
+    setFocusedCellId(resolveEventCellId(event));
     if (mobileLayout) {
       if (hovered?.touch && hovered.type === type && hovered.id === id) {
         setHovered(null);
@@ -7557,6 +7569,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
     const coordinates = point.matrixTransform(sceneRef.current?.getScreenCTM()?.inverse());
     const cellId = mapSceneService.resolveCellAtPoint({ x: coordinates.x, y: coordinates.y, map });
     if (cellId) {
+      setFocusedCellId(cellId);
       const objectReference = mapSceneService.resolveMapObjectAtCell(cellId, data);
       if (objectReference) {
         onSelect(objectReference.type, objectReference.id);
@@ -7565,7 +7578,18 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
       }
       return;
     }
+    setFocusedCellId(null);
     onClear?.();
+  }
+
+  function resolveEventCellId(event) {
+    const svg = event.currentTarget.closest("svg");
+    if (!svg || !sceneRef.current) return null;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const coordinates = point.matrixTransform(sceneRef.current.getScreenCTM()?.inverse());
+    return mapSceneService.resolveCellAtPoint({ x: coordinates.x, y: coordinates.y, map });
   }
 
   return (
@@ -7685,8 +7709,8 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
             <OpsCenters opsCenters={data.opsCenters || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={hideHover} />
             <RoadNodes roadNodes={data.roadNodes} selected={selected} />
             <Robotaxis robotaxis={data.robotaxis || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={hideHover} />
-            {selected?.type === "cell" && (() => {
-              const { row, col } = parseCellId(selected.id);
+            {focusedCellId && (() => {
+              const { row, col } = parseCellId(focusedCellId);
               return <rect className="map-selected-cell" x={col + 0.06} y={row + 0.06} width="0.88" height="0.88" />;
             })()}
             <rect
@@ -9078,8 +9102,7 @@ function formatStructuredScalar(value, key = null, row = null) {
 
 function getStructuredKeyLabel(key) {
   const fieldLabel = getFieldLabel(key);
-  if (fieldLabel && fieldLabel !== key) return fieldLabel;
-  return getDisplayValue(key) || key;
+  return fieldLabel || "未定义字段";
 }
 
 function summarizeObject(value) {
@@ -9451,7 +9474,7 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-7"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-8"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
