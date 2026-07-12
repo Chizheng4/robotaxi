@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v042.0.5-robotaxi-inspector-ops-center-labels.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v042.0.6-responsive-map-summary-detail.md`。
 
-最新完成版本：v042.0.5 Robotaxi 检查器、运营中心与地图标签。
+最新完成版本：v042.0.6 响应式地图摘要与详情。
 
 当前执行指针：暂无。
 

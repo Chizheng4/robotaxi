@@ -1597,6 +1597,12 @@ function App({ currentUser, onLogout }) {
   }, [activePage, runtimeHydrated]);
 
   useEffect(() => {
+    if (activePage === "console") {
+      setDetailCollapsedByPage((current) => ({ ...current, console: true }));
+    }
+  }, [activePage]);
+
+  useEffect(() => {
     if (!releaseHistoryOpen) return undefined;
     const handleEscape = (event) => {
       if (event.key === "Escape") setReleaseHistoryOpen(false);
@@ -1682,7 +1688,7 @@ function App({ currentUser, onLogout }) {
       const restoredSelections = snapshot.pageSelections || {};
       setActivePage(restoredPage);
       setWorkspacePages(normalizeWorkspacePages(snapshot.workspacePages, restoredPage));
-      setDetailCollapsedByPage(snapshot.detailCollapsedByPage || {});
+      setDetailCollapsedByPage({ ...(snapshot.detailCollapsedByPage || {}), console: true });
       setPageSelections(restoredSelections);
       setSelected(restoredSelections[restoredPage] || { type: "map", id: initialData.maps[0].map_id });
       setOpenMenuKeys(getOpenKeysForPage(restoredPage));
@@ -3354,7 +3360,19 @@ function App({ currentUser, onLogout }) {
           <Layout className={detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
             <Content className="work-content">
               {activePage === "console" ? (
-                <MapCanvas data={data} selected={selected} onSelect={(type, id) => selectForPage("console", type, id)} />
+                <MapCanvas
+                  data={data}
+                  selected={selected}
+                  mobileLayout={mobileLayout}
+                  onSelect={(type, id) => {
+                    selectForPage("console", type, id);
+                    setDetailCollapsedForPage("console", false);
+                  }}
+                  onClear={() => {
+                    selectForPage("console", "map", data.maps[0].map_id);
+                    setDetailCollapsedForPage("console", true);
+                  }}
+                />
               ) : (
                 <RecordTable
                 key={activePage}
@@ -3737,6 +3755,7 @@ function App({ currentUser, onLogout }) {
     setWorkspacePages((current) => addWorkspacePage(current, "console"));
     const consoleSelection = pageSelections.console || { type: "map", id: data.maps[0].map_id };
     setSelected(consoleSelection);
+    setDetailCollapsedForPage("console", true);
   }
 
   function resetRuntime() {
@@ -3829,7 +3848,7 @@ function App({ currentUser, onLogout }) {
     setOpenMenuKeys([]);
     setSelected(nextSelection);
     setWorkspacePages(["console"]);
-    setDetailCollapsedByPage({});
+    setDetailCollapsedByPage({ console: true });
     setPageSelections({ console: nextSelection });
     setPageUiState({});
     if (typeof window !== "undefined") {
@@ -3947,6 +3966,7 @@ function App({ currentUser, onLogout }) {
     setActivePageAndMenu(page);
     setWorkspacePages((current) => addWorkspacePage(current, page));
     setSelected(pageSelections[page] || getDefaultSelection(page, data));
+    if (page === "console") setDetailCollapsedForPage("console", true);
   }
 
   function closeWorkspacePage(page) {
@@ -7351,7 +7371,7 @@ function formatCostAmount(amount, currencyCode = "CNY") {
   return `${value.toFixed(2)} ${currencyCode || "CNY"}`;
 }
 
-function MapCanvas({ data, selected, onSelect }) {
+function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear }) {
   const map = data.maps[0];
   const compactMapViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 560px)").matches;
   const defaultViewport = { zoom: 1, panX: 0, panY: 0 };
@@ -7484,8 +7504,32 @@ function MapCanvas({ data, selected, onSelect }) {
     setHovered({ type, id, x, y });
   }
 
+  function showTouchSummary(event, type, id) {
+    const rect = event.currentTarget.closest(".map-stage")?.getBoundingClientRect();
+    const pointerX = event.clientX - (rect?.left || 0);
+    const pointerY = event.clientY - (rect?.top || 0);
+    const cardWidth = Math.min(260, Math.max(220, (rect?.width || 260) - 16));
+    const x = Math.max(8, Math.min(pointerX - cardWidth / 2, (rect?.width || 260) - cardWidth - 8));
+    const y = Math.max(8, pointerY + 160 <= (rect?.height || 320) ? pointerY + 14 : pointerY - 150);
+    setHovered({ type, id, x, y, touch: true });
+  }
+
+  function hideHover(event) {
+    if (event?.pointerType === "touch") return;
+    setHovered(null);
+  }
+
   function selectMapObject(event, type, id) {
     event.stopPropagation();
+    if (mobileLayout) {
+      if (hovered?.touch && hovered.type === type && hovered.id === id) {
+        setHovered(null);
+        onSelect(type, id);
+        return;
+      }
+      showTouchSummary(event, type, id);
+      return;
+    }
     setHovered(null);
     onSelect(type, id);
   }
@@ -7496,13 +7540,7 @@ function MapCanvas({ data, selected, onSelect }) {
       return;
     }
     setHovered(null);
-    const svg = event.currentTarget;
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
-    const coordinates = point.matrixTransform(sceneRef.current?.getScreenCTM()?.inverse());
-    const cellId = mapSceneService.resolveCellAtPoint({ x: coordinates.x, y: coordinates.y, map });
-    if (cellId) onSelect("cell", cellId);
+    onClear?.();
   }
 
   return (
@@ -7554,7 +7592,7 @@ function MapCanvas({ data, selected, onSelect }) {
                     height={zone.bounds.height - 0.36}
                     data-active={selected?.type === "zone" && selected?.id === zone.zone_id}
                     onPointerEnter={(event) => showHover(event, "zone", zone.zone_id)}
-                    onPointerLeave={() => setHovered(null)}
+                    onPointerLeave={hideHover}
                     onClick={(event) => selectMapObject(event, "zone", zone.zone_id)}
                   />
                 </g>
@@ -7570,7 +7608,7 @@ function MapCanvas({ data, selected, onSelect }) {
                     height={place.bounds.height}
                     data-active={selected?.type === "place" && selected?.id === place.place_id}
                     onPointerEnter={(event) => showHover(event, "place", place.place_id)}
-                    onPointerLeave={() => setHovered(null)}
+                    onPointerLeave={hideHover}
                     onClick={(event) => selectMapObject(event, "place", place.place_id)}
                   />
                 </g>
@@ -7584,7 +7622,7 @@ function MapCanvas({ data, selected, onSelect }) {
                   data-planned={road.road_status === "Planned"}
                   d={road.path}
                   onPointerEnter={(event) => showHover(event, "road", road.road_id)}
-                  onPointerLeave={() => setHovered(null)}
+                  onPointerLeave={hideHover}
                   onClick={(event) => selectMapObject(event, "road", road.road_id)}
                 />
                 </g>
@@ -7598,7 +7636,7 @@ function MapCanvas({ data, selected, onSelect }) {
                     d={area.path}
                     data-active={selected?.type === "serviceArea" && selected?.id === area.service_area_id}
                     onPointerEnter={(event) => showHover(event, "serviceArea", area.service_area_id)}
-                    onPointerLeave={() => setHovered(null)}
+                    onPointerLeave={hideHover}
                     onClick={(event) => selectMapObject(event, "serviceArea", area.service_area_id)}
                   />
                 </g>
@@ -7619,9 +7657,9 @@ function MapCanvas({ data, selected, onSelect }) {
               ))}
             </g>
             {highlightedRoutePoints && <polyline className="map-selected-route" points={highlightedRoutePoints} />}
-            <OpsCenters opsCenters={data.opsCenters || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={() => setHovered(null)} />
+            <OpsCenters opsCenters={data.opsCenters || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={hideHover} />
             <RoadNodes roadNodes={data.roadNodes} selected={selected} />
-            <Robotaxis robotaxis={data.robotaxis || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={() => setHovered(null)} />
+            <Robotaxis robotaxis={data.robotaxis || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={hideHover} />
             {selected?.type === "cell" && (() => {
               const { row, col } = parseCellId(selected.id);
               return <rect className="map-selected-cell" x={col + 0.06} y={row + 0.06} width="0.88" height="0.88" />;
@@ -7637,7 +7675,7 @@ function MapCanvas({ data, selected, onSelect }) {
           </g>
         </svg>
         {hoverPresentation && (
-          <div className="map-hover-card" style={{ left: hovered.x, top: hovered.y }} role="status">
+          <div className={hovered.touch ? "map-hover-card touch" : "map-hover-card"} style={{ left: hovered.x, top: hovered.y }} role="status">
             <strong>{hoverPresentation.title}</strong>
             {hoverPresentation.subtitle && <span>{getDisplayValue(hoverPresentation.subtitle)}</span>}
             <dl>
@@ -7645,6 +7683,20 @@ function MapCanvas({ data, selected, onSelect }) {
                 <div key={field}><dt>{getFieldLabel(field)}</dt><dd>{getFieldDisplayValue(field, value, {})}</dd></div>
               ))}
             </dl>
+            {hovered.touch && (
+              <Button
+                className="map-hover-detail-action"
+                type="text"
+                size="small"
+                onClick={() => {
+                  const { type, id } = hovered;
+                  setHovered(null);
+                  onSelect(type, id);
+                }}
+              >
+                查看详情
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -9374,7 +9426,7 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-5"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-6"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -10958,7 +11010,7 @@ function loadRuntimeSnapshot(initialData) {
     timedOperations: [],
     activePage: "console",
     workspacePages: ["console"],
-    detailCollapsedByPage: {},
+    detailCollapsedByPage: { console: true },
     pageSelections: { console: { type: "map", id: initialData.maps[0].map_id } },
     pageUiState: {},
   };
@@ -11149,7 +11201,7 @@ function loadRuntimeSnapshot(initialData) {
       timedOperations,
       activePage: restoredActivePage,
       workspacePages: normalizeWorkspacePages(snapshot.workspacePages, restoredActivePage),
-      detailCollapsedByPage: snapshot.detailCollapsedByPage || {},
+      detailCollapsedByPage: { ...(snapshot.detailCollapsedByPage || {}), console: true },
       pageSelections: {
         console: { type: "map", id: initialData.maps[0].map_id },
         ...(snapshot.pageSelections || {}),

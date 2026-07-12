@@ -123,7 +123,12 @@ try {
   }
 
   if (mapAssertionEnabled) {
-    const cellSelectionResult = await send("Runtime.evaluate", {
+    const initialMapState = await send("Runtime.evaluate", {
+      expression: `({ detailCollapsed: document.querySelector(".workbench")?.classList.contains("detail-collapsed") })`,
+      returnByValue: true,
+    });
+    assert(initialMapState.result?.result?.value?.detailCollapsed, "进入中控台时详情必须默认收起");
+    const blankClickResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const svg = document.querySelector(".zone-canvas-new");
         const scene = svg?.querySelector("g[transform]");
@@ -141,31 +146,32 @@ try {
       })()`,
       returnByValue: true,
     });
-    assert(cellSelectionResult.result?.result?.value?.clicked, "地图缺少可执行的 Cell 点击入口");
+    assert(blankClickResult.result?.result?.value?.clicked, "地图缺少可执行的空白点击入口");
     await delay(250);
-
-    const hoverTriggerResult = await send("Runtime.evaluate", {
-      expression: `(() => {
-        const place = document.querySelector(".map-place-object rect");
-        if (!place) return { triggered: false };
-        const placeRect = place.getBoundingClientRect();
-        place.dispatchEvent(new PointerEvent("pointerover", {
-          bubbles: true,
-          pointerType: "mouse",
-          clientX: placeRect.left + placeRect.width / 2,
-          clientY: placeRect.top + placeRect.height / 2,
-        }));
-        return { triggered: true };
-      })()`,
-      returnByValue: true,
-    });
-    assert(hoverTriggerResult.result?.result?.value?.triggered, "地图地点必须保留悬浮入口");
-    await delay(100);
-    const hoverVisibleResult = await send("Runtime.evaluate", {
-      expression: `Boolean(document.querySelector(".map-hover-card"))`,
-      returnByValue: true,
-    });
-    assert(hoverVisibleResult.result?.result?.value, "选中对象后，地点悬浮摘要仍必须可用");
+    if (!mobileAssertionEnabled) {
+      const hoverTriggerResult = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const place = document.querySelector(".map-place-object rect");
+          if (!place) return { triggered: false };
+          const placeRect = place.getBoundingClientRect();
+          place.dispatchEvent(new PointerEvent("pointerover", {
+            bubbles: true,
+            pointerType: "mouse",
+            clientX: placeRect.left + placeRect.width / 2,
+            clientY: placeRect.top + placeRect.height / 2,
+          }));
+          return { triggered: true };
+        })()`,
+        returnByValue: true,
+      });
+      assert(hoverTriggerResult.result?.result?.value?.triggered, "地图地点必须保留悬浮入口");
+      await delay(100);
+      const hoverVisibleResult = await send("Runtime.evaluate", {
+        expression: `Boolean(document.querySelector(".map-hover-card"))`,
+        returnByValue: true,
+      });
+      assert(hoverVisibleResult.result?.result?.value, "桌面地点悬浮摘要必须可用");
+    }
     const robotaxiClickResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const robotaxi = document.querySelector(".robotaxi-map-object");
@@ -176,6 +182,49 @@ try {
     });
     assert(robotaxiClickResult.result?.result?.value?.robotaxiClicked, "地图 Robotaxi 必须保留详情点击入口");
     await delay(250);
+    if (mobileAssertionEnabled) {
+      const touchSummaryResult = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const card = document.querySelector(".map-hover-card.touch");
+          const action = card?.querySelector(".map-hover-detail-action");
+          const rect = card?.getBoundingClientRect();
+          const withinViewport = Boolean(rect && rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= 0 && rect.bottom <= window.innerHeight + 1);
+          action?.click();
+          return { visible: Boolean(card), action: Boolean(action), withinViewport };
+        })()`,
+        returnByValue: true,
+      });
+      const touchSummary = touchSummaryResult.result?.result?.value;
+      assert(touchSummary?.visible && touchSummary?.action && touchSummary?.withinViewport, `手机对象摘要必须自适应可视区域：${JSON.stringify(touchSummary)}`);
+      await delay(250);
+    }
+    const openBeforeClearResult = await send("Runtime.evaluate", {
+      expression: `!document.querySelector(".workbench")?.classList.contains("detail-collapsed")`,
+      returnByValue: true,
+    });
+    assert(openBeforeClearResult.result?.result?.value, "对象点击后详情必须处于展开状态");
+    await send("Runtime.evaluate", {
+      expression: `document.querySelector(".zone-canvas-new")?.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 8, clientY: 8 }))`,
+      returnByValue: true,
+    });
+    await delay(150);
+    const collapsedAfterClearResult = await send("Runtime.evaluate", {
+      expression: `document.querySelector(".workbench")?.classList.contains("detail-collapsed")`,
+      returnByValue: true,
+    });
+    assert(collapsedAfterClearResult.result?.result?.value, "点击地图空白区域后详情必须收起");
+    await send("Runtime.evaluate", {
+      expression: `document.querySelector(".robotaxi-map-object")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))`,
+      returnByValue: true,
+    });
+    await delay(150);
+    if (mobileAssertionEnabled) {
+      await send("Runtime.evaluate", {
+        expression: `document.querySelector(".map-hover-detail-action")?.click()`,
+        returnByValue: true,
+      });
+      await delay(150);
+    }
   }
 
   const result = await send("Runtime.evaluate", {
@@ -195,6 +244,7 @@ try {
       robotaxiInspectorVisible: Boolean(document.querySelector('.object-inspector-summary[aria-label*="运营摘要"]')),
       robotaxiDetailTabLabels: [...document.querySelectorAll(".detail-tabs .ant-tabs-tab")].map((node) => node.textContent.trim()),
       hoverCardVisible: Boolean(document.querySelector(".map-hover-card")),
+      detailCollapsed: document.querySelector(".workbench")?.classList.contains("detail-collapsed"),
       visibleMapAnchorCount: [...document.querySelectorAll(".map-zone-anchor, .map-place-anchor")].filter((node) => {
         const rect = node.getBoundingClientRect();
         const stage = document.querySelector(".map-stage")?.getBoundingClientRect();
@@ -233,7 +283,8 @@ try {
     assert.equal(pageState.selectedRobotaxiCount, 1, `点击 Robotaxi 后必须切换到唯一车辆详情：${JSON.stringify(pageState)}`);
     assert(pageState.robotaxiInspectorVisible, `Robotaxi 详情必须显示专用运营摘要：${JSON.stringify(pageState)}`);
     assert(["基础信息", "资产事实", "任务状态", "位置上下文", "行驶记录"].every((label) => pageState.robotaxiDetailTabLabels.includes(label)), `Robotaxi 详情必须保留完整分类：${JSON.stringify(pageState)}`);
-    assert.equal(pageState.hoverCardVisible, false, `点击 Cell 后不得残留其他对象悬浮提示：${JSON.stringify(pageState)}`);
+    assert.equal(pageState.detailCollapsed, false, `点击 Robotaxi 后详情必须自动展开：${JSON.stringify(pageState)}`);
+    assert.equal(pageState.hoverCardVisible, false, `打开对象详情后不得残留浮动摘要：${JSON.stringify(pageState)}`);
     assert(pageState.documentWidth <= pageState.viewportWidth + 1, `地图页面出现全局横向溢出：${JSON.stringify(pageState)}`);
   }
   console.log("真实浏览器加载验证通过");

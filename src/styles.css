@@ -5361,3 +5361,30 @@ html[data-keyboard-open="true"] .platform-login-panel {
   .console-workbench.detail-collapsed .map-floating-actions,
   .console-workbench.detail-collapsed .map-layer-panel { right: 52px !important; }
 }
+
+.map-hover-card.touch {
+  display: grid;
+  width: min(260px, calc(100% - 16px));
+  max-height: min(210px, calc(100% - 16px));
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.map-hover-detail-action {
+  justify-self: end;
+  height: 28px;
+  margin-top: 6px;
+  padding-inline: 6px;
+  color: var(--accent);
+  font-size: var(--font-xs);
+}
+
+@media (max-width: 767px) {
+  .map-hover-card.touch {
+    display: grid;
+    padding: 9px 10px 7px;
+    border-color: rgba(201, 214, 226, 0.94);
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 8px 20px rgba(39, 61, 82, 0.12);
+  }
+}
