@@ -1,5 +1,5 @@
 const { useEffect, useMemo, useRef, useState } = React;
-const { Button, Descriptions, Empty, Input, Layout, Menu, Modal, Popover, Select, Space, Table, Tabs, Tag, Typography } = antd;
+const { Button, Descriptions, Dropdown, Empty, Input, Layout, Menu, Modal, Popover, Select, Space, Table, Tabs, Tag, Typography } = antd;
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 
@@ -1686,11 +1686,16 @@ function App({ currentUser, onLogout }) {
       setTimedOperations(snapshot.timedOperations || []);
       const restoredPage = isLeafPage(snapshot.activePage) ? snapshot.activePage : "console";
       const restoredSelections = snapshot.pageSelections || {};
+      const restoredSelection = restoredSelections[restoredPage] || getDefaultSelection(restoredPage, initialData);
       setActivePage(restoredPage);
       setWorkspacePages(normalizeWorkspacePages(snapshot.workspacePages, restoredPage));
-      setDetailCollapsedByPage({ ...(snapshot.detailCollapsedByPage || {}), console: true });
+      setDetailCollapsedByPage({
+        ...(snapshot.detailCollapsedByPage || {}),
+        [restoredPage]: restoredSelection?.id ? snapshot.detailCollapsedByPage?.[restoredPage] ?? false : true,
+        console: true,
+      });
       setPageSelections(restoredSelections);
-      setSelected(restoredSelections[restoredPage] || { type: "map", id: initialData.maps[0].map_id });
+      setSelected(restoredSelection);
       setOpenMenuKeys(getOpenKeysForPage(restoredPage));
       setPageUiState(normalizePageUiStateMap(snapshot.pageUiState));
       restoreRuntimeSequences(snapshot);
@@ -1939,7 +1944,7 @@ function App({ currentUser, onLogout }) {
   const topTitle = showConsoleSummary ? "地图空间" : activeConfig?.title || "业务记录";
   const topDescription = showConsoleSummary ? null : activeConfig?.description;
   const activeRows = rowsByPage[activePage] || [];
-  const detailCollapsed = Boolean(detailCollapsedByPage[activePage]);
+  const detailCollapsed = detailCollapsedByPage[activePage] ?? !detailSelectedObject;
 
   useEffect(() => {
     if (!runtimeHydrated) return;
@@ -3385,7 +3390,7 @@ function App({ currentUser, onLogout }) {
                 selected={selected}
                 uiState={pageUiState[activePage] || createDefaultPageUiState()}
                 onUiStateChange={(nextState) => updatePageUiState(activePage, nextState)}
-                onSelect={(type, id) => selectForPage(activePage, type, id)}
+                onSelect={(type, id) => viewRecordDetail(activePage, type, id)}
                 actions={{
                   createManualTask,
                   runAutoReadinessCheck,
@@ -3969,7 +3974,9 @@ function App({ currentUser, onLogout }) {
   function activateWorkspacePage(page) {
     setActivePageAndMenu(page);
     setWorkspacePages((current) => addWorkspacePage(current, page));
-    setSelected(pageSelections[page] || getDefaultSelection(page, data));
+    const nextSelection = pageSelections[page] || getDefaultSelection(page, data);
+    setSelected(nextSelection);
+    if (!nextSelection?.id) setDetailCollapsedForPage(page, true);
     if (page === "console") setDetailCollapsedForPage("console", true);
   }
 
@@ -3981,8 +3988,10 @@ function App({ currentUser, onLogout }) {
       const nextPages = currentPages.filter((item) => item !== page);
       if (page === activePage) {
         const nextPage = nextPages[Math.max(0, closeIndex - 1)] || "console";
+        const nextSelection = pageSelections[nextPage] || getDefaultSelection(nextPage, data);
         setActivePageAndMenu(nextPage);
-        setSelected(pageSelections[nextPage] || getDefaultSelection(nextPage, data));
+        setSelected(nextSelection);
+        if (!nextSelection?.id) setDetailCollapsedForPage(nextPage, true);
       }
       return nextPages.length > 0 ? nextPages : ["console"];
     });
@@ -6182,9 +6191,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     render: (_, row) => renderCellValue(key, row),
   }));
   const actionColumn = getActionColumn();
-  const finalColumns = actionColumn ? [
+  const compactActionColumn = actionColumn ? { ...actionColumn, width: 136 } : null;
+  const finalColumns = compactActionColumn ? [
     ...columns,
-    actionColumn,
+    compactActionColumn,
   ] : columns;
   const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isSupplyDocumentPage ? createDocumentEventRows(displayRows, objectType, idField, actions.taskEventLogs, page) : isBusinessOperationResultPage ? createRecordOperationEventRows(actions.taskEventLogs, displayRows, objectType, idField, page) : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isLongTermDemandForecastStrategyPage ? createStrategyRunRows(actions.longTermDemandForecastRuns || [], displayRows, "forecast_strategy_id") : isFleetAllocationStrategyPage ? createStrategyRunRows(actions.fleetAllocationRuns || [], displayRows, "fleet_allocation_strategy_id") : isSupplyDemandBalanceStrategyPage ? createStrategyRunRows(actions.supplyDemandBalanceRuns || [], displayRows, "supply_demand_balance_strategy_id") : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const visibleEventRows = eventRows.slice(0, 300);
@@ -7515,14 +7525,14 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
     dragRef.current = null;
   }
 
-  function showHover(event, type, id) {
+  function showHover(event, type, id, pinned = false) {
     if (event.pointerType === "touch") return;
     const rect = event.currentTarget.closest(".map-stage")?.getBoundingClientRect();
     const pointerX = event.clientX - (rect?.left || 0);
     const pointerY = event.clientY - (rect?.top || 0);
     const x = Math.max(8, Math.min(pointerX + 12, (rect?.width || 260) - 248));
     const y = Math.max(8, Math.min(pointerY + 12, (rect?.height || 180) - 172));
-    setHovered({ type, id, x, y });
+    setHovered({ type, id, x, y, pinned });
   }
 
   function showTouchSummary(event, type, id) {
@@ -7537,6 +7547,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
 
   function hideHover(event) {
     if (event?.pointerType === "touch") return;
+    if (hovered?.pinned) return;
     setHovered(null);
   }
 
@@ -7552,7 +7563,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
       showTouchSummary(event, type, id);
       return;
     }
-    setHovered(null);
+    showHover(event, type, id, true);
     onSelect(type, id);
   }
 
@@ -7572,6 +7583,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
       setFocusedCellId(cellId);
       const objectReference = mapSceneService.resolveMapObjectAtCell(cellId, data);
       if (objectReference) {
+        if (!mobileLayout) showHover(event, objectReference.type, objectReference.id, true);
         onSelect(objectReference.type, objectReference.id);
       } else {
         onBlankCell?.(cellId);
@@ -7935,6 +7947,7 @@ function RowActionButton({ children, onClick, type = "primary", danger = false, 
       type={type}
       danger={danger}
       disabled={disabled}
+      title={typeof children === "string" ? children : undefined}
       className="row-action-button"
       onClick={(event) => {
         event.stopPropagation();
@@ -7947,7 +7960,38 @@ function RowActionButton({ children, onClick, type = "primary", danger = false, 
 }
 
 function RowActionGroup({ children }) {
-  return <Space size={4} className="row-action-group">{children}</Space>;
+  const actions = React.Children.toArray(children).filter(Boolean);
+  if (actions.length <= 1) return actions[0] || null;
+  const items = actions.map((action, index) => ({
+    key: String(index),
+    label: action.props.children,
+    danger: Boolean(action.props.danger),
+    disabled: Boolean(action.props.disabled),
+  }));
+  return (
+    <Dropdown
+      trigger={["click"]}
+      placement="bottomRight"
+      menu={{
+        items,
+        onClick: ({ key, domEvent }) => {
+          domEvent?.stopPropagation?.();
+          actions[Number(key)]?.props?.onClick?.();
+        },
+      }}
+    >
+      <Button
+        size="small"
+        type="text"
+        className="row-action-menu-trigger"
+        title={typeof actions[0].props.children === "string" ? actions[0].props.children : undefined}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <span>{actions[0].props.children}</span>
+        <span aria-hidden="true">⌄</span>
+      </Button>
+    </Dropdown>
+  );
 }
 
 function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculationRuns = [], metricPeriodType = "ALL", onSelect }) {
@@ -9474,7 +9518,7 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-8"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-9"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;

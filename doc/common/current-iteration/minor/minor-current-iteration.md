@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v042.0.8-unified-object-inspector-cell-focus.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v042.0.9-workbench-focus-and-action-menu.md`。
 
-最新完成版本：v042.0.8 统一对象详情与 Cell 聚焦。
+最新完成版本：v042.0.9 工作台聚焦与统一操作菜单。
 
 当前执行指针：暂无。
 

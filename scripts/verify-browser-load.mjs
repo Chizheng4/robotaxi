@@ -334,6 +334,37 @@ try {
     })`,
     returnByValue: true,
   });
+  if (mapAssertionEnabled && !mobileAssertionEnabled && !screenshotPath) {
+    for (const label of ["运营管理", "运维支持", "运维策略管理", "运维策略配置"]) {
+      await send("Runtime.evaluate", {
+        expression: `(() => { const node = [...document.querySelectorAll(".ant-menu-title-content")].find((item) => item.textContent.trim() === ${JSON.stringify(label)}); (node?.closest(".ant-menu-submenu-title") || node)?.click(); })()`,
+        returnByValue: true,
+      });
+      await delay(80);
+    }
+    await delay(250);
+    const listInitialState = await send("Runtime.evaluate", {
+      expression: `({ collapsed: document.querySelector(".workbench")?.classList.contains("detail-collapsed"), actionWidth: document.querySelector("th.ant-table-cell-fix-right")?.getBoundingClientRect().width || 0 })`,
+      returnByValue: true,
+    });
+    assert(listInitialState.result?.result?.value?.collapsed, "首次进入无选择列表页时详情必须默认收起");
+    assert(listInitialState.result?.result?.value?.actionWidth <= 140, `固定操作列必须保持紧凑：${JSON.stringify(listInitialState.result?.result?.value)}`);
+    const rowPointResult = await send("Runtime.evaluate", {
+      expression: `(() => { const rect = document.querySelector(".ant-table-tbody tr")?.getBoundingClientRect(); return rect ? { x: rect.left + 40, y: rect.top + rect.height / 2 } : null; })()`,
+      returnByValue: true,
+    });
+    const rowPoint = rowPointResult.result?.result?.value;
+    assert(rowPoint, "运维策略列表必须存在可选择记录");
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: rowPoint.x, y: rowPoint.y, button: "left", clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: rowPoint.x, y: rowPoint.y, button: "left", clickCount: 1 });
+    await delay(150);
+    const selectedListState = await send("Runtime.evaluate", {
+      expression: `({ expanded: !document.querySelector(".workbench")?.classList.contains("detail-collapsed"), menuTrigger: Boolean(document.querySelector(".row-action-menu-trigger")), actionText: document.querySelector(".row-action-cell")?.textContent?.trim() || "" })`,
+      returnByValue: true,
+    });
+    assert(selectedListState.result?.result?.value?.expanded, "点击列表记录后详情必须自动展开");
+    assert(selectedListState.result?.result?.value?.menuTrigger, `多动作记录必须显示统一下拉操作控件：${JSON.stringify(selectedListState.result?.result?.value)}`);
+  }
   if (screenshotPath) {
     const screenshot = await send("Page.captureScreenshot", { format: "png", fromSurface: true });
     fs.writeFileSync(screenshotPath, Buffer.from(screenshot.result?.data || "", "base64"));
@@ -361,7 +392,7 @@ try {
     assert(pageState.robotaxiInspectorVisible, `Robotaxi 详情必须显示专用运营摘要：${JSON.stringify(pageState)}`);
     assert(["基础信息", "资产事实", "任务状态", "位置上下文", "行驶记录"].every((label) => pageState.robotaxiDetailTabLabels.includes(label)), `Robotaxi 详情必须保留完整分类：${JSON.stringify(pageState)}`);
     assert.equal(pageState.detailCollapsed, false, `点击 Robotaxi 后详情必须自动展开：${JSON.stringify(pageState)}`);
-    assert.equal(pageState.hoverCardVisible, false, `打开对象详情后不得残留浮动摘要：${JSON.stringify(pageState)}`);
+    assert.equal(pageState.hoverCardVisible, !mobileAssertionEnabled, `桌面选中对象后应保留摘要，手机进入详情后应关闭摘要：${JSON.stringify(pageState)}`);
     assert(pageState.documentWidth <= pageState.viewportWidth + 1, `地图页面出现全局横向溢出：${JSON.stringify(pageState)}`);
   }
   console.log("真实浏览器加载验证通过");
