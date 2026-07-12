@@ -22,6 +22,11 @@ const zone2 = data.zones.find((zone) => zone.zone_id === "Z-002");
 assert.equal(zone1.cell_ids.length, 1600, "Zone 1 空间边界不得改变");
 assert(zone1.cell_ids.every((cellId) => Number(cellId.split("-")[2]) <= 39), "Zone 1 不得跨入 Zone 2");
 assert.equal(zone2.zone_status, "Planned", "Zone 2 必须保持规划态");
+const outerRing = data.roads.find((road) => road.road_id === "RD-106");
+assert.equal(outerRing.road_status, "Planned", "跨区域外围环路必须保持规划态");
+assert.equal(outerRing.road_segment_ids.length, 16, "跨区域外围环路必须由连续道路片段构成");
+assert(["C-00-00", "C-00-83", "C-39-00", "C-39-83"].every((cellId) => data.roadNodes.some((node) => node.cell_id === cellId)), "外围环路四角必须存在道路节点");
+assert(data.roadSegments.some((segment) => segment.road_segment_id === "RS-015" && segment.cell_sequence.includes("C-12-40")), "两个区域必须通过中部道路连接");
 
 const exactIds = (records, field, prefix) => records
   .filter((record) => record[field].startsWith(prefix) && Number(record[field].split("-")[1]) < 100)

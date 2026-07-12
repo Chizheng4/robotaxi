@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v042.0.2-mobile-map-label-density.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v042.0.3-map-camera-vehicle-precision.md`。
 
-最新完成版本：v042.0.2 手机地图标注与信息密度。
+最新完成版本：v042.0.3 地图相机与车辆视觉精度。
 
 当前执行指针：暂无。
 

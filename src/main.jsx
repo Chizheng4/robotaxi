@@ -1497,8 +1497,12 @@ function App({ currentUser, onLogout }) {
     ...validateOperationsCenter(initialData),
     ...validateCustomers(initialData),
   ], [initialData]);
+  const currentSpatialData = useMemo(
+    () => spatialCatalogService.mergeSpatialCatalog(operationalData, initialData),
+    [initialData, operationalData],
+  );
   const data = useMemo(() => ({
-    ...operationalData,
+    ...currentSpatialData,
     readinessCheckTasks: readinessTasks,
     cleaningTasks,
     chargingTasks,
@@ -1522,7 +1526,7 @@ function App({ currentUser, onLogout }) {
     taskDispatchResults,
     trips,
     taskEventLogs,
-  }), [chargingTasks, cleaningTasks, demandSimulationRuns, deploymentTasks, failureHandlingTasks, maintenanceTasks, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips]);
+  }), [chargingTasks, cleaningTasks, currentSpatialData, demandSimulationRuns, deploymentTasks, failureHandlingTasks, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips]);
   const validations = useMemo(() => [
     ...initialValidations,
     ...validateDemandSimulation(data),
@@ -3347,7 +3351,7 @@ function App({ currentUser, onLogout }) {
             onClose={closeWorkspacePage}
           />
 
-          <Layout className={`${detailCollapsed ? "workbench detail-collapsed" : "workbench"}${activePage === "console" ? " console-workbench" : ""}`}>
+          <Layout className={detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
             <Content className="work-content">
               {activePage === "console" ? (
                 <MapCanvas data={data} selected={selected} onSelect={(type, id) => selectForPage("console", type, id)} />
@@ -7350,17 +7354,17 @@ function formatCostAmount(amount, currencyCode = "CNY") {
 function MapCanvas({ data, selected, onSelect }) {
   const map = data.maps[0];
   const compactMapViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 560px)").matches;
-  const defaultViewport = compactMapViewport
-    ? { zoom: 1, panX: 17, panY: 0 }
-    : { zoom: 1, panX: 0, panY: 0 };
+  const defaultViewport = { zoom: 1, panX: 0, panY: 0 };
   const scene = useMemo(
     () => mapSceneService.createMapScene(data),
     [data.maps, data.zones, data.places, data.serviceAreas, data.roads, data.roadSegments],
   );
   const dragRef = useRef(null);
   const didDragRef = useRef(false);
+  const stageRef = useRef(null);
   const sceneRef = useRef(null);
   const frameRef = useRef(0);
+  const [stageSize, setStageSize] = useState({ width: compactMapViewport ? 320 : 960, height: 720 });
   const [viewport, setViewport] = useState(defaultViewport);
   const [hovered, setHovered] = useState(null);
   const [layersOpen, setLayersOpen] = useState(false);
@@ -7380,6 +7384,10 @@ function MapCanvas({ data, selected, onSelect }) {
   const hoverPresentation = hovered
     ? mapSceneService.getMapObjectPresentation(hovered.type, hovered.id, data)
     : null;
+  const camera = useMemo(
+    () => createMapCamera(map, stageSize, compactMapViewport),
+    [compactMapViewport, map, stageSize],
+  );
 
   useEffect(() => {
     applySceneTransform(viewport);
@@ -7387,6 +7395,18 @@ function MapCanvas({ data, selected, onSelect }) {
 
   useEffect(() => () => {
     if (frameRef.current) cancelAnimationFrame(frameRef.current);
+  }, []);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = Math.max(1, entry.contentRect.width);
+      const height = Math.max(1, entry.contentRect.height);
+      setStageSize((current) => current.width === width && current.height === height ? current : { width, height });
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
   }, []);
 
   function applySceneTransform(nextViewport) {
@@ -7428,8 +7448,8 @@ function MapCanvas({ data, selected, onSelect }) {
   function handlePointerMove(event) {
     if (!dragRef.current) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const unitX = map.grid_cols / rect.width / viewport.zoom;
-    const unitY = map.grid_rows / rect.height / viewport.zoom;
+    const unitX = camera.width / rect.width / viewport.zoom;
+    const unitY = camera.height / rect.height / viewport.zoom;
     const deltaX = (event.clientX - dragRef.current.x) * unitX;
     const deltaY = (event.clientY - dragRef.current.y) * unitY;
     if (Math.hypot(event.clientX - dragRef.current.x, event.clientY - dragRef.current.y) > 4) {
@@ -7456,6 +7476,7 @@ function MapCanvas({ data, selected, onSelect }) {
 
   function showHover(event, type, id) {
     if (event.pointerType === "touch") return;
+    if (selected?.type !== "map" && selected?.id) return;
     const rect = event.currentTarget.closest(".map-stage")?.getBoundingClientRect();
     const pointerX = event.clientX - (rect?.left || 0);
     const pointerY = event.clientY - (rect?.top || 0);
@@ -7487,7 +7508,7 @@ function MapCanvas({ data, selected, onSelect }) {
 
   return (
     <section className="map-page-new">
-      <div className="map-stage" data-zoom-band={zoomBand}>
+      <div ref={stageRef} className="map-stage" data-zoom-band={zoomBand}>
         <div className="map-floating-actions">
           <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeZoom(viewport.zoom + 0.2)}>+</Button>
           <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeZoom(viewport.zoom - 0.2)}>−</Button>
@@ -7503,8 +7524,8 @@ function MapCanvas({ data, selected, onSelect }) {
         )}
         <svg
           className="zone-canvas-new"
-          viewBox={`0 -5 ${map.grid_cols} ${map.grid_rows + 10}`}
-          preserveAspectRatio="xMidYMid slice"
+          viewBox={`${camera.x} ${camera.y} ${camera.width} ${camera.height}`}
+          preserveAspectRatio="none"
           role="img"
           aria-label="Robotaxi 双区域运营地图"
           onWheel={handleWheel}
@@ -7586,16 +7607,16 @@ function MapCanvas({ data, selected, onSelect }) {
             </g>
             <g className="map-label-layer">
               {scene.zones.map((zone) => (
-                <MapAnchorLabel key={`label-${zone.zone_id}`} className="map-zone-anchor" x={zone.labelX} y={zone.bounds.y + 1.2} zoom={viewport.zoom} label={zone.zone_name} />
+                <MapAnchorLabel key={`label-${zone.zone_id}`} className="map-zone-anchor" x={zone.labelX} y={zone.bounds.y + 1.2} scale={camera.labelScale / viewport.zoom} label={zone.zone_name} />
               ))}
               {scene.places.map((place) => (
-                <MapAnchorLabel key={`label-${place.place_id}`} className="map-place-anchor" x={place.bounds.x + 0.7} y={place.bounds.y + 0.7} zoom={viewport.zoom} label={place.place_name} />
+                <MapAnchorLabel key={`label-${place.place_id}`} className="map-place-anchor" x={place.bounds.x + 0.7} y={place.bounds.y + 0.7} scale={camera.labelScale / viewport.zoom} label={place.place_name} />
               ))}
               {scene.roads.filter((road) => road.bounds.width > 0).map((road) => (
-                <MapAnchorLabel key={`label-${road.road_id}`} className="map-road-anchor" x={road.bounds.centerX} y={road.bounds.centerY} zoom={viewport.zoom} label={road.road_name} />
+                <MapAnchorLabel key={`label-${road.road_id}`} className="map-road-anchor" x={road.bounds.centerX} y={road.bounds.centerY} scale={camera.labelScale / viewport.zoom} label={road.road_name} />
               ))}
               {scene.serviceAreas.map((area) => (
-                <MapAnchorLabel key={`label-${area.service_area_id}`} className="map-service-area-anchor" x={area.bounds.centerX} y={area.bounds.centerY} zoom={viewport.zoom} label={area.service_area_name} />
+                <MapAnchorLabel key={`label-${area.service_area_id}`} className="map-service-area-anchor" x={area.bounds.centerX} y={area.bounds.centerY} scale={camera.labelScale / viewport.zoom} label={area.service_area_name} />
               ))}
             </g>
             {highlightedRoutePoints && <polyline className="map-selected-route" points={highlightedRoutePoints} />}
@@ -7632,15 +7653,41 @@ function MapCanvas({ data, selected, onSelect }) {
   );
 }
 
-function MapAnchorLabel({ className, x, y, zoom, label }) {
-  const inverseZoom = 1 / Math.max(0.7, Number(zoom || 1));
+function MapAnchorLabel({ className, x, y, scale, label }) {
   return (
-    <g className={`map-anchor-label ${className || ""}`} transform={`translate(${x} ${y}) scale(${inverseZoom})`} aria-hidden="true">
+    <g className={`map-anchor-label ${className || ""}`} transform={`translate(${x} ${y}) scale(${scale})`} aria-hidden="true">
       <circle cx="0" cy="0" r="0.13" />
       <path d="M0.18 0 L0.62 -0.34" />
       <text x="0.78" y="-0.34">{label}</text>
     </g>
   );
+}
+
+function createMapCamera(map, stageSize, compact) {
+  const stageAspect = Math.max(0.25, stageSize.width / Math.max(1, stageSize.height));
+  if (compact) {
+    const width = 24;
+    const height = width / stageAspect;
+    return {
+      x: 25 - width / 2,
+      y: (map.grid_rows - height) / 2,
+      width,
+      height,
+      labelScale: (11 * width / Math.max(1, stageSize.width)) / 0.54,
+    };
+  }
+  const contentWidth = map.grid_cols + 4;
+  const contentHeight = map.grid_rows + 4;
+  const contentAspect = contentWidth / contentHeight;
+  const width = stageAspect < contentAspect ? contentWidth : contentHeight * stageAspect;
+  const height = width / stageAspect;
+  return {
+    x: (map.grid_cols - width) / 2,
+    y: (map.grid_rows - height) / 2,
+    width,
+    height,
+    labelScale: (11 * width / Math.max(1, stageSize.width)) / 0.54,
+  };
 }
 
 function OpsCenters({ opsCenters, selected, onSelect, onHover, onHoverEnd }) {
@@ -7717,8 +7764,16 @@ function Robotaxis({ robotaxis, selected, onSelect, onHover, onHoverEnd }) {
               onSelect(event, "robotaxi", item.robotaxi_id);
             }}
           >
-            <circle className="robotaxi-map-halo" cx={centerX} cy={centerY} r="0.23" />
-            <circle className="robotaxi-map-marker" cx={centerX} cy={centerY} r="0.13" />
+            <circle className="robotaxi-map-halo" cx={centerX} cy={centerY} r="0.24" />
+            <image
+              className="robotaxi-map-marker robotaxi-map-image"
+              href="./src/assets/robotaxi-map-marker.png"
+              x={centerX - 0.17}
+              y={centerY - 0.23}
+              width="0.34"
+              height="0.46"
+              preserveAspectRatio="xMidYMid meet"
+            />
             <text className="robotaxi-map-label" x={centerX} y={centerY - 0.58} textAnchor="middle">
               {item.robotaxi_id} · {batteryPercent.toFixed(0)}%
             </text>
@@ -9320,7 +9375,7 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-2"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-3"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;

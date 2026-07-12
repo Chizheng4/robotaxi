@@ -751,7 +751,7 @@
 .map-grid-line { stroke: #dfe6ec; stroke-width: 0.026; }
 .map-zone-fill { fill: rgba(184, 211, 198, 0.12); }
 .map-zone-object[data-planned="true"] .map-zone-fill { fill: rgba(218, 205, 172, 0.11); }
-.map-zone-boundary { stroke-width: 0.09; opacity: 0.72; }
+.map-zone-boundary { fill: none; stroke-width: 0.09; opacity: 0.72; pointer-events: stroke; }
 .map-zone-boundary[data-active="true"] { stroke-width: 0.18; opacity: 1; }
 .map-place-object rect { opacity: 0.68; stroke-width: 0.06; }
 
@@ -5307,7 +5307,7 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .map-zone-boundary { stroke-width: 0.09; opacity: 0.72; }
 .map-zone-boundary[data-active="true"] { stroke-width: 0.18; opacity: 1; }
 .map-place-object rect { opacity: 0.68; stroke-width: 0.06; }
-.map-road-cells { fill: rgba(205, 216, 225, 0.74); stroke: rgba(166, 181, 193, 0.58); stroke-width: 0.035; vector-effect: non-scaling-stroke; cursor: pointer; }
+.map-road-cells { fill: rgba(205, 216, 225, 0.74); stroke: rgba(205, 216, 225, 0.74); stroke-width: 0.035; vector-effect: non-scaling-stroke; cursor: pointer; }
 .map-road-object[data-planned="true"] .map-road-cells { fill: rgba(220, 211, 187, 0.56); stroke: rgba(186, 168, 126, 0.66); stroke-dasharray: 0.35 0.24; }
 .map-anchor-label { pointer-events: none; }
 .map-anchor-label circle { fill: rgba(255, 255, 255, 0.96); stroke: #75899a; stroke-width: 0.055; vector-effect: non-scaling-stroke; }
@@ -5322,10 +5322,13 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .map-stage[data-zoom-band="detail"] .map-zone-anchor,
 .map-stage[data-zoom-band="detail"] .map-place-anchor { display: none; }
 .service-area-cell { fill: rgba(77, 155, 143, 0.42); stroke: rgba(52, 126, 115, 0.72); stroke-width: 0.055; }
-.map-selected-cell { fill: rgba(255, 255, 255, 0.24); stroke: var(--accent); stroke-width: 0.18; vector-effect: non-scaling-stroke; pointer-events: none; }
+.map-selected-cell { fill: rgba(47, 111, 228, 0.12); stroke: var(--accent); stroke-width: 0.22; vector-effect: non-scaling-stroke; pointer-events: none; }
 .robotaxi-map-halo { fill: rgba(255, 255, 255, 0.94); stroke-width: 0.055; }
-.robotaxi-map-marker { fill: #ffffff; stroke: #476d8f; stroke-width: 0.07; vector-effect: non-scaling-stroke; pointer-events: none; }
-.robotaxi-map-object[data-active="true"] .robotaxi-map-marker { fill: var(--accent); }
+.robotaxi-map-marker { pointer-events: none; }
+.robotaxi-map-image { filter: drop-shadow(0 0.05px 0.08px rgba(33, 62, 86, 0.34)); }
+.road-node-layer { display: none; }
+.map-stage[data-zoom-band="detail"] .road-node-layer { display: block; }
+.map-stage[data-zoom-band="detail"] .map-road-cells { stroke: rgba(166, 181, 193, 0.58); }
 .map-hover-card { width: 210px; padding: 9px 10px; border-color: rgba(207, 218, 228, 0.9); background: rgba(255, 255, 255, 0.94); box-shadow: 0 8px 20px rgba(39, 61, 82, 0.1); backdrop-filter: blur(12px); }
 .map-hover-card > strong { font-size: 12px; font-weight: 500; }
 .map-hover-card dl { gap: 3px; margin-top: 6px; }

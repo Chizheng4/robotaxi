@@ -109,6 +109,7 @@ function createRoads(map, roadSegments) {
     ["RD-103", "东部北侧横向主路", RoadType.MAIN_ROAD],
     ["RD-104", "东部南侧横向主路", RoadType.SECONDARY_ROAD],
     ["RD-105", "东部运营中心接入道路", RoadType.ACCESS_ROAD],
+    ["RD-106", "跨区域外围环路", RoadType.MAIN_ROAD],
   ];
 
   return definitions.map(([roadId, roadName, roadType]) => createRoad({
@@ -153,6 +154,10 @@ function createRoadNodes(map) {
     ["RN-112", 28, 83, NodeType.ROAD_ENDPOINT],
     ["RN-113", 35, 69, NodeType.INTERSECTION],
     ["RN-114", 35, 77, NodeType.ENTRANCE_EXIT],
+    ["RN-115", 0, 0, NodeType.ROAD_ENDPOINT],
+    ["RN-116", 0, 83, NodeType.ROAD_ENDPOINT],
+    ["RN-117", 39, 83, NodeType.ROAD_ENDPOINT],
+    ["RN-118", 39, 0, NodeType.ROAD_ENDPOINT],
   ];
 
   return definitions.map(([roadNodeId, row, col, nodeType]) => createRoadNode({
@@ -200,6 +205,22 @@ function createRoadSegments(map, roadNodes) {
     ["RS-112", "RD-104", "RN-107", "RN-112", rangeCells({ row: 28, colStart: 69, colEnd: 83 })],
     ["RS-113", "RD-102", "RN-113", "RN-108", rangeCells({ col: 69, rowStart: 35, rowEnd: 39 })],
     ["RS-114", "RD-105", "RN-113", "RN-114", rangeCells({ row: 35, colStart: 69, colEnd: 77 })],
+    ["RS-115", "RD-106", "RN-115", "RN-001", rangeCells({ row: 0, colStart: 0, colEnd: 10 })],
+    ["RS-116", "RD-106", "RN-001", "RN-005", rangeCells({ row: 0, colStart: 10, colEnd: 25 })],
+    ["RS-117", "RD-106", "RN-005", "RN-101", rangeCells({ row: 0, colStart: 25, colEnd: 54 })],
+    ["RS-118", "RD-106", "RN-101", "RN-105", rangeCells({ row: 0, colStart: 54, colEnd: 69 })],
+    ["RS-119", "RD-106", "RN-105", "RN-116", rangeCells({ row: 0, colStart: 69, colEnd: 83 })],
+    ["RS-120", "RD-106", "RN-116", "RN-110", rangeCells({ col: 83, rowStart: 0, rowEnd: 12 })],
+    ["RS-121", "RD-106", "RN-110", "RN-112", rangeCells({ col: 83, rowStart: 12, rowEnd: 28 })],
+    ["RS-122", "RD-106", "RN-112", "RN-117", rangeCells({ col: 83, rowStart: 28, rowEnd: 39 })],
+    ["RS-123", "RD-106", "RN-118", "RN-004", rangeCells({ row: 39, colStart: 0, colEnd: 10 })],
+    ["RS-124", "RD-106", "RN-004", "RN-008", rangeCells({ row: 39, colStart: 10, colEnd: 25 })],
+    ["RS-125", "RD-106", "RN-008", "RN-104", rangeCells({ row: 39, colStart: 25, colEnd: 54 })],
+    ["RS-126", "RD-106", "RN-104", "RN-108", rangeCells({ row: 39, colStart: 54, colEnd: 69 })],
+    ["RS-127", "RD-106", "RN-108", "RN-117", rangeCells({ row: 39, colStart: 69, colEnd: 83 })],
+    ["RS-128", "RD-106", "RN-115", "RN-009", rangeCells({ col: 0, rowStart: 0, rowEnd: 12 })],
+    ["RS-129", "RD-106", "RN-009", "RN-011", rangeCells({ col: 0, rowStart: 12, rowEnd: 28 })],
+    ["RS-130", "RD-106", "RN-011", "RN-118", rangeCells({ col: 0, rowStart: 28, rowEnd: 39 })],
   ];
 
   return definitions.map(([segmentId, roadId, startNodeId, endNodeId, cellIds]) => {

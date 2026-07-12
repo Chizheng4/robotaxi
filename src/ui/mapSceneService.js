@@ -68,7 +68,7 @@ export function createMapScene(data = {}) {
   const roads = (data.roads || []).map((road) => {
     const segments = segmentsByRoad.get(road.road_id) || [];
     const cells = segments.flatMap((segment) => segment.cell_sequence || []);
-    return { ...road, path: cellRectPath([...new Set(cells)], 0.06), bounds: boundsFromCellIds(cells) };
+    return { ...road, path: cellRectPath([...new Set(cells)], 0.01), bounds: boundsFromCellIds(cells) };
   });
 
   return {
