@@ -34,12 +34,32 @@ if [[ "$COMMIT_SUBJECT" != "$VERSION:"* && "$COMMIT_SUBJECT" != "$VERSION："* &
   exit 1
 fi
 
+push_with_retry() {
+  local ref="$1"
+  local attempt=1
+  local max_attempts=3
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    echo "==> 推送 $ref（第 $attempt/$max_attempts 次）"
+    if git -c http.version=HTTP/1.1 push origin "$ref"; then
+      return 0
+    fi
+    if [ "$attempt" -lt "$max_attempts" ]; then
+      sleep $((attempt * 2))
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  echo "发布失败：$ref 连续 $max_attempts 次无法推送到 GitHub。"
+  return 1
+}
+
 echo "==> 正在执行发布前检查"
 bash scripts/check-before-commit.sh
 
 echo "==> 正在发布 $VERSION"
-git push origin "$HEAD_TAG"
-git push origin main
+push_with_retry "$HEAD_TAG"
+push_with_retry main
 
 echo "==> 推送完成，正在等待 GitHub Actions 与公网网站更新"
 node scripts/wait-for-github-pages.mjs "$VERSION" "$(git rev-parse HEAD)"

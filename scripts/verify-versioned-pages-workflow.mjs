@@ -9,8 +9,10 @@ assert(/push:\s*\n\s+branches:\s*\n\s+- main/.test(workflow), "Pages 必须由 m
 assert(workflow.includes("verify-release-version.mjs"), "Pages 构建前必须校验标签与 VERSION.md");
 assert(workflow.includes('git tag --points-at HEAD --list "$RELEASE_VERSION"'), "Pages 必须校验 HEAD 版本标签");
 assert(workflow.includes("git log -1 --format=%s"), "Pages 必须校验版本提交说明");
-const tagPushIndex = publishCommand.indexOf('git push origin "$HEAD_TAG"');
-const mainPushIndex = publishCommand.indexOf("git push origin main");
+assert(publishCommand.includes("git -c http.version=HTTP/1.1 push"), "双击发布命令必须规避不稳定的 HTTP/2 推送链路");
+assert(publishCommand.includes("max_attempts=3"), "双击发布命令必须对临时网络失败进行有限重试");
+const tagPushIndex = publishCommand.indexOf('push_with_retry "$HEAD_TAG"');
+const mainPushIndex = publishCommand.indexOf("push_with_retry main");
 assert(tagPushIndex >= 0 && mainPushIndex > tagPushIndex, "双击发布命令必须先推送当前版本标签再推送 main");
 assert(publishCommand.includes("verify-release-version.mjs"), "双击发布命令必须先校验版本号");
 assert(publishCommand.includes("wait-for-github-pages.mjs"), "双击发布命令必须等待并校验公网版本");
