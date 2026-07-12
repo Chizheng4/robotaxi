@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v042.0.3-map-camera-vehicle-precision.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v042.0.4-map-object-interaction-restoration.md`。
 
-最新完成版本：v042.0.3 地图相机与车辆视觉精度。
+最新完成版本：v042.0.4 地图对象交互恢复。
 
 当前执行指针：暂无。
 

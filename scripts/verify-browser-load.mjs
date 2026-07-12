@@ -143,6 +143,39 @@ try {
     });
     assert(cellSelectionResult.result?.result?.value?.clicked, "地图缺少可执行的 Cell 点击入口");
     await delay(250);
+
+    const hoverTriggerResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const place = document.querySelector(".map-place-object rect");
+        if (!place) return { triggered: false };
+        const placeRect = place.getBoundingClientRect();
+        place.dispatchEvent(new PointerEvent("pointerover", {
+          bubbles: true,
+          pointerType: "mouse",
+          clientX: placeRect.left + placeRect.width / 2,
+          clientY: placeRect.top + placeRect.height / 2,
+        }));
+        return { triggered: true };
+      })()`,
+      returnByValue: true,
+    });
+    assert(hoverTriggerResult.result?.result?.value?.triggered, "地图地点必须保留悬浮入口");
+    await delay(100);
+    const hoverVisibleResult = await send("Runtime.evaluate", {
+      expression: `Boolean(document.querySelector(".map-hover-card"))`,
+      returnByValue: true,
+    });
+    assert(hoverVisibleResult.result?.result?.value, "选中对象后，地点悬浮摘要仍必须可用");
+    const robotaxiClickResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const robotaxi = document.querySelector(".robotaxi-map-object");
+        robotaxi?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        return { robotaxiClicked: Boolean(robotaxi) };
+      })()`,
+      returnByValue: true,
+    });
+    assert(robotaxiClickResult.result?.result?.value?.robotaxiClicked, "地图 Robotaxi 必须保留详情点击入口");
+    await delay(250);
   }
 
   const result = await send("Runtime.evaluate", {
@@ -158,6 +191,7 @@ try {
       zoneLabels: [...document.querySelectorAll(".map-zone-anchor text")].map((node) => node.textContent),
       robotaxiMarkerCount: document.querySelectorAll(".robotaxi-map-marker").length,
       selectedCellCount: document.querySelectorAll(".map-selected-cell").length,
+      selectedRobotaxiCount: document.querySelectorAll('.robotaxi-map-object[data-active="true"]').length,
       hoverCardVisible: Boolean(document.querySelector(".map-hover-card")),
       visibleMapAnchorCount: [...document.querySelectorAll(".map-zone-anchor, .map-place-anchor")].filter((node) => {
         const rect = node.getBoundingClientRect();
@@ -194,7 +228,7 @@ try {
     assert(pageState.zoneLabels.includes("最小运营测试区"), `地图缺少 Zone 1：${JSON.stringify(pageState)}`);
     assert(pageState.zoneLabels.includes("东部规划运营区"), `地图缺少 Zone 2：${JSON.stringify(pageState)}`);
     assert.equal(pageState.robotaxiMarkerCount, 20, `存在当前位置的 20 辆 Robotaxi 必须全部生成地图点位：${JSON.stringify(pageState)}`);
-    assert.equal(pageState.selectedCellCount, 1, `点击 Cell 后必须显示唯一选中反馈：${JSON.stringify(pageState)}`);
+    assert.equal(pageState.selectedRobotaxiCount, 1, `点击 Robotaxi 后必须切换到唯一车辆详情：${JSON.stringify(pageState)}`);
     assert.equal(pageState.hoverCardVisible, false, `点击 Cell 后不得残留其他对象悬浮提示：${JSON.stringify(pageState)}`);
     assert(pageState.documentWidth <= pageState.viewportWidth + 1, `地图页面出现全局横向溢出：${JSON.stringify(pageState)}`);
   }

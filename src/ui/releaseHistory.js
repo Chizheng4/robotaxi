@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v042.0.4",
+    "title": "恢复地图对象的完整交互边界，保证悬浮摘要与 Robotaxi 详情点击在选择其他对象后仍持续可用",
+    "changes": [
+      "移除“右侧已有选中对象时禁止地图悬浮”的过度拦截，地点、道路和服务区域可持续显示轻量摘要。",
+      "Zone 只在边界线响应选择，不再覆盖内部地点、道路、服务区域和 Robotaxi 的交互区域。",
+      "Robotaxi 地图对象恢复明确点击反馈，点击后通过统一选择入口打开右侧车辆详情。",
+      "真实浏览器合同新增完整交互链：选择 Cell、悬浮地点、点击 Robotaxi、确认唯一车辆详情。"
+    ],
+    "audienceTitle": "地图悬浮和车辆详情恢复正常",
+    "audienceChanges": [
+      "鼠标移动到地点、道路和服务区域时，会重新显示轻量信息摘要。",
+      "点击地图中的 Robotaxi 会打开对应车辆详情，不再被区域图层拦截。",
+      "选择过其他对象后，这些交互仍然可以继续使用。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v042.0.3",
     "title": "收敛地图默认相机与空间对象比例，恢复精致 Robotaxi 车辆标记，并统一地图和详情的数据来源",
     "changes": [

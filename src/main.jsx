@@ -7476,7 +7476,6 @@ function MapCanvas({ data, selected, onSelect }) {
 
   function showHover(event, type, id) {
     if (event.pointerType === "touch") return;
-    if (selected?.type !== "map" && selected?.id) return;
     const rect = event.currentTarget.closest(".map-stage")?.getBoundingClientRect();
     const pointerX = event.clientX - (rect?.left || 0);
     const pointerY = event.clientY - (rect?.top || 0);
@@ -9375,7 +9374,7 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-3"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-4"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
