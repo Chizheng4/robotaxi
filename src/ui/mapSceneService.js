@@ -5,7 +5,7 @@ const presentationRegistry = {
     nameField: "zone_name",
     typeField: "zone_type",
     profileTargetType: "ZONE",
-    hoverFields: ["zone_status", "expected_robotaxi_demand", "peak_hour_demand", "supply_need_score"],
+    hoverFields: ["expected_robotaxi_demand", "supply_need_score"],
   },
   place: {
     collection: "places",
@@ -13,7 +13,7 @@ const presentationRegistry = {
     nameField: "place_name",
     typeField: "place_type",
     profileTargetType: "PLACE",
-    hoverFields: ["place_type", "potential_demand", "expected_robotaxi_demand", "peak_hour_demand"],
+    hoverFields: ["potential_demand", "expected_robotaxi_demand"],
   },
   serviceArea: {
     collection: "serviceAreas",
@@ -21,28 +21,28 @@ const presentationRegistry = {
     nameField: "service_area_name",
     typeField: "service_area_type",
     profileTargetType: "SERVICE_AREA",
-    hoverFields: ["service_area_status", "service_capacity", "service_area_demand", "current_robotaxi_count"],
+    hoverFields: ["service_capacity", "current_robotaxi_count"],
   },
   road: {
     collection: "roads",
     idField: "road_id",
     nameField: "road_name",
     typeField: "road_type",
-    hoverFields: ["road_type", "road_status"],
+    hoverFields: ["road_status"],
   },
   opsCenter: {
     collection: "opsCenters",
     idField: "ops_center_id",
     nameField: "ops_center_name",
     typeField: "ops_center_status",
-    hoverFields: ["ops_center_status", "capacity", "can_clean_robotaxi", "can_charge_robotaxi"],
+    hoverFields: ["capacity", "can_clean_robotaxi"],
   },
   robotaxi: {
     collection: "robotaxis",
     idField: "robotaxi_id",
     nameField: "robotaxi_id",
     typeField: "availability_status",
-    hoverFields: ["availability_status", "motion_status", "battery_percent", "current_cell_id"],
+    hoverFields: ["battery_percent", "current_cell_id"],
   },
 };
 
@@ -67,9 +67,8 @@ export function createMapScene(data = {}) {
   const segmentsByRoad = groupBy(data.roadSegments || [], "road_id");
   const roads = (data.roads || []).map((road) => {
     const segments = segmentsByRoad.get(road.road_id) || [];
-    const paths = segments.map((segment) => cellSequencePoints(segment.cell_sequence));
     const cells = segments.flatMap((segment) => segment.cell_sequence || []);
-    return { ...road, paths, bounds: boundsFromCellIds(cells) };
+    return { ...road, path: cellRectPath([...new Set(cells)], 0.06), bounds: boundsFromCellIds(cells) };
   });
 
   return {
@@ -77,7 +76,7 @@ export function createMapScene(data = {}) {
     places,
     serviceAreas,
     roads,
-    staticNodeCount: 1 + zones.length * 2 + places.length * 2 + serviceAreas.length + roads.reduce((sum, road) => sum + road.paths.length, 0),
+    staticNodeCount: 1 + zones.length * 2 + places.length * 2 + serviceAreas.length + roads.length,
   };
 }
 
@@ -130,13 +129,6 @@ function cellRectPath(cellIds = [], inset = 0) {
     const { row, col } = parseCellId(cellId);
     const size = 1 - inset * 2;
     return `M${col + inset} ${row + inset}h${size}v${size}h-${size}Z`;
-  }).join(" ");
-}
-
-function cellSequencePoints(cellIds = []) {
-  return cellIds.map((cellId) => {
-    const { row, col } = parseCellId(cellId);
-    return `${col + 0.5},${row + 0.5}`;
   }).join(" ");
 }
 

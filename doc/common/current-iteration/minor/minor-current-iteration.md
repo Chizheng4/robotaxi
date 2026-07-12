@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v041.4.4-webview-visual-viewport-boundary.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v042.0.1-map-visual-interaction-refinement.md`。
 
-最新完成版本：v041.4.4 WebView 可视视口边界。
+最新完成版本：v042.0.1 地图视觉与交互收敛。
 
 当前执行指针：暂无。
 

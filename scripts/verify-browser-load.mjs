@@ -122,6 +122,29 @@ try {
     await delay(2500);
   }
 
+  if (mapAssertionEnabled) {
+    const cellSelectionResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const svg = document.querySelector(".zone-canvas-new");
+        const scene = svg?.querySelector("g[transform]");
+        if (!svg || !scene) return { clicked: false };
+        const point = svg.createSVGPoint();
+        point.x = 15.5;
+        point.y = 20.5;
+        const screenPoint = point.matrixTransform(scene.getScreenCTM());
+        svg.dispatchEvent(new MouseEvent("click", {
+          bubbles: true,
+          clientX: screenPoint.x,
+          clientY: screenPoint.y,
+        }));
+        return { clicked: true };
+      })()`,
+      returnByValue: true,
+    });
+    assert(cellSelectionResult.result?.result?.value?.clicked, "地图缺少可执行的 Cell 点击入口");
+    await delay(250);
+  }
+
   const result = await send("Runtime.evaluate", {
     expression: `JSON.stringify({
       title: document.title,
@@ -132,7 +155,10 @@ try {
       siderWidth: document.querySelector(".ops-sider")?.getBoundingClientRect().width || 0,
       mapVisible: Boolean(document.querySelector(".zone-canvas-new")),
       mapSceneNodeCount: document.querySelector(".zone-canvas-new g")?.querySelectorAll("*").length || 0,
-      zoneLabels: [...document.querySelectorAll(".map-zone-label")].map((node) => node.textContent),
+      zoneLabels: [...document.querySelectorAll(".map-zone-anchor text")].map((node) => node.textContent),
+      robotaxiMarkerCount: document.querySelectorAll(".robotaxi-map-marker").length,
+      selectedCellCount: document.querySelectorAll(".map-selected-cell").length,
+      hoverCardVisible: Boolean(document.querySelector(".map-hover-card")),
       bodyText: document.body.innerText.slice(0, 500)
     })`,
     returnByValue: true,
@@ -157,6 +183,9 @@ try {
     assert(pageState.mapSceneNodeCount < 500, `地图 DOM 节点超过性能预算：${JSON.stringify(pageState)}`);
     assert(pageState.zoneLabels.includes("最小运营测试区"), `地图缺少 Zone 1：${JSON.stringify(pageState)}`);
     assert(pageState.zoneLabels.includes("东部规划运营区"), `地图缺少 Zone 2：${JSON.stringify(pageState)}`);
+    assert.equal(pageState.robotaxiMarkerCount, 20, `存在当前位置的 20 辆 Robotaxi 必须全部生成地图点位：${JSON.stringify(pageState)}`);
+    assert.equal(pageState.selectedCellCount, 1, `点击 Cell 后必须显示唯一选中反馈：${JSON.stringify(pageState)}`);
+    assert.equal(pageState.hoverCardVisible, false, `点击 Cell 后不得残留其他对象悬浮提示：${JSON.stringify(pageState)}`);
     assert(pageState.documentWidth <= pageState.viewportWidth + 1, `地图页面出现全局横向溢出：${JSON.stringify(pageState)}`);
   }
   console.log("真实浏览器加载验证通过");

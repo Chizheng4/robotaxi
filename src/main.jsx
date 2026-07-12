@@ -1926,8 +1926,8 @@ function App({ currentUser, onLogout }) {
     : selected.type === activeObjectType ? selectedObject : null;
   const detailSelectedType = activePage === "console" ? selected.type : activeObjectType;
   const showConsoleSummary = activePage === "console";
-  const topTitle = showConsoleSummary ? data.maps[0].map_name : activeConfig?.title || "业务记录";
-  const topDescription = showConsoleSummary ? "模拟网格空间 / 道路 / 地点 / 服务区 / 运营中心" : activeConfig?.description;
+  const topTitle = showConsoleSummary ? "地图空间" : activeConfig?.title || "业务记录";
+  const topDescription = showConsoleSummary ? null : activeConfig?.description;
   const activeRows = rowsByPage[activePage] || [];
   const detailCollapsed = Boolean(detailCollapsedByPage[activePage]);
 
@@ -3284,13 +3284,7 @@ function App({ currentUser, onLogout }) {
           <div className="top-strip-tools">
             <div className="top-strip-metrics">
               {showConsoleSummary ? (
-                <>
-                  <span className="top-strip-metric">{data.maps[0].grid_cols} x {data.maps[0].grid_rows} / {data.maps[0].cell_size_m}m</span>
-                  <span className="top-strip-metric">地图 {data.maps.length}</span>
-                  <span className="top-strip-metric">网格 {data.cells.length}</span>
-                  <span className="top-strip-metric">Robotaxi {data.robotaxis.length}</span>
-                  <span className="top-strip-metric">作业人员 {data.workers.length}</span>
-                </>
+                null
               ) : (
                 <Tag bordered={false}>记录 {activeRows.length}</Tag>
               )}
@@ -3353,7 +3347,7 @@ function App({ currentUser, onLogout }) {
             onClose={closeWorkspacePage}
           />
 
-          <Layout className={detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
+          <Layout className={`${detailCollapsed ? "workbench detail-collapsed" : "workbench"}${activePage === "console" ? " console-workbench" : ""}`}>
             <Content className="work-content">
               {activePage === "console" ? (
                 <MapCanvas data={data} selected={selected} onSelect={(type, id) => selectForPage("console", type, id)} />
@@ -7477,6 +7471,7 @@ function MapCanvas({ data, selected, onSelect }) {
       didDragRef.current = false;
       return;
     }
+    setHovered(null);
     const svg = event.currentTarget;
     const point = svg.createSVGPoint();
     point.x = event.clientX;
@@ -7504,7 +7499,7 @@ function MapCanvas({ data, selected, onSelect }) {
         )}
         <svg
           className="zone-canvas-new"
-          viewBox={`0 0 ${map.grid_cols} ${map.grid_rows}`}
+          viewBox={`0 -5 ${map.grid_cols} ${map.grid_rows + 10}`}
           preserveAspectRatio="xMidYMid slice"
           role="img"
           aria-label="Robotaxi 双区域运营地图"
@@ -7538,8 +7533,7 @@ function MapCanvas({ data, selected, onSelect }) {
                     onPointerLeave={() => setHovered(null)}
                     onClick={(event) => selectMapObject(event, "zone", zone.zone_id)}
                   />
-                  <text className="map-zone-label" x={zone.labelX} y={zone.bounds.y + 2.2} textAnchor="middle">{zone.zone_name}</text>
-                  <text className="map-zone-status" x={zone.labelX} y={zone.bounds.y + 3.6} textAnchor="middle">{getDisplayValue(zone.zone_status)}</text>
+                  <MapAnchorLabel className="map-zone-anchor" x={zone.labelX} y={zone.bounds.y + 1.2} zoom={viewport.zoom} label={zone.zone_name} />
                 </g>
               ))}
             </g>
@@ -7556,24 +7550,23 @@ function MapCanvas({ data, selected, onSelect }) {
                     onPointerLeave={() => setHovered(null)}
                     onClick={(event) => selectMapObject(event, "place", place.place_id)}
                   />
-                  <text className="map-place-label" x={place.bounds.centerX} y={place.bounds.centerY} textAnchor="middle">{place.place_name}</text>
+                  <MapAnchorLabel className="map-place-anchor" x={place.bounds.x + 0.7} y={place.bounds.y + 0.7} zoom={viewport.zoom} label={place.place_name} />
                 </g>
               ))}
             </g>
             <g className="road-layer">
-              {scene.roads.flatMap((road) => road.paths.map((points, index) => (
-                <polyline
-                  key={`${road.road_id}-${index}`}
-                  className="map-road-line"
+              {scene.roads.map((road) => (
+                <g key={road.road_id} className="map-road-object" data-planned={road.road_status === "Planned"}>
+                <path
+                  className="map-road-cells"
                   data-planned={road.road_status === "Planned"}
-                  points={points}
+                  d={road.path}
                   onPointerEnter={(event) => showHover(event, "road", road.road_id)}
                   onPointerLeave={() => setHovered(null)}
                   onClick={(event) => selectMapObject(event, "road", road.road_id)}
                 />
-              )))}
-              {scene.roads.map((road) => road.bounds.width > 0 && (
-                <text className="map-road-label" key={`${road.road_id}-label`} x={road.bounds.centerX} y={road.bounds.centerY - 0.45} textAnchor="middle">{road.road_name}</text>
+                {road.bounds.width > 0 && <MapAnchorLabel className="map-road-anchor" x={road.bounds.centerX} y={road.bounds.centerY} zoom={viewport.zoom} label={road.road_name} />}
+                </g>
               ))}
             </g>
             <g className="service-area-layer">
@@ -7587,14 +7580,18 @@ function MapCanvas({ data, selected, onSelect }) {
                     onPointerLeave={() => setHovered(null)}
                     onClick={(event) => selectMapObject(event, "serviceArea", area.service_area_id)}
                   />
-                  <text className="map-service-area-label" x={area.bounds.centerX} y={area.bounds.centerY - 0.5} textAnchor="middle">{area.service_area_name}</text>
+                  <MapAnchorLabel className="map-service-area-anchor" x={area.bounds.centerX} y={area.bounds.centerY} zoom={viewport.zoom} label={area.service_area_name} />
                 </g>
               ))}
             </g>
             {highlightedRoutePoints && <polyline className="map-selected-route" points={highlightedRoutePoints} />}
             <OpsCenters opsCenters={data.opsCenters || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={() => setHovered(null)} />
             <RoadNodes roadNodes={data.roadNodes} selected={selected} />
-            <Robotaxis robotaxis={data.robotaxi || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={() => setHovered(null)} />
+            <Robotaxis robotaxis={data.robotaxis || []} selected={selected} onSelect={selectMapObject} onHover={showHover} onHoverEnd={() => setHovered(null)} />
+            {selected?.type === "cell" && (() => {
+              const { row, col } = parseCellId(selected.id);
+              return <rect className="map-selected-cell" x={col + 0.06} y={row + 0.06} width="0.88" height="0.88" />;
+            })()}
             <rect
               x="0"
               y="0"
@@ -7618,6 +7615,17 @@ function MapCanvas({ data, selected, onSelect }) {
         )}
       </div>
     </section>
+  );
+}
+
+function MapAnchorLabel({ className, x, y, zoom, label }) {
+  const inverseZoom = 1 / Math.max(0.7, Number(zoom || 1));
+  return (
+    <g className={`map-anchor-label ${className || ""}`} transform={`translate(${x} ${y}) scale(${inverseZoom})`} aria-hidden="true">
+      <circle cx="0" cy="0" r="0.13" />
+      <path d="M0.18 0 L0.62 -0.34" />
+      <text x="0.78" y="-0.34">{label}</text>
+    </g>
   );
 }
 
@@ -7695,16 +7703,8 @@ function Robotaxis({ robotaxis, selected, onSelect, onHover, onHoverEnd }) {
               onSelect(event, "robotaxi", item.robotaxi_id);
             }}
           >
-            <circle className="robotaxi-map-halo" cx={centerX} cy={centerY} r="0.48" />
-            <image
-              className="robotaxi-map-image"
-              href="./src/assets/robotaxi-map-marker.png"
-              x={centerX - 0.35}
-              y={centerY - 0.46}
-              width="0.7"
-              height="0.92"
-              preserveAspectRatio="xMidYMid meet"
-            />
+            <circle className="robotaxi-map-halo" cx={centerX} cy={centerY} r="0.23" />
+            <circle className="robotaxi-map-marker" cx={centerX} cy={centerY} r="0.13" />
             <text className="robotaxi-map-label" x={centerX} y={centerY - 0.58} textAnchor="middle">
               {item.robotaxi_id} · {batteryPercent.toFixed(0)}%
             </text>
@@ -9302,11 +9302,11 @@ async function bootstrap() {
 		    import("./data/supplyManagementInitialization.js"),
 		    import("./data/spatialBusinessProfileInitialization.js?v=20260712-v042-0-0"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
-		    import("./ui/robotaxiMapProjection.js?v=20260710-v041-3-1"),
+		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
-		    import("./ui/mapSceneService.js?v=20260712-v042-0-0"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-0"),
+		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-1"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;

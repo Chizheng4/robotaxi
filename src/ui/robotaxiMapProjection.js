@@ -19,8 +19,8 @@ export function createRobotaxiMapProjections(robotaxis = []) {
       return {
         vehicle,
         cellId,
-        offsetX: (columnIndex - (rowVehicleCount - 1) / 2) * 0.58,
-        offsetY: (rowIndex - (rowCount - 1) / 2) * 0.68,
+        offsetX: (columnIndex - (rowVehicleCount - 1) / 2) * 0.24,
+        offsetY: (rowIndex - (rowCount - 1) / 2) * 0.28,
       };
     });
   });
