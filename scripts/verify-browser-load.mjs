@@ -122,6 +122,27 @@ try {
     await delay(2500);
   }
 
+  await send("Runtime.evaluate", { expression: `document.querySelector(".platform-user-trigger")?.click()`, returnByValue: true });
+  await delay(100);
+  await send("Runtime.evaluate", {
+    expression: `[...document.querySelectorAll(".platform-account-action")].find((node) => node.textContent.trim() === "项目 README")?.click()`,
+    returnByValue: true,
+  });
+  await delay(350);
+  const readmePanelResult = await send("Runtime.evaluate", {
+    expression: `(() => {
+      const panel = document.querySelector(".project-readme-panel");
+      const scroll = document.querySelector(".project-readme-scroll");
+      const rect = panel?.getBoundingClientRect();
+      return { visible: Boolean(panel), hasTitle: Boolean(panel?.textContent.includes("Robotaxi 城市运营模拟平台")), scrollable: Boolean(scroll && scroll.scrollHeight > scroll.clientHeight), withinViewport: Boolean(rect && rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= 0 && rect.bottom <= window.innerHeight + 1) };
+    })()`,
+    returnByValue: true,
+  });
+  const readmePanel = readmePanelResult.result?.result?.value;
+  assert(readmePanel?.visible && readmePanel?.hasTitle && readmePanel?.scrollable && readmePanel?.withinViewport, `项目 README 浮层必须可读、可滚动且位于视口内：${JSON.stringify(readmePanel)}`);
+  await send("Runtime.evaluate", { expression: `document.querySelector('.project-readme-panel [aria-label="关闭项目说明"]')?.click()`, returnByValue: true });
+  await delay(100);
+
   if (mapAssertionEnabled) {
     const initialMapState = await send("Runtime.evaluate", {
       expression: `({ detailCollapsed: document.querySelector(".workbench")?.classList.contains("detail-collapsed") })`,

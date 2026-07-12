@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v042.0.9-workbench-focus-and-action-menu.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v042.0.10-project-readme-and-supply-display.md`。
 
-最新完成版本：v042.0.9 工作台聚焦与统一操作菜单。
+最新完成版本：v042.0.10 项目说明与供应展示一致性。
 
 当前执行指针：暂无。
 

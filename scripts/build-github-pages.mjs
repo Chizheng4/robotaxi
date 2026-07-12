@@ -29,6 +29,7 @@ for (const directory of runtimeDirectories) {
 }
 fs.cpSync(path.join(rootDir, "vendor"), path.join(outputDir, "vendor"), { recursive: true });
 fs.copyFileSync(path.join(rootDir, "src/styles.css"), path.join(outputDir, "src/styles.css"));
+fs.copyFileSync(path.join(rootDir, "README.md"), path.join(outputDir, "README.md"));
 
 const productionBundle = compiledBundle.replace(/(\.js)\?v=[^"')]+/g, `$1?v=${cacheVersion}`);
 fs.writeFileSync(path.join(outputDir, "src/main.bundle.js"), productionBundle);

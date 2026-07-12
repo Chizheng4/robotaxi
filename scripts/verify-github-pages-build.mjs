@@ -7,9 +7,11 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const outputDir = path.join(rootDir, "dist");
 const indexPath = path.join(outputDir, "index.html");
 const bundlePath = path.join(outputDir, "src/main.bundle.js");
+const readmePath = path.join(outputDir, "README.md");
 
 assert(fs.existsSync(indexPath), "生产站点缺少 index.html");
 assert(fs.existsSync(bundlePath), "生产站点缺少 src/main.bundle.js");
+assert(fs.existsSync(readmePath), "生产站点缺少 README.md，项目说明浮层无法读取内容");
 assert(fs.existsSync(path.join(outputDir, "src/assets/robotaxi-map-marker.png")), "生产站点缺少 Robotaxi 地图资产");
 assert(fs.existsSync(path.join(outputDir, ".nojekyll")), "生产站点缺少 .nojekyll");
 assert(fs.existsSync(path.join(outputDir, "deployment-manifest.json")), "生产站点缺少发布清单");

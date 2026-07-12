@@ -235,6 +235,69 @@
   box-shadow: 0 18px 48px rgba(41, 60, 80, 0.18);
 }
 
+.project-readme-panel {
+  position: absolute;
+  z-index: 81;
+  top: 44px;
+  right: 12px;
+  display: flex;
+  width: min(520px, calc(100vw - 24px));
+  max-height: min(640px, calc(100dvh - 88px));
+  flex-direction: column;
+  border: 1px solid #cdd8e3;
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 18px 48px rgba(41, 60, 80, 0.18);
+  animation: project-readme-enter 160ms ease-out;
+}
+
+@keyframes project-readme-enter {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.project-readme-scroll {
+  min-height: 0;
+  padding: 12px 18px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.project-readme-scroll h2,
+.project-readme-scroll h3,
+.project-readme-scroll h4 {
+  margin: 18px 0 7px;
+  color: #263d53;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+.project-readme-scroll h2:first-child { margin-top: 0; }
+.project-readme-scroll h2 { font-size: var(--font-md); font-weight: 600; }
+.project-readme-scroll h3,
+.project-readme-scroll h4 { font-size: var(--font-sm); font-weight: 600; }
+.project-readme-scroll p,
+.project-readme-scroll li,
+.project-readme-scroll blockquote,
+.project-readme-scroll td,
+.project-readme-scroll th { font-size: var(--font-xs); line-height: 1.65; }
+.project-readme-scroll p { margin: 7px 0; color: #485d70; }
+.project-readme-scroll ul,
+.project-readme-scroll ol { margin: 7px 0; padding-left: 20px; color: #485d70; }
+.project-readme-scroll blockquote { margin: 8px 0; padding: 7px 10px; border-left: 2px solid #91a7ba; color: #526a7d; background: var(--surface-soft); }
+.project-readme-table-wrap { margin: 10px 0; overflow-x: auto; }
+.project-readme-table-wrap table { width: 100%; border-collapse: collapse; }
+.project-readme-table-wrap th,
+.project-readme-table-wrap td { padding: 7px 8px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+.project-readme-table-wrap th { color: #364d62; background: var(--surface-soft); font-weight: 600; }
+.project-readme-diagram { margin: 8px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.project-readme-diagram summary { padding: 8px 0; color: var(--accent); cursor: pointer; font-size: var(--font-xs); }
+.project-readme-diagram pre,
+.project-readme-code { margin: 0 0 10px; padding: 9px 10px; overflow: auto; color: #526376; background: var(--surface-soft); font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.project-readme-state { padding: 48px 0; color: var(--muted); text-align: center; font-size: var(--font-xs); }
+
 .release-history-header {
   display: flex;
   flex: none;
@@ -4592,7 +4655,7 @@ body {
 }
 
 .platform-user-popover .ant-popover-inner {
-  min-width: 88px;
+  min-width: 120px;
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -4603,7 +4666,9 @@ body {
   padding: 0;
 }
 
-.platform-logout-action.ant-btn {
+.platform-account-menu { display: grid; }
+
+.platform-account-action.ant-btn {
   width: 100%;
   height: 28px;
   justify-content: flex-start;
@@ -4613,7 +4678,7 @@ body {
   font-weight: 400;
 }
 
-.platform-logout-action.ant-btn:hover {
+.platform-account-action.ant-btn:hover {
   color: var(--text);
   background: var(--surface-muted);
 }
@@ -5255,6 +5320,17 @@ html[data-keyboard-open="true"] .platform-login-panel {
     width: auto;
     max-height: calc(var(--app-viewport-height) - 68px);
   }
+
+  .project-readme-panel {
+    position: fixed;
+    top: calc(var(--app-viewport-offset-top) + 58px);
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: calc(var(--app-viewport-height) - 68px);
+  }
+
+  .project-readme-scroll { padding: 10px 14px 18px; }
 
   .ant-modal {
     top: 12px;

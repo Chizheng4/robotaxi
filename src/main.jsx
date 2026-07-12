@@ -61,6 +61,7 @@ let responsiveViewport;
 let spatialCatalogService;
 let mapSceneService;
 let releaseHistory = [];
+let projectReadmeService;
 let taskSequence = 0;
 let fleetOperationTaskSequence = 0;
 let fleetOperationPolicyRunSequence = 0;
@@ -1421,6 +1422,63 @@ function ReleaseHistoryPanel({ open, onClose }) {
   );
 }
 
+function ProjectReadmePanel({ open, onClose }) {
+  const [state, setState] = useState({ loading: true, blocks: [], error: null });
+  useEffect(() => {
+    if (!open || !projectReadmeService) return undefined;
+    let cancelled = false;
+    setState({ loading: true, blocks: [], error: null });
+    projectReadmeService.loadProjectReadme()
+      .then((markdown) => {
+        if (!cancelled) setState({ loading: false, blocks: projectReadmeService.parseProjectReadme(markdown), error: null });
+      })
+      .catch((error) => {
+        if (!cancelled) setState({ loading: false, blocks: [], error: error.message || "项目说明读取失败" });
+      });
+    return () => { cancelled = true; };
+  }, [open]);
+  if (!open) return null;
+  return (
+    <section className="project-readme-panel" role="dialog" aria-label="项目说明">
+      <header className="release-history-header">
+        <div><strong>项目 README</strong><span>项目定位、业务理解与当前范围</span></div>
+        <Button type="text" size="small" aria-label="关闭项目说明" onClick={onClose}>×</Button>
+      </header>
+      <div className="project-readme-scroll">
+        {state.loading && <div className="project-readme-state">正在读取项目说明</div>}
+        {state.error && <div className="project-readme-state">{state.error}</div>}
+        {!state.loading && !state.error && state.blocks.map((block, index) => (
+          <ProjectReadmeBlock block={block} key={`${block.type}-${index}`} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProjectReadmeBlock({ block }) {
+  if (block.type === "heading") {
+    const Heading = `h${Math.min(4, Math.max(2, block.level + 1))}`;
+    return <Heading>{formatReadmeInline(block.content)}</Heading>;
+  }
+  if (block.type === "quote") return <blockquote>{formatReadmeInline(block.content)}</blockquote>;
+  if (block.type === "list" || block.type === "orderedList") {
+    const List = block.type === "orderedList" ? "ol" : "ul";
+    return <List>{block.items.map((item, index) => <li key={index}>{formatReadmeInline(item)}</li>)}</List>;
+  }
+  if (block.type === "table") {
+    return (
+      <div className="project-readme-table-wrap"><table><thead><tr>{block.headers.map((cell, index) => <th key={index}>{formatReadmeInline(cell)}</th>)}</tr></thead><tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{formatReadmeInline(cell)}</td>)}</tr>)}</tbody></table></div>
+    );
+  }
+  if (block.type === "diagram") return <details className="project-readme-diagram"><summary>查看结构关系图</summary><pre>{block.content}</pre></details>;
+  if (block.type === "code") return <pre className="project-readme-code">{block.content}</pre>;
+  return <p>{formatReadmeInline(block.content)}</p>;
+}
+
+function formatReadmeInline(content = "") {
+  return String(content).replaceAll("**", "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replaceAll("`", "");
+}
+
 function App({ currentUser, onLogout }) {
   const initialData = useMemo(() => {
     const baseData = {
@@ -1550,6 +1608,8 @@ function App({ currentUser, onLogout }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileLayout, setMobileLayout] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 767px)").matches);
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
+  const [projectReadmeOpen, setProjectReadmeOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [openMenuKeys, setOpenMenuKeys] = useState(getOpenKeysForPage(initialRuntime.activePage));
   const [workspacePages, setWorkspacePages] = useState(initialRuntime.workspacePages);
   const [detailCollapsedByPage, setDetailCollapsedByPage] = useState(initialRuntime.detailCollapsedByPage);
@@ -3320,7 +3380,9 @@ function App({ currentUser, onLogout }) {
                 placement="bottomRight"
                 trigger="click"
                 overlayClassName="platform-user-popover"
-                content={<Button className="platform-logout-action" type="text" size="small" onClick={onLogout}>退出</Button>}
+                open={accountMenuOpen}
+                onOpenChange={setAccountMenuOpen}
+                content={<div className="platform-account-menu"><Button className="platform-account-action" type="text" size="small" onClick={() => { setProjectReadmeOpen(true); setAccountMenuOpen(false); }}>项目 README</Button><Button className="platform-account-action" type="text" size="small" onClick={onLogout}>退出</Button></div>}
               >
                 <Button
                   className="platform-user-trigger"
@@ -3336,6 +3398,7 @@ function App({ currentUser, onLogout }) {
             </div>
           </div>
           <ReleaseHistoryPanel open={releaseHistoryOpen} onClose={() => setReleaseHistoryOpen(false)} />
+          <ProjectReadmePanel open={projectReadmeOpen} onClose={() => setProjectReadmeOpen(false)} />
         </div>
       </header>
 
@@ -3974,9 +4037,10 @@ function App({ currentUser, onLogout }) {
   function activateWorkspacePage(page) {
     setActivePageAndMenu(page);
     setWorkspacePages((current) => addWorkspacePage(current, page));
-    const nextSelection = pageSelections[page] || getDefaultSelection(page, data);
+    const nextSelection = getDefaultSelection(page, data);
     setSelected(nextSelection);
-    if (!nextSelection?.id) setDetailCollapsedForPage(page, true);
+    setPageSelections((current) => ({ ...current, [page]: nextSelection }));
+    setDetailCollapsedForPage(page, true);
     if (page === "console") setDetailCollapsedForPage("console", true);
   }
 
@@ -9455,6 +9519,7 @@ async function bootstrap() {
 		    spatialCatalogServiceModule,
 		    mapSceneServiceModule,
 		    releaseHistoryModule,
+		    projectReadmeModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260712-v042-0-0"),
     import("./data/mapValidation.js?v=20260712-v042-0-0"),
@@ -9518,7 +9583,8 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-9"),
+		    import("./ui/releaseHistory.js?v=20260713-v042-0-10"),
+		    import("./ui/projectReadme.js?v=20260712-v042-0-10"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -9585,7 +9651,8 @@ async function bootstrap() {
 		  responsiveViewport = responsiveViewportModule;
 		  spatialCatalogService = spatialCatalogServiceModule;
 		  mapSceneService = mapSceneServiceModule;
-		  releaseHistory = releaseHistoryModule.releaseHistory;
+  releaseHistory = releaseHistoryModule.releaseHistory;
+  projectReadmeService = projectReadmeModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {

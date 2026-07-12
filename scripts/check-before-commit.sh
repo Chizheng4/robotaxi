@@ -60,6 +60,7 @@ node --check src/ui/platformExperience.js
 node --check src/ui/robotaxiMapProjection.js
 node --check src/ui/responsiveViewport.js
 node --check src/ui/releaseHistory.js
+node --check src/ui/projectReadme.js
 node --check src/ui/mapSceneService.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js

@@ -1330,6 +1330,21 @@
 |DELIVERY_ORDER_STARTED|交付已开始|状态时间线结果|
 |DELIVERY_ORDER_COMPLETE|交付完成|状态时间线动作|
 |DELIVERY_ORDER_DELIVERED|交付单已交付|状态时间线结果|
+|businessTarget|经营目标|业务对象类型|
+|supplyProductionProfile|生产画像|业务对象类型|
+|longTermDemandForecastStrategy|需求预测策略|业务对象类型|
+|longTermDemandForecastRun|需求预测执行|业务对象类型|
+|longTermDemandForecast|需求预测结果|业务对象类型|
+|supplyPlan / supplyPlans|生产计划|业务对象类型 / 页面来源|
+|productionBatch / productionBatches|生产批次|业务对象类型 / 页面来源|
+|fleetAllocationStrategy|区域分配策略|业务对象类型|
+|fleetAllocationRun|区域分配执行|业务对象类型|
+|fleetAllocationResult|区域分配结果|业务对象类型|
+|robotaxiDeliveryOrder / robotaxiDeliveryOrders|区域交付|业务对象类型 / 页面来源|
+|supplyDemandBalanceStrategy|供需平衡策略|业务对象类型|
+|supplyDemandBalanceRun|供需平衡执行|业务对象类型|
+|supplyDemandBalanceResult|供需平衡结果|业务对象类型|
+|ownerSupply|车主供应|业务对象类型|
 
 ---
 
