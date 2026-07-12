@@ -12,6 +12,7 @@ const readmePath = path.join(outputDir, "README.md");
 assert(fs.existsSync(indexPath), "生产站点缺少 index.html");
 assert(fs.existsSync(bundlePath), "生产站点缺少 src/main.bundle.js");
 assert(fs.existsSync(readmePath), "生产站点缺少 README.md，项目说明浮层无法读取内容");
+assert.equal(fs.readFileSync(readmePath, "utf8"), fs.readFileSync(path.join(rootDir, "README.md"), "utf8"), "生产站点 README 必须与当前项目文档完全一致");
 assert(fs.existsSync(path.join(outputDir, "src/assets/robotaxi-map-marker.png")), "生产站点缺少 Robotaxi 地图资产");
 assert(fs.existsSync(path.join(outputDir, ".nojekyll")), "生产站点缺少 .nojekyll");
 assert(fs.existsSync(path.join(outputDir, "deployment-manifest.json")), "生产站点缺少发布清单");

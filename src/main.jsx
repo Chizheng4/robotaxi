@@ -1470,9 +1470,54 @@ function ProjectReadmeBlock({ block }) {
       <div className="project-readme-table-wrap"><table><thead><tr>{block.headers.map((cell, index) => <th key={index}>{formatReadmeInline(cell)}</th>)}</tr></thead><tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{formatReadmeInline(cell)}</td>)}</tr>)}</tbody></table></div>
     );
   }
-  if (block.type === "diagram") return <details className="project-readme-diagram"><summary>查看结构关系图</summary><pre>{block.content}</pre></details>;
+  if (block.type === "diagram") return <ProjectReadmeDiagram source={block.content} />;
   if (block.type === "code") return <pre className="project-readme-code">{block.content}</pre>;
   return <p>{formatReadmeInline(block.content)}</p>;
+}
+
+function ProjectReadmeDiagram({ source }) {
+  const graph = useMemo(() => projectReadmeService.parseMermaidFlowchart(source), [source]);
+  const markerId = useMemo(() => `readme-arrow-${Math.random().toString(36).slice(2)}`, []);
+  return (
+    <div className="project-readme-diagram" role="img" aria-label="结构关系图">
+      <svg viewBox={`0 0 ${graph.width} ${graph.height}`} width={graph.width} height={graph.height}>
+        <defs>
+          <marker id={markerId} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" /></marker>
+        </defs>
+        <g className="project-readme-diagram-edges">
+          {graph.edges.map((edge, index) => <ProjectReadmeDiagramEdge edge={edge} markerId={markerId} key={`${edge.from}-${edge.to}-${index}`} />)}
+        </g>
+        <g className="project-readme-diagram-nodes">
+          {graph.nodes.map((node) => (
+            <g key={node.id} transform={`translate(${node.x} ${node.y})`}>
+              <rect width={node.width} height={node.height} rx="6" />
+              <text x={node.width / 2} y={node.label.includes("\n") ? 23 : 34} textAnchor="middle">
+                {node.label.split("\n").map((line, index) => <tspan x={node.width / 2} dy={index === 0 ? 0 : 18} key={index}>{line}</tspan>)}
+              </text>
+            </g>
+          ))}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function ProjectReadmeDiagramEdge({ edge, markerId }) {
+  const { fromNode, toNode, operator } = edge;
+  if (!fromNode || !toNode) return null;
+  const horizontal = Math.abs(toNode.x - fromNode.x) >= Math.abs(toNode.y - fromNode.y);
+  const start = horizontal
+    ? { x: fromNode.x + fromNode.width, y: fromNode.y + fromNode.height / 2 }
+    : { x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height };
+  const end = horizontal
+    ? { x: toNode.x, y: toNode.y + toNode.height / 2 }
+    : { x: toNode.x + toNode.width / 2, y: toNode.y };
+  const midX = (start.x + end.x) / 2;
+  const midY = (start.y + end.y) / 2;
+  const path = horizontal
+    ? `M ${start.x} ${start.y} C ${midX} ${start.y}, ${midX} ${end.y}, ${end.x} ${end.y}`
+    : `M ${start.x} ${start.y} C ${start.x} ${midY}, ${end.x} ${midY}, ${end.x} ${end.y}`;
+  return <path d={path} data-dashed={operator === "-.->"} markerEnd={operator === "---" ? undefined : `url(#${markerId})`} markerStart={operator === "<-->" ? `url(#${markerId})` : undefined} />;
 }
 
 function formatReadmeInline(content = "") {
@@ -9583,8 +9628,8 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260713-v042-0-10"),
-		    import("./ui/projectReadme.js?v=20260712-v042-0-10"),
+		    import("./ui/releaseHistory.js?v=20260713-v042-0-11"),
+		    import("./ui/projectReadme.js?v=20260713-v042-0-11"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
