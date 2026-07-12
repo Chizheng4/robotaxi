@@ -5318,7 +5318,9 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .map-stage[data-zoom-band="detail"] .map-service-area-anchor { display: block; }
 .map-stage[data-zoom-band="detail"] .map-zone-anchor,
 .map-stage[data-zoom-band="detail"] .map-place-anchor { display: none; }
-.service-area-cell { fill: rgba(77, 155, 143, 0.42); stroke: rgba(52, 126, 115, 0.72); stroke-width: 0.055; }
+.service-area-cell { fill: rgba(77, 155, 143, 0.42); stroke: rgba(52, 126, 115, 0.72); stroke-width: 0.055; pointer-events: all; }
+.ops-center-cell,
+.road-node { pointer-events: all; }
 .map-selected-cell { fill: rgba(47, 111, 228, 0.12); stroke: var(--accent); stroke-width: 0.22; vector-effect: non-scaling-stroke; pointer-events: none; }
 .robotaxi-map-halo { fill: rgba(255, 255, 255, 0.94); stroke-width: 0.055; }
 .robotaxi-map-marker { pointer-events: none; }

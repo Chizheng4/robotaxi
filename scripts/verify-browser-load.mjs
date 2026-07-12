@@ -128,59 +128,123 @@ try {
       returnByValue: true,
     });
     assert(initialMapState.result?.result?.value?.detailCollapsed, "进入中控台时详情必须默认收起");
-    const blankClickResult = await send("Runtime.evaluate", {
+    const cellPointResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const svg = document.querySelector(".zone-canvas-new");
         const scene = svg?.querySelector("g[transform]");
-        if (!svg || !scene) return { clicked: false };
+        if (!svg || !scene) return null;
         const point = svg.createSVGPoint();
-        point.x = 15.5;
+        point.x = ${mobileAssertionEnabled ? 14.5 : 40.5};
         point.y = 20.5;
         const screenPoint = point.matrixTransform(scene.getScreenCTM());
-        svg.dispatchEvent(new MouseEvent("click", {
-          bubbles: true,
-          clientX: screenPoint.x,
-          clientY: screenPoint.y,
-        }));
-        return { clicked: true };
+        return { x: screenPoint.x, y: screenPoint.y, hitClass: document.elementFromPoint(screenPoint.x, screenPoint.y)?.getAttribute("class") || "" };
       })()`,
       returnByValue: true,
     });
-    assert(blankClickResult.result?.result?.value?.clicked, "地图缺少可执行的空白点击入口");
+    const cellPoint = cellPointResult.result?.result?.value;
+    assert(cellPoint && /map-ground|zone-canvas-new/.test(cellPoint.hitClass), `Cell 必须可以通过真实命中层选择：${JSON.stringify(cellPoint)}`);
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: cellPoint.x, y: cellPoint.y, button: "left", clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: cellPoint.x, y: cellPoint.y, button: "left", clickCount: 1 });
     await delay(250);
+    const selectedCellResult = await send("Runtime.evaluate", {
+      expression: `({ selected: document.querySelectorAll(".map-selected-cell").length, expanded: !document.querySelector(".workbench")?.classList.contains("detail-collapsed") })`,
+      returnByValue: true,
+    });
+    assert.equal(selectedCellResult.result?.result?.value?.selected, 1, "真实点击 Cell 后必须显示唯一选中框");
+    assert.equal(selectedCellResult.result?.result?.value?.expanded, false, "真实点击空白 Cell 后详情必须保持收起");
+
+    const blankPointResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const svg = document.querySelector(".zone-canvas-new")?.getBoundingClientRect();
+        const ground = document.querySelector(".map-ground")?.getBoundingClientRect();
+        if (!svg || !ground) return null;
+        const above = ground.top - svg.top > 8;
+        return { x: svg.left + svg.width / 2, y: above ? ground.top - 4 : ground.bottom + 4 };
+      })()`,
+      returnByValue: true,
+    });
+    const blankPoint = blankPointResult.result?.result?.value;
+    assert(blankPoint, "地图必须保留边界外画布留白");
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: blankPoint.x, y: blankPoint.y, button: "left", clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: blankPoint.x, y: blankPoint.y, button: "left", clickCount: 1 });
+    await delay(150);
+    const collapsedAfterInitialBlank = await send("Runtime.evaluate", {
+      expression: `document.querySelector(".workbench")?.classList.contains("detail-collapsed")`,
+      returnByValue: true,
+    });
+    assert(collapsedAfterInitialBlank.result?.result?.value, "点击地图边界外留白后详情必须收起");
     if (!mobileAssertionEnabled) {
       const hoverTriggerResult = await send("Runtime.evaluate", {
         expression: `(() => {
           const place = document.querySelector(".map-place-object rect");
-          if (!place) return { triggered: false };
+          if (!place) return null;
           const placeRect = place.getBoundingClientRect();
-          place.dispatchEvent(new PointerEvent("pointerover", {
-            bubbles: true,
-            pointerType: "mouse",
-            clientX: placeRect.left + placeRect.width / 2,
-            clientY: placeRect.top + placeRect.height / 2,
-          }));
-          return { triggered: true };
+          const x = placeRect.left + placeRect.width / 2;
+          const y = placeRect.top + placeRect.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          return { x, y, hitClass: hit?.getAttribute("class") || hit?.parentElement?.getAttribute("class") || "" };
         })()`,
         returnByValue: true,
       });
-      assert(hoverTriggerResult.result?.result?.value?.triggered, "地图地点必须保留悬浮入口");
+      const hoverPoint = hoverTriggerResult.result?.result?.value;
+      assert(hoverPoint && hoverPoint.hitClass.includes("map-place"), `地图地点必须处于真实鼠标命中层：${JSON.stringify(hoverPoint)}`);
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: hoverPoint.x, y: hoverPoint.y });
       await delay(100);
       const hoverVisibleResult = await send("Runtime.evaluate", {
         expression: `Boolean(document.querySelector(".map-hover-card"))`,
         returnByValue: true,
       });
       assert(hoverVisibleResult.result?.result?.value, "桌面地点悬浮摘要必须可用");
+      for (const [label, mapX, mapY, expectedClass] of [
+        ["道路", 14.5, 12.5, "map-road-cells"],
+        ["服务区域", 18.5, 12.5, "service-area-cell"],
+      ]) {
+        const objectPointResult = await send("Runtime.evaluate", {
+          expression: `(() => {
+            const svg = document.querySelector(".zone-canvas-new");
+            const scene = svg?.querySelector("g[transform]");
+            if (!svg || !scene) return null;
+            const point = svg.createSVGPoint();
+            point.x = ${mapX};
+            point.y = ${mapY};
+            const screenPoint = point.matrixTransform(scene.getScreenCTM());
+            const hit = document.elementFromPoint(screenPoint.x, screenPoint.y);
+            return { x: screenPoint.x, y: screenPoint.y, hitClass: hit?.getAttribute("class") || "" };
+          })()`,
+          returnByValue: true,
+        });
+        const objectPoint = objectPointResult.result?.result?.value;
+        assert(objectPoint?.hitClass.includes(expectedClass), `${label}必须处于真实鼠标命中层：${JSON.stringify(objectPoint)}`);
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: objectPoint.x, y: objectPoint.y });
+        await delay(80);
+        const objectHoverResult = await send("Runtime.evaluate", {
+          expression: `Boolean(document.querySelector(".map-hover-card"))`,
+          returnByValue: true,
+        });
+        assert(objectHoverResult.result?.result?.value, `桌面${label}悬浮摘要必须可用`);
+      }
     }
-    const robotaxiClickResult = await send("Runtime.evaluate", {
+    const robotaxiPointResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const robotaxi = document.querySelector(".robotaxi-map-object");
-        robotaxi?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        return { robotaxiClicked: Boolean(robotaxi) };
+        const halo = robotaxi?.querySelector(".robotaxi-map-halo")?.getBoundingClientRect();
+        if (!robotaxi || !halo) return null;
+        const x = halo.left + halo.width / 2;
+        const y = halo.top + halo.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return { x, y, hitClass: hit?.getAttribute("class") || "", parentClass: hit?.parentElement?.getAttribute("class") || "" };
       })()`,
       returnByValue: true,
     });
-    assert(robotaxiClickResult.result?.result?.value?.robotaxiClicked, "地图 Robotaxi 必须保留详情点击入口");
+    const robotaxiPoint = robotaxiPointResult.result?.result?.value;
+    assert(robotaxiPoint && `${robotaxiPoint.hitClass} ${robotaxiPoint.parentClass}`.includes("robotaxi-map-object"), `Robotaxi 必须处于真实点击命中层：${JSON.stringify(robotaxiPoint)}`);
+    if (mobileAssertionEnabled) {
+      await send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: robotaxiPoint.x, y: robotaxiPoint.y }] });
+      await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } else {
+      await send("Input.dispatchMouseEvent", { type: "mousePressed", x: robotaxiPoint.x, y: robotaxiPoint.y, button: "left", clickCount: 1 });
+      await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: robotaxiPoint.x, y: robotaxiPoint.y, button: "left", clickCount: 1 });
+    }
     await delay(250);
     if (mobileAssertionEnabled) {
       const touchSummaryResult = await send("Runtime.evaluate", {
@@ -203,26 +267,17 @@ try {
       returnByValue: true,
     });
     assert(openBeforeClearResult.result?.result?.value, "对象点击后详情必须处于展开状态");
-    await send("Runtime.evaluate", {
-      expression: `document.querySelector(".zone-canvas-new")?.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 8, clientY: 8 }))`,
-      returnByValue: true,
-    });
-    await delay(150);
-    const collapsedAfterClearResult = await send("Runtime.evaluate", {
-      expression: `document.querySelector(".workbench")?.classList.contains("detail-collapsed")`,
-      returnByValue: true,
-    });
-    assert(collapsedAfterClearResult.result?.result?.value, "点击地图空白区域后详情必须收起");
-    await send("Runtime.evaluate", {
-      expression: `document.querySelector(".robotaxi-map-object")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))`,
-      returnByValue: true,
-    });
-    await delay(150);
-    if (mobileAssertionEnabled) {
-      await send("Runtime.evaluate", {
-        expression: `document.querySelector(".map-hover-detail-action")?.click()`,
+    if (!mobileAssertionEnabled) {
+      await send("Input.dispatchMouseEvent", { type: "mousePressed", x: blankPoint.x, y: blankPoint.y, button: "left", clickCount: 1 });
+      await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: blankPoint.x, y: blankPoint.y, button: "left", clickCount: 1 });
+      await delay(150);
+      const collapsedAfterClearResult = await send("Runtime.evaluate", {
+        expression: `document.querySelector(".workbench")?.classList.contains("detail-collapsed")`,
         returnByValue: true,
       });
+      assert(collapsedAfterClearResult.result?.result?.value, "真实点击地图边界外留白后详情必须收起");
+      await send("Input.dispatchMouseEvent", { type: "mousePressed", x: robotaxiPoint.x, y: robotaxiPoint.y, button: "left", clickCount: 1 });
+      await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: robotaxiPoint.x, y: robotaxiPoint.y, button: "left", clickCount: 1 });
       await delay(150);
     }
   }

@@ -107,6 +107,20 @@ export function resolveCellAtPoint({ x, y, map }) {
   return `C-${String(row).padStart(2, "0")}-${String(col).padStart(2, "0")}`;
 }
 
+export function resolveMapObjectAtCell(cellId, data = {}) {
+  const roadNode = (data.roadNodes || []).find((node) => node.cell_id === cellId);
+  if (roadNode) return { type: "roadNode", id: roadNode.road_node_id };
+  const serviceArea = (data.serviceAreas || []).find((area) => (area.cell_ids || area.covered_cell_ids || []).includes(cellId));
+  if (serviceArea) return { type: "serviceArea", id: serviceArea.service_area_id };
+  const opsCenter = (data.opsCenters || []).find((center) => (center.cell_ids || []).includes(cellId));
+  if (opsCenter) return { type: "opsCenter", id: opsCenter.ops_center_id };
+  const place = (data.places || []).find((item) => (item.cell_ids || []).includes(cellId));
+  if (place) return { type: "place", id: place.place_id };
+  const roadSegment = (data.roadSegments || []).find((segment) => (segment.cell_sequence || segment.cell_ids || []).includes(cellId));
+  if (roadSegment) return { type: "roadSegment", id: roadSegment.road_segment_id };
+  return null;
+}
+
 function boundsFromCellIds(cellIds = []) {
   const cells = cellIds.map(parseCellId).filter((cell) => Number.isFinite(cell.row) && Number.isFinite(cell.col));
   if (!cells.length) return { x: 0, y: 0, width: 0, height: 0, centerX: 0, centerY: 0 };

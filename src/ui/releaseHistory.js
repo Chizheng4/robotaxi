@@ -1,6 +1,25 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v042.0.7",
+    "title": "修复桌面地图真实命中层、Cell 选择和对象交互，消除直接派发事件造成的错误验收",
+    "changes": [
+      "地图只在实际拖动超过阈值后捕获指针，普通点击不再被 SVG 画布重定向为 Cell 或其他空间对象。",
+      "恢复 Robotaxi 真实点击、地点/道路/服务区域真实悬浮，以及运营中心和道路节点的点击命中。",
+      "空白判定改为对象关系驱动：不属于 Place、ServiceArea、RoadSegment、RoadNode 或运营中心的 Cell 才是空白 Cell。",
+      "点击空白 Cell 保持详情收起并显示 Cell 选中框；点击地图有效边界外留白才清除选择。",
+      "浏览器合同改用真实鼠标与触摸坐标，通过 `elementFromPoint` 验证最上层命中对象，不再绕过前端图层。",
+      "桌面和手机真实交互通过，10,000 辆车辆投影与双区域场景性能保持原水平。"
+    ],
+    "audienceTitle": "桌面地图对象现在真正可以操作",
+    "audienceChanges": [
+      "桌面鼠标经过地点、道路和服务区域会正常显示摘要。",
+      "点击 Robotaxi 会打开对应车辆详情，不再被地图画布误判为其他对象。",
+      "点击空白 Cell 会显示清晰选中框，同时保持地图完整空间。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v042.0.6",
     "title": "建立桌面与手机一致但适配输入方式的地图摘要、对象详情和空白收起交互",
     "changes": [

@@ -4,9 +4,9 @@
 
 当前没有执行中的小迭代。
 
-最近完成小版本：`doc/common/iteration-history/minor/v042.0.6-responsive-map-summary-detail.md`。
+最近完成小版本：`doc/common/iteration-history/minor/v042.0.7-real-map-hit-testing.md`。
 
-最新完成版本：v042.0.6 响应式地图摘要与详情。
+最新完成版本：v042.0.7 地图真实命中与 Cell 选择。
 
 当前执行指针：暂无。
 

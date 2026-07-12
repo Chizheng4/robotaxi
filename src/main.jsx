@@ -3372,6 +3372,10 @@ function App({ currentUser, onLogout }) {
                     selectForPage("console", "map", data.maps[0].map_id);
                     setDetailCollapsedForPage("console", true);
                   }}
+                  onBlankCell={(cellId) => {
+                    selectForPage("console", "cell", cellId);
+                    setDetailCollapsedForPage("console", true);
+                  }}
                 />
               ) : (
                 <RecordTable
@@ -7371,7 +7375,7 @@ function formatCostAmount(amount, currencyCode = "CNY") {
   return `${value.toFixed(2)} ${currencyCode || "CNY"}`;
 }
 
-function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear }) {
+function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, onBlankCell }) {
   const map = data.maps[0];
   const compactMapViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 560px)").matches;
   const defaultViewport = { zoom: 1, panX: 0, panY: 0 };
@@ -7454,9 +7458,10 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear }) 
   }
 
   function handlePointerDown(event) {
-    event.currentTarget.setPointerCapture?.(event.pointerId);
     didDragRef.current = false;
     dragRef.current = {
+      pointerId: event.pointerId,
+      target: event.currentTarget,
       x: event.clientX,
       y: event.clientY,
       panX: viewport.panX,
@@ -7473,6 +7478,9 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear }) 
     const deltaX = (event.clientX - dragRef.current.x) * unitX;
     const deltaY = (event.clientY - dragRef.current.y) * unitY;
     if (Math.hypot(event.clientX - dragRef.current.x, event.clientY - dragRef.current.y) > 4) {
+      if (!didDragRef.current) {
+        dragRef.current.target?.setPointerCapture?.(dragRef.current.pointerId);
+      }
       didDragRef.current = true;
       setHovered(null);
     }
@@ -7489,7 +7497,9 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear }) 
   }
 
   function handlePointerUp(event) {
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     if (dragRef.current?.next) setViewport(dragRef.current.next);
     dragRef.current = null;
   }
@@ -7540,6 +7550,21 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear }) 
       return;
     }
     setHovered(null);
+    const svg = event.currentTarget;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const coordinates = point.matrixTransform(sceneRef.current?.getScreenCTM()?.inverse());
+    const cellId = mapSceneService.resolveCellAtPoint({ x: coordinates.x, y: coordinates.y, map });
+    if (cellId) {
+      const objectReference = mapSceneService.resolveMapObjectAtCell(cellId, data);
+      if (objectReference) {
+        onSelect(objectReference.type, objectReference.id);
+      } else {
+        onBlankCell?.(cellId);
+      }
+      return;
+    }
     onClear?.();
   }
 
@@ -9426,7 +9451,7 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-6"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-7"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
