@@ -7349,6 +7349,10 @@ function formatCostAmount(amount, currencyCode = "CNY") {
 
 function MapCanvas({ data, selected, onSelect }) {
   const map = data.maps[0];
+  const compactMapViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 560px)").matches;
+  const defaultViewport = compactMapViewport
+    ? { zoom: 1, panX: 17, panY: 0 }
+    : { zoom: 1, panX: 0, panY: 0 };
   const scene = useMemo(
     () => mapSceneService.createMapScene(data),
     [data.maps, data.zones, data.places, data.serviceAreas, data.roads, data.roadSegments],
@@ -7357,7 +7361,7 @@ function MapCanvas({ data, selected, onSelect }) {
   const didDragRef = useRef(false);
   const sceneRef = useRef(null);
   const frameRef = useRef(0);
-  const [viewport, setViewport] = useState({ zoom: 1, panX: 0, panY: 0 });
+  const [viewport, setViewport] = useState(defaultViewport);
   const [hovered, setHovered] = useState(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const selectedRobotaxi = selected?.type === "robotaxi"
@@ -7400,7 +7404,7 @@ function MapCanvas({ data, selected, onSelect }) {
   }
 
   function resetViewport() {
-    setViewport({ zoom: 1, panX: 0, panY: 0 });
+    setViewport(defaultViewport);
   }
 
   function handleWheel(event) {
@@ -7533,7 +7537,6 @@ function MapCanvas({ data, selected, onSelect }) {
                     onPointerLeave={() => setHovered(null)}
                     onClick={(event) => selectMapObject(event, "zone", zone.zone_id)}
                   />
-                  <MapAnchorLabel className="map-zone-anchor" x={zone.labelX} y={zone.bounds.y + 1.2} zoom={viewport.zoom} label={zone.zone_name} />
                 </g>
               ))}
             </g>
@@ -7550,7 +7553,6 @@ function MapCanvas({ data, selected, onSelect }) {
                     onPointerLeave={() => setHovered(null)}
                     onClick={(event) => selectMapObject(event, "place", place.place_id)}
                   />
-                  <MapAnchorLabel className="map-place-anchor" x={place.bounds.x + 0.7} y={place.bounds.y + 0.7} zoom={viewport.zoom} label={place.place_name} />
                 </g>
               ))}
             </g>
@@ -7565,7 +7567,6 @@ function MapCanvas({ data, selected, onSelect }) {
                   onPointerLeave={() => setHovered(null)}
                   onClick={(event) => selectMapObject(event, "road", road.road_id)}
                 />
-                {road.bounds.width > 0 && <MapAnchorLabel className="map-road-anchor" x={road.bounds.centerX} y={road.bounds.centerY} zoom={viewport.zoom} label={road.road_name} />}
                 </g>
               ))}
             </g>
@@ -7580,8 +7581,21 @@ function MapCanvas({ data, selected, onSelect }) {
                     onPointerLeave={() => setHovered(null)}
                     onClick={(event) => selectMapObject(event, "serviceArea", area.service_area_id)}
                   />
-                  <MapAnchorLabel className="map-service-area-anchor" x={area.bounds.centerX} y={area.bounds.centerY} zoom={viewport.zoom} label={area.service_area_name} />
                 </g>
+              ))}
+            </g>
+            <g className="map-label-layer">
+              {scene.zones.map((zone) => (
+                <MapAnchorLabel key={`label-${zone.zone_id}`} className="map-zone-anchor" x={zone.labelX} y={zone.bounds.y + 1.2} zoom={viewport.zoom} label={zone.zone_name} />
+              ))}
+              {scene.places.map((place) => (
+                <MapAnchorLabel key={`label-${place.place_id}`} className="map-place-anchor" x={place.bounds.x + 0.7} y={place.bounds.y + 0.7} zoom={viewport.zoom} label={place.place_name} />
+              ))}
+              {scene.roads.filter((road) => road.bounds.width > 0).map((road) => (
+                <MapAnchorLabel key={`label-${road.road_id}`} className="map-road-anchor" x={road.bounds.centerX} y={road.bounds.centerY} zoom={viewport.zoom} label={road.road_name} />
+              ))}
+              {scene.serviceAreas.map((area) => (
+                <MapAnchorLabel key={`label-${area.service_area_id}`} className="map-service-area-anchor" x={area.bounds.centerX} y={area.bounds.centerY} zoom={viewport.zoom} label={area.service_area_name} />
               ))}
             </g>
             {highlightedRoutePoints && <polyline className="map-selected-route" points={highlightedRoutePoints} />}
@@ -9306,7 +9320,7 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260712-v042-0-1"),
+		    import("./ui/releaseHistory.js?v=20260712-v042-0-2"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;

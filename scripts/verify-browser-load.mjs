@@ -159,6 +159,15 @@ try {
       robotaxiMarkerCount: document.querySelectorAll(".robotaxi-map-marker").length,
       selectedCellCount: document.querySelectorAll(".map-selected-cell").length,
       hoverCardVisible: Boolean(document.querySelector(".map-hover-card")),
+      visibleMapAnchorCount: [...document.querySelectorAll(".map-zone-anchor, .map-place-anchor")].filter((node) => {
+        const rect = node.getBoundingClientRect();
+        const stage = document.querySelector(".map-stage")?.getBoundingClientRect();
+        return getComputedStyle(node).display !== "none" && stage && rect.right > stage.left && rect.left < stage.right && rect.bottom > stage.top && rect.top < stage.bottom;
+      }).length,
+      mapAnchorRects: [...document.querySelectorAll(".map-zone-anchor, .map-place-anchor")].slice(0, 5).map((node) => {
+        const rect = node.getBoundingClientRect();
+        return { label: node.textContent, display: getComputedStyle(node).display, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+      }),
       bodyText: document.body.innerText.slice(0, 500)
     })`,
     returnByValue: true,
@@ -177,6 +186,7 @@ try {
     assert(pageState.viewportWidth <= 480, `手机验证视口未生效：${JSON.stringify(pageState)}`);
     assert(pageState.siderWidth <= 64, `手机首屏菜单未收起：${JSON.stringify(pageState)}`);
     assert(pageState.documentWidth <= pageState.viewportWidth + 1, `手机页面出现全局横向溢出：${JSON.stringify(pageState)}`);
+    if (mapAssertionEnabled) assert(pageState.visibleMapAnchorCount >= 1, `手机地图可视区域缺少轻量空间标签：${JSON.stringify(pageState)}`);
   }
   if (mapAssertionEnabled) {
     assert(pageState.mapVisible, `运营中控台地图未显示：${JSON.stringify(pageState)}`);

@@ -834,7 +834,14 @@
 .map-hover-card dl { gap: 3px; margin-top: 6px; }
 
 @media (max-width: 560px) {
-  .map-anchor-label { display: none !important; }
+  .map-zone-anchor,
+  .map-place-anchor { display: block !important; }
+  .map-road-anchor,
+  .map-service-area-anchor { display: none !important; }
+  .map-anchor-label text { font-size: 0.46px; }
+  .map-zone-anchor text { font-size: 0.5px; }
+  .map-stage[data-zoom-band="detail"] .map-zone-anchor,
+  .map-stage[data-zoom-band="detail"] .map-place-anchor { display: none !important; }
 }
 
 @media (min-width: 768px) {
@@ -5324,7 +5331,14 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .map-hover-card dl { gap: 3px; margin-top: 6px; }
 
 @media (max-width: 560px) {
-  .map-anchor-label { display: none !important; }
+  .map-zone-anchor,
+  .map-place-anchor { display: block !important; }
+  .map-road-anchor,
+  .map-service-area-anchor { display: none !important; }
+  .map-anchor-label text { font-size: 0.46px; }
+  .map-zone-anchor text { font-size: 0.5px; }
+  .map-stage[data-zoom-band="detail"] .map-zone-anchor,
+  .map-stage[data-zoom-band="detail"] .map-place-anchor { display: none !important; }
 }
 
 @media (min-width: 768px) {
