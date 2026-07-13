@@ -417,47 +417,28 @@ const tableConfig = {
     title: "需求画像",
     description: "需求画像统一展示地点、服务区和区域画像记录，用于经营规划中的长期需求预测和供给规划。",
     columns: [
-      "profile_id",
-      "profile_name",
       "target_object_type",
-      "target_object_id",
       "target_object_name",
-      "potential_demand",
-      "expected_robotaxi_demand",
-      "service_area_demand",
-      "peak_hour_demand",
-      "service_capacity",
-      "waiting_capacity",
-      "turnover_capacity",
-      "supply_need_score",
-      "demand_growth_factor",
-      "coverage_gap_factor",
-      "resident_population",
-      "working_population",
-      "daily_visitors",
-      "trip_generation_rate",
-      "demand_weight",
-      "robotaxi_adoption_rate",
-      "service_acceptance_rate",
-      "pickup_probability",
-      "dropoff_probability",
-      "peak_demand_ratio",
-      "zone_adjustment_factor",
-      "coverage_factor",
-      "competition_factor",
+      "baseline_addressable_daily_orders",
+      "baseline_peak_hour_orders",
+      "place_period_growth_rate",
+      "zone_period_growth_rate",
+      "effective_daily_capacity",
+      "effective_peak_hour_capacity",
+      "waiting_robotaxi_capacity",
       "profile_status",
       "calculated_at",
     ],
   },
   businessTargets: {
     title: "经营目标",
-    description: "经营目标定义规划周期内的收入、订单、车队规模、资产利用率和履约目标，是需求预测和供应生产规划的上游目标。",
-    columns: ["business_target_id", "target_name", "target_status", "planning_horizon_years", "forecast_start_date", "forecast_end_date", "target_zone_ids", "target_service_order_count", "target_fleet_size", "target_asset_utilization_rate", "target_order_fulfillment_rate", "target_revenue_amount", "updated_at"],
+    description: "经营目标定义预测周期、期末订单目标、Robotaxi 规模约束和基础经济假设。",
+    columns: ["business_target_id", "target_name", "target_status", "forecast_start_date", "forecast_end_date", "forecast_period_unit", "forecast_period_count", "target_zone_ids", "target_end_daily_orders", "target_minimum_robotaxi_quantity", "target_task_utilization_rate", "target_order_fulfillment_rate", "planning_mode", "updated_at"],
   },
   supplyProductionProfiles: {
     title: "生产画像",
     description: "生产画像描述企业自有生产形成 Robotaxi 供给能力的约束、产能和节奏。",
-    columns: ["profile_id", "profile_name", "profile_status", "annual_production_capacity", "monthly_production_capacity", "delivery_capacity", "production_lead_time_days", "ramp_up_months", "inspection_lead_time_days", "effective_from", "effective_to"],
+    columns: ["profile_id", "profile_name", "profile_status", "production_lead_time_days", "production_capacity_period_unit", "production_capacity_per_period", "ramp_up_periods", "ramp_up_capacity_ratios", "quality_inspection_lead_time_days", "delivery_capacity_per_period", "effective_from", "effective_to"],
   },
   placeDemandProfiles: {
     title: "地点需求画像",
@@ -522,17 +503,17 @@ const tableConfig = {
   longTermDemandForecasts: {
     title: "需求预测结果",
     description: "需求预测结果记录长期需求预测策略执行后形成的区域 Robotaxi 需求和供给缺口。",
-    columns: ["forecast_result_id", "forecast_name", "forecast_status", "forecast_period", "business_target_id", "zone_id", "forecast_daily_demand", "forecast_peak_hour_demand", "required_fleet_quantity", "current_fleet_quantity", "fleet_gap_quantity", "planned_production_quantity", "feasible_production_quantity", "production_gap_quantity", "supply_completion_date", "confidence_level", "created_at"],
+    columns: ["forecast_result_id", "forecast_name", "forecast_status", "forecast_period_unit", "forecast_period_count", "zone_id", "market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "planned_production_quantity", "uncovered_robotaxi_gap", "requirement_driver", "data_quality_level", "created_at"],
   },
   longTermDemandForecastStrategies: {
     title: "需求预测策略",
     description: "需求预测策略定义经营目标、需求画像和生产画像如何转化为长期 Robotaxi 需求预测。",
-    columns: ["forecast_strategy_id", "strategy_name", "strategy_type", "strategy_status", "strategy_version", "target_zone_ids", "forecast_horizon_years", "demand_buffer_ratio", "fleet_utilization_target", "vehicle_available_hours_per_day", "average_trip_duration_min", "created_at", "updated_at"],
+    columns: ["forecast_strategy_id", "strategy_name", "strategy_status", "strategy_version", "target_zone_ids", "growth_scenario", "growth_model", "growth_adjustment_rate", "demand_buffer_ratio", "operational_availability_rate", "robotaxi_available_hours_per_day", "average_pickup_duration_min", "average_trip_duration_min", "average_turnaround_duration_min", "updated_at"],
   },
   longTermDemandForecastRuns: {
     title: "需求预测执行",
     description: "需求预测执行记录一次长期需求预测策略运行的输入、配置快照和执行状态。",
-    columns: ["forecast_run_id", "forecast_strategy_id", "business_target_id", "supply_production_profile_id", "strategy_version", "run_status", "target_zone_ids", "forecast_start_date", "forecast_end_date", "started_at", "completed_at", "result_count", "failure_reason"],
+    columns: ["forecast_run_id", "forecast_strategy_id", "business_target_id", "supply_production_profile_id", "strategy_version", "run_status", "target_zone_ids", "forecast_period_unit", "forecast_period_count", "forecast_start_date", "forecast_end_date", "started_at", "completed_at", "result_count", "failure_reason"],
   },
   supplyPlans: {
     title: "生产计划",
@@ -1182,38 +1163,35 @@ function getDemandProfileConfigFields(profile) {
       { key: "resident_population", type: "number", min: 0, step: 1 },
       { key: "working_population", type: "number", min: 0, step: 1 },
       { key: "daily_visitors", type: "number", min: 0, step: 1 },
+      { key: "resident_trip_weight", type: "number", min: 0, step: 0.01 },
+      { key: "worker_trip_weight", type: "number", min: 0, step: 0.01 },
+      { key: "visitor_trip_weight", type: "number", min: 0, step: 0.01 },
       { key: "trip_generation_rate", type: "number", min: 0, step: 0.01 },
       { key: "demand_weight", type: "number", min: 0, step: 0.01 },
-      { key: "peak_demand_ratio", type: "number", min: 0, step: 0.01 },
+      { key: "busiest_hour_share", type: "number", min: 0, max: 1, step: 0.01 },
       { key: "robotaxi_adoption_rate", type: "number", min: 0, max: 1, step: 0.01 },
       { key: "service_acceptance_rate", type: "number", min: 0, max: 1, step: 0.01 },
-      { key: "growth_rate", type: "number", step: 0.01 },
-      { key: "forecast_years", type: "number", min: 1, step: 1 },
-      { key: "peak_pattern", type: "select", options: peakPatternOptions },
+      { key: "competition_retention_rate", type: "number", min: 0, max: 1, step: 0.01 },
+      { key: "place_period_growth_rate", type: "number", step: 0.01 },
+      { key: "growth_rate_unit", type: "select", options: ["WEEK", "MONTH", "QUARTER", "YEAR"] },
+      { key: "growth_rate_source", type: "select", options: ["MANUAL_ASSUMPTION", "SIMULATION_CONFIG", "HISTORICAL_CALCULATION", "EXTERNAL_INPUT"] },
     ];
   }
   if (profile.target_object_type === "SERVICE_AREA") {
     return [
       ...commonFields,
-      { key: "pickup_probability", type: "number", min: 0, max: 1, step: 0.01 },
-      { key: "dropoff_probability", type: "number", min: 0, max: 1, step: 0.01 },
-      { key: "peak_demand_ratio", type: "number", min: 0, step: 0.01 },
-      { key: "service_capacity", type: "number", min: 0, step: 1 },
-      { key: "waiting_capacity", type: "number", min: 0, step: 1 },
-      { key: "turnover_capacity", type: "number", min: 0, step: 1 },
+      { key: "parent_place_id", type: "text" },
+      { key: "waiting_robotaxi_capacity", type: "number", min: 0, step: 1 },
+      { key: "pickup_position_capacity", type: "number", min: 1, step: 1 },
+      { key: "dropoff_position_capacity", type: "number", min: 1, step: 1 },
+      { key: "average_service_time_min", type: "number", min: 1, step: 1 },
+      { key: "operating_hours_per_day", type: "number", min: 1, max: 24, step: 1 },
       { key: "accessibility_factor", type: "number", min: 0, step: 0.01 },
+      { key: "capacity_availability_rate", type: "number", min: 0, max: 1, step: 0.01 },
     ];
   }
   if (profile.target_object_type === "ZONE") {
-    return [
-      ...commonFields,
-      { key: "peak_demand_ratio", type: "number", min: 0, step: 0.01 },
-      { key: "zone_adjustment_factor", type: "number", min: 0, step: 0.01 },
-      { key: "coverage_factor", type: "number", min: 0, step: 0.01 },
-      { key: "competition_factor", type: "number", min: 0, step: 0.01 },
-      { key: "growth_rate", type: "number", step: 0.01 },
-      { key: "forecast_years", type: "number", min: 1, step: 1 },
-    ];
+    return commonFields;
   }
   return commonFields;
 }
@@ -1236,25 +1214,52 @@ function normalizeDemandProfileDraft(profile, draft) {
 const supplyProductionProfileConfigFields = [
   { key: "profile_name", type: "text" },
   { key: "production_lead_time_days", type: "number", min: 0, step: 1 },
-  { key: "annual_production_capacity", type: "number", min: 0, step: 1 },
-  { key: "monthly_production_capacity", type: "number", min: 0, step: 1 },
-  { key: "ramp_up_months", type: "number", min: 0, step: 1 },
-  { key: "delivery_capacity", type: "number", min: 0, step: 1 },
-  { key: "inspection_lead_time_days", type: "number", min: 0, step: 1 },
+  { key: "production_capacity_period_unit", type: "select", options: ["WEEK", "MONTH", "QUARTER", "YEAR"] },
+  { key: "production_capacity_per_period", type: "number", min: 0, step: 1 },
+  { key: "ramp_up_periods", type: "number", min: 0, step: 1 },
+  { key: "ramp_up_capacity_ratios", type: "text" },
+  { key: "delivery_capacity_per_period", type: "number", min: 0, step: 1 },
+  { key: "quality_inspection_lead_time_days", type: "number", min: 0, step: 1 },
   { key: "effective_from", type: "text" },
   { key: "effective_to", type: "text" },
 ];
 
 const businessTargetConfigFields = [
   { key: "target_name", type: "text" },
-  { key: "planning_horizon_years", type: "number", min: 1, step: 1 },
   { key: "forecast_start_date", type: "text" },
-  { key: "target_revenue_amount", type: "number", min: 0, step: 1000 },
-  { key: "target_service_order_count", type: "number", min: 0, step: 1000 },
-  { key: "target_fleet_size", type: "number", min: 0, step: 1 },
-  { key: "target_asset_utilization_rate", type: "number", min: 0, max: 1, step: 0.01 },
+  { key: "forecast_period_unit", type: "select", options: ["WEEK", "MONTH", "QUARTER", "YEAR"] },
+  { key: "forecast_period_count", type: "number", min: 1, step: 1 },
+  { key: "target_end_daily_orders", type: "number", min: 0, step: 1 },
+  { key: "target_minimum_robotaxi_quantity", type: "number", min: 0, step: 1 },
+  { key: "target_task_utilization_rate", type: "number", min: 0, max: 1, step: 0.01 },
   { key: "target_order_fulfillment_rate", type: "number", min: 0, max: 1, step: 0.01 },
+  { key: "planning_mode", type: "select", options: ["MARKET_LED", "TARGET_LED", "BALANCED"] },
+  { key: "average_revenue_per_order", type: "number", min: 0, step: 1 },
+  { key: "average_variable_cost_per_order", type: "number", min: 0, step: 1 },
+  { key: "daily_fixed_operating_cost", type: "number", min: 0, step: 100 },
+  { key: "minimum_contribution_margin_rate", type: "number", min: 0, max: 1, step: 0.01 },
 ];
+
+const longTermDemandForecastStrategyConfigFields = [
+  { key: "strategy_name", type: "text" },
+  { key: "growth_scenario", type: "select", options: ["CONSERVATIVE", "BASELINE", "AGGRESSIVE"] },
+  { key: "growth_model", type: "select", options: ["LINEAR", "COMPOUND"] },
+  { key: "growth_adjustment_rate", type: "number", step: 0.001 },
+  { key: "demand_buffer_ratio", type: "number", min: 0, max: 1, step: 0.01 },
+  { key: "operational_availability_rate", type: "number", min: 0, max: 1, step: 0.01 },
+  { key: "robotaxi_available_hours_per_day", type: "number", min: 0.1, max: 24, step: 0.1 },
+  { key: "average_pickup_duration_min", type: "number", min: 0, step: 1 },
+  { key: "average_trip_duration_min", type: "number", min: 0, step: 1 },
+  { key: "average_turnaround_duration_min", type: "number", min: 0, step: 1 },
+];
+
+function createPlanningConfigDraft(fields, object) {
+  return Object.fromEntries(fields.map((field) => [field.key, object?.[field.key] ?? ""]));
+}
+
+function normalizePlanningConfigDraft(fields, draft) {
+  return Object.fromEntries(fields.map((field) => [field.key, field.type === "number" ? Number(draft[field.key] || 0) : draft[field.key]]));
+}
 
 function createBusinessTargetDraft(businessTarget) {
   return Object.fromEntries(businessTargetConfigFields.map((field) => [
@@ -1282,6 +1287,10 @@ function normalizeSupplyProductionProfileDraft(draft) {
   return Object.fromEntries(supplyProductionProfileConfigFields.map((field) => {
     const value = draft[field.key];
     if (field.type === "number") return [field.key, Number(value || 0)];
+    if (field.key === "ramp_up_capacity_ratios") {
+      const ratios = Array.isArray(value) ? value : String(value || "").split(",").map((item) => Number(item.trim())).filter(Number.isFinite);
+      return [field.key, ratios];
+    }
     return [field.key, value || null];
   }));
 }
@@ -1682,6 +1691,9 @@ function App({ currentUser, onLogout }) {
   const [pendingSupplyProductionProfile, setPendingSupplyProductionProfile] = useState(null);
   const [supplyProductionProfileModalOpen, setSupplyProductionProfileModalOpen] = useState(false);
   const [supplyProductionProfileDraft, setSupplyProductionProfileDraft] = useState({});
+  const [pendingLongTermDemandForecastStrategy, setPendingLongTermDemandForecastStrategy] = useState(null);
+  const [longTermDemandForecastStrategyModalOpen, setLongTermDemandForecastStrategyModalOpen] = useState(false);
+  const [longTermDemandForecastStrategyDraft, setLongTermDemandForecastStrategyDraft] = useState({});
   const [metricPeriodType, setMetricPeriodType] = useState(initialRuntime.metricPeriodType || "ALL");
   const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
@@ -2050,6 +2062,7 @@ function App({ currentUser, onLogout }) {
   const topDescription = showConsoleSummary ? null : activeConfig?.description;
   const activeRows = rowsByPage[activePage] || [];
   const detailCollapsed = detailCollapsedByPage[activePage] ?? !detailSelectedObject;
+  const detailHidden = activePage === "longTermDemandForecasts";
 
   useEffect(() => {
     if (!runtimeHydrated) return;
@@ -2980,11 +2993,12 @@ function App({ currentUser, onLogout }) {
       longTermDemandForecasts: [...(result.results || []), ...(current.longTermDemandForecasts || [])],
     }));
     if (result.results?.length) {
+      setActivePageAndMenu("longTermDemandForecasts");
       selectForPage("longTermDemandForecasts", "longTermDemandForecast", result.results[0].forecast_result_id);
     } else {
       appendRecordOperationEvent("longTermDemandForecastStrategies", {
         business_object_type: "longTermDemandForecastStrategy",
-        business_object_id: row.forecast_strategy_id,
+        business_object_id: strategy.forecast_strategy_id,
         action_type: "LONG_TERM_FORECAST_EXECUTE",
         result_type: "NO_RESULT",
         event_type: "LONG_TERM_FORECAST_EXECUTE",
@@ -2992,6 +3006,29 @@ function App({ currentUser, onLogout }) {
         message: "需求预测执行完成，但未生成预测结果",
       });
     }
+  }
+
+  function editLongTermDemandForecastStrategy(strategy) {
+    setPendingLongTermDemandForecastStrategy(strategy);
+    setLongTermDemandForecastStrategyDraft(createPlanningConfigDraft(longTermDemandForecastStrategyConfigFields, strategy));
+    setLongTermDemandForecastStrategyModalOpen(true);
+  }
+
+  function saveLongTermDemandForecastStrategyConfig() {
+    if (!pendingLongTermDemandForecastStrategy || !businessPlanningService?.updateLongTermDemandForecastStrategyConfig) return;
+    const result = businessPlanningService.updateLongTermDemandForecastStrategyConfig({
+      strategy: pendingLongTermDemandForecastStrategy,
+      patch: normalizePlanningConfigDraft(longTermDemandForecastStrategyConfigFields, longTermDemandForecastStrategyDraft),
+      context: { now },
+    });
+    if (!result.succeeded) return;
+    setOperationalData((current) => ({
+      ...current,
+      longTermDemandForecastStrategies: replaceCollectionItem(current.longTermDemandForecastStrategies || [], "forecast_strategy_id", result.strategy),
+    }));
+    setLongTermDemandForecastStrategyModalOpen(false);
+    setPendingLongTermDemandForecastStrategy(null);
+    setLongTermDemandForecastStrategyDraft({});
   }
 
   function runSupplyDemandBalanceStrategy(strategy) {
@@ -3365,6 +3402,7 @@ function App({ currentUser, onLogout }) {
       deliveryOrder: row,
       robotaxis: data.robotaxis || [],
       readinessTasks,
+      opsCenters: data.opsCenters || [],
       context: { now, nextReadinessTaskId: nextTaskId },
     });
     if (!result.succeeded) {
@@ -3470,7 +3508,7 @@ function App({ currentUser, onLogout }) {
             onClose={closeWorkspacePage}
           />
 
-          <Layout className={detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
+          <Layout className={detailHidden ? "workbench detail-hidden" : detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
             <Content className="work-content">
               {activePage === "console" ? (
                 <MapCanvas
@@ -3518,6 +3556,7 @@ function App({ currentUser, onLogout }) {
                   completeFleetOperationWork,
                   editFleetOperationPolicy,
                   runLongTermDemandForecastStrategy,
+                  editLongTermDemandForecastStrategy,
                   runSupplyDemandBalanceStrategy,
                   createSupplyPlanFromForecast,
                   completeSupplyManagementLoopFromForecast,
@@ -3605,7 +3644,7 @@ function App({ currentUser, onLogout }) {
                 />
               )}
             </Content>
-            <aside className="detail-rail">
+            {!detailHidden && <aside className="detail-rail">
               {detailCollapsed ? (
                 <Button className="detail-toggle-button" size="small" aria-label="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>‹</Button>
               ) : (
@@ -3615,7 +3654,7 @@ function App({ currentUser, onLogout }) {
                   onCollapse={() => setDetailCollapsedForPage(activePage, true)}
                 />
               )}
-            </aside>
+            </aside>}
           </Layout>
         </Layout>
       </Layout>
@@ -3774,10 +3813,11 @@ function App({ currentUser, onLogout }) {
                   onChange={(event) => setDemandProfileDraft((draft) => ({ ...draft, [field.key]: event.target.value }))}
                 />
               )}
+              <small className="planning-config-help">{pendingDemandProfile?.profile_field_explanations?.[field.key] || "该字段参与画像配置；保存后将整体重算地点、服务区域和区域画像。"}</small>
             </label>
           ))}
           {pendingDemandProfile?.target_object_type === "ZONE" && (
-            <Text type="secondary">区域画像的需求、容量和供给需求评分由包含的地点画像与服务区域画像汇总计算；这里只配置区域修正系数。</Text>
+            <Text type="secondary">区域画像的需求、容量和增长率由所属地点与服务区域自动汇总，仅画像名称可编辑。</Text>
           )}
         </div>
       </Modal>
@@ -3801,15 +3841,12 @@ function App({ currentUser, onLogout }) {
           {businessTargetConfigFields.map((field) => (
             <label key={field.key}>
               <span>{getFieldLabel(field.key)}</span>
-              <Input
-                size="small"
-                type={field.type === "number" ? "number" : "text"}
-                min={field.min ?? undefined}
-                max={field.max ?? undefined}
-                step={field.step ?? undefined}
-                value={businessTargetDraft[field.key] ?? ""}
-                onChange={(event) => setBusinessTargetDraft((draft) => ({ ...draft, [field.key]: event.target.value }))}
-              />
+              {field.type === "select" ? (
+                <Select size="small" value={businessTargetDraft[field.key]} onChange={(value) => setBusinessTargetDraft((draft) => ({ ...draft, [field.key]: value }))} options={field.options.map((value) => ({ value, label: getDisplayValue(value, field.key) }))} />
+              ) : (
+                <Input size="small" type={field.type === "number" ? "number" : "text"} min={field.min ?? undefined} max={field.max ?? undefined} step={field.step ?? undefined} value={businessTargetDraft[field.key] ?? ""} onChange={(event) => setBusinessTargetDraft((draft) => ({ ...draft, [field.key]: event.target.value }))} />
+              )}
+              <small className="planning-config-help">{getPlanningFieldExplanation("businessTarget", field.key)}</small>
             </label>
           ))}
         </div>
@@ -3834,14 +3871,36 @@ function App({ currentUser, onLogout }) {
           {supplyProductionProfileConfigFields.map((field) => (
             <label key={field.key}>
               <span>{getFieldLabel(field.key)}</span>
-              <Input
-                size="small"
-                type={field.type === "number" ? "number" : "text"}
-                min={field.min ?? undefined}
-                step={field.step ?? undefined}
-                value={supplyProductionProfileDraft[field.key] ?? ""}
-                onChange={(event) => setSupplyProductionProfileDraft((draft) => ({ ...draft, [field.key]: event.target.value }))}
-              />
+              {field.type === "select" ? (
+                <Select size="small" value={supplyProductionProfileDraft[field.key]} onChange={(value) => setSupplyProductionProfileDraft((draft) => ({ ...draft, [field.key]: value }))} options={field.options.map((value) => ({ value, label: getDisplayValue(value, field.key) }))} />
+              ) : (
+                <Input size="small" type={field.type === "number" ? "number" : "text"} min={field.min ?? undefined} step={field.step ?? undefined} value={Array.isArray(supplyProductionProfileDraft[field.key]) ? supplyProductionProfileDraft[field.key].join(", ") : (supplyProductionProfileDraft[field.key] ?? "")} onChange={(event) => setSupplyProductionProfileDraft((draft) => ({ ...draft, [field.key]: event.target.value }))} />
+              )}
+              <small className="planning-config-help">{getPlanningFieldExplanation("supplyProductionProfile", field.key)}</small>
+            </label>
+          ))}
+        </div>
+      </Modal>
+      <Modal
+        title="配置需求预测策略"
+        open={longTermDemandForecastStrategyModalOpen}
+        width={560}
+        onCancel={() => setLongTermDemandForecastStrategyModalOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setLongTermDemandForecastStrategyModalOpen(false)}>取消</Button>,
+          <Button key="save" type="primary" onClick={saveLongTermDemandForecastStrategyConfig}>保存配置</Button>,
+        ]}
+      >
+        <div className="timing-rule-editor">
+          {longTermDemandForecastStrategyConfigFields.map((field) => (
+            <label key={field.key}>
+              <span>{getFieldLabel(field.key)}</span>
+              {field.type === "select" ? (
+                <Select size="small" value={longTermDemandForecastStrategyDraft[field.key]} onChange={(value) => setLongTermDemandForecastStrategyDraft((draft) => ({ ...draft, [field.key]: value }))} options={field.options.map((value) => ({ value, label: getDisplayValue(value, field.key) }))} />
+              ) : (
+                <Input size="small" type={field.type === "number" ? "number" : "text"} min={field.min ?? undefined} max={field.max ?? undefined} step={field.step ?? undefined} value={longTermDemandForecastStrategyDraft[field.key] ?? ""} onChange={(event) => setLongTermDemandForecastStrategyDraft((draft) => ({ ...draft, [field.key]: event.target.value }))} />
+              )}
+              <small className="planning-config-help">{getPlanningFieldExplanation("longTermDemandForecastStrategy", field.key)}</small>
             </label>
           ))}
         </div>
@@ -6247,9 +6306,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isRobotaxiDeliveryOrderPage = page === "robotaxiDeliveryOrders";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
   const isSupplyDocumentPage = isSupplyPlanPage || isProductionBatchPage || isRobotaxiDeliveryOrderPage;
-  const isBusinessOperationResultPage = isLongTermDemandForecastPage || isFleetAllocationResultPage || page === "supplyDemandBalanceResults";
+  const isBusinessOperationResultPage = isFleetAllocationResultPage || page === "supplyDemandBalanceResults";
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
-  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isLongTermDemandForecastStrategyPage || isFleetAllocationStrategyPage || isSupplyDemandBalanceStrategyPage;
+  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isFleetAllocationStrategyPage || isSupplyDemandBalanceStrategyPage;
   const hasEventPanel = isTaskOperationPage || isSupplyDocumentPage || isBusinessOperationResultPage || isStrategyExecutionPanelPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
@@ -6327,7 +6386,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const eventTableScrollY = Math.max(80, eventPanelHeight - 44);
   const tableScrollX = finalColumns.reduce((sum, column) => sum + Number(column.width || 128), 0);
   const eventTableScrollX = eventColumns.reduce((sum, key) => sum + getColumnWidth(key, visibleEventRows), 0);
-  const showMainTable = !isMetricAnalysisPage || metricTableVisible;
+  const isForecastAnalysisPage = isLongTermDemandForecastPage;
+  const showMainTable = isForecastAnalysisPage ? false : (!isMetricAnalysisPage || metricTableVisible);
 
   useEffect(() => {
     if (isMetricAnalysisPage) setMetricTableVisible(false);
@@ -6343,7 +6403,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           onSelect={(row) => onSelect(objectType, row[idField])}
         />
       )}
-      {!isMetricAnalysisPage && statusOptions.length > 0 && (
+      {!isMetricAnalysisPage && !isForecastAnalysisPage && statusOptions.length > 0 && (
         <div className="status-segment-bar">
           <Button
             size="small"
@@ -6364,7 +6424,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           ))}
         </div>
       )}
-      {!isMetricAnalysisPage && (
+      {!isMetricAnalysisPage && !isForecastAnalysisPage && (
       <div className="list-filter-bar">
         <div className="filter-field keyword-field">
           <span>关键词</span>
@@ -6483,6 +6543,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <span className="metric-data-pool-state">{createMetricDataPoolState(actions.metricCalculationRuns, actions.metricPeriodType)}</span>
         </div>
       )}
+      {isForecastAnalysisPage && (
+        <ForecastAnalysisPanel
+          rows={displayRows}
+          selectedId={selected?.type === objectType ? selected.id : null}
+          onSelect={(row) => onSelect(objectType, row[idField])}
+          onCreateSupplyPlan={actions.createSupplyPlanFromForecast}
+          onCompleteSupplyLoop={actions.completeSupplyManagementLoopFromForecast}
+        />
+      )}
       {isMetricAnalysisPage && (
         <MetricExperiencePanel
           page={page}
@@ -6542,13 +6611,13 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           />
         </div>
       )}
-      <ModuleFooter
+      {!isForecastAnalysisPage && <ModuleFooter
         page={page}
         totalCount={rows.length}
         displayCount={displayRows.length}
         eventCount={hasEventPanel ? eventRows?.length || 0 : null}
         appliedFilters={appliedFilters}
-      />
+      />}
       {isReadinessPage && (
         <Modal
           title="提交异常检查结果"
@@ -6723,7 +6792,12 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         title: "操作",
         fixed: "right",
         width: 120,
-        render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runLongTermDemandForecastStrategy(row)}>执行</RowActionButton>),
+        render: (_, row) => renderActionCell(row, (
+          <RowActionGroup>
+            <RowActionButton onClick={() => actions.runLongTermDemandForecastStrategy(row)}>执行</RowActionButton>
+            <RowActionButton type="default" onClick={() => actions.editLongTermDemandForecastStrategy(row)}>配置</RowActionButton>
+          </RowActionGroup>
+        )),
       };
     }
     if (isLongTermDemandForecastPage) {
@@ -7104,7 +7178,7 @@ function RobotaxiObjectSummary({ robotaxi }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "demandProfile", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "demandProfile", "businessTarget", "supplyProductionProfile", "longTermDemandForecastStrategy", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -7119,7 +7193,9 @@ function TabbedDetail({ selectedObject, selectedType }) {
         label: tab.label,
         children: (
           <DetailContentViewport className="object-inspector-tab-content">
-            {tab.cost ? (
+            {tab.explanations ? (
+              <PlanningFieldExplanations explanations={tab.explanations} />
+            ) : tab.cost ? (
               <CostDetail selectedObject={selectedObject} />
             ) : tab.timeline ? (
               <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
@@ -7173,6 +7249,13 @@ function isComplexDetailField(key, value) {
 }
 
 function getDetailTabs(selectedType, selectedObject) {
+  const planningSchema = businessPlanningService?.businessPlanningObjectSchemas?.[selectedType];
+  if (planningSchema) {
+    return [
+      ...planningSchema.tabs.map((tab) => ({ ...tab, keys: tab.fields })),
+      { key: "explanations", label: "字段解释", explanations: planningSchema.explanations },
+    ];
+  }
   if (selectedType === "robotaxi") {
     return [
       { key: "basic", label: "基础信息", keys: ["robotaxi_id", "fleet_id", "model_name", "automation_level", "availability_status", "operation_blocking_reason", "motion_status"] },
@@ -7361,13 +7444,32 @@ function getDetailTabs(selectedType, selectedObject) {
   return [];
 }
 
+function PlanningFieldExplanations({ explanations = {} }) {
+  return (
+    <div className="planning-field-explanations">
+      {Object.entries(explanations).map(([field, explanation]) => (
+        <section key={field}>
+          <strong>{getFieldLabel(field)}</strong>
+          <p>{explanation}</p>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function getPlanningFieldExplanation(schemaKey, fieldKey) {
+  return businessPlanningService?.businessPlanningObjectSchemas?.[schemaKey]?.explanations?.[fieldKey]
+    || "该字段参与当前对象的经营规划配置。";
+}
+
 function getDemandProfileDetailTabs(profile) {
   const basic = { key: "basic", label: "画像信息", keys: ["profile_id", "profile_name", "target_object_type", "target_object_id", "target_object_name", "profile_version", "profile_status", "effective_from", "effective_to"] };
   if (profile?.target_object_type === "PLACE") {
     return [
       basic,
-      { key: "config", label: "可配置参数", keys: ["resident_population", "working_population", "daily_visitors", "trip_generation_rate", "demand_weight", "peak_demand_ratio", "robotaxi_adoption_rate", "service_acceptance_rate", "growth_rate", "forecast_years", "peak_pattern"] },
-      { key: "calculated", label: "自动计算", keys: ["potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "growth_factor", "calculated_at"] },
+      { key: "config", label: "需求参数", keys: ["resident_population", "working_population", "daily_visitors", "resident_trip_weight", "worker_trip_weight", "visitor_trip_weight", "trip_generation_rate", "demand_weight", "robotaxi_adoption_rate", "service_acceptance_rate", "competition_retention_rate", "busiest_hour_share"] },
+      { key: "growth", label: "增长假设", keys: ["place_period_growth_rate", "growth_rate_unit", "growth_rate_source", "growth_rate_updated_at"] },
+      { key: "calculated", label: "自动计算", keys: ["daily_population_exposure", "potential_daily_trips", "baseline_addressable_daily_orders", "baseline_peak_hour_orders", "calculated_at"] },
       { key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] },
       { key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] },
     ];
@@ -7375,8 +7477,8 @@ function getDemandProfileDetailTabs(profile) {
   if (profile?.target_object_type === "SERVICE_AREA") {
     return [
       basic,
-      { key: "config", label: "可配置参数", keys: ["pickup_probability", "dropoff_probability", "peak_demand_ratio", "service_capacity", "waiting_capacity", "turnover_capacity", "accessibility_factor"] },
-      { key: "calculated", label: "自动计算", keys: ["service_area_demand", "calculated_from_profile_ids", "calculated_at"] },
+      { key: "config", label: "承载参数", keys: ["parent_place_id", "waiting_robotaxi_capacity", "pickup_position_capacity", "dropoff_position_capacity", "average_service_time_min", "operating_hours_per_day", "accessibility_factor", "capacity_availability_rate"] },
+      { key: "calculated", label: "自动计算", keys: ["position_throughput_per_hour", "service_capacity_per_hour", "effective_peak_hour_capacity", "effective_daily_capacity", "calculated_at"] },
       { key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] },
       { key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] },
     ];
@@ -7384,8 +7486,7 @@ function getDemandProfileDetailTabs(profile) {
   if (profile?.target_object_type === "ZONE") {
     return [
       basic,
-      { key: "config", label: "可配置参数", keys: ["zone_adjustment_factor", "coverage_factor", "competition_factor", "peak_demand_ratio", "growth_rate", "forecast_years"] },
-      { key: "calculated", label: "自动汇总", keys: ["potential_demand", "service_area_demand", "expected_robotaxi_demand", "peak_hour_demand", "growth_factor", "demand_growth_factor", "peak_demand_factor", "coverage_gap_factor", "service_capacity", "waiting_capacity", "turnover_capacity", "supply_need_score", "demand_distribution", "calculated_from_profile_ids", "calculated_at"] },
+      { key: "calculated", label: "自动汇总", keys: ["potential_daily_trips", "baseline_addressable_daily_orders", "baseline_peak_hour_orders", "busiest_hour_share", "zone_period_growth_rate", "growth_rate_unit", "effective_daily_capacity", "effective_peak_hour_capacity", "waiting_robotaxi_capacity", "demand_distribution", "calculated_from_profile_ids", "calculated_at"] },
       { key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] },
       { key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] },
     ];
@@ -8101,6 +8202,181 @@ function RowActionGroup({ children }) {
       </Button>
     </Dropdown>
   );
+}
+
+function formatPlanningValue(value) {
+  if (value === null || value === undefined || value === "") return "无";
+  return typeof value === "number" ? value.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : String(value);
+}
+
+function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreateSupplyPlan, onCompleteSupplyLoop }) {
+  const [trendTimeUnit, setTrendTimeUnit] = useState("MONTH");
+  const selected = rows.find((row) => row.forecast_result_id === selectedId) || rows[0] || null;
+  if (!selected) return <Empty description="执行需求预测后将在这里展示经营规划结论" />;
+  const forecastDays = Math.max(0, (Date.parse(`${selected.forecast_end_date}T00:00:00Z`) - Date.parse(`${selected.forecast_start_date}T00:00:00Z`)) / 86400000);
+  const availableTrendUnits = new Set([...(forecastDays <= 180 ? ["DAY"] : []), ...(forecastDays <= 730 ? ["WEEK"] : []), "MONTH"]);
+  const trendRows = selected.forecast_trend_series?.[trendTimeUnit] || [];
+  const supplyTrendRows = selected.supply_trend_series || [];
+  const metrics = [
+    ["期末市场日订单", selected.market_forecast_daily_orders],
+    ["目标期末日订单", selected.target_end_daily_orders],
+    ["规划日订单", selected.planned_daily_orders],
+    ["最终所需 Robotaxi", selected.required_robotaxi_quantity],
+    ["Robotaxi 缺口", selected.robotaxi_gap_quantity],
+    ["计划生产数量", selected.planned_production_quantity],
+    ["未覆盖缺口", selected.uncovered_robotaxi_gap],
+    ["预测期累计市场订单", selected.forecast_cumulative_market_orders],
+    ["预测期累计规划订单", selected.forecast_cumulative_planned_orders],
+  ];
+  const bottlenecks = [
+    ["Robotaxi 日常能力", selected.daily_required_robotaxi],
+    ["峰值并发能力", selected.peak_required_robotaxi],
+    ["服务区域日容量缺口", selected.daily_capacity_gap],
+    ["服务区域峰值缺口", selected.peak_capacity_gap],
+  ];
+  return (
+    <div className="forecast-analysis">
+      <div className="forecast-analysis-toolbar">
+        <div className="forecast-result-switcher">
+          {rows.map((row) => <Button key={row.forecast_result_id} size="small" type={row.forecast_result_id === selected.forecast_result_id ? "primary" : "default"} onClick={() => onSelect(row)}>{formatForecastResultLabel(row)}</Button>)}
+        </div>
+        <div className="forecast-analysis-actions">
+          <Button size="small" type="primary" onClick={() => onCreateSupplyPlan?.(selected)}>生成生产计划</Button>
+          <Button size="small" onClick={() => onCompleteSupplyLoop?.(selected)}>执行供应闭环</Button>
+        </div>
+      </div>
+      <div className="forecast-context-strip">
+        <span>{selected.forecast_start_date || "无"} 至 {selected.forecast_end_date || "无"}</span>
+        <span>{formatPlanningValue(selected.forecast_period_count)} {getDisplayValue(selected.forecast_period_unit)}</span>
+        <span>{getDisplayValue(selected.growth_model || "COMPOUND")}</span>
+        <span>有效周期增长率 {formatPlanningPercent(selected.effective_period_growth_rate)}</span>
+      </div>
+      <div className="analysis-summary-grid">
+        {metrics.map(([label, value]) => <div className="analysis-summary-card" key={label}><span>{label}</span><strong>{formatPlanningValue(value)}</strong></div>)}
+      </div>
+      <div className="forecast-trend-section">
+        <div className="forecast-trend-toolbar">
+          <div><strong>预测趋势</strong><small>增长变化与累计总量使用同一预测周期快照</small></div>
+          <div className="forecast-time-unit-switcher">
+            {["DAY", "WEEK", "MONTH"].map((unit) => <Button key={unit} size="small" disabled={!availableTrendUnits.has(unit)} type={trendTimeUnit === unit ? "primary" : "default"} onClick={() => setTrendTimeUnit(unit)}>按{getDisplayValue(unit)}</Button>)}
+          </div>
+        </div>
+        <div className="forecast-trend-grid">
+          <ForecastTrendChart
+            title="需求增长趋势"
+            description="各时间点的典型日订单变化"
+            rows={trendRows}
+            series={[{ key: "market_daily_orders", label: "市场日订单" }, { key: "planned_daily_orders", label: "规划日订单" }]}
+          />
+          <ForecastTrendChart
+            title="累计需求总量"
+            description="从预测起点累计至当前时间点"
+            rows={trendRows}
+            series={[{ key: "cumulative_market_orders", label: "累计市场订单" }, { key: "cumulative_planned_orders", label: "累计规划订单" }]}
+          />
+        </div>
+      </div>
+      <div className="forecast-trend-section">
+        <div className="forecast-trend-toolbar">
+          <div><strong>生产与交付规划</strong><small>按生产画像展示预计产出、交付和 Robotaxi 剩余缺口</small></div>
+        </div>
+        <div className="forecast-trend-grid">
+          <ForecastTrendChart
+            title="每期生产与交付"
+            description="每个生产能力周期预计形成和交付的 Robotaxi"
+            rows={supplyTrendRows}
+            series={[{ key: "period_production_quantity", label: "当期生产量" }, { key: "period_delivery_quantity", label: "当期交付量" }]}
+          />
+          <ForecastTrendChart
+            title="累计供给与剩余缺口"
+            description="累计生产、累计交付与尚未覆盖的 Robotaxi 缺口"
+            rows={supplyTrendRows}
+            series={[{ key: "cumulative_production_quantity", label: "累计生产量" }, { key: "cumulative_delivery_quantity", label: "累计交付量" }, { key: "remaining_robotaxi_gap", label: "剩余缺口" }]}
+          />
+        </div>
+      </div>
+      <div className="forecast-analysis-grid">
+        <section><h3>能力与瓶颈</h3>{bottlenecks.map(([label, value]) => <div className="forecast-analysis-row" key={label}><span>{label}</span><strong>{formatPlanningValue(value)}</strong></div>)}</section>
+        <section><h3>Robotaxi 规模</h3><div className="forecast-analysis-row"><span>当前有效</span><strong>{formatPlanningValue(selected.effective_current_robotaxi)}</strong></div><div className="forecast-analysis-row"><span>需求驱动</span><strong>{getDisplayValue(selected.requirement_driver)}</strong></div><div className="forecast-analysis-row"><span>单车有效日产能</span><strong>{formatPlanningValue(selected.robotaxi_effective_daily_orders)}</strong></div></section>
+        <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>建议生产数量</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>生产准备完成</span><strong>{selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>预测期可形成供给</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>全部供给完成</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
+      </div>
+      <details className="forecast-calculation-details"><summary><span>完整计算过程</span><small>按需展开查看公式、输入与结果</small></summary>{groupForecastCalculationSteps(selected.calculation_steps).map((group) => <section className="forecast-calculation-group" key={group.name}><h4>{group.name}</h4>{group.steps.map((step) => <div className="forecast-calculation-step" key={step.step_order || step.step_name}><span><em>{step.step_order}</em>{step.step_name}</span><small>{step.formula}</small><strong>{formatPlanningValue(step.output_value)}{step.output_unit ? ` ${step.output_unit}` : ""}</strong></div>)}</section>)}</details>
+    </div>
+  );
+}
+
+function formatPlanningPercent(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${(numeric * 100).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}%` : "无";
+}
+
+function formatForecastResultLabel(row = {}) {
+  const name = row.zone_name || row.forecast_name || "预测结果";
+  if (!row.created_at) return name;
+  const date = new Date(row.created_at);
+  if (Number.isNaN(date.getTime())) return name;
+  return `${name} · ${date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}`;
+}
+
+function groupForecastCalculationSteps(steps = []) {
+  const groups = [];
+  (steps || []).forEach((step) => {
+    const name = step.step_group || "计算过程";
+    let group = groups.find((item) => item.name === name);
+    if (!group) {
+      group = { name, steps: [] };
+      groups.push(group);
+    }
+    group.steps.push(step);
+  });
+  return groups;
+}
+
+function ForecastTrendChart({ title, description, rows = [], series = [] }) {
+  const chartRows = reduceForecastChartRows(rows, 96);
+  const values = chartRows.flatMap((row) => series.map((item) => Number(row[item.key] || 0)));
+  const dataMin = Math.min(0, ...values);
+  const dataMax = Math.max(1, ...values);
+  const isCumulative = series.every((item) => item.key.startsWith("cumulative_"));
+  const visualPadding = Math.max(1, (dataMax - dataMin) * 0.12);
+  const minValue = isCumulative ? 0 : Math.max(0, Math.min(...values) - visualPadding);
+  const maxValue = dataMax + visualPadding;
+  const range = Math.max(1, maxValue - minValue);
+  const width = 640;
+  const height = 176;
+  const plot = { left: 44, right: 12, top: 12, bottom: 24 };
+  const plotWidth = width - plot.left - plot.right;
+  const plotHeight = height - plot.top - plot.bottom;
+  const toPoint = (row, index, key) => {
+    const x = plot.left + (chartRows.length <= 1 ? 0 : index / (chartRows.length - 1)) * plotWidth;
+    const y = plot.top + (1 - (Number(row[key] || 0) - minValue) / range) * plotHeight;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  };
+  return (
+    <section className="forecast-trend-chart">
+      <header><div><strong>{title}</strong><small>{description}</small></div><span>{rows.length} 个时间点</span></header>
+      {chartRows.length > 1 ? <>
+        <div className="forecast-chart-legend">{series.map((item, index) => <span key={item.key} data-series={index + 1}>{item.label}</span>)}</div>
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+          {[0, 0.5, 1].map((ratio) => <line key={ratio} x1={plot.left} x2={width - plot.right} y1={plot.top + ratio * plotHeight} y2={plot.top + ratio * plotHeight} className="forecast-chart-gridline" />)}
+          <text x="2" y={plot.top + 4}>{formatCompactNumber(maxValue)}</text>
+          <text x="2" y={plot.top + plotHeight}>{formatCompactNumber(minValue)}</text>
+          {series.map((item, index) => <polyline key={item.key} className={`forecast-chart-line series-${index + 1}`} points={chartRows.map((row, rowIndex) => toPoint(row, rowIndex, item.key)).join(" ")} />)}
+        </svg>
+        <div className="forecast-chart-axis"><span>{chartRows[0]?.trend_date}</span><span>{chartRows[chartRows.length - 1]?.trend_date}</span></div>
+      </> : <div className="forecast-trend-empty">该历史结果尚未保存趋势快照，请重新执行预测策略</div>}
+    </section>
+  );
+}
+
+function reduceForecastChartRows(rows = [], maxPoints = 96) {
+  if (rows.length <= maxPoints) return rows;
+  const lastIndex = rows.length - 1;
+  return Array.from({ length: maxPoints }, (_, index) => rows[Math.round(index * lastIndex / (maxPoints - 1))]);
+}
+
+function formatCompactNumber(value) {
+  return Number(value || 0).toLocaleString("zh-CN", { notation: "compact", maximumFractionDigits: 1 });
 }
 
 function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculationRuns = [], metricPeriodType = "ALL", onSelect }) {
@@ -9619,17 +9895,17 @@ async function bootstrap() {
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
-		    import("./services/businessPlanningService.js?v=20260712-v042-0-0"),
+		    import("./services/businessPlanningService.js?v=20260713-v043-0-0"),
 		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
 		    import("./data/supplyManagementInitialization.js"),
-		    import("./data/spatialBusinessProfileInitialization.js?v=20260712-v042-0-0"),
+		    import("./data/spatialBusinessProfileInitialization.js?v=20260713-v043-0-0"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260713-v042-0-11"),
-		    import("./ui/projectReadme.js?v=20260713-v042-0-11"),
+		    import("./ui/releaseHistory.js?v=20260713-v043-0-0"),
+		    import("./ui/projectReadme.js?v=20260713-v043-0-0"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;

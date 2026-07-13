@@ -7,8 +7,10 @@ const targetUrl = process.env.ROBOTAXI_BROWSER_VERIFY_URL || "http://127.0.0.1:4
 const viewport = process.env.ROBOTAXI_BROWSER_VIEWPORT || "1280,720";
 const mobileAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MOBILE === "1";
 const mapAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MAP === "1";
+const planningAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_PLANNING === "1";
 const screenshotPath = process.env.ROBOTAXI_BROWSER_SCREENSHOT || "";
 const [viewportWidth, viewportHeight] = viewport.split(",").map(Number);
+const browserWindowSize = planningAssertionEnabled && mobileAssertionEnabled ? "1440,900" : viewport;
 
 assert(fs.existsSync(chromePath), "未找到 Google Chrome，无法执行真实浏览器白屏检查");
 
@@ -19,7 +21,7 @@ const chrome = spawn(chromePath, [
   "--hide-scrollbars",
   "--remote-debugging-port=0",
   `--user-data-dir=/private/tmp/robotaxi-browser-load-${Date.now()}`,
-  `--window-size=${viewport}`,
+  `--window-size=${browserWindowSize}`,
   targetUrl,
 ], { stdio: ["ignore", "ignore", "pipe"] });
 
@@ -81,10 +83,26 @@ try {
     socket.send(JSON.stringify({ id, method, params }));
   });
 
+  const clickElementCenter = async (selector, text = null) => {
+    const result = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const nodes = [...document.querySelectorAll(${JSON.stringify(selector)})];
+        const target = ${text === null ? "nodes[0]" : `nodes.find((node) => node.textContent.trim() === ${JSON.stringify(text)})`};
+        const rect = target?.getBoundingClientRect();
+        return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+      })()`,
+      returnByValue: true,
+    });
+    const point = result.result?.result?.value;
+    assert(point, `未找到可点击元素：${selector}${text ? ` / ${text}` : ""}`);
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  };
+
   await send("Runtime.enable");
   await send("Log.enable");
   await send("Page.enable");
-  if (mobileAssertionEnabled) {
+  if (mobileAssertionEnabled && !planningAssertionEnabled) {
     await send("Emulation.setDeviceMetricsOverride", {
       width: viewportWidth,
       height: viewportHeight,
@@ -120,6 +138,69 @@ try {
     });
     assert(loginResult.result?.result?.value?.submitted, "登录入口缺少可提交的输入框或表单");
     await delay(2500);
+  }
+
+  if (planningAssertionEnabled) {
+    const clickMenuItem = async (label) => {
+      const clickResult = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const labels = [...document.querySelectorAll(".ant-menu-title-content")].filter((node) => node.textContent.trim() === ${JSON.stringify(label)});
+          const target = labels[0]?.closest(".ant-menu-item, .ant-menu-submenu-title");
+          target?.click();
+          return { count: labels.length, clicked: Boolean(target) };
+        })()`,
+        returnByValue: true,
+      });
+      const value = clickResult.result?.result?.value;
+      assert.equal(value?.count, 1, `菜单 ${label} 必须唯一存在`);
+      assert(value?.clicked, `菜单 ${label} 必须可以点击`);
+      await delay(180);
+    };
+    await clickMenuItem("经营规划");
+    await clickMenuItem("需求预测");
+    await clickMenuItem("预测策略");
+    await clickElementCenter(".row-action-menu-trigger");
+    await delay(500);
+    await clickElementCenter(".ant-dropdown:not(.ant-dropdown-hidden) .ant-dropdown-menu-item", "执行");
+    await delay(1500);
+    if (mobileAssertionEnabled) {
+      await send("Emulation.setDeviceMetricsOverride", {
+        width: viewportWidth,
+        height: viewportHeight,
+        deviceScaleFactor: 1,
+        mobile: true,
+      });
+      await delay(300);
+    }
+    const planningResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const analysis = document.querySelector(".forecast-analysis");
+        const summary = [...document.querySelectorAll(".analysis-summary-card")].map((node) => ({ label: node.querySelector("span")?.textContent, value: node.querySelector("strong")?.textContent }));
+        const production = summary.find((item) => item.label === "计划生产数量");
+        return {
+          analysis: Boolean(analysis),
+          url: location.href,
+          hasWorkbench: Boolean(document.querySelector(".workbench")),
+          bodyText: document.body?.innerText?.slice(0, 800) || "",
+          pageTitle: document.querySelector(".page-title-block strong")?.textContent || document.querySelector(".platform-title-copy strong")?.textContent || "",
+          visibleMessages: [...document.querySelectorAll(".ant-message-notice, .record-event-section")].map((node) => node.textContent.trim()).slice(0, 4),
+          forecastRunRows: document.querySelectorAll('[data-page="longTermDemandForecastRuns"] tbody tr').length,
+          chartCount: document.querySelectorAll(".forecast-trend-chart").length,
+          chartRowCount: document.querySelectorAll(".forecast-trend-grid").length,
+          hasDetailPanel: Boolean(document.querySelector(".object-inspector")),
+          productionQuantity: Number(String(production?.value || "0").replaceAll(",", "")),
+          horizontalOverflow: analysis ? analysis.scrollWidth - analysis.clientWidth : null,
+        };
+      })()`,
+      returnByValue: true,
+    });
+    const planning = planningResult.result?.result?.value;
+    assert(planning?.analysis, `策略执行后必须进入预测结果分析画布：${JSON.stringify({ ...planning, exceptions, messages })}`);
+    assert.equal(planning.chartCount, 4, "预测结果必须展示需求、累计需求、生产交付和累计供给四张图");
+    assert.equal(planning.chartRowCount, 2, "需求和供给各自使用独立纵向图表区域");
+    assert.equal(planning.hasDetailPanel, false, "分析结果不得混入对象详情面板");
+    assert(planning.productionQuantity > 0, "真实增长与缺口必须形成大于零的计划生产数量");
+    assert.equal(planning.horizontalOverflow, 0, "预测分析画布不得产生整体横向溢出");
   }
 
   await send("Runtime.evaluate", { expression: `document.querySelector(".platform-user-trigger")?.click()`, returnByValue: true });

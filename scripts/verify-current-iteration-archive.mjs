@@ -9,7 +9,7 @@ const currentMajorEntry = path.join(currentMajorDir, "major-current-iteration.md
 
 const entrySource = fs.readFileSync(currentMajorEntry, "utf8");
 const declaredCurrentFiles = [
-  ...entrySource.matchAll(/(?:执行方案|方案设计|自动化执行计划)：`([^`]+)`/g),
+  ...entrySource.matchAll(/(?:计划|执行方案|方案设计|自动化执行计划)：`([^`]+)`/g),
 ].map((match) => path.basename(match[1])).filter(Boolean);
 
 const allowedCurrentMajorFiles = new Set([

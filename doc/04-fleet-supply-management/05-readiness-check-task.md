@@ -51,7 +51,7 @@ RobotaxiService 根据检查结果更新主运营状态
 
 |触发来源|说明|
 |---|---|
-|DELIVERY_ORDER_COMPLETED|交付单完成后逐车触发，当前供给闭环主来源|
+|DELIVERY_ORDER_DELIVERED|交付单已交付后逐车触发，当前供给闭环主来源|
 |MANUAL|运营人员人工触发|
 |AUTO|未来系统按配置扫描待准入 Robotaxi|
 |TASK_RESULT|未来可配置上游任务结果触发|
@@ -59,7 +59,7 @@ RobotaxiService 根据检查结果更新主运营状态
 当前供给闭环中：
 
 ```text
-RobotaxiDeliveryOrder.READINESS_TRIGGERED
+RobotaxiDeliveryOrder.DELIVERED
   ↓
 ReadinessCheckTask × N
 ```

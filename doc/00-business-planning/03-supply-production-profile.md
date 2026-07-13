@@ -1,754 +1,88 @@
-# Supply Production Profile（供应生产画像）设计
+# 生产画像设计
 
----
+## 1. 定位
 
-# 1. 对象定义
+`SupplyProductionProfile` 是经营规划层的生产能力配置对象。它描述企业自有生产体系在不同周期可形成和交付多少 Robotaxi，只提供预测与生产计划的能力约束，不创建资产、不执行生产、不替代运营准入。
 
-## 对象名称
+## 2. 核心字段
 
-Supply Production Profile
-
-中文：
-
-供应生产画像
-
----
-
-## 1.1 对象定位
-
-Supply Production Profile 用于描述企业通过自有生产形成 Robotaxi 供给能力时的生产约束、生产能力和生产节奏。
-
-它不是生产计划，也不是生产执行过程。
-
-它描述：
-
-> 企业未来能够以什么速度、什么规模、什么周期形成 Robotaxi 供给能力。
-
----
-
-## 1.2 核心职责
-
-Supply Production Profile 负责定义：
-
-- Robotaxi生产提前期；
-- Robotaxi生产能力；
-- Robotaxi产能分配比例；
-- 生产爬坡能力；
-- 车辆交付能力。
-
----
-
-不负责：
-
-- 具体生产任务；
-- 生产过程执行；
-- 工厂MES管理；
-- 零部件采购。
-- 车商供应；
-- 私家车车主网络供给。
-
----
-
-# 2. 所属模块
-
-```
-00-business-planning
-
-    01-business-target
-
-    02-demand-profile
-
-    03-supply-production-profile
-
-    04-long-term-demand-forecast
-```
-
----
-
-# 3. 业务定位
-
-Supply Production Profile 解决：
-
-> 当长期需求预测发现未来需要更多Robotaxi时，企业是否能够按时间形成对应供给能力。
-
----
-
-业务关系：
-
-```
-Business Target
-
-↓
-
-Long-term Demand Forecast
-
-↓
-
-Supply Production Profile
-
-↓
-
-Fleet Production Plan
-
-↓
-
-Robotaxi Asset Formation
-```
-
----
-
-# 4. 画像对象关系
-
-Supply Production Profile 是独立对象。
-
-一个企业可以有多个生产画像。
-
-例如：
-
-```
-SPP-001
-
-Robotaxi自产工厂A
-
-
-SPP-002
-
-Robotaxi扩产阶段工厂A
-
-
-SPP-003
-
-未来新工厂B
-```
-
----
-
-关系：
-
-```
-Business Planning
-
-        |
-
-        ↓
-
-Supply Production Profile
-
-        |
-
-        ↓
-
-Fleet Production Plan
-```
-
----
-
-# 5. 核心字段设计
-
----
-
-# 5.1 基础信息字段
-
-|字段英文|中文|类型|说明|
+|字段|中文|性质|含义|
 |---|---|---|---|
-|profile_id|画像编号|系统字段|唯一编号|
-|profile_name|画像名称|配置字段|画像名称|
-|profile_type|画像类型|配置字段|生产能力类型|
-|status|状态|系统字段|当前状态|
-|effective_from|生效时间|配置字段|开始生效时间|
-|effective_to|失效时间|配置字段|结束时间|
+|`profile_id`|画像编号|系统|唯一编号|
+|`profile_name`|画像名称|配置|用户可识别名称|
+|`profile_status`|画像状态|状态|启用或归档|
+|`profile_version`|画像版本|系统|配置版本|
+|`production_lead_time_days`|生产提前期（天）|配置|从生产计划开始到首批车辆完成生产的时间|
+|`production_capacity_period_unit`|生产能力周期单位|配置|周、月、季度或年|
+|`production_capacity_per_period`|每期生产能力|配置|稳定产能下每期完成数量|
+|`ramp_up_periods`|产能爬坡期数|配置|达到稳定产能所需期数|
+|`ramp_up_capacity_ratios`|爬坡产能比例|配置|各爬坡期相对稳定产能的比例|
+|`quality_inspection_lead_time_days`|质量检验周期（天）|配置|生产完成后的工厂质量检验时间|
+|`delivery_capacity_per_period`|每期交付能力|配置|每期最多完成物流交付的数量|
+|`effective_from`|生效日期|版本|开始适用日期|
+|`effective_to`|失效日期|版本|停止适用日期，为空表示持续有效|
 
----
+`quality_inspection_lead_time_days` 不得解释为运营准入。运营准入发生在 Robotaxi 完成交付并到达运营中心之后。
 
-初始化：
+## 3. 版本选择
 
-```
-{
-"profile_id":"SPP-001",
-"profile_name":"Robotaxi自生产能力画像",
-"profile_type":"ROBOTAXI_MANUFACTURING",
-"status":"ACTIVE",
-"effective_from":"2026-01-01"
-}
-```
+预测执行只能选择满足以下条件的一个生产画像版本：
 
----
-
-# 6. 生产提前期字段
-
-## production_lead_time_days
-
-中文：
-
-生产提前期
-
-类型：
-
-配置字段
-
-定义：
-
-从生产需求确认到Robotaxi完成交付的时间。
-
-单位：
-
-Day
-
-示例：
-
-```
-{
-"production_lead_time_days":180
-}
+```text
+profile_status = ACTIVE
+and effective_from <= forecast_start_date
+and (effective_to is null or effective_to >= forecast_start_date)
 ```
 
----
+找不到有效画像时预测执行失败，不允许静默使用过期版本。
 
-影响：
+## 4. 生产与交付计算
 
-决定：
-
-```
-什么时候开始生产
-```
-
----
-
-# 7. 生产能力字段
-
-## annual_production_capacity
-
-中文：
-
-年度生产能力
-
-类型：
-
-配置字段
-
-定义：
-
-一年最大Robotaxi生产数量。
-
-单位：
-
-vehicle/year
-
-示例：
-
-```
-{
-"annual_production_capacity":10000
-}
+```text
+生产准备完成日期
+= 预测开始日期
++ 生产提前期
++ 质量检验周期
 ```
 
----
-
-## monthly_production_capacity
-
-中文：
-
-月生产能力
-
-类型：
-
-计算字段
-
-公式：
-
-```
-Monthly Production Capacity
-
-=
-
-Annual Production Capacity
-
-÷
-
-12
+```text
+当期生产量
+= min(剩余建议生产量, 每期生产能力 × 当前爬坡比例)
 ```
 
----
-
-示例：
-
-```
-10000 ÷ 12
-
-=
-
-833台/月
+```text
+当期交付量
+= min(已生产未交付库存, 每期交付能力)
 ```
 
----
+预测结果必须同时保存：
 
-# 8. Robotaxi产能分配字段
+- 建议生产数量；
+- 预测期内可生产数量；
+- 预测期内可交付数量；
+- 当期与累计生产量；
+- 当期与累计交付量；
+- 每期剩余 Robotaxi 缺口；
+- 首批交付和全部供给完成日期。
 
-因为工厂不会全部生产Robotaxi。
+建议生产数量表达需要纳入供应决策的完整缺口；预测期可交付数量只表达当前预测期内能形成的供给。两者不得混为一个字段。
 
----
+## 5. 服务边界
 
-## total_factory_capacity
-
-中文：
-
-工厂总产能
-
-类型：
-
-配置字段
-
-示例：
-
-```
-50000 vehicles/year
+```text
+生产画像
+  -> 约束需求预测结果
+  -> 需求预测结果生成生产计划
+  -> 生产计划生成生产批次
+  -> 生产批次完成后创建待区域分配 Robotaxi 资产
 ```
 
----
+生产画像不直接修改生产计划、生产批次、Robotaxi、交付单或运营准入任务。
 
-## robotaxi_allocation_rate
+## 6. 兼容字段
 
-中文：
+`annual_production_capacity`、`monthly_production_capacity`、`delivery_capacity`、`ramp_up_months`、`inspection_lead_time_days` 只允许在旧快照迁移边界读取，新对象、配置、详情和计算不得继续产生。
 
-Robotaxi产能分配比例
+## 7. 模拟运行边界
 
-类型：
-
-配置字段
-
-范围：
-
-0-1
-
-示例：
-
-```
-0.2
-```
-
-表示：
-
-20%产能用于Robotaxi。
-
----
-
-## robotaxi_production_capacity
-
-中文：
-
-Robotaxi生产能力
-
-类型：
-
-计算字段
-
-公式：
-
-```
-Robotaxi Production Capacity
-
-=
-
-Total Factory Capacity
-
-×
-
-Robotaxi Allocation Rate
-```
-
----
-
-示例：
-
-```
-50000
-
-×
-
-20%
-
-=
-
-10000
-```
-
----
-
-# 9. 产能爬坡字段
-
-## production_ramp_factor
-
-中文：
-
-产能爬坡系数
-
-类型：
-
-配置字段
-
-定义：
-
-新生产能力达到稳定产能的比例。
-
-范围：
-
-0-1
-
-示例：
-
-```
-Year 1:
-
-0.5
-
-
-Year 2:
-
-0.8
-
-
-Year 3:
-
-1.0
-```
-
----
-
-## effective_production_capacity
-
-中文：
-
-有效生产能力
-
-类型：
-
-计算字段
-
-公式：
-
-```
-Effective Production Capacity
-
-=
-
-Robotaxi Production Capacity
-
-×
-
-Production Ramp Factor
-```
-
----
-
-# 10. 交付能力字段
-
-生产完成不等于运营可用。
-
-增加：
-
-## delivery_capacity
-
-中文：
-
-交付能力
-
-类型：
-
-配置字段
-
-定义：
-
-单位周期能够完成交付运营中心的数量。
-
-单位：
-
-vehicle/month
-
-示例：
-
-```
-800/month
-```
-
----
-
-# 11. 质量验证字段
-
-车辆进入运营前需要验证。
-
----
-
-## inspection_lead_time_days
-
-中文：
-
-验证周期
-
-类型：
-
-配置字段
-
-定义：
-
-生产完成到验证完成时间。
-
-示例：
-
-```
-15 days
-```
-
----
-
-# 12. 计算字段总结
-
-## monthly_production_capacity
-
-计算：
-
-```
-annual_production_capacity / 12
-```
-
----
-
-## robotaxi_production_capacity
-
-计算：
-
-```
-total_factory_capacity
-
-×
-
-robotaxi_allocation_rate
-```
-
----
-
-## effective_production_capacity
-
-计算：
-
-```
-robotaxi_production_capacity
-
-×
-
-production_ramp_factor
-```
-
----
-
-# 13. Supply Production Profile 输入输出
-
-## 输入
-
-来自：
-
-企业生产能力配置。
-
-包括：
-
-- 工厂能力；
-- 产能比例；
-- 生产周期；
-- 爬坡计划。
-
----
-
-## 输出
-
-提供给：
-
-Fleet Production Plan。
-
-输出：
-
-```
-可生产数量
-
-+
-
-生产周期
-
-+
-
-最早交付时间
-```
-
----
-
-# 14. 与 Long-term Demand Forecast 关系
-
-关系：
-
-不是直接计算需求。
-
-而是：
-
-```
-Long-term Demand Forecast Result
-
-        +
-
-Supply Production Profile
-
-        ↓
-
-Fleet Production Plan
-```
-
----
-
-例如：
-
-预测：
-
-2028需要新增：
-
-6000台Robotaxi。
-
-生产画像：
-
-有效产能：
-
-1000台/月。
-
-生成：
-
-```
-Month 1:
-1000
-
-Month 2:
-1000
-
-Month 3:
-1000
-
-...
-```
-
----
-
-# 15. 生命周期
-
-```
-Draft
-
-↓
-
-Active
-
-↓
-
-Updated
-
-↓
-
-Expired
-
-↓
-
-Archived
-```
-
----
-
-# 16. 软件对象模型
-
-```
-{
-"profile_id":"SPP-001",
-
-"profile_name":"Robotaxi自产生产能力画像",
-
-"production_lead_time_days":180,
-
-"total_factory_capacity":50000,
-
-"robotaxi_allocation_rate":0.2,
-
-"robotaxi_production_capacity":10000,
-
-"production_ramp_factor":1.0,
-
-"effective_production_capacity":10000,
-
-"delivery_capacity":800,
-
-"inspection_lead_time_days":15,
-
-"status":"ACTIVE"
-}
-```
-
----
-
-# 17. Codex 实现约束
-
-1. Supply Production Profile 属于：
-
-```
-00-business-planning
-```
-
-不属于：
-
-```
-fleet-supply-management
-```
-
----
-
-2. Supply Production Profile 不生成Robotaxi。
-
----
-
-3. Supply Production Profile 不生成生产任务。
-
----
-
-4. Supply Production Profile 只描述生产能力约束。
-
----
-
-5. Fleet Production Plan 必须读取：
-
-```
-Long-term Demand Forecast Result
-
-+
-
-Supply Production Profile
-```
-
----
-
-6. 生产能力字段与预测结果字段必须分离。
-
----
-
-# 18. 核心原则
-
-```
-Demand Profile
-
-描述市场需要什么
-
-
-Supply Production Profile
-
-描述企业能够形成什么
-
-
-Forecast Strategy
-
-计算未来需要什么
-
-
-Fleet Production Plan
-
-决定如何形成供给
-```
+本对象属于业务底层经营规划，不接入模拟运行主扫描。未来模拟运行只能通过时间作业调用生产批次、交付等既有业务服务。

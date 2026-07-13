@@ -12,7 +12,7 @@ Major 用于整体方案变更，例如：
 - 系统边界变化
 - 需要连续自动执行计划的阶段性目标
 
-当前迭代目录：`doc/common/current-iteration/major/major-current-iteration.md`
+当前状态指针：`doc/common/current-iteration/major/major-current-iteration.md`
 
 Major 自动执行计划文件：`doc/common/current-iteration/major/v{版本号}-auto-execution-plan.md`
 
@@ -27,7 +27,7 @@ Minor 用于局部方案或局部功能修改，例如：
 - 单个状态机修正
 - 小范围文档补充
 
-当前迭代文件：`doc/common/current-iteration/minor/minor-current-iteration.md`
+当前状态指针：`doc/common/current-iteration/minor/minor-current-iteration.md`
 
 历史归档目录：`doc/common/iteration-history/minor/`
 
@@ -40,7 +40,7 @@ Minor 用于局部方案或局部功能修改，例如：
 1. 查看 Git 当前版本和工作区状态。
 2. 读取 AGENTS.md、迭代规则、字段字典规则、前端规则、执行规则和字段字典正文。
 3. 分析差异、冲突、疑问、风险和建议范围。
-4. 与用户确认后再修改文档或代码。
+4. 与用户确认后再修改文档或代码；用户明确授权直接执行时按已确认方案连续推进。
 5. **必须检查本轮是否涉及新增或修改业务对象、字段、状态、枚举——如有，必须同步更新 `doc/rules/field-dictionary.md`。**
 6. 编码只覆盖已确认范围。
 7. 执行必要校验、语法检查和前端核心路径验证。
@@ -96,7 +96,16 @@ Minor 完成时必须：
 
 ---
 
-## 4. 自动执行计划
+## 4. 文档职责
+
+- 正式方案文档：业务定义、对象边界、字段、状态和流程的唯一真值。
+- 自动执行计划：当前版本任务、顺序、状态、风险和验收标准。
+- 当前状态指针：只保存版本号、计划链接、当前阶段和执行位置。
+- `VERSION.md` 与历史归档：保存已完成版本，不回写当前状态指针。
+
+用户可直接沟通需求或修改正式方案，不需要手工维护状态指针。禁止在状态指针重复粘贴方案、任务明细或历史版本内容。
+
+## 5. 自动执行计划
 
 用户确认自动执行后，可以按计划连续推进。
 
@@ -110,7 +119,7 @@ Minor 完成时必须：
 
 ---
 
-## 5. 范围控制
+## 6. 范围控制
 
 当前阶段只实现用户确认过的业务对象、初始化数据、校验规则和前端展示。
 
@@ -122,7 +131,7 @@ Minor 完成时必须：
 
 ---
 
-## 6. 历史保护
+## 7. 历史保护
 
 历史版本和历史归档只用于对比、回退和追溯。
 

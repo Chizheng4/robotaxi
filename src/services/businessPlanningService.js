@@ -1,4 +1,5 @@
 import { createRobotaxi } from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
+import { calculateLongTermDemandPlan, resolveForecastPeriod, validatePlanningInputs } from "../domain/longTermDemandPlanning.js";
 
 export const SupplyProductionProfileStatus = {
   ACTIVE: "ACTIVE",
@@ -19,11 +20,75 @@ export const LongTermDemandForecastStrategyStatus = {
 
 export const LongTermDemandForecastRunStatus = {
   SUCCEEDED: "SUCCEEDED",
+  NO_RESULT: "NO_RESULT",
   FAILED: "FAILED",
 };
 
 export const LongTermDemandForecastResultStatus = {
   GENERATED: "GENERATED",
+};
+
+export const businessPlanningObjectSchemas = {
+  businessTarget: {
+    tabs: [
+      { key: "basic", label: "目标信息", fields: ["business_target_id", "target_name", "target_status", "target_version", "target_zone_ids"] },
+      { key: "period", label: "规划周期", fields: ["forecast_start_date", "forecast_period_unit", "forecast_period_count", "forecast_end_date"] },
+      { key: "operation", label: "运营目标", fields: ["target_end_daily_orders", "target_order_fulfillment_rate", "target_task_utilization_rate", "target_minimum_robotaxi_quantity", "planning_mode"] },
+      { key: "economics", label: "经济假设", fields: ["average_revenue_per_order", "average_variable_cost_per_order", "daily_fixed_operating_cost", "minimum_contribution_margin_rate"] },
+    ],
+    explanations: {
+      forecast_start_date: "经营规划开始生效的日期，也是需求与供给趋势的时间起点。",
+      forecast_period_unit: "规划周期的基础单位，必须与区域画像增长率周期一致。",
+      forecast_period_count: "从规划起点向后预测的周期数量。",
+      planning_mode: "决定市场预测与经营目标冲突时采用哪一种规划口径：市场导向按可服务需求、目标导向按经营目标、平衡规划取两者合理约束。",
+      target_end_daily_orders: "预测期末典型经营日希望完成的订单数量，不是预测期累计订单。",
+      target_order_fulfillment_rate: "计划完成的市场可服务订单比例，用于从市场需求转为经营目标口径。",
+      target_task_utilization_rate: "Robotaxi 可运营时间中用于执行任务的目标比例。",
+      target_minimum_robotaxi_quantity: "即使需求模型计算值更低，经营规划仍需保有的最低 Robotaxi 规模。",
+      average_revenue_per_order: "用于经营可行性判断的平均单笔服务收入假设。",
+      average_variable_cost_per_order: "随订单数量变化的平均单笔成本假设。",
+      daily_fixed_operating_cost: "与当日订单量无关的日固定运营成本假设。",
+      minimum_contribution_margin_rate: "经营目标可接受的最低单笔贡献毛利率。",
+    },
+  },
+  supplyProductionProfile: {
+    tabs: [
+      { key: "basic", label: "画像信息", fields: ["profile_id", "profile_name", "profile_status", "profile_version"] },
+      { key: "capacity", label: "生产能力", fields: ["production_lead_time_days", "production_capacity_period_unit", "production_capacity_per_period", "ramp_up_periods", "ramp_up_capacity_ratios"] },
+      { key: "delivery", label: "质检与交付", fields: ["quality_inspection_lead_time_days", "delivery_capacity_per_period"] },
+      { key: "validity", label: "版本有效期", fields: ["effective_from", "effective_to", "created_at", "updated_at"] },
+    ],
+    explanations: {
+      production_lead_time_days: "从生产计划开始到首批车辆完成生产所需的准备和制造时间。",
+      production_capacity_per_period: "产能稳定后每个生产能力周期最多完成的 Robotaxi 数量。",
+      ramp_up_capacity_ratios: "产能爬坡期间各周期相对稳定产能的比例。",
+      quality_inspection_lead_time_days: "生产完成后的工厂质量检验时间，不等于车辆到达运营中心后的运营准入。",
+      delivery_capacity_per_period: "每个生产能力周期最多可完成物流交付的 Robotaxi 数量。",
+      production_capacity_period_unit: "生产能力和交付能力共同使用的统计周期单位。",
+      ramp_up_periods: "从启动生产到稳定产能所经历的能力周期数。",
+      effective_from: "画像版本开始适用的日期；预测开始日期必须落在有效期内。",
+      effective_to: "画像版本停止适用的日期；为空表示持续有效。",
+    },
+  },
+  longTermDemandForecastStrategy: {
+    tabs: [
+      { key: "basic", label: "策略信息", fields: ["forecast_strategy_id", "strategy_name", "strategy_type", "strategy_status", "strategy_version", "target_zone_ids"] },
+      { key: "growth", label: "增长规则", fields: ["growth_scenario", "growth_model", "growth_adjustment_rate"] },
+      { key: "capacity", label: "容量参数", fields: ["demand_buffer_ratio", "operational_availability_rate", "robotaxi_available_hours_per_day", "average_pickup_duration_min", "average_trip_duration_min", "average_turnaround_duration_min"] },
+      { key: "time", label: "更新时间", fields: ["created_at", "updated_at"] },
+    ],
+    explanations: {
+      growth_scenario: "本次规划采用的经营增长情景，用于识别和复盘策略版本。",
+      growth_model: "线性增长按固定增量累加，复合增长按每周期基数递增。",
+      growth_adjustment_rate: "在区域画像增长率基础上增加的情景调整，不替代画像增长率。",
+      demand_buffer_ratio: "为波动和预测误差预留的额外 Robotaxi 容量比例。",
+      operational_availability_rate: "扣除充电、清洁、维修等不可运营时间后的资产可用比例。",
+      robotaxi_available_hours_per_day: "单台 Robotaxi 每日可投入运营的小时数。",
+      average_pickup_duration_min: "Robotaxi 前往乘客上车点的平均时间。",
+      average_trip_duration_min: "服务订单从上车到下车的平均履约时间。",
+      average_turnaround_duration_min: "一次服务结束到下一次可接单之间的平均周转时间。",
+    },
+  },
 };
 
 export const SupplyPlanStatus = {
@@ -47,21 +112,28 @@ export const FleetAllocationStrategyStatus = {
 
 export function initializeDefaultBusinessTargets(now = defaultNow()) {
   const forecastStartDate = now.slice(0, 10);
-  const planningHorizonYears = 3;
+  const forecastPeriodUnit = "MONTH";
+  const forecastPeriodCount = 36;
+  const forecastPeriod = resolveForecastPeriod({ forecast_start_date: forecastStartDate, forecast_period_unit: forecastPeriodUnit, forecast_period_count: forecastPeriodCount });
   return [{
     business_target_id: "BT-001",
     target_name: "三年运营增长目标",
     target_status: BusinessTargetStatus.ACTIVE,
     target_version: "1.0.0",
-    planning_horizon_years: planningHorizonYears,
     forecast_start_date: forecastStartDate,
-    forecast_end_date: addDaysIsoDate(now, planningHorizonYears * 365),
-    target_zone_ids: ["Z-001"],
-    target_revenue_amount: 1200000,
-    target_service_order_count: 50000,
-    target_fleet_size: 35,
-    target_asset_utilization_rate: 0.72,
+    forecast_period_unit: forecastPeriodUnit,
+    forecast_period_count: forecastPeriodCount,
+    forecast_end_date: forecastPeriod.endDate,
+    target_zone_ids: ["Z-001", "Z-002"],
+    target_end_daily_orders: 500,
+    target_minimum_robotaxi_quantity: 35,
+    target_task_utilization_rate: 0.72,
     target_order_fulfillment_rate: 0.85,
+    planning_mode: "BALANCED",
+    average_revenue_per_order: 48,
+    average_variable_cost_per_order: 18,
+    daily_fixed_operating_cost: 5000,
+    minimum_contribution_margin_rate: 0.3,
     created_at: now,
     updated_at: now,
   }];
@@ -75,27 +147,31 @@ export function updateBusinessTargetConfig({
   if (!businessTarget?.business_target_id) return { succeeded: false, reason: "BUSINESS_TARGET_REQUIRED", businessTarget: null };
   const occurredAt = resolveNow(context);
   const numericFields = [
-    "planning_horizon_years",
-    "target_revenue_amount",
-    "target_service_order_count",
-    "target_fleet_size",
-    "target_asset_utilization_rate",
+    "forecast_period_count",
+    "target_end_daily_orders",
+    "target_minimum_robotaxi_quantity",
+    "target_task_utilization_rate",
     "target_order_fulfillment_rate",
+    "average_revenue_per_order",
+    "average_variable_cost_per_order",
+    "daily_fixed_operating_cost",
+    "minimum_contribution_margin_rate",
   ];
   const normalizedPatch = { ...patch };
   numericFields.forEach((field) => {
     if (field in normalizedPatch) normalizedPatch[field] = Math.max(0, Number(normalizedPatch[field] || 0));
   });
-  const horizonYears = Math.max(1, Number(normalizedPatch.planning_horizon_years ?? businessTarget.planning_horizon_years ?? 3));
   const forecastStartDate = normalizedPatch.forecast_start_date || businessTarget.forecast_start_date || occurredAt.slice(0, 10);
+  const forecastPeriod = resolveForecastPeriod({ ...businessTarget, ...normalizedPatch, forecast_start_date: forecastStartDate });
   return {
     succeeded: true,
     businessTarget: {
       ...businessTarget,
       ...normalizedPatch,
-      planning_horizon_years: horizonYears,
       forecast_start_date: forecastStartDate,
-      forecast_end_date: addDaysIsoDate(forecastStartDate, horizonYears * 365),
+      forecast_period_unit: forecastPeriod.unit,
+      forecast_period_count: forecastPeriod.count,
+      forecast_end_date: forecastPeriod.endDate,
       target_status: normalizedPatch.target_status || businessTarget.target_status || BusinessTargetStatus.ACTIVE,
       updated_at: occurredAt,
     },
@@ -125,11 +201,12 @@ export function initializeDefaultSupplyProductionProfiles(now = defaultNow()) {
     profile_name: "自有生产能力画像",
     profile_status: SupplyProductionProfileStatus.ACTIVE,
     production_lead_time_days: 180,
-    annual_production_capacity: 120,
-    monthly_production_capacity: 10,
-    ramp_up_months: 3,
-    delivery_capacity: 20,
-    inspection_lead_time_days: 3,
+    production_capacity_period_unit: "MONTH",
+    production_capacity_per_period: 10,
+    ramp_up_periods: 3,
+    ramp_up_capacity_ratios: [0.4, 0.7, 1],
+    delivery_capacity_per_period: 20,
+    quality_inspection_lead_time_days: 3,
     effective_from: "2026-01-01",
     effective_to: null,
     created_at: now,
@@ -146,11 +223,10 @@ export function updateSupplyProductionProfileConfig({
   const occurredAt = resolveNow(context);
   const numericFields = [
     "production_lead_time_days",
-    "annual_production_capacity",
-    "monthly_production_capacity",
-    "ramp_up_months",
-    "delivery_capacity",
-    "inspection_lead_time_days",
+    "production_capacity_per_period",
+    "ramp_up_periods",
+    "delivery_capacity_per_period",
+    "quality_inspection_lead_time_days",
   ];
   const normalizedPatch = { ...patch };
   numericFields.forEach((field) => {
@@ -174,15 +250,42 @@ export function initializeDefaultLongTermDemandForecastStrategies(now = defaultN
     strategy_type: "ZONE_DEMAND_TO_FLEET_REQUIREMENT",
     strategy_status: LongTermDemandForecastStrategyStatus.ACTIVE,
     strategy_version: "1.0.0",
-    target_zone_ids: ["Z-001"],
-    forecast_horizon_years: 3,
+    target_zone_ids: ["Z-001", "Z-002"],
+    growth_scenario: "BASELINE",
+    growth_model: "LINEAR",
+    growth_adjustment_rate: 0,
     demand_buffer_ratio: 0.15,
-    fleet_utilization_target: 0.72,
-    vehicle_available_hours_per_day: 12,
+    operational_availability_rate: 0.9,
+    robotaxi_available_hours_per_day: 12,
+    average_pickup_duration_min: 8,
     average_trip_duration_min: 30,
+    average_turnaround_duration_min: 7,
     created_at: now,
     updated_at: now,
   }];
+}
+
+export function updateLongTermDemandForecastStrategyConfig({ strategy, patch = {}, context = {} } = {}) {
+  if (!strategy?.forecast_strategy_id) return { succeeded: false, reason: "FORECAST_STRATEGY_REQUIRED", strategy: null };
+  const occurredAt = resolveNow(context);
+  const numericFields = [
+    "growth_adjustment_rate", "demand_buffer_ratio", "operational_availability_rate",
+    "robotaxi_available_hours_per_day", "average_pickup_duration_min",
+    "average_trip_duration_min", "average_turnaround_duration_min",
+  ];
+  const normalizedPatch = { ...patch };
+  numericFields.forEach((field) => {
+    if (field in normalizedPatch) normalizedPatch[field] = Number(normalizedPatch[field] || 0);
+  });
+  return {
+    succeeded: true,
+    strategy: {
+      ...strategy,
+      ...normalizedPatch,
+      strategy_status: normalizedPatch.strategy_status || strategy.strategy_status,
+      updated_at: occurredAt,
+    },
+  };
 }
 
 export function initializeDefaultFleetAllocationStrategies(now = defaultNow()) {
@@ -225,12 +328,14 @@ export function executeLongTermDemandForecastStrategy({
     return { run: failedRun, results: [] };
   }
 
-  const activeProductionProfile = supplyProductionProfiles.find((item) => item.profile_status === SupplyProductionProfileStatus.ACTIVE)
-    || supplyProductionProfiles[0]
-    || null;
   const activeBusinessTarget = businessTargets.find((item) => item.target_status === BusinessTargetStatus.ACTIVE)
     || businessTargets[0]
     || null;
+  const forecastStartDate = activeBusinessTarget?.forecast_start_date || startedAt.slice(0, 10);
+  const activeProductionProfile = supplyProductionProfiles.find((item) => (
+    item.profile_status === SupplyProductionProfileStatus.ACTIVE
+      && isEffectiveOn(item, forecastStartDate)
+  )) || null;
   const targetZoneIds = Array.isArray(strategy.target_zone_ids) && strategy.target_zone_ids.length
     ? strategy.target_zone_ids
     : Array.isArray(activeBusinessTarget?.target_zone_ids) && activeBusinessTarget.target_zone_ids.length
@@ -240,7 +345,26 @@ export function executeLongTermDemandForecastStrategy({
   const runId = resolveRunId(context);
   const resultBaseId = resolveResultBaseId(context);
   const completedAt = resolveNow(context);
-  const results = zoneProfiles.map((profile, index) => createForecastResult({
+  if (!activeBusinessTarget || !activeProductionProfile) {
+    return {
+      run: createForecastRun({
+        runId,
+        strategy,
+        businessTarget: activeBusinessTarget,
+        productionProfile: activeProductionProfile,
+        runStatus: LongTermDemandForecastRunStatus.FAILED,
+        startedAt,
+        completedAt,
+        resultCount: 0,
+        failureReason: !activeBusinessTarget ? "BUSINESS_TARGET_REQUIRED" : "SUPPLY_PRODUCTION_PROFILE_REQUIRED",
+        targetZoneIds,
+        demandProfiles,
+        robotaxis,
+      }),
+      results: [],
+    };
+  }
+  const results = zoneProfiles.map((profile, index) => createPlanningForecastResult({
     resultId: `${resultBaseId}-${String(index + 1).padStart(3, "0")}`,
     runId,
     strategy,
@@ -248,19 +372,23 @@ export function executeLongTermDemandForecastStrategy({
     profile,
     productionProfile: activeProductionProfile,
     robotaxis,
+    demandProfiles,
     occurredAt: completedAt,
-  }));
+  })).filter(Boolean);
+  const runStatus = zoneProfiles.length ? (results.length ? LongTermDemandForecastRunStatus.SUCCEEDED : LongTermDemandForecastRunStatus.FAILED) : LongTermDemandForecastRunStatus.NO_RESULT;
   const run = createForecastRun({
     runId,
     strategy,
-    runStatus: LongTermDemandForecastRunStatus.SUCCEEDED,
+    runStatus,
     startedAt,
     completedAt,
     resultCount: results.length,
-    failureReason: results.length ? null : "NO_ZONE_DEMAND_PROFILE",
+    failureReason: results.length ? null : (zoneProfiles.length ? "FORECAST_INPUT_INVALID" : "NO_ZONE_DEMAND_PROFILE"),
     targetZoneIds,
     businessTarget: activeBusinessTarget,
     productionProfile: activeProductionProfile,
+    demandProfiles,
+    robotaxis,
   });
   return { run, results };
 }
@@ -274,7 +402,13 @@ export function createSupplyPlanFromForecast({
   if (!forecast?.forecast_result_id) {
     return { succeeded: false, reason: "FORECAST_RESULT_REQUIRED", supplyPlan: null };
   }
-  const plannedRobotaxiCount = Math.max(0, Number(forecast.planned_production_quantity ?? forecast.fleet_gap_quantity ?? forecast.required_fleet_quantity ?? 0));
+  const plannedRobotaxiCount = Math.max(0, Number(
+    forecast.recommended_production_quantity
+      ?? forecast.planned_production_quantity
+      ?? forecast.robotaxi_gap_quantity
+      ?? forecast.fleet_gap_quantity
+      ?? 0,
+  ));
   if (plannedRobotaxiCount <= 0) {
     return { succeeded: false, reason: "NO_FLEET_GAP", supplyPlan: null };
   }
@@ -293,14 +427,15 @@ export function createSupplyPlanFromForecast({
     target_zone_name: forecast.zone_name,
     supply_production_profile_id: productionProfile.profile_id || null,
     planned_robotaxi_count: plannedRobotaxiCount,
-    required_fleet_quantity: forecast.required_fleet_quantity ?? null,
-    current_fleet_quantity: forecast.current_fleet_quantity ?? null,
-    fleet_gap_quantity: forecast.fleet_gap_quantity ?? plannedRobotaxiCount,
-    feasible_production_quantity: forecast.feasible_production_quantity ?? null,
-    production_gap_quantity: forecast.production_gap_quantity ?? null,
+    required_robotaxi_quantity: forecast.required_robotaxi_quantity ?? null,
+    effective_current_robotaxi: forecast.effective_current_robotaxi ?? null,
+    robotaxi_gap_quantity: forecast.robotaxi_gap_quantity ?? plannedRobotaxiCount,
+    feasible_manufacturing_quantity: forecast.feasible_manufacturing_quantity ?? null,
+    feasible_delivery_quantity: forecast.feasible_delivery_quantity ?? null,
+    uncovered_robotaxi_gap: forecast.uncovered_robotaxi_gap ?? null,
     production_lead_time_days: productionProfile.production_lead_time_days ?? null,
-    planned_start_date: forecast.production_start_date || occurredAt.slice(0, 10),
-    planned_end_date: forecast.supply_completion_date || addDaysIsoDate(occurredAt, Number(productionProfile.production_lead_time_days || 180)),
+    planned_start_date: forecast.forecast_start_date || occurredAt.slice(0, 10),
+    planned_end_date: forecast.full_supply_completion_date || forecast.first_delivery_date || addDaysIsoDate(occurredAt, Number(productionProfile.production_lead_time_days || 180)),
     created_at: occurredAt,
     updated_at: occurredAt,
   }, {
@@ -431,7 +566,6 @@ export function completeProductionBatch({
   if (productionBatch.batch_status !== ProductionBatchStatus.IN_PRODUCTION) return { succeeded: false, reason: "PRODUCTION_BATCH_NOT_IN_PRODUCTION", productionBatch, robotaxis: [] };
   const occurredAt = resolveNow(context);
   const plannedQuantity = Math.max(0, Number(productionBatch.planned_robotaxi_count || 0));
-  const opsCenter = opsCenters[0] || {};
   const existingIds = new Set((existingRobotaxis || []).map((item) => item.robotaxi_id));
   const robotaxis = Array.from({ length: plannedQuantity }, (_, index) => {
     const robotaxiId = resolveRobotaxiId(context, existingIds, index);
@@ -439,7 +573,6 @@ export function completeProductionBatch({
     return createProducedRobotaxi({
       robotaxiId,
       productionBatch,
-      opsCenter,
       occurredAt,
       index,
     });
@@ -591,7 +724,7 @@ export function startDeliveryOrder({ deliveryOrder, robotaxis = [], context = {}
   return { succeeded: true, deliveryOrder: startedOrder, robotaxis: nextRobotaxis };
 }
 
-export function completeDeliveryOrder({ deliveryOrder, robotaxis = [], readinessTasks = [], context = {} } = {}) {
+export function completeDeliveryOrder({ deliveryOrder, robotaxis = [], readinessTasks = [], opsCenters = [], context = {} } = {}) {
   if (!deliveryOrder?.delivery_order_id) return { succeeded: false, reason: "DELIVERY_ORDER_REQUIRED", deliveryOrder: null, robotaxis, readinessTasks };
   if (deliveryOrder.delivery_status !== RobotaxiDeliveryOrderStatus.IN_DELIVERY) return { succeeded: false, reason: "DELIVERY_ORDER_NOT_IN_DELIVERY", deliveryOrder, robotaxis, readinessTasks };
   const occurredAt = resolveNow(context);
@@ -619,7 +752,9 @@ export function completeDeliveryOrder({ deliveryOrder, robotaxis = [], readiness
     resultType: "DELIVERY_ORDER_DELIVERED",
     occurredAt,
   });
-  const nextRobotaxis = updateRobotaxisForDelivery(robotaxis, deliveredIds, {
+  const targetOpsCenter = opsCenters.find((item) => item.ops_center_id === deliveryOrder.target_ops_center_id) || {};
+  const deliveryCellIds = targetOpsCenter.cell_ids || [];
+  const nextRobotaxis = updateRobotaxisForDelivery(robotaxis, deliveredIds, (robotaxi, index) => ({
     availability_status: "PENDING_ADMISSION",
     available_for_dispatch: false,
     current_task_id: null,
@@ -627,8 +762,9 @@ export function completeDeliveryOrder({ deliveryOrder, robotaxis = [], readiness
     current_task_status: null,
     target_zone_id: deliveryOrder.target_zone_id,
     target_ops_center_id: deliveryOrder.target_ops_center_id,
+    current_cell_id: deliveryCellIds[index % Math.max(1, deliveryCellIds.length)] || null,
     updated_at: occurredAt,
-  });
+  }));
   return {
     succeeded: true,
     deliveryOrder: completedOrder,
@@ -779,6 +915,7 @@ export function completeSupplyManagementLoopFromForecast({
     deliveryOrder: deliveryStartedResult.deliveryOrder,
     robotaxis: deliveryStartedResult.robotaxis,
     readinessTasks,
+    opsCenters,
     context,
   });
   if (!deliveryCompletedResult.succeeded) {
@@ -846,7 +983,13 @@ function createForecastRun({
   resultCount,
   failureReason = null,
   targetZoneIds = [],
+  demandProfiles = [],
+  robotaxis = [],
 }) {
+  const placeProfiles = demandProfiles.filter((item) => item.target_object_type === "PLACE");
+  const zoneProfiles = demandProfiles.filter((item) => item.target_object_type === "ZONE" && (!targetZoneIds.length || targetZoneIds.includes(item.target_object_id)));
+  const serviceAreaProfiles = demandProfiles.filter((item) => item.target_object_type === "SERVICE_AREA");
+  const period = businessTarget ? resolveForecastPeriod(businessTarget, strategy) : null;
   return {
     forecast_run_id: runId,
     forecast_strategy_id: strategy?.forecast_strategy_id || null,
@@ -857,7 +1000,9 @@ function createForecastRun({
     run_status: runStatus,
     target_zone_ids: targetZoneIds,
     forecast_start_date: businessTarget?.forecast_start_date || startedAt.slice(0, 10),
-    forecast_end_date: businessTarget?.forecast_end_date || addDaysIsoDate(startedAt, Number(strategy?.forecast_horizon_years || 3) * 365),
+    forecast_period_unit: period?.unit || strategy?.forecast_period_unit || null,
+    forecast_period_count: period?.count || strategy?.forecast_period_count || null,
+    forecast_end_date: businessTarget?.forecast_end_date || period?.endDate || null,
     started_at: startedAt,
     completed_at: completedAt,
     result_count: resultCount,
@@ -865,10 +1010,59 @@ function createForecastRun({
     strategy_snapshot: strategy ? { ...strategy } : null,
     business_target_snapshot: businessTarget ? { ...businessTarget } : null,
     production_profile_snapshot: productionProfile ? { ...productionProfile } : null,
+    place_demand_profile_snapshot: placeProfiles.map((item) => ({ ...item })),
+    zone_demand_snapshot: zoneProfiles.map((item) => ({ ...item })),
+    service_area_capacity_snapshot: serviceAreaProfiles.map((item) => ({ ...item })),
+    robotaxi_capacity_snapshot: strategy ? {
+      robotaxi_available_hours_per_day: strategy.robotaxi_available_hours_per_day,
+      average_pickup_duration_min: strategy.average_pickup_duration_min,
+      average_trip_duration_min: strategy.average_trip_duration_min,
+      average_turnaround_duration_min: strategy.average_turnaround_duration_min,
+      operational_availability_rate: strategy.operational_availability_rate,
+    } : null,
+    robotaxi_inventory_snapshot: robotaxis.map((item) => ({
+      robotaxi_id: item.robotaxi_id,
+      zone_id: item.zone_id || item.target_zone_id || item.service_zone_id || null,
+      availability_status: item.availability_status || item.operational_status || null,
+    })),
+    economic_assumption_snapshot: businessTarget ? {
+      average_revenue_per_order: businessTarget.average_revenue_per_order,
+      average_variable_cost_per_order: businessTarget.average_variable_cost_per_order,
+      daily_fixed_operating_cost: businessTarget.daily_fixed_operating_cost,
+      minimum_contribution_margin_rate: businessTarget.minimum_contribution_margin_rate,
+    } : null,
+    calculation_parameter_snapshot: strategy ? { ...strategy } : null,
+    input_validation_result: zoneProfiles.map((zoneProfile) => validatePlanningInputs({ strategy, businessTarget, zoneProfile, productionProfile })),
   };
 }
 
-function createForecastResult({ resultId, runId, strategy, businessTarget, profile, productionProfile, robotaxis, occurredAt }) {
+function createPlanningForecastResult({ resultId, runId, strategy, businessTarget, profile, productionProfile, robotaxis, occurredAt }) {
+  const calculation = calculateLongTermDemandPlan({ strategy, businessTarget, zoneProfile: profile, productionProfile, robotaxis });
+  if (!calculation.validation?.valid || !calculation.result) return null;
+  const result = calculation.result;
+  return {
+    forecast_result_id: resultId,
+    forecast_id: resultId,
+    forecast_name: `${profile.target_object_name || profile.target_object_id}需求预测`,
+    forecast_status: LongTermDemandForecastResultStatus.GENERATED,
+    forecast_strategy_id: strategy.forecast_strategy_id,
+    forecast_run_id: runId,
+    business_target_id: businessTarget.business_target_id,
+    zone_id: profile.target_object_id,
+    zone_name: profile.target_object_name,
+    demand_profile_id: profile.profile_id,
+    supply_production_profile_id: productionProfile.profile_id,
+    ...result,
+    strategy_snapshot: { ...strategy },
+    business_target_snapshot: { ...businessTarget },
+    zone_demand_snapshot: { ...profile },
+    production_profile_snapshot: { ...productionProfile },
+    input_validation_result: calculation.validation,
+    created_at: occurredAt,
+  };
+}
+
+function createForecastResultLegacy({ resultId, runId, strategy, businessTarget, profile, productionProfile, robotaxis, occurredAt }) {
   const baselineDailyDemand = Number(profile.expected_robotaxi_demand || profile.service_area_demand || profile.potential_demand || 0);
   const bufferRatio = Number(strategy.demand_buffer_ratio ?? 0.15);
   const utilizationTarget = Math.max(0.1, Number(strategy.fleet_utilization_target ?? 0.72));
@@ -965,12 +1159,11 @@ function createFleetAllocationRun({ runId, strategy, runStatus, occurredAt, resu
   };
 }
 
-function createProducedRobotaxi({ robotaxiId, productionBatch, opsCenter, occurredAt, index }) {
+function createProducedRobotaxi({ robotaxiId, productionBatch, occurredAt }) {
   const batteryPercent = 100;
-  const currentCellId = opsCenter.cell_ids?.[index % Math.max(1, opsCenter.cell_ids.length)] || "C-34-32";
   return createRobotaxi({
     robotaxi_id: robotaxiId,
-    fleet_id: `FLEET-${productionBatch.target_zone_id || "NEW"}`,
+    fleet_id: "FLEET-UNALLOCATED",
     model_name: "L4 Robotaxi Standard",
     automation_level: "L4",
     seat_capacity: 4,
@@ -982,14 +1175,15 @@ function createProducedRobotaxi({ robotaxiId, productionBatch, opsCenter, occurr
     estimated_range_km: 400,
     availability_status: "PENDING_DELIVERY",
     motion_status: "PARKED",
-    current_cell_id: currentCellId,
+    current_cell_id: null,
     current_route_id: null,
     current_task_id: null,
     current_order_id: null,
     available_for_dispatch: false,
     production_batch_id: productionBatch.production_batch_id,
-    target_zone_id: productionBatch.target_zone_id,
-    target_ops_center_id: opsCenter.ops_center_id || null,
+    planned_target_zone_id: productionBatch.target_zone_id || null,
+    target_zone_id: null,
+    target_ops_center_id: null,
     produced_at: occurredAt,
     created_at: occurredAt,
     updated_at: occurredAt,
@@ -1002,6 +1196,13 @@ function createProducedRobotaxi({ robotaxiId, productionBatch, opsCenter, occurr
     completed_charging_count: 0,
     completed_maintenance_count: 0,
   });
+}
+
+function isEffectiveOn(record = {}, date) {
+  if (!date) return true;
+  const start = record.effective_from;
+  const end = record.effective_to;
+  return (!start || start <= date) && (!end || end >= date);
 }
 
 function createDeliveryReadinessTask({ robotaxiId, deliveryOrder, occurredAt, taskId }) {
@@ -1034,7 +1235,13 @@ function createDeliveryReadinessTask({ robotaxiId, deliveryOrder, occurredAt, ta
 
 function updateRobotaxisForDelivery(robotaxis = [], robotaxiIds = [], patch = {}) {
   const targetIds = new Set(robotaxiIds || []);
-  return (robotaxis || []).map((robotaxi) => targetIds.has(robotaxi.robotaxi_id) ? { ...robotaxi, ...patch } : robotaxi);
+  let targetIndex = 0;
+  return (robotaxis || []).map((robotaxi) => {
+    if (!targetIds.has(robotaxi.robotaxi_id)) return robotaxi;
+    const resolvedPatch = typeof patch === "function" ? patch(robotaxi, targetIndex) : patch;
+    targetIndex += 1;
+    return { ...robotaxi, ...resolvedPatch };
+  });
 }
 
 function withLifecycleStatus(item, {

@@ -1,867 +1,477 @@
-# Long-term Demand Forecast Strategy（长期需求预测策略）设计
+# 长期需求预测与 Robotaxi 容量规划设计
 
----
+## 1. 设计定位
 
-# 1. 对象定义
+长期需求预测是经营规划层的确定性容量规划能力，用于回答：
 
-## 对象名称
+1. 目标期末市场每天可能产生多少 Robotaxi 订单；
+2. 企业决定服务多少订单；
+3. 日常能力与峰值并发分别需要多少 Robotaxi；
+4. 当前区域还缺多少 Robotaxi；
+5. 目标日前能够生产、检验并交付多少 Robotaxi。
 
-Long-term Demand Forecast Strategy
+当前版本只实现参数化、可解释、可复盘的商业规划模型，不实现机器学习、随机预测、时间序列拟合、蒙特卡洛、价格弹性、实时调度或完整财务模型。
 
-中文：
+## 2. 对象与服务边界
 
-长期需求预测策略
-
----
-
-## 1.1 对象定位
-
-Long-term Demand Forecast Strategy 用于定义企业在未来规划周期内，基于经营目标、需求画像和供应生产能力，对 Robotaxi 服务需求及车队规模需求进行预测的业务模型。
-
-该对象负责：
-
-- 定义预测周期；
-- 定义输入数据；
-- 定义计算模型；
-- 定义需求转换规则；
-- 定义供给需求计算方法。
-
----
-
-## 1.2 核心目标
-
-通过长期需求预测，回答：
-
-> 在未来规划周期内，目标运营区域需要多少 Robotaxi，以及企业需要提前形成多少生产供给能力。
-
-输出：
-
-```
-Business Target
-
-↓
-
-Demand Forecast Result
-
-↓
-
-Fleet Production Plan
+```mermaid
+flowchart LR
+  BT["经营目标<br/>BusinessTarget"] --> RUN["预测执行<br/>ForecastRun"]
+  PDP["地点需求画像<br/>Place DemandProfile"] --> RUN
+  SAP["服务承载画像<br/>ServiceArea CapacityProfile"] --> RUN
+  ZP["区域规划画像<br/>Zone PlanningProfile"] --> RUN
+  RP["Robotaxi 资产与能力"] --> RUN
+  PP["生产画像<br/>SupplyProductionProfile"] --> RUN
+  ST["预测策略<br/>ForecastStrategy"] --> RUN
+  RUN --> RESULT["预测结果<br/>ForecastResult"]
+  RESULT --> PLAN["生产计划<br/>SupplyPlan"]
 ```
 
----
+- `BusinessTarget` 表达管理层希望达到的经营状态，不生成市场需求。
+- `DemandProfile` 是独立画像对象；Place、ServiceArea、Zone 只保存空间事实和稳定关系。
+- `ForecastStrategy` 保存计算规则和可配置参数，不保存市场事实。
+- `ForecastRun` 是一次独立执行，冻结全部输入快照并记录校验结果。
+- `ForecastResult` 是不可变的分析结论，不因后续配置变化而重算。
+- `SupplyPlan` 消费预测结果形成生产单据，预测服务不得直接创建 Robotaxi。
+- 页面只触发服务和展示结果，不在页面层拼装执行、结果或生产计划。
+- 本闭环属于业务底层经营规划，默认不接入模拟运行主路径。
 
-# 2. 所属模块
+## 3. 空间经营关系
 
-```
-00-business-planning
-
-    01-business-target
-
-    02-demand-profile
-
-    03-supply-production-profile
-
-    04-long-term-demand-forecast
-```
-
----
-
-# 3. 业务闭环
-
-```
-Business Target
-
-经营目标
-
-↓
-
-Demand Profile
-
-需求画像
-
-↓
-
-Long-term Demand Forecast Strategy
-
-长期需求预测策略
-
-↓
-
-Long-term Demand Forecast Run
-
-预测运行
-
-↓
-
-Long-term Demand Forecast Result
-
-预测结果
-
-↓
-
-Fleet Production Plan
-
-车队生产需求计划
+```text
+Zone
+  └── Place
+        └── ServiceArea
 ```
 
----
+约束：
 
-# 4. 核心输入
+- Place 是需求产生的唯一空间来源。
+- 一个 Place 可以拥有多个 ServiceArea。
+- 一个 ServiceArea 固定且只能归属一个 Place，通过 `parent_place_id` 表达。
+- ServiceArea 不产生、分摊或折减需求，只描述 Robotaxi 等待、上车、下车和周转承载能力。
+- Zone 汇总所属 Place 的需求和 ServiceArea 的承载能力，不重新生成需求。
+- 不再使用 Place 到多个 ServiceArea 的需求概率分配，也不以 ServiceArea 需求反推 Zone 市场需求。
 
-Long-term Demand Forecast Strategy 依赖以下输入：
+## 4. 完整计算链路
 
----
+```mermaid
+flowchart TD
+  A["Place 当前可争取日订单"] --> B["Zone 当前需求汇总"]
+  B --> C["按预测周期计算市场需求"]
+  C --> D["与经营目标比较"]
+  D --> E["确定规划日订单"]
+  E --> F["计算日订单能力所需 Robotaxi"]
+  E --> G["计算峰值并发所需 Robotaxi"]
+  F --> H["确定最终 Robotaxi 需求"]
+  G --> H
+  I["ServiceArea 承载能力"] --> J["容量与瓶颈校验"]
+  E --> J
+  H --> K["扣减当前有效 Robotaxi"]
+  K --> L["Robotaxi 净缺口"]
+  M["生产、检验与交付能力"] --> N["目标日前可形成供给"]
+  L --> N
+  J --> O["形成预测结果"]
+  N --> O
+```
 
-# 4.1 Business Target
+固定顺序：需求基线、周期增长、目标比较、规划订单、峰值并发、单车日产能、服务承载、当前资产、供给缺口、生产交付约束、基础经济性、最终结论。
 
-经营目标
+## 5. 预测周期
 
-提供：
-
-|字段|说明|
-|---|---|
-|forecast_horizon_years|预测周期|
-|target_zone_ids|目标运营区域|
-|target_service_level|目标服务水平|
-
----
-
-# 4.2 Demand Profile
-
-需求画像
-
-提供：
-
-## 人口因素
-
-|字段|说明|
-|---|---|
-|resident_population|常住人口|
-|working_population|工作人口|
-|daily_visitors|日访客量|
-
----
-
-## 出行因素
-
-|字段|说明|
-|---|---|
-|trip_generation_rate|出行产生率|
-|peak_pattern|高峰模式|
-
----
-
-## Robotaxi转化因素
-
-|字段|说明|
-|---|---|
-|robotaxi_adoption_rate|Robotaxi采用率|
-|service_acceptance_rate|服务接受率|
-
----
-
-## 增长因素
-
-|字段|说明|
-|---|---|
-|growth_rate|需求增长率|
-
----
-
-# 4.3 Historical Demand Data
-
-历史需求数据
-
-来源：
-
-- ServiceOrder
-- Trip
-
-字段：
-
-|字段|说明|
-|---|---|
-|historical_daily_orders|历史日订单量|
-|historical_peak_hour_orders|历史峰值小时订单量|
-|historical_demand_distribution|历史需求分布|
-
----
-
-# 4.4 Supply Production Profile
-
-供应生产画像
-
-提供：
-
-|字段|说明|
-|---|---|
-|production_lead_time_days|生产提前期|
-|effective_production_capacity|有效生产能力|
-|delivery_capacity|交付能力|
-|inspection_lead_time_days|验证周期|
-
----
-
-# 5. Strategy 对象设计
-
-## 5.1 基础字段
-
-|字段英文|中文|类型|说明|
+|英文字段|中文字段|性质|说明|
 |---|---|---|---|
-|strategy_id|策略编号|系统字段|唯一编号|
-|strategy_name|策略名称|配置字段|策略名称|
-|strategy_type|策略类型|配置字段|预测模型类型|
-|status|状态|系统字段|策略状态|
-|version|版本|系统字段|模型版本|
+|`forecast_period_unit`|预测周期单位|配置|`WEEK / MONTH / QUARTER / YEAR`|
+|`forecast_period_count`|预测周期数量|配置|大于零的整数|
+|`forecast_start_date`|预测开始日期|配置|本次规划起点|
+|`forecast_end_date`|预测结束日期|计算|根据开始日期、单位和数量计算|
+|`growth_rate_unit`|增长率周期单位|配置|必须与预测周期单位一致|
+|`period_growth_rate`|周期增长率|配置/聚合|对应一个预测周期的增长率|
 
----
+默认使用月度三十六期；短期观察可用周，经营规划优先使用月或季度，长期扩张可用年。V1 不静默转换增长率周期，单位不一致时执行失败。
 
-初始化：
+## 6. Place 需求基线
 
-```
-{
-  "strategy_id":"LDF-001",
-  "strategy_name":"Robotaxi长期需求预测策略",
-  "strategy_type":"LONG_TERM_FORECAST",
-  "status":"ACTIVE",
-  "version":"V1"
-}
-```
+### 6.1 配置字段
 
----
-
-# 6. Forecast Horizon（预测周期模型）
-
-预测周期不是固定值。
-
-由：
-
-```
-Business Planning Horizon
-
-+
-
-Production Lead Time
-
-↓
-
-Forecast Horizon
-```
-
-确定。
-
----
-
-## 计算规则
-
-公式：
-
-```
-Forecast Horizon
-
-=
-
-MAX(
-Business Target Period,
-
-Production Lead Time
-)
-```
-
-中文：
-
-预测周期 =
-
-经营目标周期与生产提前期中的最大值。
-
----
-
-示例：
-
-经营目标：
-
-3年。
-
-生产提前：
-
-180天。
-
-结果：
-
-预测周期：
-
-3年。
-
----
-
-# 7. 需求预测计算模型
-
----
-
-# 7.1 Baseline Demand Calculation
-
-基础需求计算
-
-目标：
-
-确定当前稳定需求水平。
-
----
-
-输入：
-
-Demand Profile
-
----
-
-计算字段：
-
-|字段|中文|
+|英文字段|中文字段|
 |---|---|
-|baseline_daily_demand|基础日需求|
+|`resident_population`|常住人口|
+|`working_population`|工作人口|
+|`daily_visitors`|日访客量|
+|`resident_trip_weight`|居民出行权重|
+|`worker_trip_weight`|工作人口出行权重|
+|`visitor_trip_weight`|访客出行权重|
+|`trip_generation_rate`|日出行产生率|
+|`demand_weight`|地点需求强度系数|
+|`robotaxi_adoption_rate`|Robotaxi 采用率|
+|`service_acceptance_rate`|服务接受率|
+|`competition_retention_rate`|竞争保留率|
+|`place_period_growth_rate`|地点周期增长率|
+|`growth_rate_unit`|增长率周期单位|
+|`growth_rate_source`|增长率来源|
+|`growth_rate_updated_at`|增长率更新时间|
+|`busiest_hour_share`|最繁忙小时占比|
 
----
+`growth_rate_source` 支持 `MANUAL_ASSUMPTION / SIMULATION_CONFIG / HISTORICAL_CALCULATION / EXTERNAL_INPUT`。所有比例必须位于 `[0, 1]`，增长率必须大于 `-1`。
 
-公式：
+### 6.2 计算字段与公式
 
-```
-Baseline Daily Demand
+```text
+daily_population_exposure
+= resident_population × resident_trip_weight
++ working_population × worker_trip_weight
++ daily_visitors × visitor_trip_weight
 
-=
+potential_daily_trips
+= daily_population_exposure
+× trip_generation_rate
+× demand_weight
 
-Current Expected Robotaxi Demand
-```
+baseline_addressable_daily_orders
+= potential_daily_trips
+× robotaxi_adoption_rate
+× service_acceptance_rate
+× competition_retention_rate
 
----
-
-其中：
-
-```
-Potential Demand
-
-=
-
-(
-Resident Population
-
-+
-
-Working Population
-
-+
-
-Visitor Population
-)
-
-×
-
-Trip Generation Rate
-
-×
-
-Demand Weight
+baseline_peak_hour_orders
+= baseline_addressable_daily_orders × busiest_hour_share
 ```
 
----
+`trip_generation_rate` 与 `demand_weight` 是独立因素，只允许各参与一次计算。`baseline_addressable_daily_orders` 表示市场可争取需求，不代表当前一定能够完成。
 
-```
-Expected Robotaxi Demand
+## 7. ServiceArea 服务承载
 
-=
+### 7.1 配置字段
 
-Potential Demand
-
-×
-
-Robotaxi Adoption Rate
-
-×
-
-Service Acceptance Rate
-```
-
----
-
-# 7.2 Growth Forecast Calculation
-
-增长预测计算
-
----
-
-输入：
-
-- growth_rate
-- forecast_horizon_years
-
----
-
-计算字段：
-
-## growth_factor
-
-增长修正因子
-
-公式：
-
-```
-Growth Factor
-
-=
-
-(1 + Growth Rate)^Forecast Years
-```
-
----
-
----
-
-## forecast_daily_demand
-
-预测日需求
-
-公式：
-
-```
-Forecast Daily Demand
-
-=
-
-Baseline Daily Demand
-
-×
-
-Growth Factor
-```
-
----
-
-# 7.3 Peak Demand Calculation
-
-峰值需求计算
-
----
-
-字段：
-
-## forecast_peak_hour_demand
-
-预测峰值小时需求
-
-公式：
-
-```
-Forecast Peak Hour Demand
-
-=
-
-Forecast Daily Demand
-
-×
-
-Peak Demand Ratio
-```
-
----
-
-# 8. Fleet Requirement Calculation
-
-车辆需求计算
-
----
-
-## 8.1 Vehicle Productivity
-
-单车生产能力
-
-输入：
-
-|字段|说明|
+|英文字段|中文字段|
 |---|---|
-|vehicle_available_hours|单车每日运营时间|
-|average_trip_duration|平均服务时长|
+|`service_area_id`|服务区域编号|
+|`parent_place_id`|归属地点编号|
+|`waiting_robotaxi_capacity`|等待 Robotaxi 容量|
+|`pickup_position_capacity`|上车位容量|
+|`dropoff_position_capacity`|下车位容量|
+|`average_service_time_min`|平均站点服务时间|
+|`operating_hours_per_day`|每日开放小时数|
+|`accessibility_factor`|可达性系数|
+|`capacity_availability_rate`|容量可用率|
 
----
+### 7.2 计算
 
-公式：
+```text
+position_throughput_per_hour
+= 60 / average_service_time_min
 
-```
-Vehicle Productivity
+effective_position_capacity
+= min(pickup_position_capacity, dropoff_position_capacity)
 
-=
+service_capacity_per_hour
+= effective_position_capacity × position_throughput_per_hour
 
-Vehicle Available Hours × 60
+effective_peak_hour_capacity
+= service_capacity_per_hour
+× accessibility_factor
+× capacity_availability_rate
 
-÷
-
-Average Trip Duration
-```
-
----
-
-# 8.2 Required Fleet Quantity
-
-所需Robotaxi数量
-
-公式：
-
-```
-Required Fleet Quantity
-
-=
-
-Forecast Peak Hour Demand
-
-×
-
-Average Trip Duration
-
-÷
-
-60
+effective_daily_capacity
+= effective_peak_hour_capacity × operating_hours_per_day
 ```
 
----
+Place 和 Zone 分别对所属 ServiceArea 容量求和。容量不足只形成约束和缺口，不得反向压低市场需求。
 
-# 8.3 Fleet Gap Quantity
+## 8. Zone 汇总与增长
 
-车辆缺口
+```text
+zone.baseline_addressable_daily_orders
+= Σ Place.baseline_addressable_daily_orders
 
-公式：
+zone.baseline_peak_hour_orders
+= Σ Place.baseline_peak_hour_orders
 
-```
-Fleet Gap Quantity
+zone.effective_daily_capacity
+= Σ ServiceArea.effective_daily_capacity
 
-=
+zone.effective_peak_hour_capacity
+= Σ ServiceArea.effective_peak_hour_capacity
 
-Required Fleet Quantity
-
--
-
-Current Operating Fleet
-```
-
----
-
-# 9. Production Constraint Calculation
-
-生产约束计算
-
----
-
-## 9.1 Supply Completion Date
-
-预计供给完成时间
-
-公式：
-
-```
-Supply Completion Date
-
-=
-
-Production Start Date
-
-+
-
-Production Lead Time
+zone_period_growth_rate
+= Σ(Place.baseline_addressable_daily_orders × Place.place_period_growth_rate)
+  / Σ Place.baseline_addressable_daily_orders
 ```
 
----
+Zone 增长率由 Place 当前可争取需求加权生成，禁止人工覆盖汇总结果。
 
-## 9.2 Feasible Production Quantity
+策略可配置：
 
-可生产数量
-
-公式：
-
-```
-Feasible Production Quantity
-
-=
-
-Effective Production Capacity
-
-×
-
-Production Period
-```
-
----
-
-## 9.3 Production Gap
-
-生产缺口
-
-公式：
-
-```
-Production Gap
-
-=
-
-Required Fleet Quantity
-
--
-
-Feasible Production Quantity
-```
-
----
-
-# 10. Long-term Demand Forecast Run
-
-## 10.1 定义
-
-Long-term Demand Forecast Run 表示一次具体预测策略运行实例。
-
-记录：
-
-- 使用哪个策略；
-- 使用哪些输入数据；
-- 运行时间；
-- 计算结果。
-
----
-
-# 10.2 Run 字段
-
-|字段英文|中文|类型|
-|---|---|---|
-|run_id|运行编号|系统|
-|strategy_id|策略编号|系统|
-|business_target_id|经营目标编号|系统|
-|profile_version|画像版本|系统|
-|forecast_start_date|预测开始日期|配置|
-|forecast_end_date|预测结束日期|配置|
-|status|运行状态|系统|
-|started_at|开始时间|系统|
-|completed_at|完成时间|系统|
-
----
-
-# 10.3 Run状态
-
-```
-Created
-
-↓
-
-Running
-
-↓
-
-Completed
-
-↓
-
-Failed
-```
-
----
-
-# 11. Long-term Demand Forecast Result
-
-## 11.1 定义
-
-Long-term Demand Forecast Result 是预测策略运行后的最终业务结果。
-
-用于生成：
-
-Fleet Production Plan。
-
----
-
-# 11.2 Result字段
-
-## 需求结果
-
-|字段英文|中文|
+|英文字段|中文字段|
 |---|---|
-|forecast_period|预测周期|
-|forecast_daily_demand|预测日需求|
-|forecast_peak_hour_demand|预测峰值需求|
-|growth_factor|增长因子|
+|`growth_scenario`|增长情景|
+|`growth_adjustment_rate`|增长调整率|
 
----
+`growth_scenario` 支持 `CONSERVATIVE / BASELINE / AGGRESSIVE`。
 
-## 车辆需求结果
+```text
+effective_period_growth_rate
+= zone_period_growth_rate + growth_adjustment_rate
 
-|字段英文|中文|
+复合增长：
+
+growth_factor
+= (1 + effective_period_growth_rate) ^ forecast_period_count
+
+线性增长：
+
+growth_factor
+= max(0, 1 + effective_period_growth_rate × forecast_period_count)
+
+market_forecast_daily_orders
+= baseline_addressable_daily_orders × growth_factor
+```
+
+结果表达目标期末典型日订单水平，不表达预测期累计订单量。
+
+## 9. 经营目标与基础经济性
+
+经营目标至少包含：
+
+|英文字段|中文字段|
 |---|---|
-|required_fleet_quantity|所需车辆数量|
-|current_fleet_quantity|当前车辆数量|
-|fleet_gap_quantity|车辆缺口|
+|`target_end_daily_orders`|目标期末日订单|
+|`target_order_fulfillment_rate`|目标订单履约率|
+|`target_task_utilization_rate`|目标任务利用率|
+|`target_minimum_robotaxi_quantity`|目标最低 Robotaxi 数量|
+|`planning_mode`|规划模式|
 
----
+规划模式：
 
-## 生产约束结果
+- `MARKET_LED`：使用市场预测订单；
+- `TARGET_LED`：使用经营目标订单并暴露市场支撑不足；
+- `BALANCED`：使用市场预测与经营目标的较小值，作为默认模式。
 
-|字段英文|中文|
+```text
+market_opportunity_gap
+= max(0, market_serviceable_daily_orders - target_end_daily_orders)
+
+target_market_shortfall
+= max(0, target_end_daily_orders - market_serviceable_daily_orders)
+```
+
+其中 `market_serviceable_daily_orders = market_forecast_daily_orders × target_order_fulfillment_rate`，保证市场请求口径与目标完成订单口径一致。
+
+基础经济性输入：
+
+|英文字段|中文字段|
 |---|---|
-|production_lead_time_days|生产提前期|
-|production_start_date|生产开始时间|
-|supply_completion_date|供给完成时间|
-|production_gap_quantity|生产缺口|
+|`average_revenue_per_order`|单均收入|
+|`average_variable_cost_per_order`|单均变动成本|
+|`daily_fixed_operating_cost`|日固定运营成本|
+|`minimum_contribution_margin_rate`|最低贡献毛利率|
 
----
+```text
+contribution_margin_per_order
+= average_revenue_per_order - average_variable_cost_per_order
 
-# 12. 输出 Fleet Production Plan
+daily_contribution_margin
+= planned_daily_orders × contribution_margin_per_order
+- daily_fixed_operating_cost
 
-关系：
+contribution_margin_rate
+= contribution_margin_per_order / average_revenue_per_order
 
-```
-Long-term Demand Forecast Result
+maximum_feasible_daily_orders
+= min(market_forecast_daily_orders,
+      robotaxi_daily_capacity,
+      service_area_daily_capacity)
 
-↓
-
-Fleet Production Plan
-```
-
----
-
-Fleet Production Plan 使用：
-
-输入：
-
-```
-fleet_gap_quantity
-
-+
-
-production_lead_time_days
-
-+
-
-effective_production_capacity
+break_even_daily_orders
+= ceil(daily_fixed_operating_cost / contribution_margin_per_order)
 ```
 
----
+系统计算可行区间并提示风险，不替代管理层自动决定经营目标。
 
-生成：
+## 10. Robotaxi 规模计算
 
-```
-生产周期
+所有计算字段统一使用 `robotaxi`，不使用 `vehicle` 或含义模糊的 `fleet` 数量字段。
 
-↓
+```text
+effective_service_cycle_min
+= average_pickup_duration_min
++ average_trip_duration_min
++ average_turnaround_duration_min
 
-生产数量
+buffered_daily_orders
+= planned_daily_orders × (1 + demand_buffer_ratio)
 
-↓
+robotaxi_theoretical_daily_orders
+= robotaxi_available_hours_per_day × 60
+  / effective_service_cycle_min
 
-交付时间
+robotaxi_effective_daily_orders
+= robotaxi_theoretical_daily_orders
+× target_task_utilization_rate
+× operational_availability_rate
 
-↓
+daily_required_robotaxi
+= ceil(buffered_daily_orders / robotaxi_effective_daily_orders)
 
-Robotaxi形成
-```
+planned_peak_hour_orders
+= planned_daily_orders × busiest_hour_share
 
----
+peak_concurrent_robotaxi
+= planned_peak_hour_orders × effective_service_cycle_min / 60
 
-# 13. 生命周期
+peak_required_robotaxi
+= ceil(peak_concurrent_robotaxi / operational_availability_rate)
 
-## Strategy 生命周期
+service_required_robotaxi
+= max(daily_required_robotaxi, peak_required_robotaxi)
 
-```
-Draft
-
-↓
-
-Active
-
-↓
-
-Updated
-
-↓
-
-Archived
-```
-
----
-
-## Run 生命周期
-
-```
-Created
-
-↓
-
-Running
-
-↓
-
-Completed
-
-↓
-
-Failed
+required_robotaxi_quantity
+= max(service_required_robotaxi, target_minimum_robotaxi_quantity)
 ```
 
----
+结果必须保存 `requirement_driver`：`DAILY_ORDER_CAPACITY / PEAK_CONCURRENCY / BUSINESS_MINIMUM`，并分别展示三个来源，不只展示最大值。
 
-## Result 生命周期
+## 11. 当前有效 Robotaxi 与缺口
 
-```
-Generated
+```text
+effective_current_robotaxi
+= operational_robotaxi_quantity
++ committed_inbound_quantity
+- committed_outbound_quantity
+- planned_retirement_quantity
 
-↓
-
-Confirmed
-
-↓
-
-Used
-
-↓
-
-Archived
+robotaxi_gap_quantity
+= max(0, required_robotaxi_quantity - effective_current_robotaxi)
 ```
 
----
+每台 Robotaxi 必须按真实 `zone_id`、交付和准入状态统计。禁止对特定 Zone 读取全部 Robotaxi，也不得把短期运维状态直接等同于长期不可规划资产。
 
-# 14. Codex 实现约束
+## 12. 生产、检验与交付约束
 
-1. Long-term Demand Forecast Strategy 属于：
+|英文字段|中文字段|
+|---|---|
+|`production_lead_time_days`|生产提前期|
+|`quality_inspection_lead_time_days`|质量检验周期|
+|`ramp_up_periods`|产能爬坡期数|
+|`production_capacity_period_unit`|生产能力周期单位|
+|`production_capacity_per_period`|每期生产能力|
+|`ramp_up_capacity_ratios`|爬坡产能比例|
+|`delivery_capacity_per_period`|每期交付能力|
 
+```text
+production_ready_date
+= forecast_start_date
++ production_lead_time_days
++ quality_inspection_lead_time_days
+
+available_supply_days
+= max(0, forecast_end_date - production_ready_date)
+
+available_production_periods
+= floor(available_supply_days / production_period_days)
+
+feasible_manufacturing_quantity
+= floor(Σ 每个可生产周期的有效生产能力)
+
+feasible_delivery_quantity
+= floor(delivery_capacity_per_period × available_delivery_periods)
+
+feasible_supply_quantity
+= min(feasible_manufacturing_quantity, feasible_delivery_quantity)
+
+recommended_production_quantity
+= robotaxi_gap_quantity
+
+planned_production_quantity
+= recommended_production_quantity
+
+uncovered_robotaxi_gap
+= max(0, robotaxi_gap_quantity - feasible_supply_quantity)
 ```
-00-business-planning
-```
 
-2. Strategy 不保存预测结果。
-3. Run 保存一次预测执行过程。
-4. Result 保存预测结果。
-5. Demand Profile 只提供输入参数。
-6. Supply Production Profile 只提供生产能力约束。
-7. Forecast Result 是 Fleet Production Plan 的创建来源；Business Target 与 Supply Production Profile 作为关联输入和约束来源。
-8. 不直接由 Forecast Result 创建 Robotaxi。
-9. Robotaxi 必须由 Fleet Production Plan 后续流程形成。
+`recommended_production_quantity` 表达完整覆盖缺口需要生产的数量；`feasible_supply_quantity` 表达预测期内受产能和交付约束可完成的数量。`production_capacity_per_period` 是生产能力唯一配置真值；年度能力等其他口径只允许作为展示派生字段。必须分别输出首批可交付日期、预测期剩余缺口和全部计划供给完成日期。
 
----
+## 13. 预测策略、执行与结果
 
-# 15. 核心原则
+### 13.1 策略职责
 
-```
-Business Target
+策略保存周期、增长情景、服务周期、Robotaxi 可用率、任务利用率、需求缓冲和计算方法。策略不保存需求画像、资产数量或生产事实。
 
-定义未来目标
+### 13.2 执行快照
 
+每次执行必须冻结：
 
-Demand Profile
+- `strategy_snapshot`
+- `business_target_snapshot`
+- `place_demand_profile_snapshot`
+- `zone_demand_snapshot`
+- `service_area_capacity_snapshot`
+- `robotaxi_capacity_snapshot`
+- `robotaxi_inventory_snapshot`
+- `production_profile_snapshot`
+- `economic_assumption_snapshot`
+- `calculation_parameter_snapshot`
+- `input_validation_result`
 
-描述未来需求基础
+执行状态：`SUCCEEDED / NO_RESULT / FAILED`。缺少经营目标、有效 Zone 画像、必要 ServiceArea 容量、Robotaxi 能力或生产画像时必须失败；输入合法但没有适用区域时才是无结果。
 
+### 13.3 结果结构
 
-Supply Production Profile
+结果至少保存：
 
-描述供给形成能力
+- 市场需求：当前基线、周期增长率、增长因子、期末市场日订单；
+- 经营目标：目标日订单、规划模式、规划日订单、机会差异和目标支撑缺口；
+- 服务承载：日容量、峰值容量、等待容量及相应缺口；
+- Robotaxi 需求：单车有效日产能、日常需求、峰值需求、经营最低量、最终数量和驱动来源；
+- 当前资产：当前有效数量、调入、调出、退役和净缺口；
+- 生产可行性：可生产、可交付、计划生产和未覆盖缺口；
+- 经济性：盈亏平衡订单、贡献毛利率和经营目标可行区间；
+- 解释质量：数据质量、缺失字段、默认假设、完整计算步骤。
 
+固定 `confidence_level` 废弃。当前阶段使用 `data_quality_score / data_quality_level / missing_input_fields / assumption_fields` 表达输入质量，不伪造统计置信度。
 
-Long-term Demand Forecast Strategy
+## 14. 分析型前端
 
-计算未来需要什么
+预测结果页面不是普通对象表格的放大版，主视图按分析决策组织：
 
+1. 结论区：市场日订单、目标日订单、规划日订单、Robotaxi 缺口、承载缺口、可形成供给和剩余缺口；
+2. 需求趋势：当前基线、各预测周期、期末值，同时展示市场、经营目标和能力上限；
+3. 瓶颈判断：市场需求、Robotaxi 最大履约能力、ServiceArea 承载能力；
+4. Robotaxi 规模拆解：日常、峰值、经营最低、当前有效和新增缺口；
+5. 生产时间线：生产准备、首批交付、可生产期数、计划数量和未覆盖缺口；
+6. 计算过程：默认展示摘要，可展开查看公式、输入、单位、中间结果、来源和校验。
 
-Fleet Production Plan
+需求趋势必须由预测领域服务生成并随结果冻结，不允许前端依据期末值反推。结果同时保存日、周、月三种时间粒度：增长趋势表达各时间点的市场日订单和规划日订单，累计趋势表达从预测起点到当前时间点的市场订单总量和规划订单总量。增长模型支持复合增长与线性增长，趋势终点必须与预测结果的期末值一致。
 
-决定如何形成供给
-```
+预测策略是可配置对象，预测执行是不可变过程记录，预测结果是不可变分析结果。已有独立执行和结果页面时，不在策略、执行或结果页面底部重复嵌入“最近任务事件”；只有具备生命周期动作的业务单据才使用事件区。
+
+预测策略和预测执行仍采用标准对象列表；预测结果采用分析型页面，但保留结果记录切换和历史快照下钻。
+
+## 15. 校验合同
+
+- 比例字段位于 `[0, 1]`，增长率大于 `-1`；
+- 周期数量、服务周期、运营小时、生产周期和交付能力大于零；
+- `robotaxi_available_hours_per_day <= 24`；
+- Place、ServiceArea、Zone 的归属链唯一且完整；
+- ServiceArea 不参与市场需求生成；
+- Zone 汇总需求等于所属 Place 需求之和；
+- 增长率单位与预测周期单位一致；
+- 画像不得提供本次执行的固定增长因子；
+- 建议生产量不超过 Robotaxi 缺口；预测期内可形成供给受生产能力和交付能力约束；
+- 当前有效 Robotaxi、未覆盖缺口不得小于零；
+- 历史执行快照和结果不可被后续配置修改；
+- 所有前端字段和枚举通过统一字段字典显示中文。
+
+## 16. 兼容与迁移
+
+旧字段只用于加载历史快照，不再作为新执行的主口径：
+
+- `forecast_horizon_years`、`planning_horizon_years`；
+- `forecast_years`、画像 `growth_factor`；
+- `expected_robotaxi_demand`、`service_area_demand`；
+- `vehicle_*`、`*_fleet_*` 数量字段；
+- `annual_production_capacity`、`monthly_production_capacity`、`delivery_capacity`；
+- `confidence_level`。
+
+迁移层负责读取旧数据并转为新结构；服务内核、字段字典主定义和新前端不得继续产生这些旧字段。历史归档不修改。

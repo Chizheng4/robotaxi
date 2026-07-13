@@ -1128,7 +1128,131 @@
 |current_task_type|当前任务类型|聚合展示字段|由 current_task_id 关联 Task 推导|
 |current_task_status|当前任务状态|聚合展示字段|由 current_task_id 关联 Task 推导|
 
-### 12.1 SupplyManagement：供应管理
+### 12.1 BusinessPlanning：经营规划
+
+以下为 v043.0 新计算主口径。旧经营规划字段列于其后，仅用于历史快照兼容。
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|forecast_period_unit|预测周期单位|配置字段|WEEK、MONTH、QUARTER、YEAR|
+|forecast_period_count|预测周期数量|配置字段|预测覆盖的自然周期数量|
+|target_end_daily_orders|目标期末日订单|配置字段|目标期末典型日完成订单量|
+|target_task_utilization_rate|目标任务利用率|配置字段|Robotaxi 可运营时间用于任务的比例|
+|target_minimum_robotaxi_quantity|目标最低 Robotaxi 数量|配置字段|管理层要求的最低资产规模|
+|planning_mode|规划模式|配置字段|MARKET_LED、TARGET_LED、BALANCED|
+|average_revenue_per_order|单均收入|配置字段|基础经济性假设|
+|average_variable_cost_per_order|单均变动成本|配置字段|基础经济性假设|
+|daily_fixed_operating_cost|日固定运营成本|配置字段|基础经济性假设|
+|minimum_contribution_margin_rate|最低贡献毛利率|配置字段|目标经济性约束|
+|resident_trip_weight|居民出行权重|配置字段|居民对日出行暴露量的修正|
+|worker_trip_weight|工作人口出行权重|配置字段|工作人口对日出行暴露量的修正|
+|visitor_trip_weight|访客出行权重|配置字段|访客对日出行暴露量的修正|
+|competition_retention_rate|竞争保留率|配置字段|竞争环境下平台保留需求的比例|
+|place_period_growth_rate|地点周期增长率|配置字段|Place 对应周期的增长率|
+|growth_rate_unit|增长率周期单位|配置字段|必须与预测周期单位一致|
+|growth_rate_source|增长率来源|配置字段|人工、模拟配置、历史计算或外部输入|
+|growth_rate_updated_at|增长率更新时间|持久化字段|增长率最近更新时间|
+|busiest_hour_share|最繁忙小时占比|配置字段|最繁忙单小时占全天订单比例|
+|daily_population_exposure|日有效人群暴露量|计算字段|三类人群按权重折算后的日需求基数|
+|potential_daily_trips|潜在日出行量|计算字段|暴露量乘出行率和地点强度|
+|baseline_addressable_daily_orders|当前可争取日订单|计算字段|Robotaxi 平台当前理论可争取订单|
+|baseline_peak_hour_orders|当前峰值小时订单|计算字段|当前可争取日订单乘最繁忙小时占比|
+|parent_place_id|归属地点编号|关联字段|ServiceArea 唯一归属 Place|
+|waiting_robotaxi_capacity|等待 Robotaxi 容量|配置字段|可同时等待的 Robotaxi 数量|
+|pickup_position_capacity|上车位容量|配置字段|可同时进行上车服务的位置数量|
+|dropoff_position_capacity|下车位容量|配置字段|可同时进行下车服务的位置数量|
+|average_service_time_min|平均站点服务时间|配置字段|单次上下车占用位置的分钟数|
+|operating_hours_per_day|每日开放小时数|配置字段|服务区域每日开放时长|
+|capacity_availability_rate|容量可用率|配置字段|考虑拥堵、管制和故障后的可用比例|
+|position_throughput_per_hour|每位置小时吞吐量|计算字段|60 除以平均站点服务时间|
+|service_capacity_per_hour|每小时服务容量|计算字段|有效位置数量乘每位置吞吐量|
+|effective_peak_hour_capacity|有效峰值小时容量|计算字段|修正后的峰值小时承载量|
+|effective_daily_capacity|有效日服务容量|计算字段|小时容量乘每日开放时长|
+|zone_period_growth_rate|区域周期增长率|计算字段|Place 需求加权增长率|
+|growth_scenario|增长情景|配置字段|保守、基准或积极|
+|growth_model|增长模型|配置字段|复合增长或线性增长，决定预测周期内的增长路径|
+|growth_adjustment_rate|增长调整率|配置字段|策略对区域增长率的调整|
+|effective_period_growth_rate|有效周期增长率|计算字段|区域增长率加策略调整率|
+|market_forecast_daily_orders|期末市场日订单|计算字段|目标期末市场典型日订单|
+|forecast_trend_series|预测趋势序列|持久化字段|按日、周、月保存本次预测的增长与累计需求时间序列|
+|trend_time_unit|趋势时间单位|持久化字段|DAY、WEEK、MONTH|
+|trend_index|趋势序号|持久化字段|同一时间粒度内从零开始的时间点顺序|
+|trend_date|趋势日期|持久化字段|当前趋势时间点对应日期|
+|elapsed_days|累计天数|持久化字段|当前时间点距预测开始日期的天数|
+|market_daily_orders|市场日订单|计算字段|当前时间点预测的市场典型日订单|
+|target_daily_orders|目标日订单|快照字段|当前预测使用的经营目标期末日订单|
+|period_market_orders|当期市场订单|计算字段|相邻趋势时间点之间的市场订单量|
+|period_planned_orders|当期规划订单|计算字段|相邻趋势时间点之间的规划订单量|
+|cumulative_market_orders|累计市场订单|计算字段|从预测开始至当前时间点的累计市场订单|
+|cumulative_planned_orders|累计规划订单|计算字段|从预测开始至当前时间点的累计规划订单|
+|forecast_cumulative_market_orders|预测期累计市场订单|计算字段|完整预测周期的累计市场订单|
+|forecast_cumulative_planned_orders|预测期累计规划订单|计算字段|完整预测周期的累计规划订单|
+|market_serviceable_daily_orders|期末可履约日订单|计算字段|市场日订单乘目标履约率|
+|market_opportunity_gap|市场机会差异|计算字段|市场预测超过经营目标的部分|
+|target_market_shortfall|目标市场支撑缺口|计算字段|经营目标超过市场预测的部分|
+|planned_daily_orders|规划日订单|计算字段|规划模式确定的日订单|
+|effective_service_cycle_min|完整服务周期|计算字段|接驾、载客和周转分钟数之和|
+|robotaxi_available_hours_per_day|Robotaxi 每日可运营小时|配置字段|单台 Robotaxi 每日可运营时间|
+|average_pickup_duration_min|平均接驾时间|配置字段|单次服务订单平均接驾分钟数|
+|average_turnaround_duration_min|平均周转时间|配置字段|订单之间平均周转分钟数|
+|operational_availability_rate|运营可用率|配置字段|Robotaxi 在规划周期内可投入运营的比例|
+|robotaxi_theoretical_daily_orders|单车理论日产能|计算字段|可运营时间除以完整服务周期|
+|robotaxi_effective_daily_orders|单车有效日产能|计算字段|理论日产能乘利用率和可用率|
+|daily_required_robotaxi|日常需求 Robotaxi|计算字段|满足日订单能力所需数量|
+|peak_concurrent_robotaxi|峰值并发 Robotaxi|计算字段|峰值时段同时服务数量|
+|peak_required_robotaxi|峰值需求 Robotaxi|计算字段|考虑运营可用率后的峰值数量|
+|service_required_robotaxi|服务所需 Robotaxi|计算字段|日常和峰值需求的最大值|
+|required_robotaxi_quantity|最终所需 Robotaxi|计算字段|服务需求和经营最低数量的最大值|
+|requirement_driver|需求规模驱动|计算字段|日订单能力、峰值并发或经营最低规模|
+|operational_robotaxi_quantity|当前运营 Robotaxi|计算字段|区域内已交付并准入的 Robotaxi|
+|committed_inbound_quantity|已承诺调入数量|计算字段|规划期已确定调入数量|
+|committed_outbound_quantity|已承诺调出数量|计算字段|规划期已确定调出数量|
+|planned_retirement_quantity|计划退役数量|计算字段|规划期计划退役数量|
+|effective_current_robotaxi|当前有效 Robotaxi|计算字段|当前运营加调入减调出和退役|
+|robotaxi_gap_quantity|Robotaxi 缺口|计算字段|最终所需减当前有效数量|
+|production_capacity_period_unit|生产能力周期单位|配置字段|周、月、季度或年|
+|production_capacity_per_period|每期生产能力|配置字段|生产能力唯一配置真值|
+|ramp_up_periods|产能爬坡期数|配置字段|达到稳定产能所需周期数|
+|ramp_up_capacity_ratios|爬坡产能比例|配置字段|各爬坡周期相对稳定产能比例|
+|delivery_capacity_per_period|每期交付能力|配置字段|每个生产周期最大交付数量|
+|quality_inspection_lead_time_days|质量检验周期（天）|配置字段|生产完成后的工厂质量检验时间，不是运营准入周期|
+|production_ready_date|生产准备完成日期|计算字段|生产和检验完成后首批可供给日期|
+|available_production_periods|可生产期数|计算字段|目标日前完整可生产周期数量|
+|feasible_manufacturing_quantity|可生产数量|计算字段|爬坡与稳定产能累计结果|
+|feasible_delivery_quantity|可交付数量|计算字段|交付能力累计结果|
+|feasible_supply_quantity|可形成供给数量|计算字段|可生产和可交付数量的较小值|
+|recommended_production_quantity|建议生产数量|计算字段|需要纳入生产计划的 Robotaxi 缺口数量|
+|uncovered_robotaxi_gap|未覆盖 Robotaxi 缺口|计算字段|预测期末仍未完成交付的 Robotaxi 数量|
+|supply_trend_series|生产交付趋势|持久化字段|按生产能力周期保存生产、交付和剩余缺口|
+|within_forecast_period|是否在预测期内|嵌套字段|趋势点是否处于需求预测周期内|
+|period_production_quantity|当期生产量|计算字段|当前生产能力周期预计形成的 Robotaxi 数量|
+|cumulative_production_quantity|累计生产量|计算字段|截至当前周期累计形成的 Robotaxi 数量|
+|period_delivery_quantity|当期交付量|计算字段|当前周期预计完成交付的 Robotaxi 数量|
+|cumulative_delivery_quantity|累计交付量|计算字段|截至当前周期累计完成交付的 Robotaxi 数量|
+|remaining_robotaxi_gap|剩余 Robotaxi 缺口|计算字段|Robotaxi 缺口减累计交付数量|
+|planned_cumulative_production_quantity|计划累计生产量|计算字段|供应趋势结束时累计生产数量|
+|planned_cumulative_delivery_quantity|计划累计交付量|计算字段|供应趋势结束时累计交付数量|
+|first_delivery_date|首批交付日期|计算字段|首批 Robotaxi 可交付日期|
+|full_supply_completion_date|全部供给完成日期|计算字段|计划数量全部交付完成日期|
+|robotaxi_capacity_snapshot|Robotaxi 能力快照|持久化字段|预测执行冻结的单车能力参数|
+|robotaxi_inventory_snapshot|Robotaxi 资产快照|持久化字段|预测执行冻结的区域资产输入|
+|place_demand_profile_snapshot|地点需求画像快照|持久化字段|本次执行使用的 Place 画像|
+|zone_demand_snapshot|区域需求快照|持久化字段|本次执行使用的 Zone 汇总|
+|service_area_capacity_snapshot|服务承载快照|持久化字段|本次执行使用的 ServiceArea 容量|
+|economic_assumption_snapshot|经济假设快照|持久化字段|本次执行使用的经济参数|
+|calculation_parameter_snapshot|计算参数快照|持久化字段|本次执行使用的派生参数|
+|input_validation_result|输入校验结果|持久化字段|执行前结构化校验结果|
+|data_quality_score|数据质量评分|计算字段|关键输入完备度评分|
+|data_quality_level|数据质量等级|计算字段|低、中、高|
+|missing_input_fields|缺失输入字段|计算字段|缺少的必要字段列表|
+|assumption_fields|默认假设字段|计算字段|使用默认值的字段列表|
+|calculation_steps|完整计算过程|持久化字段|公式、输入、单位、中间结果和来源|
+|step_group|计算分组|嵌套字段|完整计算过程中步骤所属的业务计算分组|
+|output_unit|结果单位|嵌套字段|计算步骤输出结果使用的业务单位|
+
+### 12.2 SupplyManagement：供应管理兼容字段
+
+以下旧经营规划字段只用于历史快照迁移，新对象和新执行不得继续产生。
 
 当前经营规划与供应管理相关对象：
 
@@ -1174,7 +1298,7 @@
 |monthly_production_capacity|月生产能力|配置字段|自有生产体系月度可形成 Robotaxi 数量|
 |ramp_up_months|产能爬坡周期（月）|配置字段|生产能力从启动到稳定产能所需月份|
 |delivery_capacity|交付能力|配置字段|生产完成后可交付到运营中心的能力约束|
-|inspection_lead_time_days|准入周期（天）|配置字段|交付后进入运营准入所需周期|
+|inspection_lead_time_days|质量检验周期（兼容）|兼容字段|旧快照中的工厂质量检验周期；新数据使用 `quality_inspection_lead_time_days`|
 |forecast_strategy_id|预测策略编号|持久化字段|长期需求预测策略唯一编号|
 |forecast_run_id|预测执行编号|持久化字段|一次长期需求预测执行唯一编号|
 |forecast_result_id|预测结果编号|持久化字段|长期需求预测结果唯一编号|
