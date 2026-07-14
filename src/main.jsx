@@ -60,6 +60,7 @@ let robotaxiMapProjection;
 let responsiveViewport;
 let spatialCatalogService;
 let mapSceneService;
+let dataChartService;
 let releaseHistory = [];
 let projectReadmeService;
 let taskSequence = 0;
@@ -8217,6 +8218,8 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
   const availableTrendUnits = new Set([...(forecastDays <= 180 ? ["DAY"] : []), ...(forecastDays <= 730 ? ["WEEK"] : []), "MONTH"]);
   const trendRows = selected.forecast_trend_series?.[trendTimeUnit] || [];
   const supplyTrendRows = selected.supply_trend_series || [];
+  const normalizedTrendRows = normalizeForecastChartRows(trendRows, trendTimeUnit);
+  const normalizedSupplyTrendRows = normalizeForecastChartRows(supplyTrendRows, "DAY");
   const metrics = [
     ["期末市场日订单", selected.market_forecast_daily_orders],
     ["目标期末日订单", selected.target_end_daily_orders],
@@ -8262,17 +8265,20 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
           </div>
         </div>
         <div className="forecast-trend-grid">
-          <ForecastTrendChart
+          <DataSeriesChart
             title="需求增长趋势"
             description="各时间点的典型日订单变化"
-            rows={trendRows}
-            series={[{ key: "market_daily_orders", label: "市场日订单" }, { key: "planned_daily_orders", label: "规划日订单" }]}
+            rows={normalizedTrendRows}
+            series={[{ key: "market_daily_orders", label: "市场日订单", unit: "单 / 日" }, { key: "planned_daily_orders", label: "规划日订单", unit: "单 / 日" }]}
+            emptyText="该历史结果尚未保存需求趋势快照，请重新执行预测策略"
           />
-          <ForecastTrendChart
+          <DataSeriesChart
             title="累计需求总量"
             description="从预测起点累计至当前时间点"
-            rows={trendRows}
-            series={[{ key: "cumulative_market_orders", label: "累计市场订单" }, { key: "cumulative_planned_orders", label: "累计规划订单" }]}
+            rows={normalizedTrendRows}
+            series={[{ key: "cumulative_market_orders", label: "累计市场订单", unit: "单" }, { key: "cumulative_planned_orders", label: "累计规划订单", unit: "单" }]}
+            emptyText="该历史结果尚未保存累计需求快照，请重新执行预测策略"
+            zeroBased
           />
         </div>
       </div>
@@ -8281,17 +8287,21 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
           <div><strong>生产与交付规划</strong><small>按生产画像展示预计产出、交付和 Robotaxi 剩余缺口</small></div>
         </div>
         <div className="forecast-trend-grid">
-          <ForecastTrendChart
+          <DataSeriesChart
             title="每期生产与交付"
             description="每个生产能力周期预计形成和交付的 Robotaxi"
-            rows={supplyTrendRows}
-            series={[{ key: "period_production_quantity", label: "当期生产量" }, { key: "period_delivery_quantity", label: "当期交付量" }]}
+            rows={normalizedSupplyTrendRows}
+            series={[{ key: "period_production_quantity", label: "当期生产量", unit: "辆" }, { key: "period_delivery_quantity", label: "当期交付量", unit: "辆" }]}
+            emptyText="该历史结果尚未保存生产交付趋势"
+            zeroBased
           />
-          <ForecastTrendChart
+          <DataSeriesChart
             title="累计供给与剩余缺口"
             description="累计生产、累计交付与尚未覆盖的 Robotaxi 缺口"
-            rows={supplyTrendRows}
-            series={[{ key: "cumulative_production_quantity", label: "累计生产量" }, { key: "cumulative_delivery_quantity", label: "累计交付量" }, { key: "remaining_robotaxi_gap", label: "剩余缺口" }]}
+            rows={normalizedSupplyTrendRows}
+            series={[{ key: "cumulative_production_quantity", label: "累计生产量", unit: "辆" }, { key: "cumulative_delivery_quantity", label: "累计交付量", unit: "辆" }, { key: "remaining_robotaxi_gap", label: "剩余缺口", unit: "辆" }]}
+            emptyText="该历史结果尚未保存累计供给趋势"
+            zeroBased
           />
         </div>
       </div>
@@ -8332,51 +8342,128 @@ function groupForecastCalculationSteps(steps = []) {
   return groups;
 }
 
-function ForecastTrendChart({ title, description, rows = [], series = [] }) {
-  const chartRows = reduceForecastChartRows(rows, 96);
-  const values = chartRows.flatMap((row) => series.map((item) => Number(row[item.key] || 0)));
-  const dataMin = Math.min(0, ...values);
-  const dataMax = Math.max(1, ...values);
-  const isCumulative = series.every((item) => item.key.startsWith("cumulative_"));
-  const visualPadding = Math.max(1, (dataMax - dataMin) * 0.12);
-  const minValue = isCumulative ? 0 : Math.max(0, Math.min(...values) - visualPadding);
-  const maxValue = dataMax + visualPadding;
-  const range = Math.max(1, maxValue - minValue);
-  const width = 640;
-  const height = 176;
-  const plot = { left: 44, right: 12, top: 12, bottom: 24 };
-  const plotWidth = width - plot.left - plot.right;
-  const plotHeight = height - plot.top - plot.bottom;
-  const toPoint = (row, index, key) => {
-    const x = plot.left + (chartRows.length <= 1 ? 0 : index / (chartRows.length - 1)) * plotWidth;
-    const y = plot.top + (1 - (Number(row[key] || 0) - minValue) / range) * plotHeight;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+const DATA_CHART_COLORS = ["#4b78c7", "#3f9580", "#a86f42", "#8a6fb2"];
+
+function DataSeriesChart({
+  title,
+  description,
+  rows = [],
+  series = [],
+  variant = "LINE",
+  emptyText = "暂无趋势数据",
+  zeroBased = variant === "BAR",
+  onSelect,
+}) {
+  const seriesSignature = series.map((item) => item.key).join("|");
+  const [visibleKeys, setVisibleKeys] = useState(() => series.map((item) => item.key));
+  const [activeIndex, setActiveIndex] = useState(null);
+  const [tooltipAlignEnd, setTooltipAlignEnd] = useState(false);
+  useEffect(() => {
+    setVisibleKeys(series.map((item) => item.key));
+    setActiveIndex(null);
+    setTooltipAlignEnd(false);
+  }, [seriesSignature]);
+  useEffect(() => setActiveIndex(null), [rows]);
+  const chartSeries = useMemo(() => series.map((item, index) => ({
+    ...item,
+    color: item.color || DATA_CHART_COLORS[index % DATA_CHART_COLORS.length],
+    visible: visibleKeys.includes(item.key),
+  })), [series, visibleKeys]);
+  const model = useMemo(() => dataChartService.createDataChartModel({
+    rows,
+    series: chartSeries,
+    variant,
+    zeroBased,
+    pointSpacing: variant === "BAR" ? 58 : 64,
+  }), [rows, chartSeries, variant, zeroBased]);
+  const activeRow = activeIndex === null ? null : model.rows[activeIndex];
+  const activePoint = activeIndex === null ? null : model.series[0]?.points[activeIndex];
+  const selectAtPointer = (event, shouldSelectRecord = false) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const svgX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * model.width;
+    const nextIndex = dataChartService.findNearestDataChartIndex(model, svgX);
+    const scrollRect = event.currentTarget.closest(".data-chart-scroll")?.getBoundingClientRect();
+    if (scrollRect) setTooltipAlignEnd(event.clientX - scrollRect.left > scrollRect.width * 0.58);
+    setActiveIndex(nextIndex);
+    if (shouldSelectRecord && nextIndex !== null) onSelect?.(model.rows[nextIndex]?.raw);
   };
+  const moveActiveIndex = (offset) => {
+    if (!model.rows.length) return;
+    setActiveIndex((current) => Math.max(0, Math.min(model.rows.length - 1, (current ?? 0) + offset)));
+  };
+  const toggleSeries = (key) => {
+    setVisibleKeys((current) => current.includes(key)
+      ? (current.length > 1 ? current.filter((item) => item !== key) : current)
+      : [...current, key]);
+  };
+  const renderValue = (item, row) => {
+    const value = row?.values?.[item.key];
+    const formatted = item.formatValue ? item.formatValue(value, row?.raw) : dataChartService.formatDataChartNumber(value);
+    return `${formatted}${item.unit ? ` ${item.unit}` : ""}`;
+  };
+  const barWidth = Math.min(18, 34 / Math.max(1, model.series.length));
   return (
-    <section className="forecast-trend-chart">
-      <header><div><strong>{title}</strong><small>{description}</small></div><span>{rows.length} 个时间点</span></header>
-      {chartRows.length > 1 ? <>
-        <div className="forecast-chart-legend">{series.map((item, index) => <span key={item.key} data-series={index + 1}>{item.label}</span>)}</div>
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
-          {[0, 0.5, 1].map((ratio) => <line key={ratio} x1={plot.left} x2={width - plot.right} y1={plot.top + ratio * plotHeight} y2={plot.top + ratio * plotHeight} className="forecast-chart-gridline" />)}
-          <text x="2" y={plot.top + 4}>{formatCompactNumber(maxValue)}</text>
-          <text x="2" y={plot.top + plotHeight}>{formatCompactNumber(minValue)}</text>
-          {series.map((item, index) => <polyline key={item.key} className={`forecast-chart-line series-${index + 1}`} points={chartRows.map((row, rowIndex) => toPoint(row, rowIndex, item.key)).join(" ")} />)}
-        </svg>
-        <div className="forecast-chart-axis"><span>{chartRows[0]?.trend_date}</span><span>{chartRows[chartRows.length - 1]?.trend_date}</span></div>
-      </> : <div className="forecast-trend-empty">该历史结果尚未保存趋势快照，请重新执行预测策略</div>}
+    <section className="data-chart" data-variant={variant.toLowerCase()}>
+      <header className="data-chart-header">
+        <div><strong>{title}</strong>{description && <small>{description}</small>}</div>
+        <span>{rows.length ? `${rows.length} 个时间点` : "等待数据"}</span>
+      </header>
+      {rows.length > 0 ? <>
+        <div className="data-chart-legend" aria-label="图例">
+          {chartSeries.map((item) => (
+            <button key={item.key} type="button" aria-pressed={item.visible} onClick={() => toggleSeries(item.key)}>
+              <i style={{ backgroundColor: item.color }} />{item.label}{item.unit ? <small>{item.unit}</small> : null}
+            </button>
+          ))}
+        </div>
+        <div className="data-chart-scroll" tabIndex="0" role="application" aria-label={`${title}，可左右滚动并使用方向键查看数据`} onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") { event.preventDefault(); moveActiveIndex(-1); }
+          if (event.key === "ArrowRight") { event.preventDefault(); moveActiveIndex(1); }
+          if (event.key === "Enter" && activeRow) onSelect?.(activeRow.raw);
+        }}>
+          <div className="data-chart-canvas" style={{ width: model.width }}>
+            <svg viewBox={`0 0 ${model.width} ${model.height}`} aria-hidden="true" onPointerMove={(event) => selectAtPointer(event)} onPointerDown={(event) => selectAtPointer(event, true)} onPointerLeave={(event) => {
+              if (event.pointerType === "mouse") setActiveIndex(null);
+            }}>
+              {model.yTicks.map((tick) => <g key={tick.value}><line x1={model.padding.left} x2={model.width - model.padding.right} y1={tick.y} y2={tick.y} className="data-chart-gridline" /><text x={model.padding.left - 8} y={tick.y + 4} textAnchor="end">{dataChartService.formatDataChartAxisNumber(tick.value)}</text></g>)}
+              {model.rows.map((row, index) => {
+                const x = model.series[0]?.points[index]?.x || model.padding.left;
+                return <text key={row.key || index} className="data-chart-axis-label" x={x} y={model.height - 15} textAnchor="middle">{row.label}</text>;
+              })}
+              {variant === "BAR" ? model.series.flatMap((item, seriesIndex) => item.points.map((point) => {
+                const offset = (seriesIndex - (model.series.length - 1) / 2) * (barWidth + 3);
+                return <rect key={`${item.key}-${point.index}`} className="data-chart-bar" x={point.x + offset - barWidth / 2} y={point.y} width={barWidth} height={model.padding.top + model.plotHeight - point.y} rx="3" fill={item.color} />;
+              })) : model.series.map((item) => <g key={item.key}><polyline className="data-chart-line" style={{ stroke: item.color }} points={item.points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ")} />{item.points.map((point) => <circle key={point.index} className="data-chart-point" style={{ stroke: item.color }} cx={point.x} cy={point.y} r={activeIndex === point.index ? 4 : 2.4} />)}</g>)}
+              {activePoint && <line className="data-chart-crosshair" x1={activePoint.x} x2={activePoint.x} y1={model.padding.top} y2={model.padding.top + model.plotHeight} />}
+            </svg>
+            {activeRow && activePoint && (
+              <div className={`data-chart-tooltip${tooltipAlignEnd ? " align-end" : ""}`} style={{ left: activePoint.x, top: model.padding.top + 4 }}>
+                <strong>{activeRow.tooltipLabel || activeRow.label}</strong>
+                {model.series.map((item) => <span key={item.key}><i style={{ backgroundColor: item.color }} />{item.label}<b>{renderValue(item, activeRow)}</b></span>)}
+              </div>
+            )}
+          </div>
+        </div>
+        {model.sampled && <small className="data-chart-sample-note">数据量较大，图形已等距抽样，原始结果保持完整。</small>}
+      </> : <div className="data-chart-empty">{emptyText}</div>}
     </section>
   );
 }
 
-function reduceForecastChartRows(rows = [], maxPoints = 96) {
-  if (rows.length <= maxPoints) return rows;
-  const lastIndex = rows.length - 1;
-  return Array.from({ length: maxPoints }, (_, index) => rows[Math.round(index * lastIndex / (maxPoints - 1))]);
+function normalizeForecastChartRows(rows = [], timeUnit = "DAY") {
+  return rows.map((row, index) => ({
+    key: `${row.trend_date || "period"}-${index}`,
+    label: formatForecastAxisLabel(row.trend_date, timeUnit),
+    tooltipLabel: row.trend_date || `第 ${index + 1} 期`,
+    values: row,
+    raw: row,
+  }));
 }
 
-function formatCompactNumber(value) {
-  return Number(value || 0).toLocaleString("zh-CN", { notation: "compact", maximumFractionDigits: 1 });
+function formatForecastAxisLabel(value, timeUnit) {
+  if (!value) return "无日期";
+  if (timeUnit === "MONTH") return String(value).slice(0, 7);
+  return String(value).slice(5, 10) || String(value);
 }
 
 function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculationRuns = [], metricPeriodType = "ALL", onSelect }) {
@@ -8478,15 +8565,20 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
       )}
       {page === "serviceMetrics" && (
         <div className="metric-trend-grid">
-          <MetricTrendChart
+          <DataSeriesChart
             title={demandTrendMode === "DAILY" ? "每日订单量" : "每小时订单量"}
-            rows={displayedDemandRows}
+            description={demandTrendMode === "DAILY" ? "按模拟日观察订单需求变化" : "按小时观察所选模拟日的订单需求变化"}
+            rows={normalizeMetricChartRows(displayedDemandRows)}
+            series={[{ key: "metric_value", label: "订单量", unit: "单" }]}
             emptyText={demandTrendMode === "DAILY" ? "暂无每日订单趋势" : "暂无每小时订单趋势"}
             onSelect={onSelect}
           />
-          <MetricTrendChart
+          <DataSeriesChart
             title="时段订单量"
-            rows={timeSegmentDemandRows}
+            description="比较高峰、平峰和低峰时段的需求规模"
+            rows={normalizeMetricChartRows(timeSegmentDemandRows)}
+            series={[{ key: "metric_value", label: "订单量", unit: "单" }]}
+            variant="BAR"
             emptyText="暂无时段订单趋势"
             onSelect={onSelect}
           />
@@ -8504,35 +8596,14 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
   );
 }
 
-function MetricTrendChart({ title, rows = [], emptyText, onSelect }) {
-  const maxValue = Math.max(1, ...rows.map((row) => Number(row.metric_value || 0)));
-  return (
-    <div className="metric-trend-chart">
-      <div className="metric-trend-title">
-        <span>{title}</span>
-        <small>{rows.length ? `${rows.length} 个时间点` : "等待数据"}</small>
-      </div>
-      {rows.length ? (
-        <div className="metric-trend-bars">
-          {rows.map((row) => {
-            const value = Number(row.metric_value || 0);
-            const height = Math.max(8, Math.round((value / maxValue) * 72));
-            return (
-              <button key={row.metric_observation_id} className="metric-trend-bar" onClick={() => onSelect(row)}>
-                <span className="metric-trend-bar-track">
-                  <span className="metric-trend-bar-fill" style={{ height }} />
-                </span>
-                <strong>{formatMetricDisplayValue(row)}</strong>
-                <small>{formatTrendDimensionLabel(row)}</small>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="metric-trend-empty">{emptyText}</div>
-      )}
-    </div>
-  );
+function normalizeMetricChartRows(rows = []) {
+  return rows.map((row, index) => ({
+    key: row.metric_observation_id || `metric-${index}`,
+    label: formatTrendDimensionLabel(row),
+    tooltipLabel: row.metric_period_label || row.window_label || formatTrendDimensionLabel(row),
+    values: { metric_value: Number(row.metric_value || 0) },
+    raw: row,
+  }));
 }
 
 function createMetricTrendRows(rows = [], metricDefinitionId) {
@@ -9839,6 +9910,7 @@ async function bootstrap() {
 		    responsiveViewportModule,
 		    spatialCatalogServiceModule,
 		    mapSceneServiceModule,
+		    dataChartServiceModule,
 		    releaseHistoryModule,
 		    projectReadmeModule,
 		  ] = await Promise.all([
@@ -9904,8 +9976,9 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
-		    import("./ui/releaseHistory.js?v=20260713-v043-0-0"),
-		    import("./ui/projectReadme.js?v=20260713-v043-0-0"),
+		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
+		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
+		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -9972,6 +10045,7 @@ async function bootstrap() {
 		  responsiveViewport = responsiveViewportModule;
 		  spatialCatalogService = spatialCatalogServiceModule;
 		  mapSceneService = mapSceneServiceModule;
+		  dataChartService = dataChartServiceModule;
   releaseHistory = releaseHistoryModule.releaseHistory;
   projectReadmeService = projectReadmeModule;
 

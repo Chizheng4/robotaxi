@@ -20,7 +20,7 @@ if (!fs.existsSync(path.join(outputDir, "index.html"))) {
 
 const server = http.createServer((request, response) => {
   const requestPath = new URL(request.url, `http://${request.headers.host}`).pathname;
-  if (requestPath === basePath.slice(0, -1)) {
+  if (basePath !== "/" && requestPath === basePath.slice(0, -1)) {
     response.writeHead(302, { Location: basePath });
     response.end();
     return;
@@ -49,5 +49,6 @@ server.listen(port, "127.0.0.1", () => {
 });
 
 function normalizeBasePath(value) {
-  return `/${String(value).replace(/^\/+|\/+$/g, "")}/`;
+  const normalized = String(value).replace(/^\/+|\/+$/g, "");
+  return normalized ? `/${normalized}/` : "/";
 }

@@ -172,6 +172,17 @@ try {
       });
       await delay(300);
     }
+    await send("Runtime.evaluate", {
+      expression: `(() => {
+        const chart = document.querySelector(".data-chart svg");
+        const rect = chart?.getBoundingClientRect();
+        if (!chart || !rect) return false;
+        chart.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: rect.left + rect.width * 0.45, clientY: rect.top + rect.height * 0.45, pointerType: "mouse" }));
+        return true;
+      })()`,
+      returnByValue: true,
+    });
+    await delay(120);
     const planningResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const analysis = document.querySelector(".forecast-analysis");
@@ -185,8 +196,11 @@ try {
           pageTitle: document.querySelector(".page-title-block strong")?.textContent || document.querySelector(".platform-title-copy strong")?.textContent || "",
           visibleMessages: [...document.querySelectorAll(".ant-message-notice, .record-event-section")].map((node) => node.textContent.trim()).slice(0, 4),
           forecastRunRows: document.querySelectorAll('[data-page="longTermDemandForecastRuns"] tbody tr').length,
-          chartCount: document.querySelectorAll(".forecast-trend-chart").length,
+          chartCount: document.querySelectorAll(".data-chart").length,
           chartRowCount: document.querySelectorAll(".forecast-trend-grid").length,
+          axisLabelCount: document.querySelectorAll(".data-chart-axis-label").length,
+          tooltipVisible: Boolean(document.querySelector(".data-chart-tooltip")),
+          chartScrollable: [...document.querySelectorAll(".data-chart-scroll")].some((node) => node.scrollWidth > node.clientWidth),
           hasDetailPanel: Boolean(document.querySelector(".object-inspector")),
           productionQuantity: Number(String(production?.value || "0").replaceAll(",", "")),
           horizontalOverflow: analysis ? analysis.scrollWidth - analysis.clientWidth : null,
@@ -198,6 +212,9 @@ try {
     assert(planning?.analysis, `策略执行后必须进入预测结果分析画布：${JSON.stringify({ ...planning, exceptions, messages })}`);
     assert.equal(planning.chartCount, 4, "预测结果必须展示需求、累计需求、生产交付和累计供给四张图");
     assert.equal(planning.chartRowCount, 2, "需求和供给各自使用独立纵向图表区域");
+    assert(planning.axisLabelCount > 8, "预测趋势必须展示完整的周期刻度");
+    assert(planning.tooltipVisible, "鼠标经过趋势图必须显示时间、指标和数值");
+    if (mobileAssertionEnabled) assert(planning.chartScrollable, "窄屏长周期必须在图表内部横向浏览");
     assert.equal(planning.hasDetailPanel, false, "分析结果不得混入对象详情面板");
     assert(planning.productionQuantity > 0, "真实增长与缺口必须形成大于零的计划生产数量");
     assert.equal(planning.horizontalOverflow, 0, "预测分析画布不得产生整体横向溢出");
