@@ -3179,6 +3179,24 @@ body {
   background: var(--surface);
 }
 
+.record-page-new.metric-analysis-page {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: clamp(32px, 6vh, 64px);
+  scroll-padding-bottom: 32px;
+}
+
+.metric-analysis-page .metric-experience-panel,
+.metric-analysis-page .metric-table-disclosure {
+  flex: 0 0 auto;
+}
+
+.metric-analysis-page .record-table-section {
+  flex: 0 0 min(420px, 55vh);
+  min-height: 280px;
+}
+
 .metric-card-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(128px, 1fr));

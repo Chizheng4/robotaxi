@@ -6395,7 +6395,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   }, [isMetricAnalysisPage, page]);
 
   return (
-    <section className={isReadinessPage ? "record-page-new readiness-page" : "record-page-new"}>
+    <section className={isReadinessPage ? "record-page-new readiness-page" : isMetricAnalysisPage ? "record-page-new metric-analysis-page" : "record-page-new"}>
       {isRobotaxiPage && (
         <RobotaxiOperationPanel
           rows={displayRows}
