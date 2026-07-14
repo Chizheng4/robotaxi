@@ -44,6 +44,14 @@ const updatedZone = updated.find((profile) => profile.target_object_type === "ZO
 assert.equal(updatedPlace.potential_daily_trips, 3200, "Place 配置后必须按三类人群和独立需求权重重算");
 assert.equal(updatedZone.baseline_addressable_daily_orders, 1600, "Zone 必须立即汇总更新后的 Place 需求");
 
+const roundedGrowth = updateDemandProfileConfig({
+  ...context,
+  demandProfiles: initialized.demandProfiles,
+  profileId: place.profile_id,
+  patch: { place_period_growth_rate: 0.0123456789 },
+});
+assert.equal(roundedGrowth.find((profile) => profile.target_object_type === "PLACE").place_period_growth_rate, 0.012346, "增长率必须收敛，避免浮点尾数进入运行态");
+
 const legacyProfiles = normalizeDemandProfiles({
   ...context,
   placeDemandProfiles: [{ profile_id: "PDP-OLD", place_id: "P-001", profile_status: "ACTIVE", daily_visitors: 100, trip_generation_rate: 0.5, demand_weight: 1 }],
@@ -65,5 +73,7 @@ const main = fs.readFileSync("src/main.jsx", "utf8");
 assert.ok(main.includes('{ key: "competition_retention_rate"'), "Place 配置必须包含竞争保留率");
 assert.ok(main.includes('{ key: "waiting_robotaxi_capacity"'), "ServiceArea 配置必须包含等待 Robotaxi 容量");
 assert.ok(main.includes("function saveDemandProfileConfig()"), "画像必须通过统一保存动作整体重算");
+assert.ok(main.includes("function getDemandProfileConfigHelp"), "配置弹窗必须把字段解释对象转换为可渲染中文说明");
+assert.ok(main.includes("function formatDemandProfileGrowthRate"), "增长率必须通过统一比例格式展示");
 
 console.log("统一需求与服务承载画像验证通过");

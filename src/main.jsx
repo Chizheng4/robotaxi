@@ -1212,6 +1212,18 @@ function normalizeDemandProfileDraft(profile, draft) {
   }));
 }
 
+function getDemandProfileConfigHelp(profile, fieldKey) {
+  const explanation = profile?.profile_field_explanations?.[fieldKey];
+  const content = typeof explanation === "string"
+    ? explanation
+    : explanation?.meaning || explanation?.calculation_logic || explanation?.source;
+  const growthHint = fieldKey === "place_period_growth_rate"
+    ? "输入比例，例如 0.008 表示 0.8%。"
+    : "";
+  return [content, growthHint].filter(Boolean).join(" ")
+    || "该字段参与画像配置；保存后将整体重算地点、服务区域和区域画像。";
+}
+
 const supplyProductionProfileConfigFields = [
   { key: "profile_name", type: "text" },
   { key: "production_lead_time_days", type: "number", min: 0, step: 1 },
@@ -3814,7 +3826,7 @@ function App({ currentUser, onLogout }) {
                   onChange={(event) => setDemandProfileDraft((draft) => ({ ...draft, [field.key]: event.target.value }))}
                 />
               )}
-              <small className="planning-config-help">{pendingDemandProfile?.profile_field_explanations?.[field.key] || "该字段参与画像配置；保存后将整体重算地点、服务区域和区域画像。"}</small>
+              <small className="planning-config-help">{getDemandProfileConfigHelp(pendingDemandProfile, field.key)}</small>
             </label>
           ))}
           {pendingDemandProfile?.target_object_type === "ZONE" && (
@@ -9326,7 +9338,7 @@ function DemandProfileCalculationSteps({ steps }) {
         <details className="structured-detail-group" key={`${step.step_name || "step"}-${index}`} open={index === 0}>
           <summary>
             <span>{step.step_name || `步骤 ${index + 1}`}</span>
-            <span>{formatDetailValue(step.output_value, "output_value") || "无结果"}</span>
+            <span>{formatDemandProfileCalculationOutput(step) || "无结果"}</span>
           </summary>
           <div className="structured-detail-group-body">
             <dl className="structured-detail-fields">
@@ -9340,7 +9352,7 @@ function DemandProfileCalculationSteps({ steps }) {
               </div>
               <div className="structured-detail-field">
                 <dt>{getFieldLabel("output_value")}</dt>
-                <dd>{formatDetailValue(step.output_value, "output_value") || "无"}</dd>
+                <dd>{formatDemandProfileCalculationOutput(step) || "无"}</dd>
               </div>
             </dl>
           </div>
@@ -9639,8 +9651,22 @@ function getFieldDisplayValue(key, value, row = null) {
   if (key === "direction" && value === "UNKNOWN") return "未知方向";
   if (key === "check_result" && value === "FAILED") return "检查不通过";
   if (key === "event_result" && value === "FAILED") return "失败";
+  if (["place_period_growth_rate", "zone_period_growth_rate"].includes(key)) return formatDemandProfileGrowthRate(value);
   if (isStatusField(key)) return getStatusDisplayValue(key, value, row);
   return getDisplayValue(value, key);
+}
+
+function formatDemandProfileGrowthRate(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? `${(numeric * 100).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}%`
+    : "无";
+}
+
+function formatDemandProfileCalculationOutput(step = {}) {
+  return String(step.step_name || "").includes("增长率")
+    ? formatDemandProfileGrowthRate(step.output_value)
+    : formatDetailValue(step.output_value, "output_value");
 }
 
 function summarizeRouteDetail(routeDetail) {

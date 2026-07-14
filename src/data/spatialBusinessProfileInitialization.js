@@ -262,7 +262,7 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
       visitor_trip_weight: visitorTripWeight,
       trip_generation_rate: tripGenerationRate,
       demand_weight: demandWeight,
-      place_period_growth_rate: Number(existingProfile.place_period_growth_rate ?? growthRate),
+      place_period_growth_rate: roundValue(existingProfile.place_period_growth_rate ?? growthRate, 6),
       growth_rate_unit: existingProfile.growth_rate_unit || "MONTH",
       growth_rate_source: existingProfile.growth_rate_source || "MANUAL_ASSUMPTION",
       growth_rate_updated_at: existingProfile.growth_rate_updated_at || nextCalculatedAt,
