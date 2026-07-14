@@ -61,8 +61,8 @@ echo "==> 正在执行发布前检查"
 bash scripts/check-before-commit.sh
 
 echo "==> 正在发布 $VERSION"
-push_with_retry main
 push_with_retry "$HEAD_TAG"
+push_with_retry main
 
 echo "==> 推送完成，正在等待 GitHub Actions 与公网网站更新"
 node scripts/wait-for-github-pages.mjs "$VERSION" "$(git rev-parse HEAD)"

@@ -1,4 +1,19 @@
 
+## v043.0.5
+
+核心：适配 GitHub Pages 的 main 环境保护规则，同时保留 Tag 版本事实校验。
+
+- Pages 恢复由 `main` 推送触发，满足 `github-pages` 环境只允许 main 部署的保护规则。
+- Actions 校验前显式同步远端标签，避免 checkout 环境未取得最新 Tag。
+- 发布仍以 `VERSION.md`、Tag 和 Tag 指向 HEAD 为事实，不使用 Commit Message 决定成功或失败。
+- `publish` 恢复先推送 Tag、再推送 main，确保 main 触发 Actions 时版本标签已经存在。
+- 保留 GitHub 网络快速预检，Node.js 运行时弃用提示为非阻断警告。
+
+用户标题：网站发布已适配 GitHub Pages 保护规则
+用户更新：
+- 发布会通过受保护的 main 环境部署，同时继续校验对应版本标签。
+- Actions 在检查版本前会主动同步标签，减少发布时序导致的失败。
+
 ## v043.0.4
 
 核心：将 GitHub Pages 发布切换为版本标签驱动，并增加终端网络快速预检。
