@@ -7,7 +7,7 @@ const releases = parseReleaseHistory(markdown);
 const latest = releases[0];
 const versionCount = (markdown.match(/^##\s+v\d[^\s]*\s*$/gm) || []).length;
 
-assert.equal(latest.version, "v043.0.3", "网站更新记录必须与最新工程版本一致");
+assert.equal(latest.version, "v043.0.4", "网站更新记录必须与最新工程版本一致");
 assert.equal(releases.length, versionCount, "网站更新记录必须包含全部历史版本");
 assert.equal(latest.audienceSource, "curated", "最新版本必须提供人工整理的用户文案");
 assert(latest.audienceTitle.length > 0, "最新版本缺少用户标题");

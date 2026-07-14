@@ -27,12 +27,13 @@ fi
 
 node scripts/verify-release-version.mjs "$HEAD_TAG"
 
-COMMIT_SUBJECT="$(git log -1 --format=%s)"
-if [[ "$COMMIT_SUBJECT" != "$VERSION:"* && "$COMMIT_SUBJECT" != "$VERSION："* && "$COMMIT_SUBJECT" != "$VERSION "* ]]; then
-  echo "发布已停止：提交说明必须以 $VERSION 开头。"
-  echo "当前提交：$COMMIT_SUBJECT"
-  exit 1
-fi
+check_github_connectivity() {
+  echo "==> 检查 GitHub 网络连接"
+  if ! curl -fsSI --http1.1 --connect-timeout 10 --max-time 15 https://github.com >/dev/null; then
+    echo "发布已停止：系统 Terminal 当前无法连接 GitHub，请检查网络或系统代理后重试。"
+    return 1
+  fi
+}
 
 push_with_retry() {
   local ref="$1"
@@ -54,12 +55,14 @@ push_with_retry() {
   return 1
 }
 
+check_github_connectivity
+
 echo "==> 正在执行发布前检查"
 bash scripts/check-before-commit.sh
 
 echo "==> 正在发布 $VERSION"
-push_with_retry "$HEAD_TAG"
 push_with_retry main
+push_with_retry "$HEAD_TAG"
 
 echo "==> 推送完成，正在等待 GitHub Actions 与公网网站更新"
 node scripts/wait-for-github-pages.mjs "$VERSION" "$(git rev-parse HEAD)"
