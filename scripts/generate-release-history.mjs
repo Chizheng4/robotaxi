@@ -9,8 +9,9 @@ const isMainModule = path.resolve(process.argv[1] || "") === fileURLToPath(impor
 
 if (isMainModule) {
   const checkMode = process.argv.includes("--check");
-  const releaseHistory = parseReleaseHistory(fs.readFileSync(versionPath, "utf8"));
-  const source = `// Generated from VERSION.md by scripts/generate-release-history.mjs.\nexport const releaseHistory = ${JSON.stringify(releaseHistory, null, 2)};\n`;
+  const markdown = fs.readFileSync(versionPath, "utf8");
+  const releaseHistory = parseReleaseHistory(markdown);
+  const source = createReleaseHistorySource(markdown);
 
   if (checkMode) {
     const current = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, "utf8") : "";
@@ -22,6 +23,10 @@ if (isMainModule) {
     fs.writeFileSync(outputPath, source);
     console.log(`迭代记录数据已生成：${releaseHistory.length} 个版本`);
   }
+}
+
+export function createReleaseHistorySource(markdown) {
+  return `// Generated from VERSION.md by scripts/generate-release-history.mjs.\nexport const releaseHistory = ${JSON.stringify(parseReleaseHistory(markdown), null, 2)};\n`;
 }
 
 export function parseReleaseHistory(markdown) {

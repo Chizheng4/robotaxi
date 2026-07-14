@@ -53,6 +53,7 @@ node --check scripts/verify-browser-load.mjs
 node --check scripts/verify-github-pages-build.mjs
 node --check scripts/serve-github-pages-preview.mjs
 node --check scripts/generate-release-history.mjs
+node --check scripts/sync-version-metadata.mjs
 node --check scripts/verify-release-version.mjs
 node --check scripts/verify-versioned-pages-workflow.mjs
 node --check scripts/wait-for-github-pages.mjs
@@ -103,7 +104,7 @@ node scripts/verify-simulation-strategy-execution.mjs
 node scripts/verify-status-workflow-contract.mjs
 node scripts/verify-route-planning-strategy-registry.mjs
 node scripts/verify-field-display-contract.mjs
-node scripts/generate-release-history.mjs --check
+node scripts/sync-version-metadata.mjs --check
 node scripts/verify-release-history-user-display.mjs
 node scripts/verify-release-version.mjs "$(sed -n 's/^## \(v[^ ]*\).*/\1/p' VERSION.md | head -n 1)"
 node scripts/verify-versioned-pages-workflow.mjs

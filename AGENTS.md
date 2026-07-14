@@ -19,9 +19,9 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 
 涉及代码修改时，先按任务类型读取必要规则，避免不必要的全量读取。
 
-#### A. 版本迭代 / 跨模块闭环修改
+#### A. 跨模块闭环 / 大中版本修改
 
-当任务涉及版本归档、多个业务模块、闭环流程、提交标签时，必须读取：
+当任务涉及多个业务模块、闭环流程或大中版本方案时，必须读取：
 
 1. `doc/iteration-rules.md` — 迭代流程、版本归档规则
 2. `doc/rules/03-field-dictionary-rules.md` — 字段字典规则
@@ -30,6 +30,8 @@ Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Pyt
 5. `doc/rules/field-dictionary.md` — 字段字典（文档）
 6. `src/domain/fieldDictionary.js` — 字段字典（前端代码，含 fieldDictionary 和 valueDictionary）
 7. 如涉及模拟运行、时间作业、自动工作流、业务单据生命周期或高速执行，还必须读取 `doc/rules/07-simulation-runtime-architecture-rules.md`
+
+仅为已完成变更补充版本记录、归档、提交和标签时，按实际变更类型读取规则，并额外读取 `doc/iteration-rules.md`、`doc/rules/02-version-git-rules.md` 和 `doc/rules/05-codex-execution-rules.md`；未修改字段、状态或枚举时，不重复读取完整字段字典。
 
 #### B. 业务对象 / 字段 / 状态 / 枚举修改
 
