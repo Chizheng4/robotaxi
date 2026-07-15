@@ -1,65 +1,46 @@
-# Outcome Metrics：结果指标层
+# 经营结果与规划偏差指标设计
 
-## 1. 定义
+结果指标描述经营周期创造的服务和财务结果，并与同期经营目标、预测和供给计划比较。
 
-结果指标描述模拟运行在经营层面最终创造的价值，回答“这次运营是否有效、是否赚钱、是否服务了需求”。
+## 服务与需求结果
 
-第一版结果指标以当前已经建立的收入记录、成本记录和业务单据完成状态为基础。
+|唯一中文名|实际口径|规划比较|
+|---|---|---|
+|创建订单数|周期内创建的服务订单数|与同期预测累计订单比较|
+|完成订单数|周期内完成的服务订单数|与预测可服务订单比较|
+|取消订单数|周期内取消的服务订单数|解释履约偏差|
+|订单履约率|完成订单数 / 创建订单数|与目标订单履约率比较|
+|实际日均订单量|创建订单数 / 有效经营日数|与同期预测日订单和期末目标日订单分别比较|
+|需求预测偏差|实际日均订单量 - 同期预测日订单量|同时显示偏差率|
+|目标距离|实际日均订单量 - 期末目标日订单量|标记为战略目标距离，不伪装为当前应达值|
 
-## 2. P0 结果指标目录
+## 财务结果
 
-|指标编号|中文名|英文名|计算口径|来源字段|就绪度|
-|---|---|---|---|---|---|
-|OUTCOME-FIN-001|应收收入|Receivable Revenue|sum(RECEIVABLE_REVENUE.revenue_amount)|RevenueRecord|READY|
-|OUTCOME-FIN-002|实收收入|Collected Revenue|sum(COLLECTED_REVENUE.revenue_amount)|RevenueRecord|READY|
-|OUTCOME-FIN-003|未收收入|Unreceived Revenue|sum(UNRECEIVED_REVENUE.revenue_amount)|RevenueRecord|READY|
-|OUTCOME-FIN-004|运营总成本|Total Operating Cost|sum(CostRecord.cost_amount)|CostRecord|READY|
-|OUTCOME-FIN-005|贡献利润|Contribution Profit|实收收入 - 运营总成本|RevenueRecord、CostRecord|READY|
-|OUTCOME-FIN-006|贡献利润率|Contribution Margin|贡献利润 / 实收收入|RevenueRecord、CostRecord|READY|
-|OUTCOME-SERVICE-001|创建订单数|Created Orders|count(ServiceOrder)|ServiceOrder|READY|
-|OUTCOME-SERVICE-002|完成订单数|Completed Orders|count(order_status = COMPLETED)|ServiceOrder.order_status|READY|
-|OUTCOME-SERVICE-003|订单履约率|Order Fulfillment Rate|完成订单数 / 创建订单数|ServiceOrder.order_status|READY|
-|OUTCOME-SERVICE-004|订单取消率|Order Cancellation Rate|取消订单数 / 创建订单数|ServiceOrder.order_status|READY|
-|OUTCOME-EFF-001|单均收入|Revenue per Completed Order|实收收入 / 完成订单数|RevenueRecord、ServiceOrder|READY|
-|OUTCOME-EFF-002|单均成本|Cost per Completed Order|运营总成本 / 完成订单数|CostRecord、ServiceOrder|READY|
-|OUTCOME-EFF-003|单均贡献利润|Contribution Profit per Order|贡献利润 / 完成订单数|RevenueRecord、CostRecord、ServiceOrder|READY|
+|唯一中文名|计算口径|规划比较|
+|---|---|---|
+|应收收入|周期内应收收入事实合计|不与实收混名|
+|实收收入|周期内实收收入事实合计|与规划收入估算比较|
+|未收收入|周期内未收收入事实合计|解释收入质量|
+|运营总成本|周期内运营成本事实合计|按成本类型解释|
+|贡献利润|实收收入 - 运营总成本|不混入未资本化的生产投入|
+|贡献利润率|贡献利润 / 实收收入|与最低贡献利润率比较|
+|单均收入|实收收入 / 完成订单数|与目标单均收入比较|
+|单均运营成本|运营总成本 / 完成订单数|与规划变动成本比较时必须注明固定成本差异|
+|单均贡献利润|贡献利润 / 完成订单数|统一替代页面临时计算|
 
-## 3. P1 结果指标目录
+所有比率在分母为零时返回空值和原因。缺少来源记录时不得显示为真实的 `0`。
 
-|指标编号|中文名|英文名|计算口径|来源字段|就绪度|
-|---|---|---|---|---|---|
-|OUTCOME-EFF-004|单车实收收入|Collected Revenue per Robotaxi|按 robotaxi_id 聚合实收收入|RevenueRecord.robotaxi_id|READY|
-|OUTCOME-EFF-005|单车贡献利润|Contribution Profit per Robotaxi|单车实收收入 - 单车归因成本|RevenueRecord、CostRecord|DERIVABLE|
-|OUTCOME-EFF-006|平均履约距离|Average Fulfillment Distance|完成 Trip avg(total_distance_km)|Trip.total_distance_km|READY|
-|OUTCOME-EFF-007|平均履约时长|Average Fulfillment Duration|完成 Trip avg(time_elapsed)|Trip.time_elapsed|READY|
-|OUTCOME-COVERAGE-001|订单服务覆盖率|Order Service Coverage Ratio|已匹配订单数 / 创建订单数|matched_robotaxi_id|READY|
-|OUTCOME-COVERAGE-002|需求满足率|Demand Served Ratio|完成订单数 / 原始需求请求数|需求请求事实|MISSING_DATA|
-
-## 4. 经营解释关系
+## 偏差解释顺序
 
 ```text
-实收收入
-  - 运营总成本
-  = 贡献利润
-
-贡献利润异常
-  → 下钻收入：订单量、支付、未收
-  → 下钻成本：距离、能源、人力、折旧
-  → 下钻过程：匹配失败、路径距离、履约未完成
+需求偏差
+  → 创建订单量与时段分布
+供给偏差
+  → Robotaxi 缺口、生产、交付、准入
+服务偏差
+  → 匹配、履约、取消、路径和耗时
+财务偏差
+  → 单量、价格、成本结构和资产效率
+数据质量
+  → 缺失时间、距离、收入、成本或规划基线
 ```
-
-## 5. 第一版前端体验
-
-财务指标页面建议：
-
-1. 顶部显示应收收入、实收收入、总成本、贡献利润、贡献利润率。
-2. 中部展示收入构成和成本构成，使用轻量分组条或紧凑图表。
-3. 下方显示按模拟日、服务区、车辆的指标表。
-4. 右侧详情展示指标定义、公式、来源记录和质量状态。
-
-服务指标页面建议：
-
-1. 展示订单创建、完成、取消、匹配成功、履约完成。
-2. 使用流程式指标表达，不只放孤立数字。
-3. 支持从失败率下钻到具体服务订单和失败原因。
-
