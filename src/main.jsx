@@ -7058,12 +7058,36 @@ function RobotaxiObjectSummary({ robotaxi }) {
 
 function TabbedDetail({ selectedObject, selectedType }) {
   const tabs = getDetailTabs(selectedType, selectedObject);
+  const tabKeys = tabs.map((tab) => tab.key).join("|");
+  const [activeTabKey, setActiveTabKey] = useState(tabs[0]?.key);
+
+  useEffect(() => {
+    if (!tabs.some((tab) => tab.key === activeTabKey)) {
+      setActiveTabKey(tabs[0]?.key);
+    }
+  }, [activeTabKey, tabKeys]);
 
   return (
-    <div className="detail-tabs-native-scroll" onWheelCapture={(event) => event.stopPropagation()} onTouchMoveCapture={(event) => event.stopPropagation()}>
+    <div className="detail-tabs-control">
+      <div className="detail-tabs-scroll" role="tablist" aria-label="详情分类">
+        {tabs.map((tab) => (
+          <button
+            className={`detail-tab-button${activeTabKey === tab.key ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTabKey === tab.key}
+            key={tab.key}
+            onClick={() => setActiveTabKey(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
       <Tabs
-        className="detail-tabs"
+        className="detail-tabs detail-tabs-content-only"
         size="small"
+        activeKey={activeTabKey}
+        animated={false}
         items={tabs.map((tab) => ({
           key: tab.key,
           label: tab.label,
