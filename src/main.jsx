@@ -7060,7 +7060,6 @@ function TabbedDetail({ selectedObject, selectedType }) {
   const tabs = getDetailTabs(selectedType, selectedObject);
   const tabsRootRef = useRef(null);
   const [activeTabKey, setActiveTabKey] = useState(tabs[0]?.key);
-  const [tabScrollState, setTabScrollState] = useState({ overflowing: false, canScrollLeft: false, canScrollRight: false });
   const tabKeys = tabs.map((tab) => tab.key).join("|");
 
   useEffect(() => {
@@ -7072,51 +7071,66 @@ function TabbedDetail({ selectedObject, selectedType }) {
     if (!root || !activeTabKey) return undefined;
     const navWrap = root.querySelector(".ant-tabs-nav-wrap");
     if (!navWrap) return undefined;
-    const sync = () => syncDetailTabScrollState(navWrap, setTabScrollState);
-    const reveal = () => {
-      revealActiveDetailTab(root, activeTabKey);
-      sync();
-    };
+    const reveal = () => revealActiveDetailTab(root, activeTabKey);
     const handleWheel = (event) => {
       if (navWrap.scrollWidth <= navWrap.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
       event.preventDefault();
       navWrap.scrollBy({ left: event.deltaY, behavior: "auto" });
     };
+    const dragState = { active: false, moved: false, pointerId: null, startX: 0, scrollLeft: 0 };
+    const handlePointerDown = (event) => {
+      if (event.pointerType !== "mouse" || event.button !== 0 || navWrap.scrollWidth <= navWrap.clientWidth) return;
+      dragState.active = true;
+      dragState.moved = false;
+      dragState.pointerId = event.pointerId;
+      dragState.startX = event.clientX;
+      dragState.scrollLeft = navWrap.scrollLeft;
+      navWrap.setPointerCapture?.(event.pointerId);
+    };
+    const handlePointerMove = (event) => {
+      if (!dragState.active || event.pointerId !== dragState.pointerId) return;
+      const distance = event.clientX - dragState.startX;
+      if (Math.abs(distance) > 4) {
+        dragState.moved = true;
+        navWrap.classList.add("is-dragging");
+      }
+      if (dragState.moved) navWrap.scrollLeft = dragState.scrollLeft - distance;
+    };
+    const finishPointerDrag = (event) => {
+      if (!dragState.active || event.pointerId !== dragState.pointerId) return;
+      dragState.active = false;
+      navWrap.releasePointerCapture?.(event.pointerId);
+      navWrap.classList.remove("is-dragging");
+      window.requestAnimationFrame(() => { dragState.moved = false; });
+    };
+    const suppressDraggedClick = (event) => {
+      if (!dragState.moved) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
     const frameId = window.requestAnimationFrame(reveal);
-    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(sync) : null;
+    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(reveal) : null;
     resizeObserver?.observe(navWrap);
-    navWrap.addEventListener("scroll", sync, { passive: true });
     navWrap.addEventListener("wheel", handleWheel, { passive: false });
+    navWrap.addEventListener("pointerdown", handlePointerDown);
+    navWrap.addEventListener("pointermove", handlePointerMove);
+    navWrap.addEventListener("pointerup", finishPointerDrag);
+    navWrap.addEventListener("pointercancel", finishPointerDrag);
+    navWrap.addEventListener("click", suppressDraggedClick, true);
     return () => {
       window.cancelAnimationFrame(frameId);
       resizeObserver?.disconnect();
-      navWrap.removeEventListener("scroll", sync);
       navWrap.removeEventListener("wheel", handleWheel);
+      navWrap.removeEventListener("pointerdown", handlePointerDown);
+      navWrap.removeEventListener("pointermove", handlePointerMove);
+      navWrap.removeEventListener("pointerup", finishPointerDrag);
+      navWrap.removeEventListener("pointercancel", finishPointerDrag);
+      navWrap.removeEventListener("click", suppressDraggedClick, true);
     };
   }, [activeTabKey, tabKeys]);
 
   return (
-    <div className={`detail-tabs-viewport${tabScrollState.overflowing ? " is-overflowing" : ""}`} ref={tabsRootRef}>
-      {tabScrollState.overflowing && (
-        <>
-          <Button
-            aria-label="向左查看详情页签"
-            className="detail-tabs-scroll-button detail-tabs-scroll-left"
-            disabled={!tabScrollState.canScrollLeft}
-            size="small"
-            type="text"
-            onClick={() => scrollDetailTabs(tabsRootRef.current, -1)}
-          >‹</Button>
-          <Button
-            aria-label="向右查看详情页签"
-            className="detail-tabs-scroll-button detail-tabs-scroll-right"
-            disabled={!tabScrollState.canScrollRight}
-            size="small"
-            type="text"
-            onClick={() => scrollDetailTabs(tabsRootRef.current, 1)}
-          >›</Button>
-        </>
-      )}
+    <div className="detail-tabs-viewport" ref={tabsRootRef}>
       <Tabs
         activeKey={activeTabKey}
         className="detail-tabs"
@@ -7154,24 +7168,6 @@ function revealActiveDetailTab(root, activeTabKey) {
   const visibleRight = visibleLeft + navWrap.clientWidth;
   if (tabLeft < visibleLeft) navWrap.scrollTo({ left: tabLeft, behavior: "auto" });
   if (tabRight > visibleRight) navWrap.scrollTo({ left: tabRight - navWrap.clientWidth, behavior: "auto" });
-}
-
-function scrollDetailTabs(root, direction) {
-  const navWrap = root?.querySelector(".ant-tabs-nav-wrap");
-  if (!navWrap) return;
-  navWrap.scrollBy({ left: direction * Math.max(96, navWrap.clientWidth * 0.7), behavior: "smooth" });
-}
-
-function syncDetailTabScrollState(navWrap, setState) {
-  const maxScrollLeft = Math.max(0, navWrap.scrollWidth - navWrap.clientWidth);
-  const nextState = {
-    overflowing: maxScrollLeft > 1,
-    canScrollLeft: navWrap.scrollLeft > 1,
-    canScrollRight: navWrap.scrollLeft < maxScrollLeft - 1,
-  };
-  setState((current) => current.overflowing === nextState.overflowing
-    && current.canScrollLeft === nextState.canScrollLeft
-    && current.canScrollRight === nextState.canScrollRight ? current : nextState);
 }
 
 function DetailFieldContent({ selectedObject, keys }) {
