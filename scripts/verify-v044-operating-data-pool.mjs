@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createOperatingDataPool, createPlanningBaseline, createPlanningComparisons } from "../src/services/operatingDataPoolService.js";
 import { getMapObjectPresentation } from "../src/ui/mapSceneService.js";
-import { resolvePageContext } from "../src/ui/pageContextService.js";
+import { resolvePageContext, resolvePagePresentation } from "../src/ui/pageContextService.js";
 import { metricObjectSchemas } from "../src/ui/metricObjectPresentationService.js";
 
 const observations = [
@@ -54,7 +54,8 @@ assert.match(context.description, /经营目标/, "经营分析页面说明必�
 const mainSource = fs.readFileSync("src/main.jsx", "utf8");
 const navigationSource = fs.readFileSync("src/ui/navigationRegistry.js", "utf8");
 assert.match(mainSource, /operatingDataPool\?\.comparisons/, "经营分析画布必须消费数据池比较结果");
-assert.match(mainSource, /\["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"\]\.includes\(activePage\)/, "经营分析页必须隐藏常驻右侧详情");
+assert.equal(resolvePagePresentation("financialMetrics").usesDetailRail, false, "经营分析页必须通过统一展示服务隐藏常驻右侧详情");
+assert.match(mainSource, /pageContextService\.resolvePagePresentation\(activePage\)/, "工作台必须消费统一页面展示合同");
 assert.match(mainSource, /pageContextService\.resolvePageContext/, "页面标题和说明必须通过统一上下文服务解析");
 assert.match(mainSource, /metricObjectPresentationService\?\.metricObjectSchemas/, "数据计算详情必须消费统一指标对象展示服务");
 assert.match(navigationSource, /page\("metricCalculationRuns", "计算记录"\)/, "指标计算记录菜单必须使用简洁名称");

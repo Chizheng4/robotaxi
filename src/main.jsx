@@ -1863,13 +1863,12 @@ function App({ currentUser, onLogout }) {
   const detailSelectedType = activePage === "console" ? selected.type : activeObjectType;
   const showConsoleSummary = activePage === "console";
   const pageContext = pageContextService.resolvePageContext({ page: activePage, menuLabel: getPageLabel(activePage), config: activeConfig });
+  const pagePresentation = pageContextService.resolvePagePresentation(activePage);
   const topTitle = showConsoleSummary ? "地图空间" : pageContext.title;
   const topDescription = showConsoleSummary ? null : pageContext.description;
   const activeRows = rowsByPage[activePage] || [];
   const detailCollapsed = detailCollapsedByPage[activePage] ?? !detailSelectedObject;
-  const detailHidden = activePage === "operatingModel"
-    || activePage === "longTermDemandForecasts"
-    || ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(activePage);
+  const detailHidden = !pagePresentation.usesDetailRail;
 
   useEffect(() => {
     if (!runtimeHydrated) return;
@@ -6132,6 +6131,7 @@ function WorkspaceBar({ pages, activePage, onActivate, onClose }) {
 }
 
 function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect, actions }) {
+  const pagePresentation = pageContextService.resolvePagePresentation(page);
   const isReadinessPage = page === "readinessTasks";
   const isFleetOperationTaskPage = ["cleaningTasks", "chargingTasks", "maintenanceTasks", "failureHandlingTasks", "retirementTasks"].includes(page);
   const isFleetOperationPolicyPage = page === "fleetOperationPolicies";
@@ -6257,8 +6257,18 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     if (isMetricAnalysisPage) setMetricTableVisible(false);
   }, [isMetricAnalysisPage, page]);
 
+  const pageClassName = [
+    "record-page-new",
+    `page-presentation-${pagePresentation.mode}`,
+    pagePresentation.mode === "analysis" ? "analytical-workspace" : "",
+    isReadinessPage ? "readiness-page" : "",
+    isOperatingModelPage ? "operating-model-page" : "",
+    isMetricAnalysisPage ? "metric-analysis-page" : "",
+    isForecastAnalysisPage ? "forecast-analysis-page" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <section className={isReadinessPage ? "record-page-new readiness-page" : isOperatingModelPage ? "record-page-new analytical-workspace operating-model-page" : isMetricAnalysisPage ? "record-page-new analytical-workspace metric-analysis-page" : isForecastAnalysisPage ? "record-page-new analytical-workspace forecast-analysis-page" : "record-page-new"}>
+    <section className={pageClassName}>
       {isRobotaxiPage && (
         <RobotaxiOperationPanel
           rows={displayRows}
@@ -6408,28 +6418,34 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         </div>
       )}
       {isForecastAnalysisPage && (
-        <ForecastAnalysisPanel
-          rows={displayRows}
-          selectedId={selected?.type === objectType ? selected.id : null}
-          onSelect={(row) => onSelect(objectType, row[idField])}
-          onCreateSupplyPlan={actions.createSupplyPlanFromForecast}
-          onCompleteSupplyLoop={actions.completeSupplyManagementLoopFromForecast}
-        />
+        <AnalysisContentViewport>
+          <ForecastAnalysisPanel
+            rows={displayRows}
+            selectedId={selected?.type === objectType ? selected.id : null}
+            onSelect={(row) => onSelect(objectType, row[idField])}
+            onCreateSupplyPlan={actions.createSupplyPlanFromForecast}
+            onCompleteSupplyLoop={actions.completeSupplyManagementLoopFromForecast}
+          />
+        </AnalysisContentViewport>
       )}
       {isOperatingModelPage && (
-        <OperatingModelPanel model={displayRows[0] || operatingModelService.getOperatingModelDefinition()} />
+        <AnalysisContentViewport>
+          <OperatingModelPanel model={displayRows[0] || operatingModelService.getOperatingModelDefinition()} />
+        </AnalysisContentViewport>
       )}
       {isMetricAnalysisPage && (
-        <MetricExperiencePanel
-          page={page}
-          rows={displayRows}
-          allRows={actions.metricDisplayRows || rows}
-          metricCalculationRuns={actions.metricCalculationRuns}
-          metricPeriodType={actions.metricPeriodType}
-          planningBaseline={actions.operatingDataPool?.planningBaseline}
-          comparisons={actions.operatingDataPool?.comparisons}
-          onSelect={(row) => onSelect(objectType, row[idField])}
-        />
+        <AnalysisContentViewport>
+          <MetricExperiencePanel
+            page={page}
+            rows={displayRows}
+            allRows={actions.metricDisplayRows || rows}
+            metricCalculationRuns={actions.metricCalculationRuns}
+            metricPeriodType={actions.metricPeriodType}
+            planningBaseline={actions.operatingDataPool?.planningBaseline}
+            comparisons={actions.operatingDataPool?.comparisons}
+            onSelect={(row) => onSelect(objectType, row[idField])}
+          />
+        </AnalysisContentViewport>
       )}
       {isMetricAnalysisPage && (
         <div className="metric-table-disclosure">
@@ -6776,9 +6792,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     return null;
   }
 
-  function renderActionCell(row, actionContent) {
+  function renderActionCell(_row, actionContent) {
     return (
-      <span className="row-action-cell" onClickCapture={() => onSelect(objectType, row[idField])}>
+      <span className="row-action-cell" onClick={(event) => event.stopPropagation()}>
         {actionContent}
       </span>
     );
@@ -7018,6 +7034,10 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
 
 function DetailContentViewport({ children, className = "" }) {
   return <div className={`object-inspector-content ${className}`.trim()}>{children}</div>;
+}
+
+function AnalysisContentViewport({ children, className = "" }) {
+  return <div className={`analysis-content-viewport ${className}`.trim()}>{children}</div>;
 }
 
 function RobotaxiObjectSummary({ robotaxi }) {

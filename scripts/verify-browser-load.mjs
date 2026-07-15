@@ -259,6 +259,8 @@ try {
       expression: `JSON.stringify({
         hasPage: Boolean(document.querySelector('[data-page="operatingMetricsOverview"]')),
         hasAnalysis: Boolean(document.querySelector('.metric-experience-panel')),
+        hasSharedViewport: Boolean(document.querySelector('.analysis-content-viewport')),
+        detailHidden: Boolean(document.querySelector('.workbench.detail-hidden')),
         documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         analysisOverflow: (() => { const node = document.querySelector('.metric-analysis-page'); return node ? node.scrollWidth - node.clientWidth : null; })(),
         overflowCandidates: (() => {
@@ -272,11 +274,18 @@ try {
     });
     const overview = JSON.parse(overviewResult.result?.result?.value || "{}");
     assert(overview.hasAnalysis && exceptions.length === 0, `经营总览页面加载失败：${JSON.stringify({ ...overview, exceptions, messages })}`);
+    assert(overview.hasSharedViewport, "经营总览必须接入统一分析内容视口");
+    assert(overview.detailHidden, "经营总览不得混入对象详情栏");
     assert.equal(overview.documentOverflow, 0, "经营总览不得产生页面级横向溢出");
     if (mobileAssertionEnabled) assert(overview.analysisOverflow <= 1, `手机经营总览不得产生内容横向溢出：${JSON.stringify(overview.overflowCandidates)}`);
   }
 
   if (metricDetailsAssertionEnabled) {
+    if (mobileAssertionEnabled) {
+      await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 844, deviceScaleFactor: 1, mobile: false });
+      await send("Runtime.evaluate", { expression: `document.querySelector('[aria-label="展开菜单"]')?.click()`, returnByValue: true });
+      await delay(250);
+    }
     const clickMenuLabel = async (label) => {
       const result = await send("Runtime.evaluate", {
         expression: `(() => {
@@ -295,6 +304,18 @@ try {
     await clickMenuLabel("指标定义");
     await delay(600);
     await clickElementCenter(".record-table-section tbody tr");
+    if (mobileAssertionEnabled) {
+      await send("Emulation.setDeviceMetricsOverride", { width: viewportWidth, height: viewportHeight, deviceScaleFactor: 1, mobile: true });
+      await delay(800);
+      const mobileRowPointResult = await send("Runtime.evaluate", {
+        expression: `(() => { const rect = document.querySelector(".record-table-section tbody tr")?.getBoundingClientRect(); return rect ? { x: Math.max(8, rect.left + 24), y: rect.top + rect.height / 2 } : null; })()`,
+        returnByValue: true,
+      });
+      const mobileRowPoint = mobileRowPointResult.result?.result?.value;
+      assert(mobileRowPoint, "手机指标定义列表必须存在可选择记录");
+      await send("Input.dispatchMouseEvent", { type: "mousePressed", x: mobileRowPoint.x, y: mobileRowPoint.y, button: "left", clickCount: 1 });
+      await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: mobileRowPoint.x, y: mobileRowPoint.y, button: "left", clickCount: 1 });
+    }
     await delay(500);
     const metricDetailResult = await send("Runtime.evaluate", {
       expression: `JSON.stringify({
@@ -638,6 +659,16 @@ try {
     });
     assert(listInitialState.result?.result?.value?.collapsed, "首次进入无选择列表页时详情必须默认收起");
     assert(listInitialState.result?.result?.value?.actionWidth <= 140, `固定操作列必须保持紧凑：${JSON.stringify(listInitialState.result?.result?.value)}`);
+    await clickElementCenter(".row-action-menu-trigger");
+    await delay(120);
+    const actionOnlyState = await send("Runtime.evaluate", {
+      expression: `({ collapsed: document.querySelector(".workbench")?.classList.contains("detail-collapsed"), selectedRows: document.querySelectorAll(".active-table-row").length })`,
+      returnByValue: true,
+    });
+    assert(actionOnlyState.result?.result?.value?.collapsed, "点击行内功能不得展开详情");
+    assert.equal(actionOnlyState.result?.result?.value?.selectedRows, 0, "点击行内功能不得选中表格记录");
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape" });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape" });
     const rowPointResult = await send("Runtime.evaluate", {
       expression: `(() => { const rect = document.querySelector(".ant-table-tbody tr")?.getBoundingClientRect(); return rect ? { x: rect.left + 40, y: rect.top + rect.height / 2 } : null; })()`,
       returnByValue: true,

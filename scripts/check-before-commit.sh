@@ -64,6 +64,7 @@ node --check src/ui/releaseHistory.js
 node --check src/ui/projectReadme.js
 node --check src/ui/mapSceneService.js
 node --check src/ui/pageContextService.js
+node --check scripts/verify-v045-1-page-presentation.mjs
 node --check src/ui/dataChartService.js
 node --check src/ui/metricObjectPresentationService.js
 node --check src/ui/navigationRegistry.js
@@ -71,6 +72,7 @@ node --check src/ui/releaseFreshnessService.js
 node --check src/services/operatingDataPoolService.js
 node --check src/services/operatingModelService.js
 node --check src/services/publicDemoBootstrapService.js
+node scripts/verify-v045-1-page-presentation.mjs
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js

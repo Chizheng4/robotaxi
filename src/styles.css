@@ -5982,3 +5982,89 @@ html[data-keyboard-open="true"] .platform-login-panel {
   .forecast-calculation-step { grid-template-columns: 1fr; gap: 3px; }
   .forecast-calculation-step strong { text-align: left; }
 }
+
+/* Shared page presentation contract. Keep this final so legacy page styles cannot override it. */
+.page-presentation-analysis,
+.page-presentation-record,
+.analysis-content-viewport {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.analysis-content-viewport {
+  flex: 0 0 auto;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.analysis-content-viewport > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.detail-tabs .ant-tabs-nav-wrap {
+  min-width: 0;
+}
+
+.detail-tabs .ant-tabs-nav-list {
+  min-width: max-content;
+}
+
+.detail-tabs .ant-tabs-tab-btn {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.detail-tabs .ant-tabs-nav-more {
+  flex: 0 0 auto;
+}
+
+.row-action-cell {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+}
+
+@media (max-width: 767px) {
+  .page-presentation-analysis {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .analysis-content-viewport {
+    width: 100%;
+    padding-bottom: 4px;
+  }
+
+  .page-presentation-analysis .metric-card-grid,
+  .page-presentation-analysis .analysis-summary-grid {
+    grid-template-columns: repeat(2, minmax(136px, 1fr));
+  }
+
+  .page-presentation-analysis .metric-comparison-grid,
+  .page-presentation-analysis .metric-trend-grid {
+    grid-template-columns: minmax(244px, 1fr);
+  }
+
+  .page-presentation-analysis .metric-planning-baseline,
+  .page-presentation-analysis .metric-quality-strip {
+    flex-wrap: wrap;
+  }
+
+  .workbench.detail-collapsed .detail-rail {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-left: 0;
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  .detail-tabs .ant-tabs-nav {
+    padding-inline: 10px;
+  }
+}
