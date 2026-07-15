@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v045.2.7",
+    "title": "完成详情页签的简洁原生交付，隐藏多余的更多菜单和灰色滚动条，同时保证全部标题可访问",
+    "changes": [
+      "详情页签继续使用浏览器原生横向滚动，Mac 双指和手机触摸可直接左右移动。",
+      "隐藏 Ant Tabs 的三个点更多菜单，所有页签统一在同一水平轨道中浏览。",
+      "隐藏页签栏下方灰色滚动条，但保留完整原生滚动能力，不增加按钮或 JavaScript 事件。",
+      "禁止组件内部位移与原生滚动叠加，末项标题可以完整进入可视区，点击选择保持稳定。"
+    ],
+    "audienceTitle": "详情页签简洁完整显示",
+    "audienceChanges": [
+      "页签栏不再出现三个点更多菜单。",
+      "页签下方不再显示灰色滚动条。",
+      "双指或触摸左右移动后可以完整查看并选择所有页签。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v045.2.6",
     "title": "恢复详情页签原生交互，只保留标题完整显示和遮罩移除，撤销修复过程中引入的全部自定义滚动逻辑",
     "changes": [

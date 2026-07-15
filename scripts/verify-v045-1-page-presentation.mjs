@@ -24,9 +24,11 @@ assert.match(stylesSource, /\.analysis-content-viewport\s*\{[^}]*overflow-x:\s*a
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-tab-btn\s*\{[^}]*white-space:\s*nowrap/s, "详情页签标题不得被压缩裁断");
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap\s*\{[^}]*min-width:\s*0/s, "详情页签必须保留组件原生溢出边界");
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap\s*\{[^}]*overflow-x:\s*auto/s, "详情页签必须与表单一致使用原生横向滚动");
+assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap\s*\{[^}]*scrollbar-width:\s*none/s, "详情页签不得显示无意义的灰色滚动条");
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap::after\s*\{[^}]*display:\s*none/s, "详情页签不得保留覆盖标题的溢出遮罩");
 assert.doesNotMatch(tabbedDetailSource, /handlePointerMove|setPointerCapture|suppressDraggedClick|revealActiveDetailTab/, "详情页签不得覆盖平台原生滚动和点击交互");
-assert.doesNotMatch(stylesSource, /\.detail-tabs \.ant-tabs-nav-list\s*\{[^}]*transform:\s*none/s, "详情页签不得覆盖组件原生定位");
+assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-list\s*\{[^}]*transform:\s*none/s, "详情页签原生滚动时不得叠加组件位移");
+assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-operations\s*\{[^}]*display:\s*none/s, "详情页签不得显示更多菜单");
 assert.match(mainSource, /aria-label="展开详情"[\s\S]*?>›<\/Button>/, "详情展开控件必须使用统一的向右提示");
 assert.match(mainSource, /aria-label="隐藏详情"[\s\S]*?>‹<\/Button>/, "详情收起控件必须使用统一的向左提示");
 assert.match(stylesSource, /\.detail-toggle-button\.ant-btn:hover[\s\S]*background:\s*var\(--surface-soft\)/, "详情开合控件悬停时必须提供稳定的浮层反馈");

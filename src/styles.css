@@ -6018,7 +6018,12 @@ html[data-keyboard-open="true"] .platform-login-panel {
   overflow-x: auto !important;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
+  scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+}
+
+.detail-tabs .ant-tabs-nav-wrap::-webkit-scrollbar {
+  display: none;
 }
 
 .detail-tabs .ant-tabs-nav-wrap::before,
@@ -6028,6 +6033,7 @@ html[data-keyboard-open="true"] .platform-login-panel {
 
 .detail-tabs .ant-tabs-nav-list {
   min-width: max-content;
+  transform: none !important;
 }
 
 .detail-tabs .ant-tabs-tab-btn {
@@ -6036,8 +6042,8 @@ html[data-keyboard-open="true"] .platform-login-panel {
   white-space: nowrap;
 }
 
-.detail-tabs .ant-tabs-nav-more {
-  flex: 0 0 auto;
+.detail-tabs .ant-tabs-nav-operations {
+  display: none !important;
 }
 
 .row-action-cell {
