@@ -345,7 +345,9 @@
 |INTERRUPT|中断当前任务|规划决策|
 |MOVING_ONLY|仅行驶或运营异常触发|故障触发策略|
 |INTERNAL_QUEUE_FIRST|内部任务队列优先|外部分配队列策略|
+|ROBOTAXI_MANAGEMENT|Robotaxi 管理触发|任务规划触发来源|
 |WAIT_CURRENT_ASSIGNMENT_COMPLETION|等待当前任务完成|任务规划原因|
+|PRIORITY_REORDER|按优先级重排|任务队列重排原因|
 |ROBOTAXI_READY_FOR_FLEET_OPERATION_TASK|允许创建并执行运维任务|任务规划原因|
 |ROBOTAXI_READY_FOR_EXTERNAL_ASSIGNMENT|允许分配外部运营任务|任务规划原因|
 |FIRST_ADMISSION_ALLOWED|允许创建运营准入任务|任务规划原因|

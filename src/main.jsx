@@ -7385,6 +7385,11 @@ function getDetailStatusField(selectedType) {
   return {
     readinessTask: "task_status",
     deploymentTask: "task_status",
+    cleaningTask: "task_status",
+    chargingTask: "task_status",
+    maintenanceTask: "task_status",
+    failureHandlingTask: "task_status",
+    retirementTask: "task_status",
     routeExecution: "execution_status",
     serviceOrder: "order_status",
     trip: "trip_status",
@@ -9588,6 +9593,10 @@ function formatStructuredScalar(value, key = null, row = null) {
 }
 
 function getStructuredKeyLabel(key) {
+  if (/^[A-Z][A-Z0-9_]*$/.test(String(key || ""))) {
+    const enumLabel = getDisplayValue(key);
+    if (enumLabel !== key) return enumLabel;
+  }
   const fieldLabel = getFieldLabel(key);
   return fieldLabel || "未定义字段";
 }
@@ -9595,11 +9604,11 @@ function getStructuredKeyLabel(key) {
 function summarizeObject(value) {
   const enabled = Object.entries(value)
     .filter(([, itemValue]) => itemValue === true)
-    .map(([key]) => getFieldLabel(key));
+    .map(([key]) => getStructuredKeyLabel(key));
   if (enabled.length > 0) return enabled.join(", ");
   const entries = Object.entries(value)
     .filter(([, itemValue]) => itemValue !== null && itemValue !== undefined && itemValue !== false)
-    .map(([key, itemValue]) => `${getFieldLabel(key)}: ${getDisplayValue(itemValue)}`);
+    .map(([key, itemValue]) => `${getStructuredKeyLabel(key)}: ${getFieldDisplayValue(key, itemValue, value)}`);
   return entries.length > 0 ? entries.join("; ") : "无";
 }
 
@@ -9616,7 +9625,7 @@ function formatDetailValue(value, key, parentRow = null) {
   if (typeof value === "boolean") return value ? "是" : "否";
   if (typeof value === "object" && value !== null) {
     return Object.entries(value)
-      .map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, value)}`)
+      .map(([itemKey, itemValue]) => `${getStructuredKeyLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, value)}`)
       .join("; ");
   }
   return String(getFieldDisplayValue(key, value ?? "", parentRow));
@@ -9680,7 +9689,7 @@ function summarizeRecord(record) {
   if (primaryId) return String(primaryId);
   return Object.entries(record)
     .slice(0, 3)
-    .map(([itemKey, itemValue]) => `${getFieldLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`)
+    .map(([itemKey, itemValue]) => `${getStructuredKeyLabel(itemKey)}: ${formatDetailValue(itemValue, itemKey, record)}`)
     .join("，");
 }
 
