@@ -64,6 +64,8 @@ node --check src/ui/releaseHistory.js
 node --check src/ui/projectReadme.js
 node --check src/ui/mapSceneService.js
 node --check src/ui/dataChartService.js
+node --check src/ui/releaseFreshnessService.js
+node --check src/services/publicDemoBootstrapService.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js
@@ -162,6 +164,7 @@ node scripts/verify-v041-3-1-map-projection.mjs
 node scripts/verify-v041-4-responsive-viewport.mjs
 node scripts/verify-v042-multi-zone-map.mjs
 node scripts/verify-v043-0-1-unified-data-chart.mjs
+node scripts/verify-v043-0-7-public-demo-bootstrap.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

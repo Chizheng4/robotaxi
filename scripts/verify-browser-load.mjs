@@ -8,6 +8,7 @@ const viewport = process.env.ROBOTAXI_BROWSER_VIEWPORT || "1280,720";
 const mobileAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MOBILE === "1";
 const mapAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MAP === "1";
 const planningAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_PLANNING === "1";
+const publicDemoAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_PUBLIC_DEMO === "1";
 const screenshotPath = process.env.ROBOTAXI_BROWSER_SCREENSHOT || "";
 const [viewportWidth, viewportHeight] = viewport.split(",").map(Number);
 const browserWindowSize = planningAssertionEnabled && mobileAssertionEnabled ? "1440,900" : viewport;
@@ -138,6 +139,17 @@ try {
     });
     assert(loginResult.result?.result?.value?.submitted, "登录入口缺少可提交的输入框或表单");
     await delay(2500);
+  }
+
+  if (publicDemoAssertionEnabled) {
+    await delay(1200);
+    const publicDemoResult = await send("Runtime.evaluate", {
+      expression: `window.__robotaxiPublicDemoState || null`,
+      returnByValue: true,
+    });
+    const publicDemoState = publicDemoResult.result?.result?.value;
+    assert(publicDemoState?.forecastResultCount > 0, `线上演示引导必须自动生成需求预测结果：${JSON.stringify(publicDemoState)}`);
+    assert(publicDemoState?.simulationStatuses?.some((status) => status !== "READY"), `线上演示引导必须自动启动模拟运行：${JSON.stringify(publicDemoState)}`);
   }
 
   if (planningAssertionEnabled) {

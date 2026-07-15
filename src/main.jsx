@@ -55,7 +55,9 @@ let taskDispatchStrategyService;
 let robotaxiTaskPlanningService;
 let businessPlanningService;
 let supplyDemandBalanceService;
+let publicDemoBootstrapService;
 let platformExperience;
+let releaseFreshnessService;
 let robotaxiMapProjection;
 let responsiveViewport;
 let spatialCatalogService;
@@ -1312,6 +1314,10 @@ function PlatformEntry() {
   const [accessSession, setAccessSession] = useState(() => platformExperience.readAccessSession());
 
   useEffect(() => {
+    releaseFreshnessService?.ensureLatestRelease?.();
+  }, []);
+
+  useEffect(() => {
     if (!accessSession) return undefined;
     const remainingMs = Math.max(0, accessSession.expires_at - Date.now());
     const timeoutId = window.setTimeout(() => {
@@ -1711,6 +1717,12 @@ function App({ currentUser, onLogout }) {
   const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
   const autoMetricCalculationRunIdsRef = useRef(new Set());
+  const publicDemoBootstrapRef = useRef({
+    completed: false,
+    forecastRequested: false,
+    simulationCreated: false,
+    startedSimulationRunIds: new Set(),
+  });
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return undefined;
@@ -2423,6 +2435,61 @@ function App({ currentUser, onLogout }) {
   useEffect(() => {
     simActionsRef.current = simActions;
   }, [simActions]);
+
+  useEffect(() => {
+    if (!runtimeHydrated || !publicDemoBootstrapService) return;
+    const bootstrapState = publicDemoBootstrapRef.current;
+    if (bootstrapState.completed) return;
+    const plan = publicDemoBootstrapService.createPublicDemoBootstrapPlan({
+      locationLike: window.location,
+      forecastResults: operationalData.longTermDemandForecasts || [],
+      simulationRuns,
+    });
+    if (!plan.enabled) return;
+    if (plan.forecastAction === publicDemoBootstrapService.PublicDemoBootstrapAction.NONE
+      && plan.simulationAction === publicDemoBootstrapService.PublicDemoBootstrapAction.NONE) {
+      bootstrapState.completed = true;
+      return;
+    }
+
+    if (plan.forecastAction === publicDemoBootstrapService.PublicDemoBootstrapAction.EXECUTE_FORECAST
+      && !bootstrapState.forecastRequested) {
+      bootstrapState.forecastRequested = true;
+      const forecast = publicDemoBootstrapService.executePublicDemoForecast({
+        planningService: businessPlanningService,
+        operationalData,
+        context: {
+          now,
+          nextRunId: nextLongTermDemandForecastRunId,
+          nextResultBaseId: nextLongTermDemandForecastResultBaseId,
+        },
+      });
+      if (forecast.executed) setOperationalData(forecast.operationalData);
+    }
+
+    const actions = simActionsRef.current;
+    if (!actions) return;
+    if (plan.simulationAction === publicDemoBootstrapService.PublicDemoBootstrapAction.CREATE_SIMULATION
+      && simulationPolicies.length
+      && !bootstrapState.simulationCreated) {
+      bootstrapState.simulationCreated = true;
+      actions.createSimulationRun();
+    }
+    if (plan.simulationAction === publicDemoBootstrapService.PublicDemoBootstrapAction.START_SIMULATION
+      && plan.simulationRunId
+      && !bootstrapState.startedSimulationRunIds.has(plan.simulationRunId)) {
+      bootstrapState.startedSimulationRunIds.add(plan.simulationRunId);
+      actions.startSimulationRun(plan.simulationRunId);
+    }
+  }, [operationalData, runtimeHydrated, simulationPolicies.length, simulationRuns]);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("publicDemo") !== "1") return;
+    window.__robotaxiPublicDemoState = {
+      forecastResultCount: operationalData.longTermDemandForecasts?.length || 0,
+      simulationStatuses: simulationRuns.map((item) => item.simulation_status),
+    };
+  }, [operationalData.longTermDemandForecasts, simulationRuns]);
 
   useEffect(() => {
     return () => { if (simActionsRef.current) simActionsRef.current.cleanup(); };
@@ -9939,6 +10006,8 @@ async function bootstrap() {
 		    dataChartServiceModule,
 		    releaseHistoryModule,
 		    projectReadmeModule,
+		    publicDemoBootstrapServiceModule,
+		    releaseFreshnessServiceModule,
 		  ] = await Promise.all([
     import("./data/mapInitialization.js?v=20260712-v042-0-0"),
     import("./data/mapValidation.js?v=20260712-v042-0-0"),
@@ -10005,6 +10074,8 @@ async function bootstrap() {
 		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
+		    import("./services/publicDemoBootstrapService.js?v=20260715-v043-0-7"),
+		    import("./ui/releaseFreshnessService.js?v=20260715-v043-0-7"),
 		  ]);
 
   initializeMapSpace = mapInitialization.initializeMapSpace;
@@ -10061,6 +10132,7 @@ async function bootstrap() {
 		  robotaxiTaskPlanningService = robotaxiTaskPlanningServiceModule;
 		  businessPlanningService = businessPlanningServiceModule;
 		  supplyDemandBalanceService = supplyDemandBalanceServiceModule;
+		  publicDemoBootstrapService = publicDemoBootstrapServiceModule;
 		  initializeSupplyManagement = supplyManagementInitializationModule.initializeSupplyManagement;
 		  initializeSpatialBusinessProfiles = spatialBusinessProfileInitializationModule.initializeSpatialBusinessProfiles;
 		  normalizeDemandProfiles = spatialBusinessProfileInitializationModule.normalizeDemandProfiles;
@@ -10074,6 +10146,7 @@ async function bootstrap() {
 		  dataChartService = dataChartServiceModule;
   releaseHistory = releaseHistoryModule.releaseHistory;
   projectReadmeService = projectReadmeModule;
+  releaseFreshnessService = releaseFreshnessServiceModule;
 
   // 注册 Simulation 业务处理器到 ExecutionEngine
   if (simulationExecutionEngineModule && simulationHandlersModule) {

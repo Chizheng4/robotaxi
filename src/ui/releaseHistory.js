@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v043.0.7",
+    "title": "建立线上最新版本检查与幂等演示数据引导，让首次访客自动看到需求预测和模拟经营结果",
+    "changes": [
+      "线上加载后轻量检查 GitHub Pages 部署清单，发现资源版本更新时自动刷新一次。",
+      "登录并完成运行态恢复后检查需求预测结果；缺失时调用现有经营规划服务自动生成。",
+      "检查模拟运行状态；无运行时自动创建并启动，已有就绪运行时直接启动，已执行时不重复运行。",
+      "自动模拟继续复用现有 SimulationActions、SimulationLoop 和业务动作服务，并沿用成本、收入及经营指标自动计算链路。",
+      "本地开发默认不启用线上演示引导；补充服务合同和真实生产预览浏览器验证。"
+    ],
+    "audienceTitle": "首次打开网站即可看到完整经营数据",
+    "audienceChanges": [
+      "网站发布新版本后会主动检查最新资源，减少浏览器继续使用旧页面的情况。",
+      "首次登录且没有数据时，会自动生成需求预测并运行一次运营模拟；已有数据不会被覆盖或重复执行。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v043.0.6",
     "title": "修复需求画像配置弹窗白屏，并统一周期增长率的存储精度与中文百分比展示",
     "changes": [
