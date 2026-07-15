@@ -4,6 +4,7 @@ const main = fs.readFileSync("src/main.jsx", "utf8");
 const styles = fs.readFileSync("src/styles.css", "utf8");
 const dictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
+const operatingDataPoolService = fs.readFileSync("src/services/operatingDataPoolService.js", "utf8");
 
 function assertIncludes(source, needle, message) {
   if (!source.includes(needle)) {
@@ -17,9 +18,9 @@ assertIncludes(
   "经营分析洞察栏必须使用合并字段定义后的统一指标池，不能只使用当前页面过滤后的行",
 );
 assertIncludes(
-  main,
-  "const metricDisplayRows = useMemo(() => createMetricDisplayRows(metricObservations, metricDefinitions, simulationRuns)",
-  "经营分析统一指标池必须由指标观测和指标定义合并生成",
+  operatingDataPoolService,
+  "export function createOperatingDataPool",
+  "经营分析统一指标池必须由独立服务合并指标观测和定义",
 );
 assertIncludes(
   main,

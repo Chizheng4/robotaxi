@@ -1,6 +1,5 @@
 # 当前大版本
 
-- 状态：执行中
-- 当前版本：`v044 经营规划与经营分析一体化`
-- 当前阶段：`v044.0.0 方案与合同基线`
-- 自动执行计划：`doc/common/current-iteration/major/v044-operating-performance-management-auto-execution-plan.md`
+- 状态：无正在执行的大版本
+- 最近完成：`v044.5.0 经营规划与经营分析一体化`
+- 归档计划：`doc/common/iteration-history/major/v044-operating-performance-management-auto-execution-plan.md`

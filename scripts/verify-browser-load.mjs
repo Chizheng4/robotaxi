@@ -122,7 +122,7 @@ try {
     returnByValue: true,
   });
   const entryState = JSON.parse(entryResult.result?.result?.value || "{}");
-  assert(entryState.hasLogin || entryState.hasWorkbench, `页面既未渲染登录入口也未渲染工作台：${JSON.stringify(entryState)}`);
+  assert(entryState.hasLogin || entryState.hasWorkbench, `页面既未渲染登录入口也未渲染工作台：${JSON.stringify({ ...entryState, exceptions, messages })}`);
   if (entryState.hasLogin) {
     const loginResult = await send("Runtime.evaluate", {
       expression: `(() => {

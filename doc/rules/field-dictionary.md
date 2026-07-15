@@ -439,7 +439,28 @@
 |source_object_refs|来源对象引用|运行态字段|可下钻来源对象|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 
-### 1.2.4 SimulationRun 指标汇总字段
+### 1.2.4 OperatingPerformanceComparison：经营表现比较
+
+该对象由统一经营数据池按需生成，不复制业务单据事实，也不进入模拟 Tick。
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|performance_indicator_id|经营表现指标编号|运行态字段|经营表现比较唯一语义编号|
+|performance_indicator_name|经营表现指标|运行态字段|统一中文名称|
+|performance_domain|经营领域|运行态字段|需求、供给、服务、资产或财务|
+|actual_value|实际值|运行态字段|业务事实计算结果|
+|forecast_value|同期预测值|运行态字段|与事实截止点对齐的预测值|
+|target_value|目标值|运行态字段|经营目标基线|
+|variance_to_forecast|预测差异|运行态字段|实际值减同期预测值|
+|variance_to_target|目标差异|运行态字段|实际值减目标值|
+|attainment_rate|达成率|运行态字段|实际值除以优先采用的预测或目标基线|
+|performance_status|经营表现状态|运行态字段|ACHIEVED、WATCH、OFF_TRACK、INSUFFICIENT_DATA|
+|value_unit|数值单位|运行态字段|辆、单、金额或比例|
+|comparison_explanation|比较说明|运行态字段|本次比较口径说明|
+|planning_source_refs|规划来源|运行态字段|经营目标、预测结果和供给计划引用|
+|fact_source_refs|事实来源|运行态字段|业务事实或指标观测引用|
+
+### 1.2.5 SimulationRun 指标汇总字段
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
@@ -449,7 +470,7 @@
 |metric_result_summary|指标结果摘要|运行态字段|指标计算结果摘要|
 |metric_calculation_errors|指标计算错误|运行态字段|指标计算质量问题或错误|
 
-### 1.2.5 指标枚举中文
+### 1.2.6 指标枚举中文
 
 |英文值|中文名|用途|
 |---|---|---|

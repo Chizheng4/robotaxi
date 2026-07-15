@@ -62,14 +62,14 @@ export const defaultMetricDefinitions = [
   definition("OUTCOME-SERVICE-003", "订单履约率", "Order Fulfillment Rate", MetricDomain.SERVICE, "Completed Orders / Created Orders", ["ServiceOrder"], ["order_status"], MetricUnit.PERCENT, true),
   definition("OUTCOME-SERVICE-004", "订单取消率", "Order Cancellation Rate", MetricDomain.SERVICE, "Cancelled Orders / Created Orders", ["ServiceOrder"], ["order_status"], MetricUnit.PERCENT, false),
   definition("OUTCOME-EFF-001", "单均收入", "Revenue per Completed Order", MetricDomain.FINANCE, "Collected Revenue / Completed Orders", ["RevenueRecord", "ServiceOrder"], ["revenue_amount", "order_status"], MetricUnit.CURRENCY, true),
-  definition("OUTCOME-EFF-002", "单均成本", "Cost per Completed Order", MetricDomain.FINANCE, "Total Operating Cost / Completed Orders", ["CostRecord", "ServiceOrder"], ["cost_amount", "order_status"], MetricUnit.CURRENCY, false),
+  definition("OUTCOME-EFF-002", "单均运营成本", "Operating Cost per Completed Order", MetricDomain.FINANCE, "Total Operating Cost / Completed Orders", ["CostRecord", "ServiceOrder"], ["cost_amount", "order_status"], MetricUnit.CURRENCY, false),
+  definition("OUTCOME-EFF-003", "单均贡献利润", "Contribution Profit per Completed Order", MetricDomain.FINANCE, "Contribution Profit / Completed Orders", ["RevenueRecord", "CostRecord", "ServiceOrder"], ["revenue_amount", "cost_amount", "order_status"], MetricUnit.CURRENCY, true),
   definition("DEMAND-TREND-001", "每小时订单数", "Hourly Order Count", MetricDomain.DEMAND, "count(ServiceOrder) by simulation hour", ["ServiceOrder"], ["simulation_created_at"], MetricUnit.COUNT, true, MetricLayer.PROCESS, ["simulation_hour"]),
   definition("DEMAND-TREND-002", "时段订单数", "Time Segment Order Count", MetricDomain.DEMAND, "count(ServiceOrder) by PEAK / NORMAL / OFF_PEAK", ["ServiceOrder"], ["simulation_created_at"], MetricUnit.COUNT, true, MetricLayer.PROCESS, ["time_segment"]),
-  definition("PROCESS-ASSET-001", "Robotaxi 资产利用率", "Robotaxi Asset Utilization Rate", MetricDomain.ASSET, "Robotaxi with completed ServiceOrder / Robotaxi total", ["Robotaxi", "ServiceOrder"], ["robotaxi_id", "order_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
+  definition("PROCESS-ASSET-001", "履约车辆覆盖率", "Fulfillment Robotaxi Coverage Rate", MetricDomain.ASSET, "Robotaxi with completed ServiceOrder / effective Robotaxi", ["Robotaxi", "ServiceOrder"], ["robotaxi_id", "order_status", "availability_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
   definition("PROCESS-MATCH-001", "Robotaxi 分配成功率", "Robotaxi Assignment Success Rate", MetricDomain.MATCHING, "Assigned Orders / Created Orders", ["ServiceOrder", "OrderMatchingDecision"], ["order_status", "selected_robotaxi_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
   definition("PROCESS-ROUTE-001", "路径规划成功率", "Route Planning Success Rate", MetricDomain.ROUTING, "Successful RoutePlanningRun / RoutePlanningRun", ["RoutePlanningRun"], ["planning_result", "result_route_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
   definition("PROCESS-TRIP-001", "履约完成率", "Trip Completion Rate", MetricDomain.SERVICE, "Completed Trips / Trips", ["Trip"], ["trip_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
-  definition("PROCESS-SUPPLY-001", "供给任务完成率", "Supply Task Completion Rate", MetricDomain.SUPPLY, "Completed Supply Tasks / Supply Tasks", ["ReadinessTask", "DeploymentTask", "RouteExecution"], ["task_status", "execution_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
   definition("PROCESS-EFF-001", "平均履约距离", "Average Fulfillment Distance", MetricDomain.EFFICIENCY, "sum(ServiceOrder.fulfillment_distance_km) / Completed Orders", ["ServiceOrder"], ["fulfillment_distance_km", "order_status"], MetricUnit.KM, false, MetricLayer.PROCESS),
   definition("PROCESS-EFF-002", "平均履约耗时", "Average Fulfillment Duration", MetricDomain.EFFICIENCY, "sum(ServiceOrder.fulfillment_duration_min) / Completed Orders", ["ServiceOrder"], ["fulfillment_duration_min", "order_status"], MetricUnit.MINUTE, false, MetricLayer.PROCESS),
   definition("QUALITY-DATA-001", "关键数据完整率", "Critical Data Completeness Rate", MetricDomain.QUALITY, "complete critical inputs / required critical inputs", ["SimulationRun", "RevenueRecord", "CostRecord", "ServiceOrder"], ["cost_calculation_status", "revenue_calculation_status", "simulation_created_at"], MetricUnit.PERCENT, true, MetricLayer.QUALITY),
@@ -193,7 +193,7 @@ function createOperatingPeriodMetricContext({ simulationRuns = [], scope = {}, r
   const period = resolveOperatingPeriod(simulationRuns, periodType);
   const runIds = new Set(period.simulationRuns.map((run) => run.simulation_run_id).filter(Boolean));
   const scopedRunIds = runIds.size > 0 ? runIds : new Set((simulationRuns || []).map((run) => run.simulation_run_id).filter(Boolean));
-  const filteredScope = filterScopeBySimulationRuns(scope || {}, scopedRunIds);
+  const filteredScope = filterScopeByOperatingPeriod(scope || {}, scopedRunIds, period);
   return {
     simulationRun: createPeriodAnchor(period, scopedRunIds),
     simulationRunIds: [...scopedRunIds],
@@ -202,8 +202,8 @@ function createOperatingPeriodMetricContext({ simulationRuns = [], scope = {}, r
     metricPeriodType: period.periodType,
     metricPeriodLabel: period.periodLabel,
     scope: filteredScope,
-    revenueRecords: filterRecordsBySimulationRuns(revenueRecords, scopedRunIds),
-    costRecords: filterRecordsBySimulationRuns(costRecords, scopedRunIds),
+    revenueRecords: filterRecordsByOperatingPeriod(revenueRecords, scopedRunIds, period),
+    costRecords: filterRecordsByOperatingPeriod(costRecords, scopedRunIds, period),
     calculationRunId,
   };
 }
@@ -270,8 +270,8 @@ function formatMetricPeriodTime(totalSeconds) {
   return `Day${day} ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
 }
 
-function filterScopeBySimulationRuns(scope, runIds) {
-  const shouldKeep = (item) => !item?.simulation_run_id || runIds.has(item.simulation_run_id);
+function filterScopeByOperatingPeriod(scope, runIds, period) {
+  const shouldKeep = (item) => recordBelongsToOperatingPeriod(item, runIds, period);
   return {
     ...scope,
     serviceOrders: (scope.serviceOrders || []).filter(shouldKeep),
@@ -288,8 +288,27 @@ function filterScopeBySimulationRuns(scope, runIds) {
   };
 }
 
-function filterRecordsBySimulationRuns(records = [], runIds) {
-  return (records || []).filter((record) => !record?.simulation_run_id || runIds.has(record.simulation_run_id));
+function filterRecordsByOperatingPeriod(records = [], runIds, period) {
+  return (records || []).filter((record) => recordBelongsToOperatingPeriod(record, runIds, period));
+}
+
+function recordBelongsToOperatingPeriod(record, runIds, period) {
+  if (!record) return false;
+  if (record.simulation_run_id) return runIds.has(record.simulation_run_id);
+  if (period.periodType === MetricPeriodType.ALL) return true;
+  const seconds = resolveRecordSimulationSeconds(record);
+  return Number.isFinite(seconds) && seconds >= period.startSeconds && seconds <= period.endSeconds;
+}
+
+function resolveRecordSimulationSeconds(record = {}) {
+  const direct = Number(record.simulation_created_seconds ?? record.created_simulation_seconds ?? record.simulation_occurred_seconds);
+  if (Number.isFinite(direct)) return direct;
+  return parseSimulationTimeSeconds(
+    record.simulation_created_at
+      || record.simulation_completed_at
+      || record.simulation_cost_occurred_at
+      || record.simulation_revenue_occurred_at,
+  );
 }
 
 export function normalizeMetricDefinitions(definitions = []) {
@@ -299,7 +318,7 @@ export function normalizeMetricDefinitions(definitions = []) {
   const normalizedDefinitions = definitions.map((item) => ({
     ...(fallbackById.get(item.metric_definition_id) || {}),
     ...item,
-    metric_status: item.metric_status || "ACTIVE",
+    metric_status: item.metric_definition_id === "PROCESS-SUPPLY-001" ? "DISABLED" : item.metric_status || "ACTIVE",
     definition_version: Number(item.definition_version || 1),
   }));
   const existingIds = new Set(normalizedDefinitions.map((item) => item.metric_definition_id));
@@ -323,15 +342,15 @@ function calculateObservations(metricDefinition, context, nextSequence) {
     "OUTCOME-SERVICE-004": () => ratio(cancelledOrders(context).length, serviceOrders(context).length),
     "OUTCOME-EFF-001": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE"), completedOrders(context).length),
     "OUTCOME-EFF-002": () => ratio(sumCost(context.costRecords), completedOrders(context).length),
+    "OUTCOME-EFF-003": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumCost(context.costRecords), completedOrders(context).length),
     "DEMAND-TREND-001": () => createHourlyOrderTrend(context),
     "DEMAND-TREND-002": () => createTimeSegmentOrderTrend(context),
     "PROCESS-ASSET-001": () => calculateRobotaxiAssetUtilization(context),
     "PROCESS-MATCH-001": () => ratio(assignedOrders(context).length, serviceOrders(context).length),
     "PROCESS-ROUTE-001": () => ratio(successfulRoutePlanningRuns(context).length, routePlanningRuns(context).length),
     "PROCESS-TRIP-001": () => ratio(completedTrips(context).length, trips(context).length),
-    "PROCESS-SUPPLY-001": () => ratio(completedSupplyObjects(context).length, supplyObjects(context).length),
-    "PROCESS-EFF-001": () => ratio(sumCompletedOrderDistance(completedOrders(context)), completedOrders(context).length),
-    "PROCESS-EFF-002": () => ratio(sumCompletedOrderDurationMinutes(completedOrders(context)), completedOrders(context).length),
+    "PROCESS-EFF-001": () => averageCompletedOrderDistance(completedOrders(context)),
+    "PROCESS-EFF-002": () => averageCompletedOrderDurationMinutes(completedOrders(context)),
     "QUALITY-DATA-001": () => calculateCriticalDataCompleteness(context),
   };
   const rawValue = calculators[metricDefinition.metric_definition_id]?.();
@@ -493,21 +512,6 @@ function robotaxis(context) {
   return context.scope?.robotaxis || [];
 }
 
-function supplyObjects(context) {
-  return [
-    ...(context.scope?.readinessTasks || []),
-    ...(context.scope?.deploymentTasks || []),
-    ...(context.scope?.routeExecutions || []),
-  ];
-}
-
-function completedSupplyObjects(context) {
-  return supplyObjects(context).filter((item) => (
-    ["COMPLETED", "PASSED", "ARRIVED"].includes(item.task_status)
-    || ["COMPLETED", "ARRIVED"].includes(item.execution_status)
-  ));
-}
-
 function sumTripDistance(records = []) {
   return Number(records.reduce((sum, trip) => sum + Number(trip.total_distance_km || trip.trip_total_distance_km || 0), 0).toFixed(2));
 }
@@ -516,20 +520,27 @@ function sumTripDurationSeconds(records = []) {
   return Number(records.reduce((sum, trip) => sum + normalizeDurationSeconds(trip.time_elapsed ?? trip.trip_total_duration_min ?? trip.estimated_duration_min), 0).toFixed(2));
 }
 
-function sumCompletedOrderDistance(records = []) {
-  return Number(records.reduce((sum, order) => sum + Number(order.fulfillment_distance_km ?? order.trip_total_distance_km ?? order.trip_distance_traveled_km ?? 0), 0).toFixed(2));
+function averageCompletedOrderDistance(records = []) {
+  const values = records.map((order) => firstFiniteNumber(order.fulfillment_distance_km, order.trip_total_distance_km, order.trip_distance_traveled_km)).filter(Number.isFinite);
+  return ratio(values.reduce((sum, value) => sum + value, 0), values.length);
 }
 
-function sumCompletedOrderDurationMinutes(records = []) {
-  return Number(records.reduce((sum, order) => sum + Number(order.fulfillment_duration_min ?? order.trip_total_duration_min ?? 0), 0).toFixed(2));
+function averageCompletedOrderDurationMinutes(records = []) {
+  const values = records.map((order) => firstFiniteNumber(order.fulfillment_duration_min, order.trip_total_duration_min)).filter(Number.isFinite);
+  return ratio(values.reduce((sum, value) => sum + value, 0), values.length);
+}
+
+function firstFiniteNumber(...values) {
+  const value = values.find((item) => item !== null && item !== undefined && item !== "" && Number.isFinite(Number(item)));
+  return value === undefined ? NaN : Number(value);
 }
 
 function calculateRobotaxiAssetUtilization(context) {
-  const totalRobotaxis = robotaxis(context).length;
+  const effectiveRobotaxis = robotaxis(context).filter((item) => !["PENDING_ADMISSION", "PENDING_DELIVERY", "RETIRED"].includes(item.availability_status || item.operational_status));
   const servedRobotaxiIds = new Set(completedOrders(context)
     .map((order) => order.robotaxi_id || order.matched_robotaxi_id || order.assigned_robotaxi_id)
     .filter(Boolean));
-  return ratio(servedRobotaxiIds.size, totalRobotaxis);
+  return ratio(servedRobotaxiIds.size, effectiveRobotaxis.length);
 }
 
 function createHourlyOrderTrend(context) {

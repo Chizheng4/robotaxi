@@ -77,10 +77,10 @@ const zonePresentation = getMapObjectPresentation("zone", "Z-001", data);
 assert.equal(zonePresentation.title, zone1.zone_name, "地图名称必须来自当前 Zone 对象");
 const changedProfileData = {
   ...data,
-  demandProfiles: data.demandProfiles.map((profile) => profile.target_object_id === "Z-001" ? { ...profile, expected_robotaxi_demand: 987.65 } : profile),
+  demandProfiles: data.demandProfiles.map((profile) => profile.target_object_id === "Z-001" ? { ...profile, baseline_addressable_daily_orders: 987.65 } : profile),
 };
 assert.equal(
-  getMapObjectPresentation("zone", "Z-001", changedProfileData).fields.find((item) => item.field === "expected_robotaxi_demand").value,
+  getMapObjectPresentation("zone", "Z-001", changedProfileData).fields.find((item) => item.field === "baseline_addressable_daily_orders").value,
   987.65,
   "画像更新后地图必须读取当前画像值，不得保留页面副本",
 );

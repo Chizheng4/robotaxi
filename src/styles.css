@@ -3179,6 +3179,103 @@ body {
   background: var(--surface);
 }
 
+.metric-planning-baseline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 0;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.metric-planning-baseline > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.metric-planning-baseline span,
+.metric-planning-baseline small {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.metric-planning-baseline strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-planning-facts {
+  display: flex;
+  gap: 14px;
+  white-space: nowrap;
+}
+
+.metric-planning-facts strong { color: var(--text); }
+
+.metric-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.metric-comparison-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #9aa8b7;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.metric-comparison-card.status-achieved { border-left-color: #4c9b78; }
+.metric-comparison-card.status-watch { border-left-color: #c39846; }
+.metric-comparison-card.status-off_track { border-left-color: #c56b6b; }
+
+.metric-comparison-card header,
+.metric-comparison-card footer,
+.metric-comparison-values {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric-comparison-card header span,
+.metric-comparison-card header em,
+.metric-comparison-card footer,
+.metric-comparison-card footer small {
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-style: normal;
+}
+
+.metric-comparison-card h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.metric-comparison-values > span {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.metric-comparison-values strong {
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
 .record-page-new.metric-analysis-page {
   overflow-x: hidden;
   overflow-y: auto;
@@ -4162,6 +4259,8 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .metric-comparison-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+
   .robotaxi-selected-card-inner {
     grid-template-columns: minmax(120px, 0.24fr) minmax(0, 1fr);
   }
@@ -4275,6 +4374,10 @@ body {
   .metric-card-grid {
     grid-template-columns: repeat(2, minmax(132px, 1fr));
   }
+
+  .metric-planning-baseline { align-items: flex-start; flex-direction: column; }
+  .metric-planning-facts { width: 100%; overflow-x: auto; }
+  .metric-comparison-grid { grid-template-columns: 1fr; }
 }
 
 /* v041.2.15 final shell overrides stay last so legacy version blocks cannot win. */

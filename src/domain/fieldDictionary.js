@@ -1294,6 +1294,20 @@ export const fieldDictionary = {
   active_metric_calculation_run_id: "当前指标计算运行编号",
   metric_result_summary: "指标结果摘要",
   metric_calculation_errors: "指标计算错误",
+  performance_indicator_id: "经营表现指标编号",
+  performance_indicator_name: "经营表现指标",
+  performance_domain: "经营领域",
+  actual_value: "实际值",
+  forecast_value: "同期预测值",
+  target_value: "目标值",
+  variance_to_forecast: "预测差异",
+  variance_to_target: "目标差异",
+  attainment_rate: "达成率",
+  performance_status: "经营表现状态",
+  value_unit: "数值单位",
+  comparison_explanation: "比较说明",
+  planning_source_refs: "规划来源",
+  fact_source_refs: "事实来源",
 
   // 子对象字段
   start_time: "开始时间",
@@ -1349,6 +1363,10 @@ export function getDetailTitle(type) {
 }
 
 export const valueDictionary = {
+  ACHIEVED: "已达成",
+  WATCH: "需关注",
+  OFF_TRACK: "偏离计划",
+  INSUFFICIENT_DATA: "数据不足",
   DAY: "日",
   WEEK: "周",
   MONTH: "月",

@@ -43,6 +43,7 @@ let businessTimingCalculator;
 let costModelCalculator;
 let revenueCalculator;
 let metricCalculator;
+let operatingDataPoolService;
 let simulationRunBusinessScope;
 let statusRegistry;
 let routePlanningStrategies;
@@ -62,6 +63,7 @@ let robotaxiMapProjection;
 let responsiveViewport;
 let spatialCatalogService;
 let mapSceneService;
+let pageContextService;
 let dataChartService;
 let releaseHistory = [];
 let projectReadmeService;
@@ -1132,10 +1134,6 @@ const runtimeSnapshotDbName = "robotaxi.runtime.snapshot.v027";
 const runtimeSnapshotStoreName = "runtimeSnapshots";
 const persistedSimulationEventIds = new Set();
 const defaultPageFilters = { keyword: "", statusValue: null, triggerType: null, objectType: null };
-const overviewMetricIds = ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "PROCESS-ASSET-001", "PROCESS-EFF-002", "PROCESS-EFF-001", "OUTCOME-FIN-005"];
-const financialMetricIds = ["OUTCOME-FIN-001", "OUTCOME-FIN-002", "OUTCOME-FIN-003", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-FIN-006", "OUTCOME-EFF-001", "OUTCOME-EFF-002"];
-const serviceMetricIds = ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "OUTCOME-SERVICE-004", "DEMAND-TREND-001", "DEMAND-TREND-002", "PROCESS-ASSET-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "PROCESS-TRIP-001"];
-const diagnosticMetricIds = ["PROCESS-ASSET-001", "PROCESS-MATCH-001", "PROCESS-ROUTE-001", "PROCESS-TRIP-001", "PROCESS-SUPPLY-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "QUALITY-DATA-001"];
 const demandTrendMetricIds = ["DEMAND-TREND-001", "DEMAND-TREND-002"];
 const metricPeriodOptions = [
   { value: "ALL", label: "全量经营周期" },
@@ -1668,7 +1666,6 @@ function App({ currentUser, onLogout }) {
     ...validateReadinessCheckTasks(data),
     ...validateDeploymentTasks(data),
   ], [data, initialValidations]);
-  const metricDisplayRows = useMemo(() => createMetricDisplayRows(metricObservations, metricDefinitions, simulationRuns), [metricDefinitions, metricObservations, simulationRuns]);
   const allFleetOperationTasks = useMemo(() => ([
     ...cleaningTasks,
     ...chargingTasks,
@@ -1715,6 +1712,18 @@ function App({ currentUser, onLogout }) {
   const [longTermDemandForecastStrategyDraft, setLongTermDemandForecastStrategyDraft] = useState({});
   const [metricPeriodType, setMetricPeriodType] = useState(initialRuntime.metricPeriodType || "ALL");
   const [metricCalculationInProgress, setMetricCalculationInProgress] = useState(false);
+  const operatingDataPool = useMemo(() => operatingDataPoolService.createOperatingDataPool({
+    metricObservations,
+    metricDefinitions,
+    metricCalculationRuns,
+    simulationRuns,
+    periodType: metricPeriodType,
+    businessTargets: operationalData.businessTargets,
+    demandForecasts: operationalData.longTermDemandForecasts,
+    supplyPlans: operationalData.supplyPlans,
+    robotaxis: operationalData.robotaxis,
+  }), [metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData.businessTargets, operationalData.longTermDemandForecasts, operationalData.supplyPlans, operationalData.robotaxis, simulationRuns]);
+  const metricDisplayRows = operatingDataPool.rows;
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
   const autoMetricCalculationRunIdsRef = useRef(new Set());
   const publicDemoBootstrapRef = useRef({
@@ -1943,10 +1952,10 @@ function App({ currentUser, onLogout }) {
     costRecords,
     revenueCalculationRuns,
     revenueRecords,
-    operatingMetricsOverview: filterMetricRowsForPage(metricDisplayRows, "operatingMetricsOverview", metricPeriodType),
-    financialMetrics: filterMetricRowsForPage(metricDisplayRows, "financialMetrics", metricPeriodType),
-    serviceMetrics: filterMetricRowsForPage(metricDisplayRows, "serviceMetrics", metricPeriodType),
-    processDiagnostics: filterMetricRowsForPage(metricDisplayRows, "processDiagnostics", metricPeriodType),
+    operatingMetricsOverview: operatingDataPool.pages.operatingMetricsOverview,
+    financialMetrics: operatingDataPool.pages.financialMetrics,
+    serviceMetrics: operatingDataPool.pages.serviceMetrics,
+    processDiagnostics: operatingDataPool.pages.processDiagnostics,
     metricDefinitions,
     metricCalculationRuns,
     metricObservations: metricDisplayRows,
@@ -2083,11 +2092,13 @@ function App({ currentUser, onLogout }) {
     : selected.type === activeObjectType ? selectedObject : null;
   const detailSelectedType = activePage === "console" ? selected.type : activeObjectType;
   const showConsoleSummary = activePage === "console";
-  const topTitle = showConsoleSummary ? "地图空间" : activeConfig?.title || "业务记录";
-  const topDescription = showConsoleSummary ? null : activeConfig?.description;
+  const pageContext = pageContextService.resolvePageContext({ page: activePage, menuLabel: getPageLabel(activePage), config: activeConfig });
+  const topTitle = showConsoleSummary ? "地图空间" : pageContext.title;
+  const topDescription = showConsoleSummary ? null : pageContext.description;
   const activeRows = rowsByPage[activePage] || [];
   const detailCollapsed = detailCollapsedByPage[activePage] ?? !detailSelectedObject;
-  const detailHidden = activePage === "longTermDemandForecasts";
+  const detailHidden = activePage === "longTermDemandForecasts"
+    || ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(activePage);
 
   useEffect(() => {
     if (!runtimeHydrated) return;
@@ -2914,7 +2925,7 @@ function App({ currentUser, onLogout }) {
     setMetricCalculationInProgress(true);
     setTimeout(() => {
       try {
-        const result = metricCalculator.createPeriodMetricCalculation({
+        const result = operatingDataPoolService.calculateOperatingDataPool({
           simulationRuns,
           scope,
           revenueRecords,
@@ -3717,6 +3728,7 @@ function App({ currentUser, onLogout }) {
                   metricDisplayRows,
                   metricCalculationRuns,
                   metricObservations,
+                  operatingDataPool,
                   simulationRuns,
                   simulationEvents,
                   timedOperations,
@@ -6620,7 +6632,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <Button size="small" type="primary" onClick={() => actions.refreshOperatingMetrics(actions.metricPeriodType)} disabled={actions.metricCalculationInProgress}>
             {actions.metricCalculationInProgress ? "数据更新中" : "更新经营数据"}
           </Button>
-          <span className="metric-data-pool-state">{createMetricDataPoolState(actions.metricCalculationRuns, actions.metricPeriodType)}</span>
+          <span className="metric-data-pool-state">{formatOperatingDataPoolState(actions.metricCalculationRuns, actions.metricPeriodType)}</span>
         </div>
       )}
       {isForecastAnalysisPage && (
@@ -6639,6 +6651,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           allRows={actions.metricDisplayRows || rows}
           metricCalculationRuns={actions.metricCalculationRuns}
           metricPeriodType={actions.metricPeriodType}
+          planningBaseline={actions.operatingDataPool?.planningBaseline}
+          comparisons={actions.operatingDataPool?.comparisons}
           onSelect={(row) => onSelect(objectType, row[idField])}
         />
       )}
@@ -8545,9 +8559,9 @@ function formatForecastAxisLabel(value, timeUnit) {
   return String(value).slice(5, 10) || String(value);
 }
 
-function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculationRuns = [], metricPeriodType = "ALL", onSelect }) {
+function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculationRuns = [], metricPeriodType = "ALL", planningBaseline = {}, comparisons = [], onSelect }) {
   const [demandTrendMode, setDemandTrendMode] = useState("HOURLY");
-  const latestRows = createLatestMetricRows(rows);
+  const latestRows = operatingDataPoolService.getLatestMetricRows(rows);
   const insightSourceRows = allRows.filter((row) => (
     row.metric_scope_type === "OPERATING_PERIOD"
     && row.metric_period_type === metricPeriodType
@@ -8567,9 +8581,9 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
     ? overviewMetricIds.map((id) => latestRows.find((row) => row.metric_definition_id === id)).filter(Boolean)
     : latestRows.slice(0, 6);
   const warningRows = insightSourceRows.filter((row) => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
-  const latestCalculationRun = getLatestMetricCalculationRun(metricCalculationRuns, metricPeriodType);
+  const latestCalculationRun = operatingDataPoolService.getLatestCalculationRun(metricCalculationRuns, metricPeriodType);
   const periodLabel = latestRows[0]?.metric_period_label || latestCalculationRun?.metric_period_label || "尚未更新";
-  const metricById = new Map(createLatestMetricRows(insightSourceRows).map((row) => [row.metric_definition_id, row]));
+  const metricById = new Map(operatingDataPoolService.getLatestMetricRows(insightSourceRows).map((row) => [row.metric_definition_id, row]));
   const sourceRecordCount = latestRows.reduce((total, row) => total + Number(row.source_record_count || 0), 0);
   const qualityMetric = metricById.get("QUALITY-DATA-001");
   const qualitySummary = qualityMetric ? `${getMetricDisplayName(qualityMetric)} ${formatMetricDisplayValue(qualityMetric)}` : "等待数据质量结果";
@@ -8602,8 +8616,38 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
       secondary: [metricById.get("PROCESS-ROUTE-001"), metricById.get("QUALITY-DATA-001")],
     }),
   ];
+  const activeTarget = planningBaseline?.businessTarget;
   return (
     <div className="metric-experience-panel">
+      <section className="metric-planning-baseline">
+        <div>
+          <span>经营规划基线</span>
+          <strong>{activeTarget?.target_name || "尚未建立经营目标"}</strong>
+          <small>{activeTarget ? `${activeTarget.forecast_start_date || ""} 至 ${activeTarget.forecast_end_date || ""}` : "完成经营规划后将自动进入统一数据池"}</small>
+        </div>
+        <div className="metric-planning-facts">
+          <span>预测结果 <strong>{planningBaseline?.forecasts?.length || 0}</strong></span>
+          <span>生产计划 <strong>{planningBaseline?.supplyPlans?.length || 0}</strong></span>
+          <span>事实截止 <strong>{periodLabel}</strong></span>
+        </div>
+      </section>
+      <section className="metric-comparison-grid" aria-label="规划与实际对比">
+        {(comparisons || []).map((item) => (
+          <article key={item.performance_indicator_id} className={`metric-comparison-card status-${String(item.performance_status || "").toLowerCase()}`}>
+            <header><span>{item.performance_domain}</span><em>{getDisplayValue(item.performance_status)}</em></header>
+            <h3>{item.performance_indicator_name}</h3>
+            <div className="metric-comparison-values">
+              <span>实际<strong>{formatPerformanceValue(item.actual_value, item.value_unit)}</strong></span>
+              <span>预测<strong>{formatPerformanceValue(item.forecast_value, item.value_unit)}</strong></span>
+              <span>目标<strong>{formatPerformanceValue(item.target_value, item.value_unit)}</strong></span>
+            </div>
+            <footer>
+              <span>达成率 {formatPerformanceRate(item.attainment_rate)}</span>
+              <small>{item.comparison_explanation}</small>
+            </footer>
+          </article>
+        ))}
+      </section>
       <div className="metric-card-grid">
         {overviewRows.length > 0 ? overviewRows.map((row) => (
           <button key={row.metric_observation_id} className="metric-summary-card" onClick={() => onSelect(row)}>
@@ -8673,6 +8717,18 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
       </div>
     </div>
   );
+}
+
+function formatPerformanceValue(value, unit) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "未形成";
+  const number = Number(value);
+  if (unit === "比例") return `${(number * 100).toFixed(1)}%`;
+  const formatted = Math.abs(number) >= 100 ? number.toFixed(0) : number.toFixed(2).replace(/\.00$/, "");
+  return `${formatted}${unit && unit !== "金额" ? ` ${unit}` : ""}`;
+}
+
+function formatPerformanceRate(value) {
+  return value === null || value === undefined || !Number.isFinite(Number(value)) ? "未形成" : `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function normalizeMetricChartRows(rows = []) {
@@ -9982,6 +10038,7 @@ async function bootstrap() {
 		    costModelCalculatorModule,
 		    revenueCalculatorModule,
 		    metricCalculatorModule,
+		    operatingDataPoolServiceModule,
 		    simulationRunBusinessScopeModule,
 		    routePlanningServiceModule,
 		    statusRegistryModule,
@@ -10003,6 +10060,7 @@ async function bootstrap() {
 		    responsiveViewportModule,
 		    spatialCatalogServiceModule,
 		    mapSceneServiceModule,
+		    pageContextServiceModule,
 		    dataChartServiceModule,
 		    releaseHistoryModule,
 		    projectReadmeModule,
@@ -10050,6 +10108,7 @@ async function bootstrap() {
 		    import("./data/costModelCalculator.js?v=20260625-v029-1"),
 		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
 		    import("./data/metricCalculator.js?v=20260629-v034-6"),
+		    import("./services/operatingDataPoolService.js?v=20260715-v044-1-0"),
 		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
 		    import("./services/routePlanningService.js?v=20260712-v042-0-0"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
@@ -10070,7 +10129,8 @@ async function bootstrap() {
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
-		    import("./ui/mapSceneService.js?v=20260712-v042-0-1"),
+		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
+		    import("./ui/pageContextService.js?v=20260715-v044-4-0"),
 		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
@@ -10118,6 +10178,7 @@ async function bootstrap() {
 		  costModelCalculator = costModelCalculatorModule;
 		  revenueCalculator = revenueCalculatorModule;
 		  metricCalculator = metricCalculatorModule;
+		  operatingDataPoolService = operatingDataPoolServiceModule;
 		  simulationRunBusinessScope = simulationRunBusinessScopeModule;
 		  routePlanningService = routePlanningServiceModule;
 		  statusRegistry = statusRegistryModule;
@@ -10143,6 +10204,7 @@ async function bootstrap() {
 		  responsiveViewport = responsiveViewportModule;
 		  spatialCatalogService = spatialCatalogServiceModule;
 		  mapSceneService = mapSceneServiceModule;
+		  pageContextService = pageContextServiceModule;
 		  dataChartService = dataChartServiceModule;
   releaseHistory = releaseHistoryModule.releaseHistory;
   projectReadmeService = projectReadmeModule;
@@ -12216,85 +12278,14 @@ function filterRecordRows(rows, columns, statusField, filters) {
   });
 }
 
-function createMetricDisplayRows(metricObservations = [], metricDefinitions = [], simulationRuns = []) {
-  const defaultDefinitions = typeof metricCalculator?.initializeDefaultMetricDefinitions === "function"
-    ? metricCalculator.initializeDefaultMetricDefinitions()
-    : [];
-  const definitionById = new Map([
-    ...(defaultDefinitions || []),
-    ...(metricDefinitions || []),
-  ].filter((definition) => definition?.metric_definition_id).map((definition) => [definition.metric_definition_id, definition]));
-  const runById = new Map((simulationRuns || []).map((run) => [run.simulation_run_id, run]));
-  return (metricObservations || []).map((observation) => {
-    const definition = definitionById.get(observation.metric_definition_id) || {};
-    const run = runById.get(observation.simulation_run_id) || {};
-    const hasDefinition = Boolean(definition.metric_definition_id);
-    return {
-      ...definition,
-      ...observation,
-      metric_name_cn: hasDefinition ? definition.metric_name_cn : "指标定义缺失",
-      metric_name_en: hasDefinition ? definition.metric_name_en : "Missing Metric Definition",
-      metric_domain: hasDefinition ? definition.metric_domain : "QUALITY",
-      metric_layer: hasDefinition ? definition.metric_layer : "QUALITY",
-      calculation_formula: hasDefinition ? definition.calculation_formula : "缺少指标定义，无法展示计算公式",
-      business_definition: hasDefinition ? definition.business_definition : "缺少指标定义，请检查统一指标定义数据池",
-      display_unit: hasDefinition ? definition.display_unit : observation.metric_unit,
-      simulation_name: run.simulation_name,
-      completed_time: run.completed_time,
-      completed_at: run.completed_at,
-    };
-  }).sort((a, b) => {
-    const createdOrder = String(b.created_at || "").localeCompare(String(a.created_at || ""));
-    if (createdOrder !== 0) return createdOrder;
-    const runOrder = String(b.metric_calculation_run_id || "").localeCompare(String(a.metric_calculation_run_id || ""));
-    if (runOrder !== 0) return runOrder;
-    return String(a.metric_definition_id || "").localeCompare(String(b.metric_definition_id || ""));
-  });
-}
-
-function filterMetricRowsForPage(metricRows = [], page, periodType = "ALL") {
-  const operatingPeriodRows = metricRows.filter((row) => row.metric_scope_type === "OPERATING_PERIOD");
-  const selectedPeriodRows = operatingPeriodRows.filter((row) => row.metric_period_type === periodType);
-  const sourceRows = selectedPeriodRows.length ? selectedPeriodRows : [];
-  if (page === "operatingMetricsOverview") return pickLatestMetricRows(sourceRows, overviewMetricIds);
-  if (page === "financialMetrics") return pickLatestMetricRows(sourceRows, financialMetricIds);
-  if (page === "serviceMetrics") return pickLatestMetricRows(sourceRows, serviceMetricIds);
-  if (page === "processDiagnostics") return pickLatestMetricRows(sourceRows, diagnosticMetricIds);
-  return metricRows;
-}
-
 function isFinanceCalculationTerminal(status) {
   return ["SUCCEEDED", "PARTIALLY_SUCCEEDED", "FAILED"].includes(status);
 }
 
-function getLatestMetricCalculationRun(metricCalculationRuns = [], periodType = "ALL") {
-  return (metricCalculationRuns || []).find((run) =>
-    run.metric_scope_type === "OPERATING_PERIOD" &&
-    run.metric_period_type === periodType
-  ) || null;
-}
-
-function createMetricDataPoolState(metricCalculationRuns = [], periodType = "ALL") {
-  const latestRun = getLatestMetricCalculationRun(metricCalculationRuns, periodType);
+function formatOperatingDataPoolState(metricCalculationRuns = [], periodType = "ALL") {
+  const latestRun = operatingDataPoolService.getLatestCalculationRun(metricCalculationRuns, periodType);
   if (!latestRun) return "数据池尚未更新";
   return `${latestRun.metric_calculation_run_id} · ${getDisplayValue(latestRun.calculation_status, "calculation_status")}`;
-}
-
-function pickLatestMetricRows(metricRows = [], metricIds = []) {
-  const latestByMetricId = new Map();
-  metricRows.forEach((row) => {
-    if (!metricIds.includes(row.metric_definition_id)) return;
-    if (!latestByMetricId.has(row.metric_definition_id)) latestByMetricId.set(row.metric_definition_id, row);
-  });
-  return metricIds.map((id) => latestByMetricId.get(id)).filter(Boolean);
-}
-
-function createLatestMetricRows(rows = []) {
-  const latestByMetricId = new Map();
-  rows.forEach((row) => {
-    if (!latestByMetricId.has(row.metric_definition_id)) latestByMetricId.set(row.metric_definition_id, row);
-  });
-  return [...latestByMetricId.values()];
 }
 
 function createMetricInsightGroup({ title, description, primary, secondary = [] }) {

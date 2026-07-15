@@ -5,7 +5,7 @@ const presentationRegistry = {
     nameField: "zone_name",
     typeField: "zone_type",
     profileTargetType: "ZONE",
-    hoverFields: ["expected_robotaxi_demand", "supply_need_score"],
+    hoverFields: ["baseline_addressable_daily_orders", "zone_period_growth_rate", "effective_daily_capacity"],
   },
   place: {
     collection: "places",
@@ -13,7 +13,7 @@ const presentationRegistry = {
     nameField: "place_name",
     typeField: "place_type",
     profileTargetType: "PLACE",
-    hoverFields: ["potential_demand", "expected_robotaxi_demand"],
+    hoverFields: ["baseline_addressable_daily_orders", "place_period_growth_rate", "peak_pattern"],
   },
   serviceArea: {
     collection: "serviceAreas",
@@ -21,28 +21,42 @@ const presentationRegistry = {
     nameField: "service_area_name",
     typeField: "service_area_type",
     profileTargetType: "SERVICE_AREA",
-    hoverFields: ["service_capacity", "current_robotaxi_count"],
+    hoverFields: ["effective_daily_capacity", "waiting_robotaxi_capacity", "current_robotaxi_count"],
   },
   road: {
     collection: "roads",
     idField: "road_id",
     nameField: "road_name",
     typeField: "road_type",
-    hoverFields: ["road_status"],
+    hoverFields: ["road_status", "road_segment_ids"],
+  },
+  roadNode: {
+    collection: "roadNodes",
+    idField: "road_node_id",
+    nameField: "road_node_id",
+    typeField: "node_type",
+    hoverFields: ["cell_id", "node_status"],
+  },
+  roadSegment: {
+    collection: "roadSegments",
+    idField: "road_segment_id",
+    nameField: "road_segment_id",
+    typeField: "segment_status",
+    hoverFields: ["road_id", "distance_m", "allowed_direction"],
   },
   opsCenter: {
     collection: "opsCenters",
     idField: "ops_center_id",
     nameField: "ops_center_name",
     typeField: "ops_center_status",
-    hoverFields: ["capacity", "can_clean_robotaxi"],
+    hoverFields: ["capacity", "service_area_ids", "ops_center_status"],
   },
   robotaxi: {
     collection: "robotaxis",
     idField: "robotaxi_id",
     nameField: "robotaxi_id",
     typeField: "availability_status",
-    hoverFields: ["battery_percent", "current_cell_id"],
+    hoverFields: ["battery_percent", "current_cell_id", "current_task_type"],
   },
 };
 
@@ -86,7 +100,9 @@ export function getMapObjectPresentation(type, id, data = {}) {
   const object = (data[registry.collection] || []).find((item) => item?.[registry.idField] === id);
   if (!object) return null;
   const profile = registry.profileTargetType
-    ? (data.demandProfiles || []).find((item) => item.target_object_type === registry.profileTargetType && item.target_object_id === id)
+    ? [...(data.demandProfiles || [])]
+      .filter((item) => item.target_object_type === registry.profileTargetType && item.target_object_id === id)
+      .sort((left, right) => String(right.calculated_at || right.updated_at || "").localeCompare(String(left.calculated_at || left.updated_at || "")))[0]
     : null;
   const values = { ...object, ...(profile || {}) };
   return {
