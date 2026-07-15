@@ -7058,116 +7058,30 @@ function RobotaxiObjectSummary({ robotaxi }) {
 
 function TabbedDetail({ selectedObject, selectedType }) {
   const tabs = getDetailTabs(selectedType, selectedObject);
-  const tabsRootRef = useRef(null);
-  const [activeTabKey, setActiveTabKey] = useState(tabs[0]?.key);
-  const tabKeys = tabs.map((tab) => tab.key).join("|");
-
-  useEffect(() => {
-    if (!tabs.some((tab) => tab.key === activeTabKey)) setActiveTabKey(tabs[0]?.key);
-  }, [activeTabKey, tabKeys]);
-
-  useEffect(() => {
-    const root = tabsRootRef.current;
-    if (!root || !activeTabKey) return undefined;
-    const navWrap = root.querySelector(".ant-tabs-nav-wrap");
-    if (!navWrap) return undefined;
-    const reveal = () => revealActiveDetailTab(root, activeTabKey);
-    const handleWheel = (event) => {
-      if (navWrap.scrollWidth <= navWrap.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
-      event.preventDefault();
-      navWrap.scrollBy({ left: event.deltaY, behavior: "auto" });
-    };
-    const dragState = { active: false, moved: false, pointerId: null, startX: 0, scrollLeft: 0 };
-    const handlePointerDown = (event) => {
-      if (event.pointerType !== "mouse" || event.button !== 0 || navWrap.scrollWidth <= navWrap.clientWidth) return;
-      dragState.active = true;
-      dragState.moved = false;
-      dragState.pointerId = event.pointerId;
-      dragState.startX = event.clientX;
-      dragState.scrollLeft = navWrap.scrollLeft;
-    };
-    const handlePointerMove = (event) => {
-      if (!dragState.active || event.pointerId !== dragState.pointerId) return;
-      const distance = event.clientX - dragState.startX;
-      if (Math.abs(distance) > 4) {
-        dragState.moved = true;
-        navWrap.classList.add("is-dragging");
-        navWrap.setPointerCapture?.(event.pointerId);
-      }
-      if (dragState.moved) navWrap.scrollLeft = dragState.scrollLeft - distance;
-    };
-    const finishPointerDrag = (event) => {
-      if (!dragState.active || event.pointerId !== dragState.pointerId) return;
-      dragState.active = false;
-      if (navWrap.hasPointerCapture?.(event.pointerId)) navWrap.releasePointerCapture(event.pointerId);
-      navWrap.classList.remove("is-dragging");
-      window.requestAnimationFrame(() => { dragState.moved = false; });
-    };
-    const suppressDraggedClick = (event) => {
-      if (!dragState.moved) return;
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    const frameId = window.requestAnimationFrame(reveal);
-    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(reveal) : null;
-    resizeObserver?.observe(navWrap);
-    navWrap.addEventListener("wheel", handleWheel, { passive: false });
-    navWrap.addEventListener("pointerdown", handlePointerDown);
-    navWrap.addEventListener("pointermove", handlePointerMove);
-    navWrap.addEventListener("pointerup", finishPointerDrag);
-    navWrap.addEventListener("pointercancel", finishPointerDrag);
-    navWrap.addEventListener("click", suppressDraggedClick, true);
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      resizeObserver?.disconnect();
-      navWrap.removeEventListener("wheel", handleWheel);
-      navWrap.removeEventListener("pointerdown", handlePointerDown);
-      navWrap.removeEventListener("pointermove", handlePointerMove);
-      navWrap.removeEventListener("pointerup", finishPointerDrag);
-      navWrap.removeEventListener("pointercancel", finishPointerDrag);
-      navWrap.removeEventListener("click", suppressDraggedClick, true);
-    };
-  }, [activeTabKey, tabKeys]);
 
   return (
-    <div className="detail-tabs-viewport" ref={tabsRootRef}>
-      <Tabs
-        activeKey={activeTabKey}
-        className="detail-tabs"
-        size="small"
-        onChange={setActiveTabKey}
-        items={tabs.map((tab) => ({
-          key: tab.key,
-          label: tab.label,
-          children: (
-            <DetailContentViewport className="object-inspector-tab-content">
-              {tab.explanations ? (
-                <PlanningFieldExplanations explanations={tab.explanations} />
-              ) : tab.cost ? (
-                <CostDetail selectedObject={selectedObject} />
-              ) : tab.timeline ? (
-                <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
-              ) : (
-                <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
-              )}
-            </DetailContentViewport>
-          ),
-        }))}
-      />
-    </div>
+    <Tabs
+      className="detail-tabs"
+      size="small"
+      items={tabs.map((tab) => ({
+        key: tab.key,
+        label: tab.label,
+        children: (
+          <DetailContentViewport className="object-inspector-tab-content">
+            {tab.explanations ? (
+              <PlanningFieldExplanations explanations={tab.explanations} />
+            ) : tab.cost ? (
+              <CostDetail selectedObject={selectedObject} />
+            ) : tab.timeline ? (
+              <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
+            ) : (
+              <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
+            )}
+          </DetailContentViewport>
+        ),
+      }))}
+    />
   );
-}
-
-function revealActiveDetailTab(root, activeTabKey) {
-  const navWrap = root.querySelector(".ant-tabs-nav-wrap");
-  const activeTab = root.querySelector(`.ant-tabs-tab[data-node-key="${activeTabKey}"]`);
-  if (!navWrap || !activeTab) return;
-  const tabLeft = activeTab.offsetLeft;
-  const tabRight = tabLeft + activeTab.offsetWidth;
-  const visibleLeft = navWrap.scrollLeft;
-  const visibleRight = visibleLeft + navWrap.clientWidth;
-  if (tabLeft < visibleLeft) navWrap.scrollTo({ left: tabLeft, behavior: "auto" });
-  if (tabRight > visibleRight) navWrap.scrollTo({ left: tabRight - navWrap.clientWidth, behavior: "auto" });
 }
 
 function DetailFieldContent({ selectedObject, keys }) {

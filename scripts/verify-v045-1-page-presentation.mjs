@@ -6,6 +6,7 @@ import { resolvePagePresentation } from "../src/ui/pageContextService.js";
 const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const stylesSource = fs.readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const rulesSource = fs.readFileSync(new URL("../doc/rules/04-frontend-ux-rules.md", import.meta.url), "utf8");
+const tabbedDetailSource = mainSource.match(/function TabbedDetail[\s\S]*?function DetailFieldContent/)?.[0] || "";
 
 for (const page of ["operatingModel", "longTermDemandForecasts", "operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"]) {
   const presentation = resolvePagePresentation(page);
@@ -21,14 +22,11 @@ assert.doesNotMatch(mainSource, /row-action-cell[^>]*onClickCapture/, "行操作
 assert.match(mainSource, /row-action-cell[^>]*onClick=\{\(event\) => event\.stopPropagation\(\)\}/, "行操作必须由公共控件隔离点击事件");
 assert.match(stylesSource, /\.analysis-content-viewport\s*\{[^}]*overflow-x:\s*auto/s, "分析内容必须支持内部横向浏览");
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-tab-btn\s*\{[^}]*white-space:\s*nowrap/s, "详情页签标题不得被压缩裁断");
-assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap\s*\{[^}]*overflow-x:\s*auto/s, "详情页签超宽时必须在控件内部横向浏览");
-assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-operations\s*\{[^}]*display:\s*none/s, "详情页签不得同时保留裁剪式更多占位");
+assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap\s*\{[^}]*min-width:\s*0/s, "详情页签必须保留组件原生溢出边界");
+assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap\s*\{[^}]*overflow-x:\s*auto/s, "详情页签必须与表单一致使用原生横向滚动");
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap::after\s*\{[^}]*display:\s*none/s, "详情页签不得保留覆盖标题的溢出遮罩");
-assert.match(mainSource, /function revealActiveDetailTab/, "详情页签必须在选择和宽度变化后保持当前页签可见");
-assert.match(mainSource, /handlePointerMove[\s\S]*navWrap\.scrollLeft = dragState\.scrollLeft - distance/, "详情页签必须支持连续拖动浏览");
-assert.match(mainSource, /suppressDraggedClick/, "详情页签拖动后不得误触发页签选择");
-assert.match(mainSource, /handlePointerDown[\s\S]*?dragState\.scrollLeft = navWrap\.scrollLeft;\s*};/, "详情页签普通点击不得提前捕获指针");
-assert.match(mainSource, /handlePointerMove[\s\S]*navWrap\.setPointerCapture/, "详情页签只有进入拖动后才能捕获指针");
+assert.doesNotMatch(tabbedDetailSource, /handlePointerMove|setPointerCapture|suppressDraggedClick|revealActiveDetailTab/, "详情页签不得覆盖平台原生滚动和点击交互");
+assert.doesNotMatch(stylesSource, /\.detail-tabs \.ant-tabs-nav-list\s*\{[^}]*transform:\s*none/s, "详情页签不得覆盖组件原生定位");
 assert.match(mainSource, /aria-label="展开详情"[\s\S]*?>›<\/Button>/, "详情展开控件必须使用统一的向右提示");
 assert.match(mainSource, /aria-label="隐藏详情"[\s\S]*?>‹<\/Button>/, "详情收起控件必须使用统一的向左提示");
 assert.match(stylesSource, /\.detail-toggle-button\.ant-btn:hover[\s\S]*background:\s*var\(--surface-soft\)/, "详情开合控件悬停时必须提供稳定的浮层反馈");
