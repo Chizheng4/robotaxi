@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createOperatingDataPool, createPlanningBaseline, createPlanningComparisons } from "../src/services/operatingDataPoolService.js";
 import { getMapObjectPresentation } from "../src/ui/mapSceneService.js";
 import { resolvePageContext } from "../src/ui/pageContextService.js";
+import { metricObjectSchemas } from "../src/ui/metricObjectPresentationService.js";
 
 const observations = [
   metric("OUTCOME-SERVICE-001", 80),
@@ -54,6 +55,12 @@ const mainSource = fs.readFileSync("src/main.jsx", "utf8");
 assert.match(mainSource, /operatingDataPool\?\.comparisons/, "经营分析画布必须消费数据池比较结果");
 assert.match(mainSource, /\["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"\]\.includes\(activePage\)/, "经营分析页必须隐藏常驻右侧详情");
 assert.match(mainSource, /pageContextService\.resolvePageContext/, "页面标题和说明必须通过统一上下文服务解析");
+assert.match(mainSource, /metricObjectPresentationService\?\.metricObjectSchemas/, "数据计算详情必须消费统一指标对象展示服务");
+assert.match(mainSource, /\{ key: "metricCalculationRuns", label: "计算记录" \}/, "指标计算记录菜单必须使用简洁名称");
+assert.ok(metricObjectSchemas.metricDefinition.tabs.some((tab) => tab.key === "calculation"), "指标定义详情必须解释计算逻辑");
+assert.ok(metricObjectSchemas.metricObservation.tabs.some((tab) => tab.key === "source"), "指标观测详情必须支持来源追溯");
+assert.ok(metricObjectSchemas.metricCalculationRun.tabs.some((tab) => tab.key === "issues"), "计算记录详情必须提供问题处理分组");
+assert.ok(!metricObjectSchemas.metricDefinition.tabs.flatMap((tab) => tab.fields).includes("metric_name_en"), "指标详情不得展示英文名称");
 
 console.log("v044 统一经营数据池、规划比较、地图摘要和页面上下文验证通过。");
 

@@ -65,6 +65,7 @@ node --check src/ui/projectReadme.js
 node --check src/ui/mapSceneService.js
 node --check src/ui/pageContextService.js
 node --check src/ui/dataChartService.js
+node --check src/ui/metricObjectPresentationService.js
 node --check src/ui/releaseFreshnessService.js
 node --check src/services/operatingDataPoolService.js
 node --check src/services/publicDemoBootstrapService.js

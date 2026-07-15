@@ -5,7 +5,7 @@ const PAGE_DESCRIPTION_OVERRIDES = Object.freeze({
   processDiagnostics: "诊断匹配、路径、资产和数据质量过程，定位经营偏差的业务原因。",
   metricDefinitions: "统一管理指标名称、含义、公式、单位、时间口径和来源对象。",
   metricObservations: "查看统一经营数据池生成的指标事实和来源引用。",
-  metricCalculationRuns: "查看每次经营数据更新的周期、结果和数据质量。",
+  metricCalculationRuns: "查看每次经营数据更新的可用结果、质量问题和建议处理方式。",
   businessTargets: "设定经营周期内的订单、服务、资产和经济目标，作为预测与分析的统一基线。",
   demandProfiles: "管理地点、服务区域和 Zone 的需求事实与增长假设，为长期需求预测提供输入。",
   supplyProductionProfiles: "描述 Robotaxi 生产、质检和交付能力，为供给计划提供能力约束。",

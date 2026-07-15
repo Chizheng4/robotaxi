@@ -9,6 +9,9 @@ const mobileAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MOBILE === "1
 const mapAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MAP === "1";
 const planningAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_PLANNING === "1";
 const publicDemoAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_PUBLIC_DEMO === "1";
+const businessTargetAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_BUSINESS_TARGET === "1";
+const operatingOverviewAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_OPERATING_OVERVIEW === "1";
+const metricDetailsAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_METRIC_DETAILS === "1";
 const screenshotPath = process.env.ROBOTAXI_BROWSER_SCREENSHOT || "";
 const [viewportWidth, viewportHeight] = viewport.split(",").map(Number);
 const browserWindowSize = planningAssertionEnabled && mobileAssertionEnabled ? "1440,900" : viewport;
@@ -150,6 +153,97 @@ try {
     const publicDemoState = publicDemoResult.result?.result?.value;
     assert(publicDemoState?.forecastResultCount > 0, `线上演示引导必须自动生成需求预测结果：${JSON.stringify(publicDemoState)}`);
     assert(publicDemoState?.simulationStatuses?.some((status) => status !== "READY"), `线上演示引导必须自动启动模拟运行：${JSON.stringify(publicDemoState)}`);
+  }
+
+  if (businessTargetAssertionEnabled) {
+    const clickMenuLabel = async (label) => {
+      const result = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const node = [...document.querySelectorAll(".ant-menu-title-content")].find((item) => item.textContent.trim() === ${JSON.stringify(label)});
+          const target = node?.closest(".ant-menu-item, .ant-menu-submenu-title");
+          target?.click();
+          return Boolean(target);
+        })()`,
+        returnByValue: true,
+      });
+      assert(result.result?.result?.value, `未找到菜单：${label}`);
+      await delay(250);
+    };
+    await clickMenuLabel("经营规划");
+    await clickMenuLabel("经营目标");
+    await delay(800);
+    const targetPageResult = await send("Runtime.evaluate", {
+      expression: `JSON.stringify({
+        hasPage: Boolean(document.querySelector('[data-page="businessTargets"]')),
+        hasTable: Boolean(document.querySelector('.record-table-section')),
+        bodyText: document.body?.innerText?.slice(0, 500) || ''
+      })`,
+      returnByValue: true,
+    });
+    const targetPage = JSON.parse(targetPageResult.result?.result?.value || "{}");
+    assert(targetPage.hasPage && targetPage.hasTable, `经营目标页面加载失败：${JSON.stringify({ ...targetPage, exceptions, messages })}`);
+  }
+
+  if (operatingOverviewAssertionEnabled) {
+    const clickMenuLabel = async (label) => {
+      const result = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const node = [...document.querySelectorAll(".ant-menu-title-content")].find((item) => item.textContent.trim() === ${JSON.stringify(label)});
+          const target = node?.closest(".ant-menu-item, .ant-menu-submenu-title");
+          target?.click();
+          return Boolean(target);
+        })()`,
+        returnByValue: true,
+      });
+      assert(result.result?.result?.value, `未找到菜单：${label}`);
+      await delay(250);
+    };
+    await clickMenuLabel("经营分析");
+    await clickMenuLabel("经营总览");
+    await delay(800);
+    const overviewResult = await send("Runtime.evaluate", {
+      expression: `JSON.stringify({
+        hasPage: Boolean(document.querySelector('[data-page="operatingMetricsOverview"]')),
+        hasAnalysis: Boolean(document.querySelector('.metric-experience-panel')),
+        bodyText: document.body?.innerText?.slice(0, 500) || ''
+      })`,
+      returnByValue: true,
+    });
+    const overview = JSON.parse(overviewResult.result?.result?.value || "{}");
+    assert(overview.hasAnalysis && exceptions.length === 0, `经营总览页面加载失败：${JSON.stringify({ ...overview, exceptions, messages })}`);
+  }
+
+  if (metricDetailsAssertionEnabled) {
+    const clickMenuLabel = async (label) => {
+      const result = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const node = [...document.querySelectorAll(".ant-menu-title-content")].find((item) => item.textContent.trim() === ${JSON.stringify(label)});
+          const target = node?.closest(".ant-menu-item, .ant-menu-submenu-title");
+          target?.click();
+          return Boolean(target);
+        })()`,
+        returnByValue: true,
+      });
+      assert(result.result?.result?.value, `未找到菜单：${label}`);
+      await delay(250);
+    };
+    await clickMenuLabel("经营分析");
+    await clickMenuLabel("数据计算");
+    await clickMenuLabel("指标定义");
+    await delay(600);
+    await clickElementCenter(".record-table-section tbody tr");
+    await delay(500);
+    const metricDetailResult = await send("Runtime.evaluate", {
+      expression: `JSON.stringify({
+        tabLabels: [...document.querySelectorAll('.detail-tabs .ant-tabs-tab')].map((node) => node.textContent.trim()),
+        bodyText: document.body?.innerText || ''
+      })`,
+      returnByValue: true,
+    });
+    const metricDetail = JSON.parse(metricDetailResult.result?.result?.value || "{}");
+    assert.deepEqual(metricDetail.tabLabels, ["基础定义", "业务口径", "计算逻辑", "质量规则", "字段解释"], `指标定义详情未接入统一分组：${JSON.stringify(metricDetail)}`);
+    assert(!metricDetail.bodyText.includes("指标英文名"), "指标定义详情不得显示英文指标名");
+    assert.equal(exceptions.length, 0, `指标详情存在运行异常：${JSON.stringify(exceptions)}`);
   }
 
   if (planningAssertionEnabled) {

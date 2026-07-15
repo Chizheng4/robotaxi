@@ -67,6 +67,13 @@
 |total_cost_amount|总成本金额|运行态字段|本次计算得到的总成本|
 |error_count|错误数量|运行态字段|本次计算错误数量|
 |calculation_errors|计算错误列表|运行态字段|结构化错误列表|
+|successful_metric_count|成功指标数|运行态字段|本次可正常使用的唯一指标数量|
+|warning_metric_count|提示指标数|运行态字段|数据不足但不阻断其他结果的唯一指标数量|
+|failed_metric_count|失败指标数|运行态字段|当前不可使用的唯一指标数量|
+|affected_metric_ids|受影响指标编号|运行态字段|存在提示或失败的指标编号列表|
+|metric_issue_details|指标问题明细|运行态字段|指标中文名、问题级别、原因和建议处理方式|
+|calculation_issue_summary|计算问题摘要|运行态字段|面向用户解释部分成功或失败的范围|
+|recommended_action|建议处理方式|运行态字段|根据问题原因生成的后续处理建议|
 |algorithm_version|计算算法版本|持久化字段|成本计算算法版本|
 |started_at|开始时间|持久化字段|真实审计开始时间|
 |completed_at|完成时间|持久化字段|真实审计完成时间|

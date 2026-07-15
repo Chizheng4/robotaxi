@@ -65,6 +65,7 @@ let spatialCatalogService;
 let mapSceneService;
 let pageContextService;
 let dataChartService;
+let metricObjectPresentationService;
 let releaseHistory = [];
 let projectReadmeService;
 let taskSequence = 0;
@@ -135,7 +136,7 @@ const pageGroups = [
         children: [
           { key: "metricDefinitions", label: "指标定义" },
           { key: "metricObservations", label: "指标观测" },
-          { key: "metricCalculationRuns", label: "指标计算记录" },
+          { key: "metricCalculationRuns", label: "计算记录" },
         ],
       },
     ],
@@ -806,9 +807,9 @@ const tableConfig = {
     columns: ["metric_definition_id", "metric_name_cn", "metric_layer", "metric_domain", "calculation_formula", "display_unit", "data_readiness", "metric_status", "definition_version"],
   },
   metricCalculationRuns: {
-    title: "指标计算记录",
-    description: "记录每次经营指标计算的范围、状态、结果数量和质量问题。",
-    columns: ["metric_calculation_run_id", "metric_scope_type", "metric_period_type", "metric_period_label", "calculation_status", "calculation_progress_percent", "metric_definition_count", "generated_metric_observation_count", "error_count", "started_at", "completed_at"],
+    title: "计算记录",
+    description: "记录每次经营数据更新的范围、可用结果、质量问题和建议处理方式。",
+    columns: ["metric_calculation_run_id", "metric_period_label", "calculation_status", "successful_metric_count", "warning_metric_count", "failed_metric_count", "calculation_issue_summary", "recommended_action", "started_at", "completed_at"],
   },
   metricObservations: {
     title: "指标观测",
@@ -7272,7 +7273,7 @@ function RobotaxiObjectSummary({ robotaxi }) {
 }
 
 function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "demandProfile", "businessTarget", "supplyProductionProfile", "longTermDemandForecastStrategy", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
+  return ["robotaxi", "worker", "route", "demandProfile", "businessTarget", "supplyProductionProfile", "longTermDemandForecastStrategy", "metricDefinition", "metricObservation", "metricCalculationRun", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -7348,6 +7349,13 @@ function getDetailTabs(selectedType, selectedObject) {
     return [
       ...planningSchema.tabs.map((tab) => ({ ...tab, keys: tab.fields })),
       { key: "explanations", label: "字段解释", explanations: planningSchema.explanations },
+    ];
+  }
+  const metricSchema = metricObjectPresentationService?.metricObjectSchemas?.[selectedType];
+  if (metricSchema) {
+    return [
+      ...metricSchema.tabs.map((tab) => ({ ...tab, keys: tab.fields })),
+      { key: "explanations", label: "字段解释", explanations: metricSchema.explanations },
     ];
   }
   if (selectedType === "robotaxi") {
@@ -7513,26 +7521,6 @@ function getDetailTabs(selectedType, selectedObject) {
     return [
       { key: "basic", label: "生成信息", keys: ["revenue_calculation_run_id", "simulation_run_id", "calculation_status", "calculation_progress_percent", "started_at", "completed_at"] },
       { key: "result", label: "生成结果", keys: ["processed_object_count", "generated_revenue_record_count", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "error_count", "calculation_errors"] },
-    ];
-  }
-  if (selectedType === "metricDefinition") {
-    return [
-      { key: "basic", label: "指标定义", keys: ["metric_definition_id", "metric_name_cn", "metric_name_en", "metric_layer", "metric_domain", "metric_status", "definition_version"] },
-      { key: "formula", label: "计算口径", keys: ["business_definition", "calculation_formula", "source_objects", "source_fields", "time_basis", "default_time_window", "supported_dimensions"] },
-      { key: "quality", label: "质量规则", keys: ["zero_denominator_rule", "data_readiness", "display_unit", "higher_is_better"] },
-    ];
-  }
-  if (selectedType === "metricCalculationRun") {
-    return [
-      { key: "basic", label: "计算信息", keys: ["metric_calculation_run_id", "metric_scope_type", "metric_period_type", "metric_period_label", "simulation_run_ids", "simulation_timeline_id", "calculation_status", "calculation_progress_percent", "started_at", "completed_at"] },
-      { key: "result", label: "计算结果", keys: ["metric_definition_count", "generated_metric_observation_count", "error_count", "calculation_errors", "algorithm_version"] },
-    ];
-  }
-  if (selectedType === "metricObservation") {
-    return [
-      { key: "basic", label: "指标结果", keys: ["metric_observation_id", "metric_definition_id", "metric_scope_type", "metric_period_type", "metric_period_label", "metric_value", "metric_unit", "quality_status", "quality_reason"] },
-      { key: "window", label: "窗口与维度", keys: ["simulation_run_ids", "simulation_timeline_id", "window_type", "window_start_seconds", "window_end_seconds", "window_label", "dimension_type", "dimension_id"] },
-      { key: "source", label: "来源解释", keys: ["numerator_value", "denominator_value", "source_record_count", "source_object_refs", "created_at"] },
     ];
   }
   return [];
@@ -8578,7 +8566,9 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
     : hourlyDemandRows.filter((row) => getMetricTrendDayValue(row) === activeTrendDay);
   const timeSegmentDemandRows = createMetricTrendRows(insightSourceRows, "DEMAND-TREND-002");
   const overviewRows = page === "operatingMetricsOverview"
-    ? overviewMetricIds.map((id) => latestRows.find((row) => row.metric_definition_id === id)).filter(Boolean)
+    ? operatingDataPoolService.OPERATING_ANALYSIS_PAGE_METRICS.operatingMetricsOverview
+      .map((id) => latestRows.find((row) => row.metric_definition_id === id))
+      .filter(Boolean)
     : latestRows.slice(0, 6);
   const warningRows = insightSourceRows.filter((row) => row.quality_status && row.quality_status !== "PASS").slice(0, 4);
   const latestCalculationRun = operatingDataPoolService.getLatestCalculationRun(metricCalculationRuns, metricPeriodType);
@@ -9424,6 +9414,12 @@ function renderDetailValue(key, value, row = null) {
   if (key === "pending_task_queue" && Array.isArray(value)) {
     return <Text className="detail-value">{formatRobotaxiQueueItems(value)}</Text>;
   }
+  if (key === "source_objects" && Array.isArray(value)) {
+    return <Text className="detail-value">{value.map(metricObjectPresentationService.getMetricSourceObjectLabel).join(" / ") || "无"}</Text>;
+  }
+  if (key === "source_fields" && Array.isArray(value)) {
+    return <Text className="detail-value">{value.map(getFieldLabel).join(" / ") || "无"}</Text>;
+  }
   if (isStatusField(key)) {
     return <StatusValue value={value} label={getFieldDisplayValue(key, value ?? "", row)} />;
   }
@@ -10062,6 +10058,7 @@ async function bootstrap() {
 		    mapSceneServiceModule,
 		    pageContextServiceModule,
 		    dataChartServiceModule,
+		    metricObjectPresentationServiceModule,
 		    releaseHistoryModule,
 		    projectReadmeModule,
 		    publicDemoBootstrapServiceModule,
@@ -10132,6 +10129,7 @@ async function bootstrap() {
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./ui/pageContextService.js?v=20260715-v044-4-0"),
 		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
+		    import("./ui/metricObjectPresentationService.js?v=20260715-v044-5-1"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
 		    import("./services/publicDemoBootstrapService.js?v=20260715-v043-0-7"),
@@ -10206,6 +10204,7 @@ async function bootstrap() {
 		  mapSceneService = mapSceneServiceModule;
 		  pageContextService = pageContextServiceModule;
 		  dataChartService = dataChartServiceModule;
+		  metricObjectPresentationService = metricObjectPresentationServiceModule;
   releaseHistory = releaseHistoryModule.releaseHistory;
   projectReadmeService = projectReadmeModule;
   releaseFreshnessService = releaseFreshnessServiceModule;

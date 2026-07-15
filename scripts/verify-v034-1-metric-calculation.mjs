@@ -118,6 +118,10 @@ assert.equal(
   MetricQualityStatus.WARN,
   "零订单分母必须给出质量提示，而不是制造错误履约率",
 );
+assert.equal(emptyOrderResult.calculationRun.calculation_status, MetricCalculationStatus.PARTIALLY_SUCCEEDED, "部分指标缺少事实时必须保留其他可用结果");
+assert.ok(emptyOrderResult.calculationRun.warning_metric_count > 0, "部分成功必须显示受影响的唯一指标数量");
+assert.match(emptyOrderResult.calculationRun.calculation_issue_summary, /其余指标可正常使用/, "部分成功必须解释可用范围");
+assert.match(emptyOrderResult.calculationRun.recommended_action, /服务订单|业务字段|经营数据/, "部分成功必须给出可执行的处理建议");
 
 const secondSimulationRun = {
   ...simulationRun,

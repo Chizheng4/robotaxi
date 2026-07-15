@@ -149,6 +149,11 @@ function createCalculationFromContext(context, definitions, algorithmVersion) {
       error_type: item.quality_status === MetricQualityStatus.FAIL ? "METRIC_QUALITY_FAILED" : "METRIC_QUALITY_WARN",
       error_message: item.quality_reason,
     }));
+  const definitionById = new Map(definitions.map((item) => [item.metric_definition_id, item]));
+  const issueDetails = createMetricIssueDetails(errors, definitionById);
+  const failedMetricCount = issueDetails.filter((item) => item.issue_level === "FAIL").length;
+  const warningMetricCount = issueDetails.filter((item) => item.issue_level === "WARN").length;
+  const activeMetricCount = definitions.filter((item) => item.metric_status === "ACTIVE").length;
   return {
     metricObservations: observations,
     calculationRun: {
@@ -161,15 +166,58 @@ function createCalculationFromContext(context, definitions, algorithmVersion) {
       simulation_timeline_id: context.simulationTimelineId,
       calculation_status: status,
       calculation_progress_percent: 100,
-      metric_definition_count: definitions.filter((item) => item.metric_status === "ACTIVE").length,
+      metric_definition_count: activeMetricCount,
       generated_metric_observation_count: observations.length,
       error_count: errors.length,
       calculation_errors: errors,
+      successful_metric_count: Math.max(0, activeMetricCount - failedMetricCount - warningMetricCount),
+      warning_metric_count: warningMetricCount,
+      failed_metric_count: failedMetricCount,
+      affected_metric_ids: issueDetails.map((item) => item.metric_definition_id),
+      metric_issue_details: issueDetails,
+      calculation_issue_summary: createCalculationIssueSummary({ status, failedMetricCount, warningMetricCount }),
+      recommended_action: createCalculationRecommendedAction(issueDetails),
       algorithm_version: algorithmVersion,
       started_at: startedAt,
       completed_at: new Date().toISOString(),
     },
   };
+}
+
+function createMetricIssueDetails(errors, definitionById) {
+  const issueByMetricId = new Map();
+  errors.forEach((error) => {
+    if (issueByMetricId.has(error.metric_definition_id)) return;
+    const reason = error.error_message || "数据质量未通过";
+    issueByMetricId.set(error.metric_definition_id, {
+      metric_definition_id: error.metric_definition_id,
+      metric_name_cn: definitionById.get(error.metric_definition_id)?.metric_name_cn || "未定义指标",
+      issue_level: error.error_type === "METRIC_QUALITY_FAILED" ? "FAIL" : "WARN",
+      issue_reason: reason,
+      recommended_action: resolveMetricIssueAction(reason),
+    });
+  });
+  return [...issueByMetricId.values()];
+}
+
+function createCalculationIssueSummary({ status, failedMetricCount, warningMetricCount }) {
+  if (status === MetricCalculationStatus.SUCCEEDED) return "全部指标计算成功，数据质量通过。";
+  if (status === MetricCalculationStatus.FAILED) return `${failedMetricCount} 项指标计算失败，当前结果不可用于经营判断。`;
+  return `${warningMetricCount} 项指标存在数据提示${failedMetricCount > 0 ? `，${failedMetricCount} 项指标失败` : ""}；其余指标可正常使用。`;
+}
+
+function createCalculationRecommendedAction(issueDetails) {
+  if (!issueDetails.length) return "无需处理，可直接查看经营分析结果。";
+  const actions = [...new Set(issueDetails.map((item) => item.recommended_action))];
+  return actions.slice(0, 3).join("；");
+}
+
+function resolveMetricIssueAction(reason) {
+  const text = String(reason || "");
+  if (/分母|订单|履约/.test(text)) return "继续形成已完成服务订单，或确认所选统计周期是否包含订单事实";
+  if (/收入|成本|财务/.test(text)) return "确认业务单据已完成成本和收入闭环，再更新经营数据";
+  if (/来源|缺失|完整/.test(text)) return "查看指标来源记录并补齐缺失业务字段";
+  return "查看该指标的质量说明和来源记录后修正数据";
 }
 
 function createSimulationRunMetricContext({ simulationRun, scope, revenueRecords = [], costRecords = [], calculationRunId }) {
