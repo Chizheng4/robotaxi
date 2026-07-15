@@ -1,6 +1,22 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v043.0.8",
+    "title": "让一键发布自动复用 Mac 本地代理，并在代理不可用时安全回退直连",
+    "changes": [
+      "发布命令自动探测 Clash Verge 本地代理 `127.0.0.1:7897`，无需每次手工输入代理环境变量。",
+      "GitHub 连接检查、Git 标签与 main 推送、Actions 和公网版本等待统一使用同一网络路径。",
+      "代理不可用时自动改用直连，不修改 Git 全局代理配置，也不影响其他项目。",
+      "补充发布网络合同验证和公开演示发布说明；业务功能、前端页面及模拟运行不变。"
+    ],
+    "audienceTitle": "双击即可稳定发布网站",
+    "audienceChanges": [
+      "保持 Clash Verge 运行后，双击发布命令会自动使用本地代理完成推送和上线确认。",
+      "本地代理未运行时会自动尝试直连，不需要再手工输入代理参数。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v043.0.7",
     "title": "建立线上最新版本检查与幂等演示数据引导，让首次访客自动看到需求预测和模拟经营结果",
     "changes": [

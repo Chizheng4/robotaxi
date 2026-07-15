@@ -24,6 +24,7 @@ flowchart LR
 - 产物检查：`node scripts/verify-github-pages-build.mjs`。
 - 自动部署：`.github/workflows/deploy-pages.yml`。
 - 一键发布：`publish-robotaxi.command`。
+- 发布网络：命令优先探测并使用 Clash Verge 本地代理 `127.0.0.1:7897`，代理不可用时自动回退直连；连接检查、Git 推送和公网验收使用同一网络路径。可通过 `ROBOTAXI_GITHUB_PROXY` 临时覆盖代理地址，不修改 Git 全局配置。
 - 发布目录：`dist/`，为生成目录，不提交 Git。
 
 生产构建只复制页面运行需要的 `index.html`、`vendor` 和运行时 `src`。设计文档、验证脚本、本地日志和 JSX 入口不会进入公开站点。
@@ -45,6 +46,7 @@ flowchart LR
 
 - 正式更新：Codex 完成本地验证、版本提交和标签后，只需双击 `publish-robotaxi.command`；不要再次点击 Commit。
 - 自动验收：发布命令等待 Actions 成功，并校验公网部署清单的版本与提交一致后才报告上线完成。
+- 网络选择：保持 Clash Verge 运行即可直接双击发布；无需在 Terminal 手工输入代理变量。
 - Contribution：版本提交进入 `main` 后形成贡献记录；提交邮箱必须是 GitHub 账号已验证邮箱或 GitHub noreply 邮箱。
 - 回退：将需要恢复的稳定提交重新发布到 `main`，或在 GitHub Pages 部署记录中重新运行对应版本。不得删除历史标签。
 

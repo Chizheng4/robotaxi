@@ -11,6 +11,10 @@ assert(workflow.includes("git fetch --force --tags origin"), "Pages 校验前必
 assert(workflow.includes('git rev-parse "$RELEASE_VERSION^{}"'), "Pages 必须校验标签指向当前提交");
 assert(!workflow.includes("git log -1 --format=%s"), "Pages 发布不得依赖提交说明格式");
 assert(publishCommand.includes("git -c http.version=HTTP/1.1 push"), "双击发布命令必须规避不稳定的 HTTP/2 推送链路");
+assert(publishCommand.includes("DEFAULT_GITHUB_PROXY=\"http://127.0.0.1:7897\""), "双击发布命令必须自动探测本地 GitHub 代理");
+assert(publishCommand.includes('http.proxy="$GITHUB_PROXY"'), "Git 推送必须复用发布命令探测到的代理");
+assert(publishCommand.includes("NODE_USE_ENV_PROXY=1"), "公网版本等待必须复用发布命令探测到的代理");
+assert(publishCommand.includes("--noproxy '*'"), "本地代理不可用时必须支持直连回退");
 assert(publishCommand.includes("max_attempts=3"), "双击发布命令必须对临时网络失败进行有限重试");
 assert(publishCommand.includes("--connect-timeout 10"), "双击发布命令必须在完整检查前快速探测 GitHub 网络");
 const tagPushIndex = publishCommand.indexOf('push_with_retry "$HEAD_TAG"');
