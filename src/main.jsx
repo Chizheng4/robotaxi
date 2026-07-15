@@ -66,6 +66,8 @@ let mapSceneService;
 let pageContextService;
 let dataChartService;
 let metricObjectPresentationService;
+let navigationRegistry;
+let operatingModelService;
 let releaseHistory = [];
 let projectReadmeService;
 let taskSequence = 0;
@@ -120,250 +122,8 @@ const unfinishedDeploymentStatuses = new Set([
   "ARRIVAL_ABNORMAL",
 ]);
 
-const pageGroups = [
-  { key: "console", label: "运营中控台", children: [{ key: "console", label: "运营中控台" }] },
-  {
-    key: "businessAnalysis",
-    label: "经营分析",
-    children: [
-      { key: "operatingMetricsOverview", label: "经营总览" },
-      { key: "financialMetrics", label: "财务表现" },
-      { key: "serviceMetrics", label: "服务分析" },
-      { key: "processDiagnostics", label: "过程诊断" },
-      {
-        key: "dataCalculationManagement",
-        label: "数据计算",
-        children: [
-          { key: "metricDefinitions", label: "指标定义" },
-          { key: "metricObservations", label: "指标观测" },
-          { key: "metricCalculationRuns", label: "计算记录" },
-        ],
-      },
-    ],
-  },
-  {
-    key: "financialManagement",
-    label: "财务管理",
-    children: [
-      { key: "revenueRecords", label: "收入记录" },
-      { key: "costRecords", label: "成本记录" },
-      { key: "costParameterRules", label: "成本配置" },
-      { key: "revenueCalculationRuns", label: "收入生成记录" },
-      { key: "costCalculationRuns", label: "成本计算记录" },
-      { key: "costModelProfiles", label: "成本模型配置" },
-    ],
-  },
-  {
-    key: "businessPlanning",
-    label: "经营规划",
-    children: [
-      { key: "businessTargets", label: "经营目标" },
-      { key: "demandProfiles", label: "需求画像" },
-      { key: "supplyProductionProfiles", label: "生产画像" },
-      {
-        key: "demandForecastManagement",
-        label: "需求预测",
-        children: [
-          { key: "longTermDemandForecastStrategies", label: "预测策略" },
-          { key: "longTermDemandForecastRuns", label: "预测执行" },
-          { key: "longTermDemandForecasts", label: "预测结果" },
-        ],
-      },
-    ],
-  },
-  {
-    key: "customer",
-    label: "客户管理",
-    children: [
-      { key: "customers", label: "客户列表" },
-    ],
-  },
-  {
-    key: "supplyManagement",
-    label: "供应管理",
-    children: [
-      { key: "supplyPlans", label: "生产计划" },
-      { key: "productionBatches", label: "生产批次" },
-      {
-        key: "regionDeliveryManagement",
-        label: "区域交付",
-        children: [
-          {
-            key: "fleetAllocationManagement",
-            label: "区域分配策略",
-            children: [
-              { key: "fleetAllocationStrategies", label: "分配策略配置" },
-              { key: "fleetAllocationRuns", label: "分配策略执行" },
-              { key: "fleetAllocationResults", label: "分配策略结果" },
-            ],
-          },
-          { key: "robotaxiDeliveryOrders", label: "交付单" },
-        ],
-      },
-      { key: "readinessTasks", label: "运营准入" },
-      { key: "ownerSupplies", label: "车主供应" },
-    ],
-  },
-  {
-    key: "robotaxi",
-    label: "Robotaxi",
-    children: [
-      { key: "robotaxis", label: "Robotaxi 列表" },
-      {
-        key: "routePlanningManagement",
-        label: "路径规划",
-        children: [
-          { key: "routePlanningStrategies", label: "路径规划策略" },
-          { key: "routePlanningRuns", label: "路径规划执行" },
-          { key: "routes", label: "路径规划结果" },
-        ],
-      },
-      { key: "routeExecutions", label: "运营行驶" },
-      { key: "serviceFulfillmentRecords", label: "履约行驶" },
-    ],
-  },
-  {
-    key: "operationsManagement",
-    label: "运营管理",
-    children: [
-      {
-        key: "supplyDemandDeploymentManagement",
-        label: "供需投放",
-        children: [
-          { key: "deploymentTasks", label: "投放任务单" },
-          { key: "supplyDemandBalanceStrategies", label: "供需平衡策略" },
-          { key: "supplyDemandBalanceRuns", label: "供需平衡执行" },
-          { key: "supplyDemandBalanceResults", label: "供需平衡结果" },
-        ],
-      },
-      {
-        key: "travelServiceManagement",
-        label: "出行服务",
-        children: [
-          { key: "serviceOrders", label: "服务订单管理" },
-          {
-            key: "demandSimulationPolicyGroup",
-            label: "虚拟需求策略",
-            children: [
-              { key: "demandSimulationStrategies", label: "虚拟需求配置" },
-              { key: "demandSimulationRuns", label: "虚拟需求执行" },
-              { key: "demandSimulationResults", label: "虚拟需求结果" },
-            ],
-          },
-          {
-            key: "pricingPolicyGroup",
-            label: "动态定价策略",
-            children: [
-              { key: "pricingStrategies", label: "定价策略配置" },
-              { key: "pricingStrategyRuns", label: "定价策略执行" },
-              { key: "pricingDecisions", label: "定价策略结果" },
-            ],
-          },
-          {
-            key: "orderMatchingPolicyGroup",
-            label: "订单匹配策略",
-            children: [
-              { key: "orderMatchingStrategies", label: "匹配策略配置" },
-              { key: "orderMatchingRuns", label: "匹配策略执行" },
-              { key: "orderMatchingDecisions", label: "匹配策略结果" },
-            ],
-          },
-        ],
-      },
-      {
-        key: "operationSupportManagement",
-        label: "运维支持",
-        children: [
-          { key: "cleaningTasks", label: "清洁任务" },
-          { key: "chargingTasks", label: "充电任务" },
-          { key: "maintenanceTasks", label: "维修任务" },
-          { key: "failureHandlingTasks", label: "故障处理" },
-          { key: "retirementTasks", label: "退役任务" },
-          {
-            key: "fleetOperationPolicyGroup",
-            label: "运维策略管理",
-            children: [
-              { key: "fleetOperationPolicies", label: "运维策略配置" },
-              { key: "fleetOperationPolicyRuns", label: "运维策略执行" },
-              { key: "fleetOperationPolicyResults", label: "运维策略结果" },
-            ],
-          },
-          {
-            key: "fleetOperationDispatchPolicyGroup",
-            label: "运维调度策略",
-            children: [
-              { key: "fleetOperationDispatchStrategies", label: "调度策略配置" },
-              { key: "fleetOperationDispatchRuns", label: "调度策略执行" },
-              { key: "fleetOperationDispatchDecisions", label: "调度策略结果" },
-            ],
-          },
-          {
-            key: "robotaxiTaskPlanningPolicyGroup",
-            label: "任务规划策略",
-            children: [
-              { key: "robotaxiTaskPlanningStrategies", label: "规划策略配置" },
-              { key: "robotaxiTaskPlanningRuns", label: "规划策略执行" },
-              { key: "robotaxiTaskPlanningResults", label: "规划策略结果" },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    key: "operationOrganization",
-    label: "运营组织",
-    children: [
-      { key: "opsCenters", label: "运营中心列表" },
-      { key: "workers", label: "作业人员列表" },
-    ],
-  },
-  {
-    key: "space",
-    label: "地图空间",
-    children: [
-      { key: "maps", label: "地图管理" },
-      { key: "cells", label: "网格单元" },
-      { key: "roads", label: "道路管理" },
-      { key: "roadNodes", label: "道路节点" },
-      { key: "roadSegments", label: "道路片段" },
-      { key: "places", label: "地点管理" },
-      { key: "serviceAreas", label: "服务区域" },
-      { key: "zones", label: "Zone 管理" },
-    ],
-  },
-  {
-    key: "simulation",
-    label: "运营模拟",
-    children: [
-      { key: "simulationRuns", label: "模拟运行" },
-      { key: "timedOperations", label: "时间作业" },
-      {
-        key: "simulationConfigManagement",
-        label: "配置管理",
-        children: [
-          { key: "simulationPolicies", label: "模拟规则" },
-          { key: "workflowTimingRules", label: "工作流时效" },
-        ],
-      },
-    ],
-  },
-];
-
-const menuGroupIcons = {
-  console: "⌁",
-  businessAnalysis: "◫",
-  financialManagement: "¥",
-  businessPlanning: "◇",
-  customer: "○",
-  supplyManagement: "⇧",
-  robotaxi: "R",
-  operationsManagement: "↔",
-  operationOrganization: "⊙",
-  space: "⌖",
-  simulation: "▷",
-};
-
+let pageGroups = [];
+let menuGroupIcons = {};
 const hiddenWorkspacePages = new Set([
   "simulationEvents",
   "costCalculationRuns",
@@ -379,6 +139,11 @@ const hiddenWorkspacePages = new Set([
 ]);
 
 const tableConfig = {
+  operatingModel: {
+    title: "经营模型",
+    description: "统一展示需求、供给、服务、资产、财务和经营反馈之间的经营结构。",
+    columns: ["operating_model_id", "operating_model_name", "operating_model_status", "operating_model_version", "model_description", "updated_at"],
+  },
   maps: {
     title: "地图管理",
     description: "地图是 Robotaxi 运营模拟中的空间容器。",
@@ -834,6 +599,7 @@ const tableConfig = {
 };
 
 const pageObjectType = {
+  operatingModel: "operatingModel",
   maps: "map",
   cells: "cell",
   roads: "road",
@@ -925,6 +691,7 @@ const pageObjectType = {
 };
 
 const idFieldByType = {
+  operatingModel: "operating_model_id",
   map: "map_id",
   cell: "cell_id",
   road: "road_id",
@@ -1865,6 +1632,7 @@ function App({ currentUser, onLogout }) {
       zoneDemandProfiles: data.zoneDemandProfiles || [],
     };
     return {
+      operatingModel: [operatingModelService.getOperatingModelDefinition()],
       maps: data.maps,
     cells: data.cells,
     roads: data.roads,
@@ -1994,6 +1762,7 @@ function App({ currentUser, onLogout }) {
     }
 
     const collections = {
+      operatingModel: rowsByPage.operatingModel,
       map: data.maps,
       road: data.roads,
       roadNode: data.roadNodes,
@@ -2098,7 +1867,8 @@ function App({ currentUser, onLogout }) {
   const topDescription = showConsoleSummary ? null : pageContext.description;
   const activeRows = rowsByPage[activePage] || [];
   const detailCollapsed = detailCollapsedByPage[activePage] ?? !detailSelectedObject;
-  const detailHidden = activePage === "longTermDemandForecasts"
+  const detailHidden = activePage === "operatingModel"
+    || activePage === "longTermDemandForecasts"
     || ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(activePage);
 
   useEffect(() => {
@@ -6391,6 +6161,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isSupplyProductionProfilePage = page === "supplyProductionProfiles";
   const isLongTermDemandForecastStrategyPage = page === "longTermDemandForecastStrategies";
   const isLongTermDemandForecastPage = page === "longTermDemandForecasts";
+  const isOperatingModelPage = page === "operatingModel";
   const isSupplyPlanPage = page === "supplyPlans";
   const isProductionBatchPage = page === "productionBatches";
   const isFleetAllocationStrategyPage = page === "fleetAllocationStrategies";
@@ -6480,14 +6251,14 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const tableScrollX = finalColumns.reduce((sum, column) => sum + Number(column.width || 128), 0);
   const eventTableScrollX = eventColumns.reduce((sum, key) => sum + getColumnWidth(key, visibleEventRows), 0);
   const isForecastAnalysisPage = isLongTermDemandForecastPage;
-  const showMainTable = isForecastAnalysisPage ? false : (!isMetricAnalysisPage || metricTableVisible);
+  const showMainTable = isForecastAnalysisPage || isOperatingModelPage ? false : (!isMetricAnalysisPage || metricTableVisible);
 
   useEffect(() => {
     if (isMetricAnalysisPage) setMetricTableVisible(false);
   }, [isMetricAnalysisPage, page]);
 
   return (
-    <section className={isReadinessPage ? "record-page-new readiness-page" : isMetricAnalysisPage ? "record-page-new metric-analysis-page" : "record-page-new"}>
+    <section className={isReadinessPage ? "record-page-new readiness-page" : isOperatingModelPage ? "record-page-new analytical-workspace operating-model-page" : isMetricAnalysisPage ? "record-page-new analytical-workspace metric-analysis-page" : isForecastAnalysisPage ? "record-page-new analytical-workspace forecast-analysis-page" : "record-page-new"}>
       {isRobotaxiPage && (
         <RobotaxiOperationPanel
           rows={displayRows}
@@ -6496,7 +6267,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           onSelect={(row) => onSelect(objectType, row[idField])}
         />
       )}
-      {!isMetricAnalysisPage && !isForecastAnalysisPage && statusOptions.length > 0 && (
+      {!isMetricAnalysisPage && !isForecastAnalysisPage && !isOperatingModelPage && statusOptions.length > 0 && (
         <div className="status-segment-bar">
           <Button
             size="small"
@@ -6517,7 +6288,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           ))}
         </div>
       )}
-      {!isMetricAnalysisPage && !isForecastAnalysisPage && (
+      {!isMetricAnalysisPage && !isForecastAnalysisPage && !isOperatingModelPage && (
       <div className="list-filter-bar">
         <div className="filter-field keyword-field">
           <span>关键词</span>
@@ -6645,6 +6416,9 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           onCompleteSupplyLoop={actions.completeSupplyManagementLoopFromForecast}
         />
       )}
+      {isOperatingModelPage && (
+        <OperatingModelPanel model={displayRows[0] || operatingModelService.getOperatingModelDefinition()} />
+      )}
       {isMetricAnalysisPage && (
         <MetricExperiencePanel
           page={page}
@@ -6706,7 +6480,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           />
         </div>
       )}
-      {!isForecastAnalysisPage && <ModuleFooter
+      {!isForecastAnalysisPage && !isOperatingModelPage && <ModuleFooter
         page={page}
         totalCount={rows.length}
         displayCount={displayRows.length}
@@ -8289,6 +8063,57 @@ function RowActionGroup({ children }) {
 function formatPlanningValue(value) {
   if (value === null || value === undefined || value === "") return "无";
   return typeof value === "number" ? value.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) : String(value);
+}
+
+function OperatingModelPanel({ model }) {
+  const domains = model?.model_domains || [];
+  const domainNameById = new Map(domains.map((item) => [item.model_domain_id, item.model_domain_name]));
+  return (
+    <div className="operating-model-panel">
+      <header className="operating-model-header">
+        <div>
+          <span className="analysis-eyebrow">经营结构</span>
+          <h2>{model?.operating_model_name || "经营模型"}</h2>
+          <p>{model?.model_description}</p>
+        </div>
+        <div className="operating-model-version">
+          <span>{getDisplayValue(model?.operating_model_status)}</span>
+          <small>版本 {model?.operating_model_version}</small>
+        </div>
+      </header>
+      <div className="operating-model-domain-grid">
+        {domains.map((domain, index) => (
+          <React.Fragment key={domain.model_domain_id}>
+            <article className="operating-model-domain">
+              <div className="operating-model-domain-index">{String(index + 1).padStart(2, "0")}</div>
+              <h3>{domain.model_domain_name}</h3>
+              <p>{domain.management_question}</p>
+              <dl>
+                <div><dt>规划输入</dt><dd>{domain.planning_input_types.map(operatingModelService.getModelObjectTypeLabel).join("、") || "无"}</dd></div>
+                <div><dt>经营事实</dt><dd>{domain.fact_source_types.map(operatingModelService.getModelObjectTypeLabel).join("、") || "无"}</dd></div>
+                <div><dt>经营指标</dt><dd>{domain.metric_definition_ids.length} 项统一指标</dd></div>
+              </dl>
+            </article>
+            {index < domains.length - 1 && <span className="operating-model-arrow" aria-hidden="true">→</span>}
+          </React.Fragment>
+        ))}
+      </div>
+      <section className="operating-model-relations">
+        <div>
+          <span className="analysis-eyebrow">经营传导</span>
+          <h3>从规划到反馈的闭环</h3>
+        </div>
+        <div className="operating-model-relation-list">
+          {(model?.model_relations || []).map((relation) => (
+            <div key={relation.model_relation_id}>
+              <strong>{domainNameById.get(relation.source_model_domain_id)} → {domainNameById.get(relation.target_model_domain_id)}</strong>
+              <span>{relation.relation_description}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreateSupplyPlan, onCompleteSupplyLoop }) {
@@ -10059,6 +9884,8 @@ async function bootstrap() {
 		    pageContextServiceModule,
 		    dataChartServiceModule,
 		    metricObjectPresentationServiceModule,
+		    navigationRegistryModule,
+		    operatingModelServiceModule,
 		    releaseHistoryModule,
 		    projectReadmeModule,
 		    publicDemoBootstrapServiceModule,
@@ -10130,6 +9957,8 @@ async function bootstrap() {
 		    import("./ui/pageContextService.js?v=20260715-v044-4-0"),
 		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
 		    import("./ui/metricObjectPresentationService.js?v=20260715-v044-5-1"),
+		    import("./ui/navigationRegistry.js?v=20260715-v045-0-0"),
+		    import("./services/operatingModelService.js?v=20260715-v045-0-0"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
 		    import("./services/publicDemoBootstrapService.js?v=20260715-v043-0-7"),
@@ -10205,6 +10034,12 @@ async function bootstrap() {
 		  pageContextService = pageContextServiceModule;
 		  dataChartService = dataChartServiceModule;
 		  metricObjectPresentationService = metricObjectPresentationServiceModule;
+		  navigationRegistry = navigationRegistryModule;
+		  operatingModelService = operatingModelServiceModule;
+		  pageGroups = navigationRegistry.navigationGroups;
+		  menuGroupIcons = navigationRegistry.navigationIcons;
+		  const navigationValidation = navigationRegistry.validateNavigationRegistry(Object.keys(tableConfig));
+		  if (!navigationValidation.valid) throw new Error(`导航注册表校验失败：${navigationValidation.errors.join("；")}`);
   releaseHistory = releaseHistoryModule.releaseHistory;
   projectReadmeService = projectReadmeModule;
   releaseFreshnessService = releaseFreshnessServiceModule;
@@ -11626,21 +11461,7 @@ function getPageLabel(page) {
 }
 
 function findMenuPath(page) {
-  const walk = (items = [], path = []) => {
-    for (const item of items) {
-      const nextPath = [...path, item];
-      if (item.key === page) return nextPath;
-      const childPath = walk(item.children || [], nextPath);
-      if (childPath) return childPath;
-    }
-    return null;
-  };
-  for (const group of pageGroups) {
-    if (group.key === page) return [group];
-    const path = walk(group.children || [], [group]);
-    if (path) return path;
-  }
-  return [];
+  return navigationRegistry?.findNavigationPath(page) || [];
 }
 
 function findPageMenuLabel(page) {
@@ -12357,12 +12178,9 @@ function createStatusOptions(rows, statusField, orderedValues = [], statusContex
 
 function getOpenKeysForPage(pageKey) {
   if (pageKey === "console") return [];
-  const path = findMenuPath(pageKey);
-  return path.slice(0, -1).map((item) => item.key);
+  return navigationRegistry?.getNavigationOpenKeys(pageKey) || [];
 }
 
 function getRootMenuKey(key) {
-  if (pageGroups.some((group) => group.key === key)) return key;
-  const parentKeys = getOpenKeysForPage(key);
-  return parentKeys[0] || key;
+  return navigationRegistry?.getNavigationRootKey(key) || key;
 }

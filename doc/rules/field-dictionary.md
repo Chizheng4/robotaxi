@@ -1286,6 +1286,7 @@
 
 |对象英文名|中文名|含义|
 |---|---|---|
+|operatingModel|经营模型|统一定义需求、供给、服务、资产、财务和经营反馈之间的关系|
 |businessTarget|经营目标|规划周期内收入、订单、车队规模、资产利用率和履约目标|
 |supplyProductionProfile|生产画像|描述自有生产形成 Robotaxi 供给能力的配置对象|
 |longTermDemandForecastStrategy|需求预测策略|长期需求预测策略配置|
@@ -1303,6 +1304,23 @@
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
+|operating_model_id|经营模型编号|持久化字段|经营模型唯一编号|
+|operating_model_name|经营模型名称|持久化字段|经营模型中文名称|
+|operating_model_status|经营模型状态|运行态字段|经营模型是否可使用|
+|operating_model_version|经营模型版本|持久化字段|经营模型合同版本|
+|model_description|模型说明|持久化字段|经营模型整体业务解释|
+|model_domains|经营模型域|持久化字段|需求、供给、服务、资产、财务和经营反馈模型域|
+|model_relations|模型关系|持久化字段|模型域之间的经营传导关系|
+|model_domain_id|模型域编号|持久化字段|经营模型域唯一编号|
+|model_domain_name|模型域名称|持久化字段|经营模型域中文名称|
+|management_question|经营问题|持久化字段|该模型域需要回答的核心经营问题|
+|planning_input_types|规划输入|持久化字段|模型域使用的规划输入对象|
+|fact_source_types|经营事实来源|持久化字段|模型域使用的业务事实对象|
+|metric_definition_ids|关联指标|持久化字段|模型域关联的统一指标定义编号|
+|model_relation_id|模型关系编号|持久化字段|模型域关系唯一编号|
+|source_model_domain_id|来源模型域|持久化字段|经营传导关系的来源模型域|
+|target_model_domain_id|目标模型域|持久化字段|经营传导关系的目标模型域|
+|relation_description|关系说明|持久化字段|模型域之间的经营传导含义|
 |business_target_id|经营目标编号|持久化字段|经营目标唯一编号|
 |target_name|目标名称|持久化字段|经营目标名称|
 |target_status|目标状态|运行态字段|经营目标状态|

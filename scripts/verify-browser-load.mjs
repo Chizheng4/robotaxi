@@ -12,6 +12,7 @@ const publicDemoAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_PUBLIC_DE
 const businessTargetAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_BUSINESS_TARGET === "1";
 const operatingOverviewAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_OPERATING_OVERVIEW === "1";
 const metricDetailsAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_METRIC_DETAILS === "1";
+const operatingModelAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_OPERATING_MODEL === "1";
 const screenshotPath = process.env.ROBOTAXI_BROWSER_SCREENSHOT || "";
 const [viewportWidth, viewportHeight] = viewport.split(",").map(Number);
 const browserWindowSize = planningAssertionEnabled && mobileAssertionEnabled ? "1440,900" : viewport;
@@ -184,7 +185,56 @@ try {
     assert(targetPage.hasPage && targetPage.hasTable, `经营目标页面加载失败：${JSON.stringify({ ...targetPage, exceptions, messages })}`);
   }
 
+  if (operatingModelAssertionEnabled) {
+    if (mobileAssertionEnabled) {
+      await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 844, deviceScaleFactor: 1, mobile: false });
+      await send("Runtime.evaluate", { expression: `document.querySelector('[aria-label="展开菜单"]')?.click()`, returnByValue: true });
+      await delay(250);
+    }
+    const clickMenuLabel = async (label) => {
+      const result = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const node = [...document.querySelectorAll(".ant-menu-title-content")].find((item) => item.textContent.trim() === ${JSON.stringify(label)});
+          const target = node?.closest(".ant-menu-item, .ant-menu-submenu-title");
+          target?.click();
+          return Boolean(target);
+        })()`,
+        returnByValue: true,
+      });
+      assert(result.result?.result?.value, `未找到菜单：${label}`);
+      await delay(250);
+    };
+    await clickMenuLabel("经营规划");
+    await clickMenuLabel("经营模型");
+    if (mobileAssertionEnabled) {
+      await send("Emulation.setDeviceMetricsOverride", { width: viewportWidth, height: viewportHeight, deviceScaleFactor: 1, mobile: true });
+      await delay(350);
+    }
+    await delay(700);
+    const modelResult = await send("Runtime.evaluate", {
+      expression: `JSON.stringify({
+        hasPanel: Boolean(document.querySelector('.operating-model-panel')),
+        domainNames: [...document.querySelectorAll('.operating-model-domain h3')].map((node) => node.textContent.trim()),
+        detailHidden: Boolean(document.querySelector('.workbench.detail-hidden')),
+        documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        panelOverflow: (() => { const node = document.querySelector('.operating-model-panel'); return node ? node.scrollWidth - node.clientWidth : null; })()
+      })`,
+      returnByValue: true,
+    });
+    const modelState = JSON.parse(modelResult.result?.result?.value || "{}");
+    assert(modelState.hasPanel, `经营模型页面加载失败：${JSON.stringify({ modelState, exceptions, messages })}`);
+    assert.deepEqual(modelState.domainNames, ["需求", "供给", "服务", "资产", "财务", "经营反馈"]);
+    assert(modelState.detailHidden, "经营模型分析画布不得混入对象详情面板");
+    assert.equal(modelState.documentOverflow, 0, "经营模型不得产生页面级横向溢出");
+    if (mobileAssertionEnabled) assert.equal(modelState.panelOverflow, 0, "手机经营模型不得产生内容横向溢出");
+  }
+
   if (operatingOverviewAssertionEnabled) {
+    if (mobileAssertionEnabled) {
+      await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 844, deviceScaleFactor: 1, mobile: false });
+      await send("Runtime.evaluate", { expression: `document.querySelector('[aria-label="展开菜单"]')?.click()`, returnByValue: true });
+      await delay(250);
+    }
     const clickMenuLabel = async (label) => {
       const result = await send("Runtime.evaluate", {
         expression: `(() => {
@@ -200,17 +250,30 @@ try {
     };
     await clickMenuLabel("经营分析");
     await clickMenuLabel("经营总览");
+    if (mobileAssertionEnabled) {
+      await send("Emulation.setDeviceMetricsOverride", { width: viewportWidth, height: viewportHeight, deviceScaleFactor: 1, mobile: true });
+      await delay(350);
+    }
     await delay(800);
     const overviewResult = await send("Runtime.evaluate", {
       expression: `JSON.stringify({
         hasPage: Boolean(document.querySelector('[data-page="operatingMetricsOverview"]')),
         hasAnalysis: Boolean(document.querySelector('.metric-experience-panel')),
+        documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        analysisOverflow: (() => { const node = document.querySelector('.metric-analysis-page'); return node ? node.scrollWidth - node.clientWidth : null; })(),
+        overflowCandidates: (() => {
+          const root = document.querySelector('.metric-analysis-page');
+          if (!root) return [];
+          return [...root.querySelectorAll('*')].map((node) => ({ className: String(node.className || '').slice(0, 100), overflow: node.scrollWidth - node.clientWidth, width: Math.round(node.getBoundingClientRect().width) })).filter((item) => item.overflow > 1).sort((a, b) => b.overflow - a.overflow).slice(0, 8);
+        })(),
         bodyText: document.body?.innerText?.slice(0, 500) || ''
       })`,
       returnByValue: true,
     });
     const overview = JSON.parse(overviewResult.result?.result?.value || "{}");
     assert(overview.hasAnalysis && exceptions.length === 0, `经营总览页面加载失败：${JSON.stringify({ ...overview, exceptions, messages })}`);
+    assert.equal(overview.documentOverflow, 0, "经营总览不得产生页面级横向溢出");
+    if (mobileAssertionEnabled) assert(overview.analysisOverflow <= 1, `手机经营总览不得产生内容横向溢出：${JSON.stringify(overview.overflowCandidates)}`);
   }
 
   if (metricDetailsAssertionEnabled) {

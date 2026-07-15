@@ -66,8 +66,10 @@ node --check src/ui/mapSceneService.js
 node --check src/ui/pageContextService.js
 node --check src/ui/dataChartService.js
 node --check src/ui/metricObjectPresentationService.js
+node --check src/ui/navigationRegistry.js
 node --check src/ui/releaseFreshnessService.js
 node --check src/services/operatingDataPoolService.js
+node --check src/services/operatingModelService.js
 node --check src/services/publicDemoBootstrapService.js
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
@@ -169,6 +171,7 @@ node scripts/verify-v042-multi-zone-map.mjs
 node scripts/verify-v043-0-1-unified-data-chart.mjs
 node scripts/verify-v043-0-7-public-demo-bootstrap.mjs
 node scripts/verify-v044-operating-data-pool.mjs
+node scripts/verify-v045-operating-model.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

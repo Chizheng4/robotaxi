@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const main = fs.readFileSync("src/main.jsx", "utf8");
+const navigation = fs.readFileSync("src/ui/navigationRegistry.js", "utf8");
 const planningTypes = fs.readFileSync("src/domain/robotaxiTaskPlanningTypes.js", "utf8");
 const planningService = fs.readFileSync("src/services/robotaxiTaskPlanningService.js", "utf8");
 const fleetTaskService = fs.readFileSync("src/services/fleetOperationTaskService.js", "utf8");
@@ -18,8 +19,8 @@ const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
   "nextTaskPlanningResultId",
 ].forEach((needle) => assert.ok(main.includes(needle), `主页面缺少 ${needle}`));
 
-assert.ok(main.includes('{ key: "robotaxiTaskPlanningRuns", label: "规划策略执行" }'), "任务规划策略分组必须包含规划策略执行");
-assert.ok(main.includes('{ key: "robotaxiTaskPlanningResults", label: "规划策略结果" }'), "任务规划策略分组必须包含规划策略结果");
+assert.ok(navigation.includes('page("robotaxiTaskPlanningRuns", "规划策略执行")'), "任务规划策略分组必须包含规划策略执行");
+assert.ok(navigation.includes('page("robotaxiTaskPlanningResults", "规划策略结果")'), "任务规划策略分组必须包含规划策略结果");
 assert.match(main, /isFleetOperationDispatchStrategyPage[\s\S]*isRobotaxiTaskPlanningStrategyPage[\s\S]*isStrategyExecutionPanelPage/, "策略页面必须统一接入最近策略执行区");
 assert.match(main, /isRobotaxiTaskPlanningStrategyPage \? createStrategyRunRows\(actions\.robotaxiTaskPlanningRuns/, "任务规划策略页必须展示最近任务规划执行");
 

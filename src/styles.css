@@ -520,6 +520,129 @@
   }
 }
 
+/* v045 经营模型与数据分析页面共享同一分析画布。 */
+.record-page-new.analytical-workspace {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: clamp(36px, 7vh, 72px);
+  background: var(--surface);
+}
+
+.analytical-workspace > * {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.operating-model-panel {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.operating-model-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.analysis-eyebrow {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.operating-model-header h2,
+.operating-model-relations h3 {
+  margin: 4px 0 6px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.operating-model-header p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  line-height: 1.65;
+}
+
+.operating-model-version {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 3px;
+  text-align: right;
+}
+
+.operating-model-version span { color: #237a57; font-size: var(--font-sm); font-weight: 600; }
+.operating-model-version small { color: var(--muted); font-size: var(--font-xs); }
+
+.operating-model-domain-grid {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(18px, auto));
+  align-items: stretch;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.operating-model-domain {
+  width: min(210px, 18vw);
+  min-width: 168px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfe;
+}
+
+.operating-model-domain-index { color: #7b8ea5; font-size: 11px; font-variant-numeric: tabular-nums; }
+.operating-model-domain h3 { margin: 5px 0; color: var(--text); font-size: 15px; font-weight: 600; }
+.operating-model-domain > p { min-height: 40px; margin: 0 0 9px; color: #566578; font-size: var(--font-xs); line-height: 1.55; }
+.operating-model-domain dl { display: grid; gap: 7px; margin: 0; }
+.operating-model-domain dl > div { display: grid; gap: 2px; padding-top: 6px; border-top: 1px solid var(--line-soft); }
+.operating-model-domain dt { color: var(--muted); font-size: 11px; }
+.operating-model-domain dd { margin: 0; color: var(--text); font-size: var(--font-xs); line-height: 1.5; }
+.operating-model-arrow { align-self: center; color: #91a0b2; font-size: 15px; }
+
+.operating-model-relations {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.28fr) minmax(0, 1fr);
+  gap: 28px;
+  padding-top: 4px;
+}
+
+.operating-model-relations h3 { font-size: 16px; }
+.operating-model-relation-list { display: grid; grid-template-columns: repeat(2, minmax(230px, 1fr)); gap: 0 18px; }
+.operating-model-relation-list > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.operating-model-relation-list strong { color: var(--text); font-size: var(--font-xs); font-weight: 600; }
+.operating-model-relation-list span { color: var(--muted); font-size: var(--font-xs); line-height: 1.5; }
+
+@media (max-width: 767px) {
+  .record-page-new.analytical-workspace { padding-bottom: max(48px, env(safe-area-inset-bottom)); }
+  .analytical-workspace .list-action-bar,
+  .analytical-workspace .metric-period-actions { flex-wrap: wrap; align-items: stretch; height: auto; }
+  .analytical-workspace .metric-period-actions .metric-data-pool-state { flex-basis: 100%; white-space: normal; }
+  .analytical-workspace .module-footer { flex-wrap: wrap; gap: 4px 12px; height: auto; white-space: normal; }
+  .analytical-workspace .metric-card-grid,
+  .analytical-workspace .analysis-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analytical-workspace .metric-summary-card span,
+  .analytical-workspace .analysis-summary-card span { overflow: visible; text-overflow: clip; white-space: normal; }
+  .operating-model-panel { gap: 14px; padding: 12px; }
+  .operating-model-header { display: grid; gap: 10px; }
+  .operating-model-version { text-align: left; }
+  .operating-model-domain-grid { grid-template-columns: 1fr; overflow: visible; }
+  .operating-model-domain { width: auto; min-width: 0; }
+  .operating-model-domain > p { min-height: 0; }
+  .operating-model-arrow { justify-self: center; transform: rotate(90deg); }
+  .operating-model-relations { grid-template-columns: 1fr; gap: 4px; }
+  .operating-model-relation-list { grid-template-columns: 1fr; }
+  .operating-model-relation-list > div { grid-template-columns: 105px minmax(0, 1fr); }
+}
+
 /* v042.0 multi-zone operational map scene */
 .map-page-new {
   display: block;

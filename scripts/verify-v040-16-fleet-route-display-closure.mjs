@@ -16,7 +16,7 @@ function assertBefore(source, first, second, message) {
 assertBefore(
   main,
   "{isRobotaxiPage && (",
-  "{!isMetricAnalysisPage && !isForecastAnalysisPage && statusOptions.length > 0",
+  "{!isMetricAnalysisPage && !isForecastAnalysisPage && !isOperatingModelPage && statusOptions.length > 0",
   "Robotaxi 运营状态面板必须位于状态分类和筛选之前，避免与表格筛选层级混淆",
 );
 assertIncludes(main, "function formatRobotaxiQueueItems", "Robotaxi 排队任务必须显示排队序号");

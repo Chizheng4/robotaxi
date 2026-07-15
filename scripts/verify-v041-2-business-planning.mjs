@@ -259,13 +259,14 @@ assert.equal(producedAsset.availability_status, "PENDING_ADMISSION", "闭环编�
 assert.equal(supplyLoop.robotaxis.find((robotaxi) => robotaxi.robotaxi_id === "RTX-001").availability_status, "AVAILABLE", "闭环编排不得破坏已有 Robotaxi 管理状态");
 
 const main = fs.readFileSync("src/main.jsx", "utf8");
+const navigationRegistry = fs.readFileSync("src/ui/navigationRegistry.js", "utf8");
 const fieldDictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8");
 const dictionaryDoc = fs.readFileSync("doc/rules/field-dictionary.md", "utf8");
 
-assert.ok(main.includes('label: "经营规划"'), "前端必须存在经营规划一级菜单");
-assert.ok(main.includes('{ key: "businessTargets", label: "经营目标" }'), "经营规划必须包含经营目标菜单");
-assert.ok(main.includes('{ key: "supplyProductionProfiles", label: "生产画像" }'), "经营规划必须包含生产画像菜单");
-assert.ok(main.includes('{ key: "longTermDemandForecastStrategies", label: "预测策略" }'), "需求预测必须包含预测策略三级菜单");
+assert.ok(navigationRegistry.includes('group("businessPlanning", "经营规划"'), "前端必须存在经营规划一级菜单");
+assert.ok(navigationRegistry.includes('page("businessTargets", "经营目标")'), "经营规划必须包含经营目标菜单");
+assert.ok(navigationRegistry.includes('page("supplyProductionProfiles", "生产画像")'), "经营规划必须包含生产画像菜单");
+assert.ok(navigationRegistry.includes('page("longTermDemandForecastStrategies", "预测策略")'), "需求预测必须包含预测策略三级菜单");
 assert.ok(main.includes("businessPlanningService.executeLongTermDemandForecastStrategy"), "页面只能调用经营规划服务执行预测，不得自行拼预测结果");
 assert.ok(main.includes("businessPlanningService.updateBusinessTargetConfig"), "页面必须调用服务保存经营目标配置");
 assert.ok(main.includes("businessPlanningService.updateSupplyProductionProfileConfig"), "页面必须调用服务保存生产画像配置");
@@ -273,8 +274,8 @@ assert.ok(main.includes("businessTargets: data.businessTargets || []"), "需求�
 assert.ok(main.includes("businessPlanningService.createSupplyPlanFromForecast"), "页面必须调用服务从预测结果创建生产计划");
 assert.ok(main.includes("businessPlanningService.completeSupplyManagementLoopFromForecast"), "页面必须调用服务执行供应管理闭环编排");
 assert.ok(main.includes("执行供应闭环"), "预测结果页必须提供供应闭环人工入口");
-assert.ok(main.includes('key: "regionDeliveryManagement"'), "供应管理必须把区域交付作为二级菜单容器");
-assert.ok(main.includes('label: "交付单"'), "区域交付容器下必须把区域交付单显示为交付单");
+assert.ok(navigationRegistry.includes('group("regionDeliveryManagement", "区域交付"'), "供应管理必须把区域交付作为二级菜单容器");
+assert.ok(navigationRegistry.includes('page("robotaxiDeliveryOrders", "交付单")'), "区域交付容器下必须把区域交付单显示为交付单");
 assert.ok(main.includes("deriveInitialRuntimeSequences(fallback)"), "干净启动必须按初始 Robotaxi 派生新车编号序列，避免破坏 Robotaxi 管理");
 assert.ok(main.includes('producedRobotaxiSequence = deriveSequence(initialData.robotaxis || [], "robotaxi_id", "RTX-")'), "重置模拟数据后必须按初始 Robotaxi 派生新车编号序列");
 assert.ok(main.includes("businessPlanningService.completeProductionBatch"), "页面必须调用服务完成生产批次并创建 Robotaxi");
@@ -290,8 +291,8 @@ assert.ok(main.includes("longTermDemandForecasts: [...(result.results || []), ..
 assert.ok(main.includes("supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || []"), "运行态恢复必须兼容生产画像集合");
 assert.ok(main.includes("longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || []"), "运行态恢复必须兼容预测策略集合");
 assert.ok(main.includes("longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || []"), "运行态恢复必须兼容预测执行集合");
-assert.equal(main.includes('{ key: "supplyOrders", label: "供给单" }'), false, "当前菜单不得继续展示无效供给单");
-assert.equal(main.includes('{ key: "dealerSupplies", label: "车商供应" }'), false, "当前菜单不得继续展示无效车商供应");
+assert.equal(navigationRegistry.includes('page("supplyOrders"'), false, "当前菜单不得继续展示无效供给单");
+assert.equal(navigationRegistry.includes('page("dealerSupplies"'), false, "当前菜单不得继续展示无效车商供应");
 
 [
   "supplyProductionProfile",

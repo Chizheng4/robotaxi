@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+const navigationSource = fs.readFileSync(new URL("../src/ui/navigationRegistry.js", import.meta.url), "utf8");
 
 const pages = [
   ["cleaningTasks", "cleaningTask"],
@@ -12,7 +13,7 @@ const pages = [
 ];
 
 for (const [page, objectType] of pages) {
-  assert.match(source, new RegExp(`\\{ key: "${page}"`), `${page} 未接入菜单`);
+  assert.match(navigationSource, new RegExp(`page\\("${page}",`), `${page} 未接入菜单`);
   assert.match(source, new RegExp(`${page}: \\{\\n\\s+title:`), `${page} 未接入表格配置`);
   assert.match(source, new RegExp(`${page}: "${objectType}"`), `${page} 未接入 pageObjectType`);
   assert.match(source, new RegExp(`${objectType}: "task_id"`), `${objectType} 未接入 idFieldByType`);

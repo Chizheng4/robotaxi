@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+const navigationSource = fs.readFileSync(new URL("../src/ui/navigationRegistry.js", import.meta.url), "utf8");
 
 [
   "fleetOperationDispatchStrategies",
@@ -20,10 +21,10 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
   "fleetOperationDispatchDecisions: \"fleetOperationDispatchDecision\"",
   "fleetOperationDispatchDecision: \"fleet_operation_dispatch_decision_id\"",
   "fleetOperationDispatchDecisions: \"decision_result\"",
-  "{ key: \"fleetOperationDispatchDecisions\", label: \"调度策略结果\" }",
 ].forEach((needle) => {
   assert(source.includes(needle), `运维调度策略结果页面合同缺失：${needle}`);
 });
+assert(navigationSource.includes('page("fleetOperationDispatchDecisions", "调度策略结果")'), "运维调度策略结果页面未接入导航注册表");
 
 const planIndex = source.indexOf("function planFleetOperationRoute(task)");
 const advanceIndex = source.indexOf("function advanceFleetOperationRouteExecution(execution)");

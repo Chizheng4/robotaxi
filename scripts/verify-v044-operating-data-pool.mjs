@@ -52,11 +52,12 @@ assert.equal(context.title, "财务表现", "页面标题必须与菜单统一")
 assert.match(context.description, /经营目标/, "经营分析页面说明必须表达规划与事实关系");
 
 const mainSource = fs.readFileSync("src/main.jsx", "utf8");
+const navigationSource = fs.readFileSync("src/ui/navigationRegistry.js", "utf8");
 assert.match(mainSource, /operatingDataPool\?\.comparisons/, "经营分析画布必须消费数据池比较结果");
 assert.match(mainSource, /\["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"\]\.includes\(activePage\)/, "经营分析页必须隐藏常驻右侧详情");
 assert.match(mainSource, /pageContextService\.resolvePageContext/, "页面标题和说明必须通过统一上下文服务解析");
 assert.match(mainSource, /metricObjectPresentationService\?\.metricObjectSchemas/, "数据计算详情必须消费统一指标对象展示服务");
-assert.match(mainSource, /\{ key: "metricCalculationRuns", label: "计算记录" \}/, "指标计算记录菜单必须使用简洁名称");
+assert.match(navigationSource, /page\("metricCalculationRuns", "计算记录"\)/, "指标计算记录菜单必须使用简洁名称");
 assert.ok(metricObjectSchemas.metricDefinition.tabs.some((tab) => tab.key === "calculation"), "指标定义详情必须解释计算逻辑");
 assert.ok(metricObjectSchemas.metricObservation.tabs.some((tab) => tab.key === "source"), "指标观测详情必须支持来源追溯");
 assert.ok(metricObjectSchemas.metricCalculationRun.tabs.some((tab) => tab.key === "issues"), "计算记录详情必须提供问题处理分组");
