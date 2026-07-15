@@ -1,3 +1,5 @@
+import { resolvePagePresentation as resolveRegisteredPagePresentation } from "./pageArchitectureRegistry.js";
+
 const PAGE_DESCRIPTION_OVERRIDES = Object.freeze({
   operatingModel: "统一解释需求、供给、服务、资产、财务和经营反馈，连接经营规划、业务执行与经营分析。",
   operatingMetricsOverview: "汇总经营目标、预测基线与实际经营结果，识别整体达成情况和关键偏差。",
@@ -14,17 +16,6 @@ const PAGE_DESCRIPTION_OVERRIDES = Object.freeze({
   console: "在统一地图空间观察运营区域、地点、服务区域、道路、运营中心和 Robotaxi。",
 });
 
-const ANALYTICAL_PAGES = new Set([
-  "operatingModel",
-  "longTermDemandForecasts",
-  "operatingMetricsOverview",
-  "financialMetrics",
-  "serviceMetrics",
-  "processDiagnostics",
-]);
-
-const MAP_PAGES = new Set(["console"]);
-
 export function resolvePageContext({ page, menuLabel, config } = {}) {
   const title = menuLabel || config?.title || "业务页面";
   const description = PAGE_DESCRIPTION_OVERRIDES[page] || normalizeDescription(config?.description, title);
@@ -32,13 +23,7 @@ export function resolvePageContext({ page, menuLabel, config } = {}) {
 }
 
 export function resolvePagePresentation(page) {
-  if (MAP_PAGES.has(page)) {
-    return Object.freeze({ mode: "map", usesDetailRail: true, supportsHorizontalContent: false });
-  }
-  if (ANALYTICAL_PAGES.has(page)) {
-    return Object.freeze({ mode: "analysis", usesDetailRail: false, supportsHorizontalContent: true });
-  }
-  return Object.freeze({ mode: "record", usesDetailRail: true, supportsHorizontalContent: true });
+  return resolveRegisteredPagePresentation(page);
 }
 
 function normalizeDescription(description, title) {

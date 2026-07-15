@@ -67,6 +67,7 @@ let pageContextService;
 let dataChartService;
 let metricObjectPresentationService;
 let navigationRegistry;
+let pageArchitectureRegistry;
 let operatingModelService;
 let releaseHistory = [];
 let projectReadmeService;
@@ -6132,6 +6133,7 @@ function WorkspaceBar({ pages, activePage, onActivate, onClose }) {
 
 function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect, actions }) {
   const pagePresentation = pageContextService.resolvePagePresentation(page);
+  const pageArchitecture = pageArchitectureRegistry.getPageArchitecture(page);
   const isReadinessPage = page === "readinessTasks";
   const isFleetOperationTaskPage = ["cleaningTasks", "chargingTasks", "maintenanceTasks", "failureHandlingTasks", "retirementTasks"].includes(page);
   const isFleetOperationPolicyPage = page === "fleetOperationPolicies";
@@ -6173,7 +6175,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isBusinessOperationResultPage = isFleetAllocationResultPage || page === "supplyDemandBalanceResults";
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
   const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isFleetAllocationStrategyPage || isSupplyDemandBalanceStrategyPage;
-  const hasEventPanel = isTaskOperationPage || isSupplyDocumentPage || isBusinessOperationResultPage || isStrategyExecutionPanelPage || isServiceOrderPage || isTripPage || isRoutePlanningPage || isDemandSimulationStrategyPage || isPricingPage || isOrderMatchingPage || isSimulationRunPage || isSimulationEventPage;
+  const hasEventPanel = Boolean(pageArchitecture?.eventPanel);
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
   if (!config || !objectType) {
@@ -6223,6 +6225,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     render: (_, row) => renderCellValue(key, row),
   }));
   const actionColumn = getActionColumn();
+  const expectsRowAction = ["row", "view"].includes(pageArchitecture?.actionMode);
+  if (expectsRowAction !== Boolean(actionColumn)) throw new Error(`页面操作合同与实现不一致：${page}`);
   const compactActionColumn = actionColumn ? { ...actionColumn, width: 136 } : null;
   const finalColumns = compactActionColumn ? [
     ...columns,
@@ -6268,7 +6272,13 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   ].filter(Boolean).join(" ");
 
   return (
-    <section className={pageClassName}>
+    <section
+      className={pageClassName}
+      data-page={page}
+      data-page-mode={pageArchitecture.mode}
+      data-resource-kind={pageArchitecture.resourceKind}
+      data-detail-mode={pageArchitecture.detailMode}
+    >
       {isRobotaxiPage && (
         <RobotaxiOperationPanel
           rows={displayRows}
@@ -6477,7 +6487,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
       {hasEventPanel && (
         <div className="event-log-section" style={{ height: eventPanelHeight }}>
           <div className="event-log-resizer" onPointerDown={handleEventResizeStart} title="拖动调整事件区高度" />
-          <div className="event-log-title">{isTripPage ? "履约行驶事件" : isServiceOrderPage ? "最近事件记录" : isSimulationRunPage ? "模拟运行事件" : isStrategyExecutionPanelPage ? "最近策略执行" : isDemandSimulationStrategyPage ? "需求模拟执行" : isRoutePlanningPage ? "路径规划执行记录" : isPricingPage ? "定价执行记录" : isOrderMatchingPage ? "匹配执行记录" : "最近任务事件"}</div>
+          <div className="event-log-title">{pageArchitecture.eventPanel.label}</div>
           <Table
             size="small"
             rowKey={eventRowKey}
@@ -6681,20 +6691,6 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <RowActionGroup>
             <RowActionButton onClick={() => actions.runLongTermDemandForecastStrategy(row)}>执行</RowActionButton>
             <RowActionButton type="default" onClick={() => actions.editLongTermDemandForecastStrategy(row)}>配置</RowActionButton>
-          </RowActionGroup>
-        )),
-      };
-    }
-    if (isLongTermDemandForecastPage) {
-      return {
-        key: "actions",
-        title: "操作",
-        fixed: "right",
-        width: 260,
-        render: (_, row) => renderActionCell(row, (
-          <RowActionGroup>
-            <RowActionButton onClick={() => actions.createSupplyPlanFromForecast(row)}>生成生产计划</RowActionButton>
-            <RowActionButton type="default" onClick={() => actions.completeSupplyManagementLoopFromForecast(row)}>执行供应闭环</RowActionButton>
           </RowActionGroup>
         )),
       };
@@ -7021,13 +7017,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
         <Button size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
       </div>
       {selectedType === "robotaxi" && <RobotaxiObjectSummary robotaxi={selectedObject} />}
-      {hasTabbedDetail(selectedType) ? (
-        <TabbedDetail selectedObject={selectedObject} selectedType={selectedType} />
-      ) : (
-        <DetailContentViewport>
-          <DetailFieldContent selectedObject={selectedObject} keys={Object.keys(selectedObject)} />
-        </DetailContentViewport>
-      )}
+      <TabbedDetail selectedObject={selectedObject} selectedType={selectedType} />
     </section>
   );
 }
@@ -7064,10 +7054,6 @@ function RobotaxiObjectSummary({ robotaxi }) {
       </dl>
     </section>
   );
-}
-
-function hasTabbedDetail(selectedType) {
-  return ["robotaxi", "worker", "route", "demandProfile", "businessTarget", "supplyProductionProfile", "longTermDemandForecastStrategy", "metricDefinition", "metricObservation", "metricCalculationRun", "readinessTask", "deploymentTask", "cleaningTask", "chargingTask", "maintenanceTask", "failureHandlingTask", "retirementTask", "routeExecution", "serviceOrder", "trip", "simulationPolicy", "simulationRun", "simulationEvent", "timedOperation", "costModelProfile", "costParameterRule", "costCalculationRun", "costRecord", "revenueRecord", "revenueCalculationRun"].includes(selectedType);
 }
 
 function TabbedDetail({ selectedObject, selectedType }) {
@@ -7317,7 +7303,32 @@ function getDetailTabs(selectedType, selectedObject) {
       { key: "result", label: "生成结果", keys: ["processed_object_count", "generated_revenue_record_count", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "error_count", "calculation_errors"] },
     ];
   }
-  return [];
+  return getSemanticDetailTabs(selectedObject);
+}
+
+function getSemanticDetailTabs(selectedObject) {
+  const keys = Object.keys(selectedObject || {}).filter((key) => selectedObject[key] !== undefined);
+  const primaryIdKey = keys.find((key) => key.endsWith("_id"));
+  const identityKeys = keys.filter((key) => isIdentityDetailKey(key, primaryIdKey));
+  const relationKeys = keys.filter((key) => !identityKeys.includes(key) && isRelationDetailKey(key, selectedObject[key]));
+  const businessKeys = keys.filter((key) => !identityKeys.includes(key) && !relationKeys.includes(key));
+  return [
+    { key: "overview", label: "基本信息", keys: identityKeys },
+    { key: "business", label: "业务信息", keys: businessKeys },
+    { key: "relation", label: "关联与结构", keys: relationKeys },
+  ].filter((tab) => tab.keys.length > 0);
+}
+
+function isIdentityDetailKey(key, primaryIdKey) {
+  return key === primaryIdKey
+    || /(_name|_status|_type|_version)$/.test(key)
+    || ["created_at", "updated_at", "started_at", "completed_at"].includes(key);
+}
+
+function isRelationDetailKey(key, value) {
+  return Array.isArray(value)
+    || Boolean(value && typeof value === "object")
+    || /(_id|_ids|_snapshot|_sequence|_steps|_rules|_config|_detail)$/.test(key);
 }
 
 function PlanningFieldExplanations({ explanations = {} }) {
@@ -9905,6 +9916,7 @@ async function bootstrap() {
 		    dataChartServiceModule,
 		    metricObjectPresentationServiceModule,
 		    navigationRegistryModule,
+		    pageArchitectureRegistryModule,
 		    operatingModelServiceModule,
 		    releaseHistoryModule,
 		    projectReadmeModule,
@@ -9978,6 +9990,7 @@ async function bootstrap() {
 		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
 		    import("./ui/metricObjectPresentationService.js?v=20260715-v044-5-1"),
 		    import("./ui/navigationRegistry.js?v=20260715-v045-0-0"),
+		    import("./ui/pageArchitectureRegistry.js?v=20260715-v045-2-0"),
 		    import("./services/operatingModelService.js?v=20260715-v045-0-0"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
@@ -10055,11 +10068,14 @@ async function bootstrap() {
 		  dataChartService = dataChartServiceModule;
 		  metricObjectPresentationService = metricObjectPresentationServiceModule;
 		  navigationRegistry = navigationRegistryModule;
+		  pageArchitectureRegistry = pageArchitectureRegistryModule;
 		  operatingModelService = operatingModelServiceModule;
 		  pageGroups = navigationRegistry.navigationGroups;
 		  menuGroupIcons = navigationRegistry.navigationIcons;
 		  const navigationValidation = navigationRegistry.validateNavigationRegistry(Object.keys(tableConfig));
 		  if (!navigationValidation.valid) throw new Error(`导航注册表校验失败：${navigationValidation.errors.join("；")}`);
+		  const architectureValidation = pageArchitectureRegistry.validatePageArchitecture(navigationValidation.leafKeys);
+		  if (!architectureValidation.valid) throw new Error(`页面架构校验失败：${architectureValidation.errors.join("；")}`);
   releaseHistory = releaseHistoryModule.releaseHistory;
   projectReadmeService = projectReadmeModule;
   releaseFreshnessService = releaseFreshnessServiceModule;

@@ -511,16 +511,31 @@ try {
       const placeSelectionResult = await send("Runtime.evaluate", {
         expression: `(() => {
           const simple = document.querySelector(".object-inspector-content .compact-descriptions")?.getBoundingClientRect();
-          const complex = document.querySelector(".object-inspector-content .detail-block-list")?.getBoundingClientRect();
           return {
             selectedCells: document.querySelectorAll(".map-selected-cell").length,
-            aligned: Boolean(simple && complex && Math.abs(simple.left - complex.left) <= 1),
+            simpleLeft: simple?.left || null,
           };
         })()`,
         returnByValue: true,
       });
       assert.equal(placeSelectionResult.result?.result?.value?.selectedCells, 1, "点击地点后必须保留精确 Cell 选中框");
-      assert(placeSelectionResult.result?.result?.value?.aligned, "详情简单字段与复杂字段必须共享统一左侧基线");
+      const simpleLeft = placeSelectionResult.result?.result?.value?.simpleLeft;
+      assert(simpleLeft, "语义详情必须显示基础字段");
+      const relationTabResult = await send("Runtime.evaluate", {
+        expression: `(() => {
+          const tab = [...document.querySelectorAll(".detail-tabs .ant-tabs-tab")].find((item) => item.textContent.trim() === "关联与结构");
+          tab?.click();
+          return Boolean(tab);
+        })()`,
+        returnByValue: true,
+      });
+      assert(relationTabResult.result?.result?.value, "复杂字段必须进入统一关联与结构页签");
+      await delay(100);
+      const complexAlignmentResult = await send("Runtime.evaluate", {
+        expression: `document.querySelector(".object-inspector-content .detail-block-list")?.getBoundingClientRect().left || null`,
+        returnByValue: true,
+      });
+      assert(Math.abs(simpleLeft - complexAlignmentResult.result?.result?.value) <= 1, "详情跨页签内容必须共享统一左侧基线");
       for (const [label, mapX, mapY, expectedClass] of [
         ["道路", 14.5, 12.5, "map-road-cells"],
         ["服务区域", 18.5, 12.5, "service-area-cell"],

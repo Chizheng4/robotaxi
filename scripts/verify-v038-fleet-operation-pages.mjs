@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
+import { getPageArchitecture } from "../src/ui/pageArchitectureRegistry.js";
+
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
 [
@@ -12,10 +14,11 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
   "editFleetOperationPolicy",
   "createFleetTaskEventRows",
   "isFleetOperationTaskPage",
-  "最近策略执行",
 ].forEach((needle) => {
   assert.match(source, new RegExp(escapeRegExp(needle)), `主页面缺少 ${needle}`);
 });
+
+assert.equal(getPageArchitecture("fleetOperationPolicies").eventPanel.label, "最近运维策略执行", "运维策略页面应通过统一页面合同展示最近执行");
 
 [
   "cleaningTasks",
