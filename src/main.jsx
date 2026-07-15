@@ -3509,7 +3509,7 @@ function App({ currentUser, onLogout }) {
             </Content>
             {!detailHidden && <aside className="detail-rail">
               {detailCollapsed ? (
-                <Button className="detail-toggle-button" size="small" type="text" aria-label="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>›</Button>
+                <Button className="detail-toggle-button" size="small" type="text" aria-label="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>‹</Button>
               ) : (
                 <DetailPanel
                   selectedObject={detailSelectedObject}
@@ -7003,7 +7003,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
       <section className="detail-panel-new">
         <div className="panel-title">
           <span>{getDetailTitle(selectedType)}</span>
-          <Button className="detail-toggle-button" size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>‹</Button>
+          <Button className="detail-toggle-button" size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
         </div>
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择对象查看详情" />
       </section>
@@ -7014,7 +7014,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
     <section className="detail-panel-new object-inspector">
       <div className="panel-title">
         <span>{getDetailTitle(selectedType)}</span>
-        <Button className="detail-toggle-button" size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>‹</Button>
+        <Button className="detail-toggle-button" size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
       </div>
       {selectedType === "robotaxi" && <RobotaxiObjectSummary robotaxi={selectedObject} />}
       <TabbedDetail selectedObject={selectedObject} selectedType={selectedType} />
@@ -7060,27 +7060,29 @@ function TabbedDetail({ selectedObject, selectedType }) {
   const tabs = getDetailTabs(selectedType, selectedObject);
 
   return (
-    <Tabs
-      className="detail-tabs"
-      size="small"
-      items={tabs.map((tab) => ({
-        key: tab.key,
-        label: tab.label,
-        children: (
-          <DetailContentViewport className="object-inspector-tab-content">
-            {tab.explanations ? (
-              <PlanningFieldExplanations explanations={tab.explanations} />
-            ) : tab.cost ? (
-              <CostDetail selectedObject={selectedObject} />
-            ) : tab.timeline ? (
-              <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
-            ) : (
-              <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
-            )}
-          </DetailContentViewport>
-        ),
-      }))}
-    />
+    <div className="detail-tabs-native-scroll" onWheelCapture={(event) => event.stopPropagation()} onTouchMoveCapture={(event) => event.stopPropagation()}>
+      <Tabs
+        className="detail-tabs"
+        size="small"
+        items={tabs.map((tab) => ({
+          key: tab.key,
+          label: tab.label,
+          children: (
+            <DetailContentViewport className="object-inspector-tab-content">
+              {tab.explanations ? (
+                <PlanningFieldExplanations explanations={tab.explanations} />
+              ) : tab.cost ? (
+                <CostDetail selectedObject={selectedObject} />
+              ) : tab.timeline ? (
+                <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
+              ) : (
+                <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
+              )}
+            </DetailContentViewport>
+          ),
+        }))}
+      />
+    </div>
   );
 }
 
