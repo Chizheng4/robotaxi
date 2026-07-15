@@ -7060,6 +7060,7 @@ function TabbedDetail({ selectedObject, selectedType }) {
   const tabs = getDetailTabs(selectedType, selectedObject);
   const tabsRootRef = useRef(null);
   const [activeTabKey, setActiveTabKey] = useState(tabs[0]?.key);
+  const [tabScrollState, setTabScrollState] = useState({ overflowing: false, canScrollLeft: false, canScrollRight: false });
   const tabKeys = tabs.map((tab) => tab.key).join("|");
 
   useEffect(() => {
@@ -7069,18 +7070,53 @@ function TabbedDetail({ selectedObject, selectedType }) {
   useEffect(() => {
     const root = tabsRootRef.current;
     if (!root || !activeTabKey) return undefined;
-    const reveal = () => revealActiveDetailTab(root, activeTabKey);
+    const navWrap = root.querySelector(".ant-tabs-nav-wrap");
+    if (!navWrap) return undefined;
+    const sync = () => syncDetailTabScrollState(navWrap, setTabScrollState);
+    const reveal = () => {
+      revealActiveDetailTab(root, activeTabKey);
+      sync();
+    };
+    const handleWheel = (event) => {
+      if (navWrap.scrollWidth <= navWrap.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+      event.preventDefault();
+      navWrap.scrollBy({ left: event.deltaY, behavior: "auto" });
+    };
     const frameId = window.requestAnimationFrame(reveal);
-    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(reveal) : null;
-    resizeObserver?.observe(root);
+    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(sync) : null;
+    resizeObserver?.observe(navWrap);
+    navWrap.addEventListener("scroll", sync, { passive: true });
+    navWrap.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       window.cancelAnimationFrame(frameId);
       resizeObserver?.disconnect();
+      navWrap.removeEventListener("scroll", sync);
+      navWrap.removeEventListener("wheel", handleWheel);
     };
   }, [activeTabKey, tabKeys]);
 
   return (
-    <div className="detail-tabs-viewport" ref={tabsRootRef}>
+    <div className={`detail-tabs-viewport${tabScrollState.overflowing ? " is-overflowing" : ""}`} ref={tabsRootRef}>
+      {tabScrollState.overflowing && (
+        <>
+          <Button
+            aria-label="向左查看详情页签"
+            className="detail-tabs-scroll-button detail-tabs-scroll-left"
+            disabled={!tabScrollState.canScrollLeft}
+            size="small"
+            type="text"
+            onClick={() => scrollDetailTabs(tabsRootRef.current, -1)}
+          >‹</Button>
+          <Button
+            aria-label="向右查看详情页签"
+            className="detail-tabs-scroll-button detail-tabs-scroll-right"
+            disabled={!tabScrollState.canScrollRight}
+            size="small"
+            type="text"
+            onClick={() => scrollDetailTabs(tabsRootRef.current, 1)}
+          >›</Button>
+        </>
+      )}
       <Tabs
         activeKey={activeTabKey}
         className="detail-tabs"
@@ -7118,6 +7154,24 @@ function revealActiveDetailTab(root, activeTabKey) {
   const visibleRight = visibleLeft + navWrap.clientWidth;
   if (tabLeft < visibleLeft) navWrap.scrollTo({ left: tabLeft, behavior: "auto" });
   if (tabRight > visibleRight) navWrap.scrollTo({ left: tabRight - navWrap.clientWidth, behavior: "auto" });
+}
+
+function scrollDetailTabs(root, direction) {
+  const navWrap = root?.querySelector(".ant-tabs-nav-wrap");
+  if (!navWrap) return;
+  navWrap.scrollBy({ left: direction * Math.max(96, navWrap.clientWidth * 0.7), behavior: "smooth" });
+}
+
+function syncDetailTabScrollState(navWrap, setState) {
+  const maxScrollLeft = Math.max(0, navWrap.scrollWidth - navWrap.clientWidth);
+  const nextState = {
+    overflowing: maxScrollLeft > 1,
+    canScrollLeft: navWrap.scrollLeft > 1,
+    canScrollRight: navWrap.scrollLeft < maxScrollLeft - 1,
+  };
+  setState((current) => current.overflowing === nextState.overflowing
+    && current.canScrollLeft === nextState.canScrollLeft
+    && current.canScrollRight === nextState.canScrollRight ? current : nextState);
 }
 
 function DetailFieldContent({ selectedObject, keys }) {

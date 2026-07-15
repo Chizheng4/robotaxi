@@ -23,7 +23,10 @@ assert.match(stylesSource, /\.analysis-content-viewport\s*\{[^}]*overflow-x:\s*a
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-tab-btn\s*\{[^}]*white-space:\s*nowrap/s, "详情页签标题不得被压缩裁断");
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap\s*\{[^}]*overflow-x:\s*auto/s, "详情页签超宽时必须在控件内部横向浏览");
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-operations\s*\{[^}]*display:\s*none/s, "详情页签不得同时保留裁剪式更多占位");
+assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap::after\s*\{[^}]*display:\s*none/s, "详情页签不得保留覆盖标题的溢出遮罩");
 assert.match(mainSource, /function revealActiveDetailTab/, "详情页签必须在选择和宽度变化后保持当前页签可见");
+assert.match(mainSource, /function scrollDetailTabs/, "详情页签溢出时必须提供明确的左右导航");
+assert.match(mainSource, /function syncDetailTabScrollState/, "详情页签导航状态必须来自真实滚动宽度");
 assert.match(stylesSource, /\.workbench\.detail-collapsed \.detail-rail\s*\{[^}]*width:\s*0/s, "手机详情收起后不得覆盖主内容");
 assert.match(rulesSource, /行内功能只执行操作/, "前端规则必须约束行操作与选择隔离");
 

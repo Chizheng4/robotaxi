@@ -6018,6 +6018,11 @@ html[data-keyboard-open="true"] .platform-login-panel {
   display: none;
 }
 
+.detail-tabs .ant-tabs-nav-wrap::before,
+.detail-tabs .ant-tabs-nav-wrap::after {
+  display: none !important;
+}
+
 .detail-tabs .ant-tabs-nav-list {
   min-width: max-content;
   transform: none !important;
@@ -6032,6 +6037,38 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .detail-tabs .ant-tabs-nav-operations {
   display: none !important;
 }
+
+.detail-tabs-viewport {
+  position: relative;
+  min-width: 0;
+}
+
+.detail-tabs-viewport.is-overflowing .detail-tabs .ant-tabs-nav {
+  padding-inline: 36px;
+}
+
+.detail-tabs-scroll-button.ant-btn {
+  position: absolute;
+  z-index: 3;
+  top: 4px;
+  width: 24px;
+  min-width: 24px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-secondary);
+  line-height: 26px;
+}
+
+.detail-tabs-scroll-button.ant-btn:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.detail-tabs-scroll-left { left: 6px; }
+.detail-tabs-scroll-right { right: 6px; }
 
 .row-action-cell {
   display: inline-flex;
