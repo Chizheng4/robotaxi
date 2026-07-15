@@ -3172,9 +3172,7 @@ body {
 }
 
 .brand-title-button.ant-btn:hover,
-.brand-bar > .ant-btn:last-child:hover,
-.detail-toggle-button.ant-btn:hover,
-.panel-title .ant-btn:hover {
+.brand-bar > .ant-btn:last-child:hover {
   border-color: transparent !important;
   color: #4f5865 !important;
   background: transparent !important;
@@ -4263,7 +4261,17 @@ body {
 
 .detail-toggle-button {
   border-color: transparent;
+  color: var(--text-secondary);
+  background: transparent;
   box-shadow: none;
+}
+
+.detail-toggle-button.ant-btn:hover,
+.detail-toggle-button.ant-btn:focus-visible {
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+  background: var(--surface-soft) !important;
+  box-shadow: 0 2px 8px rgba(30, 48, 68, 0.10) !important;
 }
 
 * {

@@ -3509,7 +3509,7 @@ function App({ currentUser, onLogout }) {
             </Content>
             {!detailHidden && <aside className="detail-rail">
               {detailCollapsed ? (
-                <Button className="detail-toggle-button" size="small" aria-label="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>‹</Button>
+                <Button className="detail-toggle-button" size="small" type="text" aria-label="展开详情" onClick={() => setDetailCollapsedForPage(activePage, false)}>›</Button>
               ) : (
                 <DetailPanel
                   selectedObject={detailSelectedObject}
@@ -7003,7 +7003,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
       <section className="detail-panel-new">
         <div className="panel-title">
           <span>{getDetailTitle(selectedType)}</span>
-          <Button size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
+          <Button className="detail-toggle-button" size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>‹</Button>
         </div>
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择对象查看详情" />
       </section>
@@ -7014,7 +7014,7 @@ function DetailPanel({ selectedObject, selectedType, onCollapse }) {
     <section className="detail-panel-new object-inspector">
       <div className="panel-title">
         <span>{getDetailTitle(selectedType)}</span>
-        <Button size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>›</Button>
+        <Button className="detail-toggle-button" size="small" type="text" aria-label="隐藏详情" onClick={onCollapse}>‹</Button>
       </div>
       {selectedType === "robotaxi" && <RobotaxiObjectSummary robotaxi={selectedObject} />}
       <TabbedDetail selectedObject={selectedObject} selectedType={selectedType} />
@@ -7085,7 +7085,6 @@ function TabbedDetail({ selectedObject, selectedType }) {
       dragState.pointerId = event.pointerId;
       dragState.startX = event.clientX;
       dragState.scrollLeft = navWrap.scrollLeft;
-      navWrap.setPointerCapture?.(event.pointerId);
     };
     const handlePointerMove = (event) => {
       if (!dragState.active || event.pointerId !== dragState.pointerId) return;
@@ -7093,13 +7092,14 @@ function TabbedDetail({ selectedObject, selectedType }) {
       if (Math.abs(distance) > 4) {
         dragState.moved = true;
         navWrap.classList.add("is-dragging");
+        navWrap.setPointerCapture?.(event.pointerId);
       }
       if (dragState.moved) navWrap.scrollLeft = dragState.scrollLeft - distance;
     };
     const finishPointerDrag = (event) => {
       if (!dragState.active || event.pointerId !== dragState.pointerId) return;
       dragState.active = false;
-      navWrap.releasePointerCapture?.(event.pointerId);
+      if (navWrap.hasPointerCapture?.(event.pointerId)) navWrap.releasePointerCapture(event.pointerId);
       navWrap.classList.remove("is-dragging");
       window.requestAnimationFrame(() => { dragState.moved = false; });
     };

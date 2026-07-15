@@ -27,6 +27,11 @@ assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap::after\s*\{[^}]*di
 assert.match(mainSource, /function revealActiveDetailTab/, "详情页签必须在选择和宽度变化后保持当前页签可见");
 assert.match(mainSource, /handlePointerMove[\s\S]*navWrap\.scrollLeft = dragState\.scrollLeft - distance/, "详情页签必须支持连续拖动浏览");
 assert.match(mainSource, /suppressDraggedClick/, "详情页签拖动后不得误触发页签选择");
+assert.match(mainSource, /handlePointerDown[\s\S]*?dragState\.scrollLeft = navWrap\.scrollLeft;\s*};/, "详情页签普通点击不得提前捕获指针");
+assert.match(mainSource, /handlePointerMove[\s\S]*navWrap\.setPointerCapture/, "详情页签只有进入拖动后才能捕获指针");
+assert.match(mainSource, /aria-label="展开详情"[\s\S]*?>›<\/Button>/, "详情展开控件必须使用统一的向右提示");
+assert.match(mainSource, /aria-label="隐藏详情"[\s\S]*?>‹<\/Button>/, "详情收起控件必须使用统一的向左提示");
+assert.match(stylesSource, /\.detail-toggle-button\.ant-btn:hover[\s\S]*background:\s*var\(--surface-soft\)/, "详情开合控件悬停时必须提供稳定的浮层反馈");
 assert.match(stylesSource, /\.workbench\.detail-collapsed \.detail-rail\s*\{[^}]*width:\s*0/s, "手机详情收起后不得覆盖主内容");
 assert.match(rulesSource, /行内功能只执行操作/, "前端规则必须约束行操作与选择隔离");
 
