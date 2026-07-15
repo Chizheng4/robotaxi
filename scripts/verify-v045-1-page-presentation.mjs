@@ -21,6 +21,9 @@ assert.doesNotMatch(mainSource, /row-action-cell[^>]*onClickCapture/, "行操作
 assert.match(mainSource, /row-action-cell[^>]*onClick=\{\(event\) => event\.stopPropagation\(\)\}/, "行操作必须由公共控件隔离点击事件");
 assert.match(stylesSource, /\.analysis-content-viewport\s*\{[^}]*overflow-x:\s*auto/s, "分析内容必须支持内部横向浏览");
 assert.match(stylesSource, /\.detail-tabs \.ant-tabs-tab-btn\s*\{[^}]*white-space:\s*nowrap/s, "详情页签标题不得被压缩裁断");
+assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-wrap\s*\{[^}]*overflow-x:\s*auto/s, "详情页签超宽时必须在控件内部横向浏览");
+assert.match(stylesSource, /\.detail-tabs \.ant-tabs-nav-operations\s*\{[^}]*display:\s*none/s, "详情页签不得同时保留裁剪式更多占位");
+assert.match(mainSource, /function revealActiveDetailTab/, "详情页签必须在选择和宽度变化后保持当前页签可见");
 assert.match(stylesSource, /\.workbench\.detail-collapsed \.detail-rail\s*\{[^}]*width:\s*0/s, "手机详情收起后不得覆盖主内容");
 assert.match(rulesSource, /行内功能只执行操作/, "前端规则必须约束行操作与选择隔离");
 

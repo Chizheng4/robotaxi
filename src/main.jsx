@@ -7058,30 +7058,66 @@ function RobotaxiObjectSummary({ robotaxi }) {
 
 function TabbedDetail({ selectedObject, selectedType }) {
   const tabs = getDetailTabs(selectedType, selectedObject);
+  const tabsRootRef = useRef(null);
+  const [activeTabKey, setActiveTabKey] = useState(tabs[0]?.key);
+  const tabKeys = tabs.map((tab) => tab.key).join("|");
+
+  useEffect(() => {
+    if (!tabs.some((tab) => tab.key === activeTabKey)) setActiveTabKey(tabs[0]?.key);
+  }, [activeTabKey, tabKeys]);
+
+  useEffect(() => {
+    const root = tabsRootRef.current;
+    if (!root || !activeTabKey) return undefined;
+    const reveal = () => revealActiveDetailTab(root, activeTabKey);
+    const frameId = window.requestAnimationFrame(reveal);
+    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(reveal) : null;
+    resizeObserver?.observe(root);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
+    };
+  }, [activeTabKey, tabKeys]);
 
   return (
-    <Tabs
-      className="detail-tabs"
-      size="small"
-      items={tabs.map((tab) => ({
-        key: tab.key,
-        label: tab.label,
-        children: (
-          <DetailContentViewport className="object-inspector-tab-content">
-            {tab.explanations ? (
-              <PlanningFieldExplanations explanations={tab.explanations} />
-            ) : tab.cost ? (
-              <CostDetail selectedObject={selectedObject} />
-            ) : tab.timeline ? (
-              <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
-            ) : (
-              <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
-            )}
-          </DetailContentViewport>
-        ),
-      }))}
-    />
+    <div className="detail-tabs-viewport" ref={tabsRootRef}>
+      <Tabs
+        activeKey={activeTabKey}
+        className="detail-tabs"
+        size="small"
+        onChange={setActiveTabKey}
+        items={tabs.map((tab) => ({
+          key: tab.key,
+          label: tab.label,
+          children: (
+            <DetailContentViewport className="object-inspector-tab-content">
+              {tab.explanations ? (
+                <PlanningFieldExplanations explanations={tab.explanations} />
+              ) : tab.cost ? (
+                <CostDetail selectedObject={selectedObject} />
+              ) : tab.timeline ? (
+                <StatusTimeline history={selectedObject.simulation_status_transition_history} statusField={getDetailStatusField(selectedType)} row={selectedObject} />
+              ) : (
+                <DetailFieldContent selectedObject={selectedObject} keys={tab.keys} />
+              )}
+            </DetailContentViewport>
+          ),
+        }))}
+      />
+    </div>
   );
+}
+
+function revealActiveDetailTab(root, activeTabKey) {
+  const navWrap = root.querySelector(".ant-tabs-nav-wrap");
+  const activeTab = root.querySelector(`.ant-tabs-tab[data-node-key="${activeTabKey}"]`);
+  if (!navWrap || !activeTab) return;
+  const tabLeft = activeTab.offsetLeft;
+  const tabRight = tabLeft + activeTab.offsetWidth;
+  const visibleLeft = navWrap.scrollLeft;
+  const visibleRight = visibleLeft + navWrap.clientWidth;
+  if (tabLeft < visibleLeft) navWrap.scrollTo({ left: tabLeft, behavior: "auto" });
+  if (tabRight > visibleRight) navWrap.scrollTo({ left: tabRight - navWrap.clientWidth, behavior: "auto" });
 }
 
 function DetailFieldContent({ selectedObject, keys }) {
