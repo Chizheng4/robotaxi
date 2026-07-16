@@ -100,7 +100,7 @@ assert.equal(inactiveExecution.run.failure_reason, "SUPPLY_DEMAND_BALANCE_STRATE
 const main = fs.readFileSync("src/main.jsx", "utf8");
 const navigation = fs.readFileSync("src/ui/navigationRegistry.js", "utf8");
 assert.equal(navigation.includes('page("supplyDemandBalanceStrategies"'), false, "旧供需平衡页面不得继续作为导航事实源");
-assert.ok(navigation.includes('group("shortTermDemandForecastManagement", "短期需求预测"'), "供需投放必须显式拆分短期需求预测");
+assert.ok(navigation.includes('group("shortTermDemandForecastManagement", "短期预测"'), "供需投放必须显式拆分短期预测");
 assert.ok(navigation.includes('group("deploymentDecisionManagement", "投放决策"'), "供需投放必须显式拆分投放决策");
 assert.ok(main.includes("supplyDemandBalanceService.executeSupplyDemandBalanceStrategy"), "页面必须调用服务执行供需平衡策略");
 assert.equal(main.includes("createDeploymentTasksFromSupplyDemandBalance"), false, "供需平衡当前版本不得接入投放任务创建");

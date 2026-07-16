@@ -3,7 +3,7 @@ import { withLifecycleStatus } from "./businessPlanningService.js";
 export const StrategyStatus = Object.freeze({ ACTIVE: "ACTIVE", DRAFT: "DRAFT", ARCHIVED: "ARCHIVED" });
 export const RunStatus = Object.freeze({ SUCCEEDED: "SUCCEEDED", FAILED: "FAILED" });
 export const ForecastResultStatus = Object.freeze({ GENERATED: "GENERATED" });
-export const DeploymentPlanStatus = Object.freeze({ DRAFT: "DRAFT", CONFIRMED: "CONFIRMED", DISPATCHED: "DISPATCHED", CANCELLED: "CANCELLED" });
+export const DeploymentPlanStatus = Object.freeze({ DRAFT: "DRAFT", CONFIRMED: "CONFIRMED", PARTIALLY_DISPATCHED: "PARTIALLY_DISPATCHED", DISPATCHED: "DISPATCHED", CANCELLED: "CANCELLED" });
 
 export function initializeOperatingPlanningData(now = new Date().toISOString()) {
   return {
@@ -41,6 +41,7 @@ export function initializeOperatingPlanningData(now = new Date().toISOString()) 
       service_pressure_weight: 0.2,
       profit_weight: 0.15,
       average_fulfillment_duration_min: 30,
+      average_fulfillment_cost_per_order: 12,
       target_utilization_rate: 0.72,
       default_average_order_revenue: 35,
       reposition_cost_per_km: 2.4,
@@ -75,14 +76,14 @@ export function executeShortTermDemandForecast({
     return { run: createForecastRun({ runId, strategy, occurredAt, status: RunStatus.FAILED, failureReason: "NO_FORECAST_TARGET" }), results: [] };
   }
   const period = resolveForecastPeriod(strategy, occurredAt);
-  const orderFacts = createOrderFacts(serviceOrders, trips);
+  const orderFacts = filterFactsByWindow(createOrderFacts(serviceOrders, trips), occurredAt, strategy.recent_window_days);
   const bucketCount = period.bucketCount;
   const results = [];
   targets.forEach((target) => {
     const targetFacts = orderFacts.filter((fact) => isOrderInTarget(fact, target, zones, places, serviceAreas));
     const dailyBaseline = resolveDailyBaseline(target.profile);
     const historicalDaily = resolveHistoricalDailyDemand(targetFacts, strategy.recent_window_days);
-    const recentTrend = resolveRecentTrend(targetFacts);
+    const recentTrend = resolveRecentTrend(targetFacts, occurredAt, strategy.recent_window_days);
     for (let index = 0; index < bucketCount; index += 1) {
       const bucketStart = addBucket(period.startAt, strategy.time_bucket_unit, index);
       const bucketEnd = addBucket(period.startAt, strategy.time_bucket_unit, index + 1);
@@ -99,6 +100,7 @@ export function executeShortTermDemandForecast({
 export function executeDeploymentDecision({
   strategy,
   forecastResults = [],
+  forecastRunId = null,
   robotaxis = [],
   serviceOrders = [],
   trips = [],
@@ -112,8 +114,11 @@ export function executeDeploymentDecision({
   if (!strategy?.deployment_decision_strategy_id || strategy.strategy_status !== StrategyStatus.ACTIVE) {
     return { run: createDecisionRun({ runId, strategy, occurredAt, status: RunStatus.FAILED, failureReason: "DEPLOYMENT_DECISION_STRATEGY_NOT_ACTIVE" }), plans: [] };
   }
-  const latestForecastRunId = forecastResults.find((item) => item.short_term_forecast_run_id)?.short_term_forecast_run_id;
+  const latestForecastRunId = forecastRunId || resolveLatestForecastRunId(forecastResults);
   const currentResults = forecastResults.filter((item) => item.short_term_forecast_run_id === latestForecastRunId);
+  if (!latestForecastRunId || !currentResults.length) {
+    return { run: createDecisionRun({ runId, strategy, occurredAt, status: RunStatus.FAILED, failureReason: "SHORT_TERM_FORECAST_RESULT_REQUIRED" }), plans: [] };
+  }
   const hasPositiveDemand = (type) => currentResults.some((item) => item.target_object_type === type && Number(item.predicted_order_count || 0) > 0);
   const preferredGranularity = hasPositiveDemand("SERVICE_AREA") ? "SERVICE_AREA"
     : hasPositiveDemand("PLACE") ? "PLACE" : "ZONE";
@@ -147,15 +152,25 @@ export function confirmDeploymentPlan({ plan, context = {} } = {}) {
 }
 
 export function cancelDeploymentPlan({ plan, context = {} } = {}) {
-  if (!plan?.deployment_plan_id || [DeploymentPlanStatus.CANCELLED, DeploymentPlanStatus.DISPATCHED].includes(plan.plan_status)) return { succeeded: false, reason: "DEPLOYMENT_PLAN_NOT_CANCELLABLE", plan };
+  if (!plan?.deployment_plan_id || [DeploymentPlanStatus.CANCELLED, DeploymentPlanStatus.PARTIALLY_DISPATCHED, DeploymentPlanStatus.DISPATCHED].includes(plan.plan_status)) return { succeeded: false, reason: "DEPLOYMENT_PLAN_NOT_CANCELLABLE", plan };
   const occurredAt = resolveNow(context);
   return { succeeded: true, plan: transitionPlan(plan, DeploymentPlanStatus.CANCELLED, "DEPLOYMENT_PLAN_CANCEL", "DEPLOYMENT_PLAN_CANCELLED", occurredAt, { cancelled_at: occurredAt }) };
 }
 
-export function markDeploymentPlanDispatched({ plan, taskIds = [], context = {} } = {}) {
-  if (!plan?.deployment_plan_id || plan.plan_status !== DeploymentPlanStatus.CONFIRMED) return { succeeded: false, reason: "DEPLOYMENT_PLAN_NOT_CONFIRMED", plan };
+export function markDeploymentPlanDispatched({ plan, taskIds = [], failureReasons = [], context = {} } = {}) {
+  if (!plan?.deployment_plan_id || ![DeploymentPlanStatus.CONFIRMED, DeploymentPlanStatus.PARTIALLY_DISPATCHED].includes(plan.plan_status)) return { succeeded: false, reason: "DEPLOYMENT_PLAN_NOT_CONFIRMED", plan };
   const occurredAt = resolveNow(context);
-  return { succeeded: true, plan: transitionPlan(plan, DeploymentPlanStatus.DISPATCHED, "DEPLOYMENT_PLAN_DISPATCH", "DEPLOYMENT_TASKS_CREATED", occurredAt, { generated_task_ids: taskIds, dispatched_at: occurredAt }) };
+  const generatedTaskIds = [...new Set([...(plan.generated_task_ids || []), ...taskIds].filter(Boolean))];
+  const plannedCount = Math.max(0, Number(plan.planned_robotaxi_count || 0));
+  const remainingCount = Math.max(0, plannedCount - generatedTaskIds.length);
+  const nextStatus = remainingCount > 0 ? DeploymentPlanStatus.PARTIALLY_DISPATCHED : DeploymentPlanStatus.DISPATCHED;
+  return { succeeded: true, plan: transitionPlan(plan, nextStatus, "DEPLOYMENT_PLAN_DISPATCH", nextStatus === DeploymentPlanStatus.DISPATCHED ? "DEPLOYMENT_TASKS_CREATED" : "DEPLOYMENT_TASKS_PARTIALLY_CREATED", occurredAt, {
+    generated_task_ids: generatedTaskIds,
+    dispatched_robotaxi_count: generatedTaskIds.length,
+    remaining_robotaxi_count: remainingCount,
+    dispatch_failure_reasons: failureReasons,
+    ...(nextStatus === DeploymentPlanStatus.DISPATCHED ? { dispatched_at: occurredAt } : {}),
+  }) };
 }
 
 function createForecastRun({ runId, strategy, occurredAt, status, resultCount = 0, failureReason = null, period = null, targets = [], orderFacts = [] }) {
@@ -225,9 +240,13 @@ function createDeploymentPlan({ planId, runId, strategy, forecastResults, robota
   const expectedDemand = Math.ceil((predictedOrders * averageDuration) / (60 * horizonHours * targetUtilization));
   const currentSupply = countSupply(first, robotaxis, zones, places, serviceAreas);
   const gap = Math.max(0, expectedDemand - currentSupply);
-  const revenue = predictedOrders * averageRevenue;
+  const vehicleCycleCapacity = Math.max(0, (horizonHours * 60 / averageDuration) * targetUtilization);
+  const currentCoveredOrders = Math.min(predictedOrders, currentSupply * vehicleCycleCapacity);
+  const incrementalServiceOrders = Math.max(0, Math.min(predictedOrders - currentCoveredOrders, gap * vehicleCycleCapacity));
+  const revenue = incrementalServiceOrders * averageRevenue;
+  const fulfillmentCost = incrementalServiceOrders * Number(strategy.average_fulfillment_cost_per_order || 0);
   const cost = gap * Number(strategy.average_reposition_distance_km || 3) * Number(strategy.reposition_cost_per_km || 0);
-  const profit = revenue - cost;
+  const profit = revenue - fulfillmentCost - cost;
   const pressure = expectedDemand > 0 ? gap / expectedDemand : 0;
   const score = round(100 * (Math.min(1, predictedOrders / 50) * Number(strategy.demand_weight || 0) + pressure * Number(strategy.supply_gap_weight || 0) + pressure * Number(strategy.service_pressure_weight || 0) + Math.max(0, Math.min(1, profit / Math.max(1, revenue))) * Number(strategy.profit_weight || 0)));
   const targetCell = resolveTargetCell(first, zones, places, serviceAreas);
@@ -252,12 +271,17 @@ function createDeploymentPlan({ planId, runId, strategy, forecastResults, robota
     current_supply_quantity: currentSupply,
     robotaxi_gap_quantity: gap,
     planned_robotaxi_count: gap,
+    dispatched_robotaxi_count: 0,
+    remaining_robotaxi_count: gap,
     deployment_priority_score: score,
     deployment_priority_rank: null,
+    incremental_service_order_count: round(incrementalServiceOrders),
     expected_revenue_amount: round(revenue),
+    estimated_fulfillment_cost_amount: round(fulfillmentCost),
     estimated_deployment_cost_amount: round(cost),
     expected_profit_amount: round(profit),
     generated_task_ids: [],
+    dispatch_failure_reasons: [],
     strategy_snapshot: { ...strategy },
     created_at: occurredAt,
     updated_at: occurredAt,
@@ -307,11 +331,29 @@ function resolveForecastPeriod(strategy, occurredAt) {
 function addBucket(startAt, unit, index) { return new Date(Date.parse(startAt) + index * (unit === "DAY" ? 86400000 : 3600000)).toISOString(); }
 function resolveDailyBaseline(profile = {}) { return Number(profile.baseline_addressable_daily_orders ?? profile.potential_daily_trips ?? profile.potential_demand ?? profile.service_area_demand ?? profile.expected_robotaxi_demand ?? 0); }
 function resolveHistoricalDailyDemand(facts, days = 7) { return facts.length ? facts.length / Math.max(1, Number(days || 7)) : 0; }
-function resolveRecentTrend(facts) { if (facts.length < 2) return 1; const midpoint = Math.ceil(facts.length / 2); const older = Math.max(1, midpoint); const recent = Math.max(1, facts.length - midpoint); return Math.max(0.5, Math.min(1.5, recent / older)); }
+function resolveRecentTrend(facts, occurredAt, days = 7) {
+  if (facts.length < 2) return 1;
+  const end = Date.parse(occurredAt);
+  const halfWindowMs = Math.max(1, Number(days || 7)) * 86400000 / 2;
+  const recent = facts.filter((fact) => Date.parse(fact.createdAt) >= end - halfWindowMs).length;
+  const older = Math.max(1, facts.length - recent);
+  return Math.max(0.5, Math.min(1.5, recent / older));
+}
 function resolveHourShare(hour, profile = {}) { const peak = Number(profile.busiest_hour_share || profile.peak_hour_share || 0.1); return [7, 8, 9, 17, 18, 19].includes(hour) ? peak : Math.max(0, (1 - peak * 6) / 18); }
 function resolveDateFactor(strategy, at) { const day = new Date(at).getDay(); if (strategy.date_type === "HOLIDAY") return Number(strategy.holiday_factor || 1.25); if (strategy.date_type === "WEEKEND" || day === 0 || day === 6) return Number(strategy.weekend_factor || 1.08); return Number(strategy.normal_day_factor || 1); }
 function normalizeWeights(profile, historical, trend, hasHistory) { if (!hasHistory) return { profile: 1, historical: 0, trend: 0 }; const total = Math.max(0.0001, Number(profile || 0) + Number(historical || 0) + Number(trend || 0)); return { profile: Number(profile || 0) / total, historical: Number(historical || 0) / total, trend: Number(trend || 0) / total }; }
-function isOrderInTarget(fact, target, zones, places, serviceAreas) { const cells = resolveTargetCells(target, zones, places, serviceAreas); return !cells.size || cells.has(fact.pickupCellId) || cells.has(fact.dropoffCellId); }
+function isOrderInTarget(fact, target, zones, places, serviceAreas) { const cells = resolveTargetCells(target, zones, places, serviceAreas); return !cells.size || cells.has(fact.pickupCellId); }
+function filterFactsByWindow(facts, occurredAt, days = 7) {
+  const end = Date.parse(occurredAt);
+  const start = end - Math.max(1, Number(days || 7)) * 86400000;
+  return facts.filter((fact) => Number.isFinite(Date.parse(fact.createdAt)) && Date.parse(fact.createdAt) >= start && Date.parse(fact.createdAt) <= end)
+    .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+}
+function resolveLatestForecastRunId(results = []) {
+  const latest = [...results].filter((item) => item.short_term_forecast_run_id)
+    .sort((left, right) => Date.parse(right.created_at || right.forecast_bucket_start_at || 0) - Date.parse(left.created_at || left.forecast_bucket_start_at || 0))[0];
+  return latest?.short_term_forecast_run_id || null;
+}
 function countSupply(target, robotaxis, zones, places, serviceAreas) { const cells = resolveTargetCells(target, zones, places, serviceAreas); return robotaxis.filter((item) => ["AVAILABLE", "OPERATIONAL", "READY"].includes(item.availability_status) && !item.current_task_id && !item.current_order_id && (!cells.size ? item.target_zone_id === target.target_zone_id || item.service_zone_id === target.target_zone_id : cells.has(item.current_cell_id || item.location_cell_id))).length; }
 function resolveTargetCell(target, zones, places, serviceAreas) { return [...resolveTargetCells(target, zones, places, serviceAreas)][0] || null; }
 function resolveTargetCells(target, zones, places, serviceAreas) { if (!target) return new Set(); if (target.target_object_type === "SERVICE_AREA") return new Set(serviceAreas.find((item) => item.service_area_id === target.target_object_id)?.cell_ids || []); if (target.target_object_type === "PLACE") { const place = places.find((item) => item.place_id === target.target_object_id) || {}; const areas = serviceAreas.filter((item) => item.parent_place_id === place.place_id || place.nearby_service_area_ids?.includes(item.service_area_id)); return new Set([...(place.cell_ids || []), ...areas.flatMap((item) => item.cell_ids || [])]); } return new Set(zones.find((item) => item.zone_id === target.target_object_id)?.cell_ids || []); }

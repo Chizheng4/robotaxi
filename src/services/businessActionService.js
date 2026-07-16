@@ -324,10 +324,11 @@ export function createDeploymentTask({ state, runtime, request = {} }) {
 }
 
 export function createDeploymentTasksFromPlan({ state, plan, runtime }) {
-  if (!plan?.deployment_plan_id || plan.plan_status !== "CONFIRMED") {
+  if (!plan?.deployment_plan_id || !["CONFIRMED", "PARTIALLY_DISPATCHED"].includes(plan.plan_status)) {
     return failure("DEPLOYMENT_PLAN_NOT_CONFIRMED", "投放计划未确认，不能生成投放任务", "deploymentPlan", plan?.deployment_plan_id || null, "投放计划未确认");
   }
-  const requestedCount = Math.max(0, Number(plan.planned_robotaxi_count || 0));
+  const generatedCount = new Set(plan.generated_task_ids || []).size;
+  const requestedCount = Math.max(0, Number(plan.planned_robotaxi_count || 0) - generatedCount);
   if (!requestedCount) return failure("NO_PLANNED_ROBOTAXI", "投放计划没有需要投放的 Robotaxi", "deploymentPlan", plan.deployment_plan_id, "计划投放数量为零");
   let workingState = state;
   const taskIds = [];

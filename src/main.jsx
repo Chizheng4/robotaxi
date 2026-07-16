@@ -144,6 +144,9 @@ const hiddenWorkspacePages = new Set([
   "placeDemandProfiles",
   "serviceAreaDemandProfiles",
   "zoneDemandProfiles",
+  "supplyDemandBalanceStrategies",
+  "supplyDemandBalanceRuns",
+  "supplyDemandBalanceResults",
 ]);
 
 const tableConfig = {
@@ -467,7 +470,7 @@ const tableConfig = {
   deploymentDecisionStrategies: {
     title: "投放决策策略",
     description: "结合短期需求、当前供给和经济性，决定各服务区域的投放数量与优先级。",
-    columns: ["deployment_decision_strategy_id", "strategy_name", "strategy_status", "strategy_version", "decision_algorithm", "target_utilization_rate", "average_fulfillment_duration_min", "demand_weight", "supply_gap_weight", "service_pressure_weight", "profit_weight", "updated_at"],
+    columns: ["deployment_decision_strategy_id", "strategy_name", "strategy_status", "strategy_version", "decision_algorithm", "target_utilization_rate", "average_fulfillment_duration_min", "average_fulfillment_cost_per_order", "demand_weight", "supply_gap_weight", "service_pressure_weight", "profit_weight", "updated_at"],
   },
   deploymentDecisionRuns: {
     title: "投放决策执行",
@@ -477,7 +480,7 @@ const tableConfig = {
   deploymentPlans: {
     title: "投放计划",
     description: "投放计划是投放决策的正式输出，确认后可分解为运营投放任务。",
-    columns: ["deployment_plan_id", "plan_name", "plan_status", "target_object_type", "target_object_name", "target_zone_id", "plan_start_at", "plan_end_at", "predicted_order_count", "expected_robotaxi_demand", "current_supply_quantity", "robotaxi_gap_quantity", "planned_robotaxi_count", "deployment_priority_rank", "expected_revenue_amount", "estimated_deployment_cost_amount", "expected_profit_amount", "created_at"],
+    columns: ["deployment_plan_id", "plan_name", "plan_status", "target_object_type", "target_object_name", "target_zone_id", "plan_start_at", "plan_end_at", "predicted_order_count", "expected_robotaxi_demand", "current_supply_quantity", "robotaxi_gap_quantity", "planned_robotaxi_count", "dispatched_robotaxi_count", "remaining_robotaxi_count", "deployment_priority_rank", "incremental_service_order_count", "expected_revenue_amount", "estimated_fulfillment_cost_amount", "estimated_deployment_cost_amount", "expected_profit_amount", "created_at"],
   },
   supplyDemandBalanceStrategies: {
     title: "供需平衡策略",
@@ -3135,9 +3138,13 @@ function App({ currentUser, onLogout }) {
 
   function runDeploymentDecisionStrategy(strategy) {
     if (!operatingPlanningService?.executeDeploymentDecision || !strategy) return;
+    const forecastRun = (data.shortTermDemandForecastRuns || [])
+      .filter((item) => item.run_status === "SUCCEEDED")
+      .sort((left, right) => Date.parse(right.completed_at || right.started_at || 0) - Date.parse(left.completed_at || left.started_at || 0))[0];
     const result = operatingPlanningService.executeDeploymentDecision({
       strategy,
       forecastResults: data.shortTermDemandForecastResults || [],
+      forecastRunId: forecastRun?.short_term_forecast_run_id || null,
       robotaxis: data.robotaxis || [],
       serviceOrders,
       trips,
@@ -5493,26 +5500,22 @@ function App({ currentUser, onLogout }) {
   }
 
   function dispatchDeploymentPlan(plan) {
-    if (plan?.plan_status !== "CONFIRMED") return;
-    const result = runRepeatedManualBusinessAction(
-      (params) => businessActionService.createDeploymentTask({
-        ...params,
-        request: {
-          deployment_plan_id: plan.deployment_plan_id,
-          short_term_forecast_run_id: plan.short_term_forecast_run_id,
-          target_cell_id: plan.target_cell_id,
-          target_service_area_id: plan.target_service_area_id,
-          target_zone_id: plan.target_zone_id,
-        },
-        runtime: { ...params.runtime, context: { ...(params.runtime.context || {}), trigger_type: taskTypes.TriggerType.MANUAL, source_type: "DEPLOYMENT_PLAN" } },
-      }),
-      { maxIterations: Math.max(1, Number(plan.planned_robotaxi_count || 0)), isProgressResult: (item) => item.resultType === "DEPLOYMENT_CREATED" },
-    );
-    const created = result?.data?.results || [];
-    if (!created.length) return;
-    const transition = operatingPlanningService.markDeploymentPlanDispatched({ plan, taskIds: created.map((item) => item.objectId), context: { now } });
+    if (!["CONFIRMED", "PARTIALLY_DISPATCHED"].includes(plan?.plan_status)) return;
+    const result = runManualBusinessAction((params) => businessActionService.createDeploymentTasksFromPlan({
+      ...params,
+      plan,
+      runtime: { ...params.runtime, context: { ...(params.runtime.context || {}), trigger_type: taskTypes.TriggerType.MANUAL, source_type: "DEPLOYMENT_PLAN" } },
+    }));
+    const taskIds = result?.data?.taskIds || [];
+    if (!taskIds.length) return;
+    const transition = operatingPlanningService.markDeploymentPlanDispatched({
+      plan,
+      taskIds,
+      failureReasons: result?.data?.failureReasons || [],
+      context: { now },
+    });
     if (transition.succeeded) setOperationalData((current) => ({ ...current, deploymentPlans: replaceCollectionItem(current.deploymentPlans || [], "deployment_plan_id", transition.plan) }));
-    selectForPage("deploymentTasks", "deploymentTask", created[0].objectId);
+    selectForPage("deploymentTasks", "deploymentTask", taskIds[0]);
   }
 
   function createServiceOrderFromDemand(orderChannel) {
@@ -7034,7 +7037,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         render: (_, row) => renderActionCell(row, <RowActionGroup>
           {row.plan_status === "DRAFT" && <RowActionButton onClick={() => actions.confirmDeploymentPlan(row)}>确认计划</RowActionButton>}
           {row.plan_status === "CONFIRMED" && <RowActionButton onClick={() => actions.dispatchDeploymentPlan(row)}>生成投放任务</RowActionButton>}
-          {!["CANCELLED", "DISPATCHED"].includes(row.plan_status) && <RowActionButton type="default" onClick={() => actions.cancelDeploymentPlan(row)}>取消</RowActionButton>}
+          {row.plan_status === "PARTIALLY_DISPATCHED" && <RowActionButton onClick={() => actions.dispatchDeploymentPlan(row)}>继续生成任务</RowActionButton>}
+          {!["CANCELLED", "PARTIALLY_DISPATCHED", "DISPATCHED"].includes(row.plan_status) && <RowActionButton type="default" onClick={() => actions.cancelDeploymentPlan(row)}>取消</RowActionButton>}
         </RowActionGroup>),
       };
     }
@@ -10420,7 +10424,7 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260624-v028-1-5"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-    import("./domain/fieldDisplayService.js?v=20260625-v029-2"),
+	    import("./domain/fieldDisplayService.js?v=20260716-v046-0-6"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
@@ -10445,7 +10449,7 @@ async function bootstrap() {
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
 		    import("./domain/routePlanningStrategies.js?v=20260625-v030-3"),
 		    import("./data/timedOperationDiagnostics.js?v=20260630-v036-1"),
-		    import("./services/businessActionService.js?v=20260706-v040-28"),
+		    import("./services/businessActionService.js?v=20260716-v046-0-6"),
 		    import("./services/robotaxiTaskPriorityService.js?v=20260702-v040-1"),
 		    import("./services/fleetOperationTaskService.js?v=20260702-v039-7"),
 		    import("./services/fleetOperationPolicyService.js?v=20260702-v038-0"),
@@ -10453,9 +10457,9 @@ async function bootstrap() {
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
 		    import("./services/businessPlanningService.js?v=20260713-v043-0-0"),
-		    import("./services/operatingPlanningService.js?v=20260716-v046-0-0"),
+		    import("./services/operatingPlanningService.js?v=20260716-v046-0-6"),
 		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
-		    import("./data/supplyManagementInitialization.js"),
+		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
 		    import("./data/spatialBusinessProfileInitialization.js?v=20260713-v043-0-0"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
@@ -10465,8 +10469,8 @@ async function bootstrap() {
 		    import("./ui/pageContextService.js?v=20260715-v044-4-0"),
 		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
 		    import("./ui/metricObjectPresentationService.js?v=20260715-v044-5-1"),
-		    import("./ui/navigationRegistry.js?v=20260715-v045-0-0"),
-		    import("./ui/pageArchitectureRegistry.js?v=20260715-v045-2-0"),
+		    import("./ui/navigationRegistry.js?v=20260716-v046-0-6"),
+		    import("./ui/pageArchitectureRegistry.js?v=20260716-v046-0-6"),
 		    import("./services/operatingModelService.js?v=20260715-v045-0-0"),
 		    import("./services/decisionControlService.js?v=20260716-v045-3-0"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
@@ -12323,6 +12327,7 @@ function removeRuntimeResetParam() {
 
 function normalizeOperationalRouteStrategies(operationalData) {
   const demandProfiles = normalizeDemandProfiles ? normalizeDemandProfiles(operationalData) : (operationalData.demandProfiles || []);
+  const planningDefaults = operatingPlanningService?.initializeOperatingPlanningData?.() || {};
   const legacyDemandProfileGroups = splitDemandProfilesByTarget ? splitDemandProfilesByTarget(demandProfiles) : {
     placeDemandProfiles: operationalData.placeDemandProfiles || [],
     serviceAreaDemandProfiles: operationalData.serviceAreaDemandProfiles || [],
@@ -12331,9 +12336,25 @@ function normalizeOperationalRouteStrategies(operationalData) {
   return {
     ...operationalData,
     routes: normalizeRouteStrategyReferences(operationalData.routes || []),
+    shortTermDemandForecastStrategies: mergeDefaultConfiguredRecords(
+      operationalData.shortTermDemandForecastStrategies,
+      planningDefaults.shortTermDemandForecastStrategies,
+      "short_term_forecast_strategy_id",
+    ),
+    deploymentDecisionStrategies: mergeDefaultConfiguredRecords(
+      operationalData.deploymentDecisionStrategies,
+      planningDefaults.deploymentDecisionStrategies,
+      "deployment_decision_strategy_id",
+    ),
     demandProfiles,
     ...legacyDemandProfileGroups,
   };
+}
+
+function mergeDefaultConfiguredRecords(records = [], defaults = [], idField) {
+  const current = Array.isArray(records) && records.length ? records : defaults;
+  const defaultById = new Map((defaults || []).map((item) => [item[idField], item]));
+  return (current || []).map((item) => ({ ...(defaultById.get(item[idField]) || {}), ...item }));
 }
 
 function normalizeServiceOrders(orders) {

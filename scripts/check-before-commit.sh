@@ -96,6 +96,7 @@ node --check src/services/taskDispatchStrategyService.js
 node --check src/services/robotaxiTaskPlanningService.js
 node --check src/services/supplyDemandBalanceService.js
 node --check src/services/operatingPlanningService.js
+node --check scripts/verify-v046-operating-supply-planning.mjs
 node --check src/services/spatialCatalogService.js
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js

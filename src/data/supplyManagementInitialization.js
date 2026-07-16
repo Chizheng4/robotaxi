@@ -6,7 +6,7 @@ import {
   initializeDefaultSupplyProductionProfiles,
 } from "../services/businessPlanningService.js";
 import { initializeDefaultSupplyDemandBalanceStrategies } from "../services/supplyDemandBalanceService.js";
-import { initializeOperatingPlanningData } from "../services/operatingPlanningService.js";
+import { initializeOperatingPlanningData } from "../services/operatingPlanningService.js?v=20260716-v046-0-6";
 
 export function initializeSupplyManagement() {
   const operatingPlanning = initializeOperatingPlanningData();

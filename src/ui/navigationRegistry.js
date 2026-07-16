@@ -56,7 +56,7 @@ export const navigationGroups = Object.freeze([
     page("serviceFulfillmentRecords", "履约行驶"),
   ]),
   group("supplyDemandDeploymentManagement", "供需投放", [
-      group("shortTermDemandForecastManagement", "短期需求预测", [
+      group("shortTermDemandForecastManagement", "短期预测", [
         page("shortTermDemandForecastStrategies", "预测策略"),
         page("shortTermDemandForecastRuns", "预测执行"),
         page("shortTermDemandForecastResults", "预测结果"),

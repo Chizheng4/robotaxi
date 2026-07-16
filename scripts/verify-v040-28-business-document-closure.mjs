@@ -10,7 +10,6 @@ const fleetOperationSource = fs.readFileSync("src/services/fleetOperationTaskSer
 const workflowRegistrySource = fs.readFileSync("src/domain/workflowTransitionRegistry.js", "utf8");
 
 [
-  'import("./services/businessActionService.js?v=20260706-v040-28")',
   "function runManualBusinessAction(action)",
   "businessActionService.executeOrderMatching",
   "businessActionService.advanceTrip",
@@ -25,6 +24,7 @@ const workflowRegistrySource = fs.readFileSync("src/domain/workflowTransitionReg
 ].forEach((snippet) => {
   assert.ok(mainSource.includes(snippet), `主页面必须通过服务层闭环接入：${snippet}`);
 });
+assert.match(mainSource, /import\("\.\/services\/businessActionService\.js\?v=[^"']+"\)/, "主页面必须通过带版本标识的业务动作服务接入闭环");
 
 assert.ok(
   mainSource.includes("<RowActionButton type=\"default\" onClick={() => actions.completeTripTravelNow(row.trip_id)}>自动到达</RowActionButton>"),

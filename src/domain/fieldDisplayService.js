@@ -4,7 +4,7 @@ import {
   getDetailTitle,
   objectDictionary,
   valueDictionary,
-} from "./fieldDictionary.js";
+} from "./fieldDictionary.js?v=20260716-v046-0-6";
 
 const INTERNAL_FIELD_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
 const INTERNAL_VALUE_PATTERN = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;

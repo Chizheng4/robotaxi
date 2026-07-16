@@ -1474,6 +1474,8 @@
 |forecast_horizon_value|预测跨度|配置字段|短期预测向未来覆盖的单位数量|
 |forecast_horizon_unit|预测跨度单位|配置字段|短期预测跨度使用小时或日|
 |time_bucket_unit|时间粒度|配置字段|预测结果的时间桶粒度|
+
+短期预测时间单位统一枚举：`HOUR`（小时）、`DAY`（日）。
 |recent_window_days|近期数据窗口（天）|配置字段|计算近期趋势使用的历史天数|
 |profile_weight|需求画像权重|配置字段|需求画像基准在短期预测中的权重|
 |historical_weight|历史数据权重|配置字段|历史订单事实在短期预测中的权重|
@@ -1488,13 +1490,19 @@
 |deployment_plan_id|投放计划编号|持久化字段|投放决策直接形成的计划编号|
 |target_utilization_rate|目标利用率|配置字段|投放决策希望维持的 Robotaxi 目标利用率|
 |average_fulfillment_duration_min|平均履约时长（分钟）|配置字段|订单需求换算车辆需求时使用的平均履约时长|
+|average_fulfillment_cost_per_order|单均履约变动成本|配置字段|一笔新增履约预计产生的能源、资产和运营变动成本|
 |supply_gap_weight|供给缺口权重|配置字段|供给缺口在投放优先级中的权重|
 |service_pressure_weight|服务压力权重|配置字段|预计需求无法及时履约的压力权重|
 |plan_start_at|计划开始时间|持久化字段|投放计划覆盖窗口的开始时间|
 |plan_end_at|计划结束时间|持久化字段|投放计划覆盖窗口的结束时间|
 |expected_robotaxi_demand|预计 Robotaxi 需求|计算字段|预测订单量按时长和利用率换算的车辆需求|
 |deployment_priority_score|投放优先级评分|计算字段|需求、缺口、服务压力和利润形成的排序评分|
+|incremental_service_order_count|预计新增覆盖订单数|计算字段|新增投放运力在计划周期内能够覆盖的未满足订单数量|
+|estimated_fulfillment_cost_amount|预计履约变动成本|计算字段|预计新增覆盖订单对应的履约变动成本|
 |generated_task_ids|已生成任务列表|运行态字段|投放计划分解形成的运营投放任务编号列表|
+|dispatched_robotaxi_count|已下发 Robotaxi 数|运行态字段|投放计划已成功生成投放任务的 Robotaxi 数量|
+|remaining_robotaxi_count|剩余 Robotaxi 数|运行态字段|计划数量减去已成功生成任务数量后的剩余数量|
+|dispatch_failure_reasons|下发失败原因|运行态字段|投放计划部分或全部未生成任务时的结构化原因列表|
 |delivery_order_id|交付单编号|持久化字段|区域交付单唯一编号|
 |delivery_order_name|交付单名称|持久化字段|区域交付单名称|
 |delivery_status|交付状态|运行态字段|区域交付单状态|
@@ -1539,6 +1547,10 @@
 |IN_DELIVERY|交付中|区域交付单状态|
 |DELIVERED|已交付|区域交付单状态|
 |PENDING_DELIVERY|待交付|区域交付相关状态|
+|PARTIALLY_DISPATCHED|部分下发|投放计划只生成了部分投放任务|
+|DISPATCHED|已下发|投放计划已生成全部投放任务|
+|DEPLOYMENT_TASKS_PARTIALLY_CREATED|投放任务部分生成|投放计划部分下发结果|
+|SHORT_TERM_FORECAST_RESULT_REQUIRED|缺少短期预测结果|投放决策执行失败原因|
 |ZONE_SUPPLY_URGENCY_ALLOCATION|区域供给紧急度分配|区域分配算法|
 |ZONE_GAP_TO_OPS_CENTER|区域缺口分配到运营中心（兼容）|区域分配算法兼容值|
 |SHORT_TERM_PROFIT_PRIORITY|短期利润优先平衡|供需平衡算法|

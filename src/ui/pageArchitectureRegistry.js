@@ -117,6 +117,7 @@ const specializedDetailPages = new Set([
 
 const rowActionPages = new Set([
   "businessTargets", "demandProfiles", "supplyProductionProfiles", "longTermDemandForecastStrategies",
+  "supplyDecisionStrategies", "shortTermDemandForecastStrategies", "deploymentDecisionStrategies",
   "supplyPlans", "productionBatches", "deploymentPlans", "fleetAllocationStrategies", "fleetAllocationResults",
   "robotaxiDeliveryOrders", "readinessTasks", "robotaxis", "routePlanningRuns", "routeExecutions",
   "serviceFulfillmentRecords", "deploymentTasks", "serviceOrders",

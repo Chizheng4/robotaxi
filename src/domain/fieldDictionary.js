@@ -476,6 +476,7 @@ export const fieldDictionary = {
   deployment_plan_id: "投放计划编号",
   target_utilization_rate: "目标利用率",
   average_fulfillment_duration_min: "平均履约时长（分钟）",
+  average_fulfillment_cost_per_order: "单均履约变动成本",
   supply_gap_weight: "供给缺口权重",
   service_pressure_weight: "服务压力权重",
   reposition_cost_per_km: "单位调度成本",
@@ -485,7 +486,12 @@ export const fieldDictionary = {
   plan_end_at: "计划结束时间",
   expected_robotaxi_demand: "预计 Robotaxi 需求",
   deployment_priority_score: "投放优先级评分",
+  incremental_service_order_count: "预计新增覆盖订单数",
+  estimated_fulfillment_cost_amount: "预计履约变动成本",
   generated_task_ids: "已生成任务列表",
+  dispatched_robotaxi_count: "已下发 Robotaxi 数",
+  remaining_robotaxi_count: "剩余 Robotaxi 数",
+  dispatch_failure_reasons: "下发失败原因",
   supply_demand_balance_run_id: "供需平衡执行编号",
   supply_demand_balance_result_id: "供需平衡结果编号",
   balance_algorithm: "平衡算法",
@@ -1494,6 +1500,7 @@ export const valueDictionary = {
   OFF_TRACK: "偏离计划",
   INSUFFICIENT_DATA: "数据不足",
   DAY: "日",
+  HOUR: "小时",
   WEEK: "周",
   MONTH: "月",
   QUARTER: "季度",
@@ -1757,6 +1764,9 @@ export const valueDictionary = {
   ROBOTAXI_NOT_RELEASED_FOR_DISPATCH: "Robotaxi 未释放为可调度",
   NO_DISPATCH_CANDIDATE: "无可调度候选",
   DISPATCHED: "已调度",
+  PARTIALLY_DISPATCHED: "部分下发",
+  DEPLOYMENT_TASKS_PARTIALLY_CREATED: "投放任务部分生成",
+  SHORT_TERM_FORECAST_RESULT_REQUIRED: "缺少短期预测结果",
   NO_CAPACITY: "无可用容量",
   NO_MATCHING_CAPABILITY: "无匹配能力",
   NO_ELIGIBLE_CENTER: "无可用运维中心",
@@ -2439,6 +2449,13 @@ export const valueDictionary = {
 };
 
 export const fieldValueDictionary = {
+  plan_status: {
+    DRAFT: "草稿",
+    CONFIRMED: "已确认",
+    PARTIALLY_DISPATCHED: "部分下发",
+    DISPATCHED: "已下发",
+    CANCELLED: "已取消",
+  },
   action_type: {
     READINESSTASK_CREATE: "创建运营准入任务",
     DEPLOYMENTTASK_CREATE: "创建运营投放任务",

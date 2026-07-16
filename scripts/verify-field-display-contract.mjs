@@ -63,7 +63,7 @@ const contract = validateFieldDisplayContract({
 
 assert.deepEqual(contract.missingFields, [], `字段字典缺少中文字段名：\n${contract.missingFields.join("\n")}`);
 assert.deepEqual(contract.missingValues, [], `值字典缺少中文枚举值：\n${contract.missingValues.join("\n")}`);
-assert.match(mainSource, /fieldDisplayService\.js\?v=20260625-v029-2/, "主页面必须通过字段展示服务接入字段字典");
+assert.match(mainSource, /fieldDisplayService\.js\?v=[^"']+/, "主页面必须通过带版本标识的字段展示服务接入字段字典");
 assert.doesNotMatch(mainSource, /import\("\.\/domain\/fieldDictionary\.js/, "主页面不得直接接入字段字典实现");
 [
   "businessTarget", "supplyProductionProfile", "longTermDemandForecastStrategy", "longTermDemandForecastRun",
