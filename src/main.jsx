@@ -1214,7 +1214,7 @@ function PlatformLogin({ onEnter }) {
     <main className="platform-login-shell">
       <section className="platform-login-panel" aria-labelledby="platform-login-title">
         <div className="platform-login-brand">
-          <h1 id="platform-login-title">Robotaxi经营模拟</h1>
+          <h1 id="platform-login-title">Robotaxi 经营模拟</h1>
         </div>
         <form className="platform-login-form" onSubmit={submitLogin}>
           <input
@@ -3547,13 +3547,13 @@ function App({ currentUser, onLogout }) {
       <header className="global-system-bar">
         <div className={collapsed ? "system-brand collapsed" : "system-brand"}>
           <Button
-            aria-label="Robotaxi经营模拟，返回运营中控台"
+            aria-label="Robotaxi 经营模拟，返回运营中控台"
             className="brand-title-button"
             type="text"
             onClick={goToConsole}
           >
             {collapsed ? "R" : (
-              <span className="brand-title-full">Robotaxi经营模拟</span>
+              <span className="brand-title-full">Robotaxi 经营模拟</span>
             )}
           </Button>
           <Button type="text" size="small" aria-label={collapsed ? "展开菜单" : "收起菜单"} onClick={() => setCollapsed((value) => !value)}>

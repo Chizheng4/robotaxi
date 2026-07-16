@@ -1227,7 +1227,7 @@
 }
 
 .map-hover-card > strong {
-  font-size: 12px;
+  font-size: var(--font-md);
   font-weight: 500;
 }
 

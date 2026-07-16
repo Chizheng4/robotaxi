@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v046.0.3",
+    "title": "恢复站内品牌标题的规范视觉权重，并优化中英文混排间距",
+    "changes": [
+      "站内 Logo 使用统一 `14px` 系统标题令牌，不再沿用两行 Logo 的 `12px` 特例。",
+      "登录页、站内 Logo、浏览器标题和兼容导航统一为“Robotaxi 经营模拟”。",
+      "英文品牌与中文名称之间使用自然空格，不额外增加字间距样式。",
+      "桌面端与 390×844 手机端真实浏览器验证通过，页面无横向溢出。"
+    ],
+    "audienceTitle": "品牌标题视觉优化",
+    "audienceChanges": [
+      "网站标题恢复清晰、协调的标准字号。",
+      "“Robotaxi”与中文名称之间增加自然间距，阅读更舒适。",
+      "登录页和网站内部继续保持统一，并兼顾手机端自适应。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v046.0.2",
     "title": "收敛网站品牌展示为简洁的“Robotaxi经营模拟”，减少登录页和主导航的视觉负担",
     "changes": [
