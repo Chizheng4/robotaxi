@@ -4,30 +4,36 @@ import { initializeOperationsCenter } from "../src/data/operationsCenterInitiali
 import { initializeSupplyManagement } from "../src/data/supplyManagementInitialization.js";
 import { initializeSpatialBusinessProfiles } from "../src/data/spatialBusinessProfileInitialization.js";
 import * as businessPlanningService from "../src/services/businessPlanningService.js";
+import * as operatingPlanningService from "../src/services/operatingPlanningService.js";
 import {
   PublicDemoBootstrapAction,
   createPublicDemoBootstrapPlan,
   executePublicDemoForecast,
+  executePublicDemoShortTermForecast,
 } from "../src/services/publicDemoBootstrapService.js";
 import { ensureLatestRelease } from "../src/ui/releaseFreshnessService.js";
 
 const publicLocation = { hostname: "chizheng4.github.io", search: "", href: "https://chizheng4.github.io/robotaxi/" };
 const emptyPlan = createPublicDemoBootstrapPlan({ locationLike: publicLocation });
 assert.equal(emptyPlan.forecastAction, PublicDemoBootstrapAction.EXECUTE_FORECAST, "线上无预测结果时必须执行预测");
+assert.equal(emptyPlan.shortTermForecastAction, PublicDemoBootstrapAction.EXECUTE_SHORT_TERM_FORECAST, "线上无短期预测结果时必须执行短期预测");
 assert.equal(emptyPlan.simulationAction, PublicDemoBootstrapAction.CREATE_SIMULATION, "线上无模拟运行时必须创建模拟");
 
 const readyPlan = createPublicDemoBootstrapPlan({
   locationLike: publicLocation,
   forecastResults: [{ forecast_result_id: "LDF-RES-0001-001" }],
+  shortTermForecastResults: [{ short_term_forecast_result_id: "STF-RES-0001" }],
   simulationRuns: [{ simulation_run_id: "SIM-RUN-001", simulation_status: "READY" }],
 });
 assert.equal(readyPlan.forecastAction, PublicDemoBootstrapAction.NONE, "已有预测结果不得重复执行");
+assert.equal(readyPlan.shortTermForecastAction, PublicDemoBootstrapAction.NONE, "已有短期预测结果不得重复执行");
 assert.equal(readyPlan.simulationAction, PublicDemoBootstrapAction.START_SIMULATION, "已有就绪模拟必须直接启动");
 assert.equal(readyPlan.simulationRunId, "SIM-RUN-001", "必须启动已有就绪模拟");
 
 const completedPlan = createPublicDemoBootstrapPlan({
   locationLike: publicLocation,
   forecastResults: [{ forecast_result_id: "LDF-RES-0001-001" }],
+  shortTermForecastResults: [{ short_term_forecast_result_id: "STF-RES-0001" }],
   simulationRuns: [{ simulation_run_id: "SIM-RUN-001", simulation_status: "COMPLETED" }],
 });
 assert.equal(completedPlan.simulationAction, PublicDemoBootstrapAction.NONE, "已执行模拟不得重复运行");
@@ -53,6 +59,18 @@ const forecast = executePublicDemoForecast({
 });
 assert(forecast.succeeded && forecast.results.length > 0, "演示初始化必须通过现有经营规划服务生成预测结果");
 assert.equal(forecast.operationalData.longTermDemandForecastRuns[0].forecast_run_id, "LDF-RUN-DEMO", "预测执行记录必须完整保留");
+
+const shortTermForecast = executePublicDemoShortTermForecast({
+  planningService: operatingPlanningService,
+  operationalData,
+  context: {
+    now: () => "2026-07-15T10:00:00.000Z",
+    nextRunId: () => "STF-RUN-DEMO",
+    nextResultId: (index) => `STF-RES-DEMO-${index + 1}`,
+  },
+});
+assert(shortTermForecast.succeeded && shortTermForecast.results.length > 0, "演示初始化必须通过短期预测服务生成结果");
+assert.equal(shortTermForecast.operationalData.shortTermDemandForecastRuns[0].short_term_forecast_run_id, "STF-RUN-DEMO", "短期预测执行记录必须完整保留");
 
 let replacedUrl = null;
 const latestReleaseReloaded = await ensureLatestRelease({

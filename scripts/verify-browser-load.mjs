@@ -153,6 +153,7 @@ try {
     });
     const publicDemoState = publicDemoResult.result?.result?.value;
     assert(publicDemoState?.forecastResultCount > 0, `线上演示引导必须自动生成需求预测结果：${JSON.stringify(publicDemoState)}`);
+    assert(publicDemoState?.shortTermForecastResultCount > 0, `线上演示引导必须自动生成短期需求预测结果：${JSON.stringify(publicDemoState)}`);
     assert(publicDemoState?.simulationStatuses?.some((status) => status !== "READY"), `线上演示引导必须自动启动模拟运行：${JSON.stringify(publicDemoState)}`);
   }
 

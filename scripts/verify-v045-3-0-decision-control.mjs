@@ -5,7 +5,7 @@ import { getPageArchitecture } from "../src/ui/pageArchitectureRegistry.js";
 
 const definitionValidation = validateDecisionCapabilityDefinitions();
 assert.equal(definitionValidation.valid, true, definitionValidation.errors.join("；"));
-assert.equal(decisionCapabilityDefinitions.length, 10, "决策中心应登记十项首期决策能力");
+assert.equal(decisionCapabilityDefinitions.length, 12, "决策中心应登记十二项决策能力");
 
 const view = createDecisionControlView({
   collections: {

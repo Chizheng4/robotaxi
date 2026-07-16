@@ -40,7 +40,7 @@ production_batch_id = 当前批次
 planned_target_zone_id = 计划目标区域
 ```
 
-生产批次只形成资产。区域分配策略决定目标运营中心，交付完成后才写入当前位置并进入 `PENDING_ADMISSION`。
+生产批次只形成资产。供应决策和生产计划已经确定目标区域；交付编排只选择具体 Robotaxi、运营中心和物流批次，交付完成后才写入当前位置并进入 `PENDING_ADMISSION`。
 
 ## 5. 边界
 

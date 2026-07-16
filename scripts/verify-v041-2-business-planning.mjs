@@ -271,7 +271,7 @@ assert.ok(main.includes("businessPlanningService.executeLongTermDemandForecastSt
 assert.ok(main.includes("businessPlanningService.updateBusinessTargetConfig"), "页面必须调用服务保存经营目标配置");
 assert.ok(main.includes("businessPlanningService.updateSupplyProductionProfileConfig"), "页面必须调用服务保存生产画像配置");
 assert.ok(main.includes("businessTargets: data.businessTargets || []"), "需求预测执行必须传入经营目标集合");
-assert.ok(main.includes("businessPlanningService.createSupplyPlanFromForecast"), "页面必须调用服务从预测结果创建生产计划");
+assert.ok(main.includes("businessPlanningService.executeSupplyDecisionStrategy"), "页面必须通过供应决策服务从预测结果创建生产计划");
 assert.ok(main.includes("businessPlanningService.completeSupplyManagementLoopFromForecast"), "页面必须调用服务执行供应管理闭环编排");
 assert.ok(main.includes("执行供应闭环"), "预测结果页必须提供供应闭环人工入口");
 assert.ok(navigationRegistry.includes('group("regionDeliveryManagement", "区域交付"'), "供应管理必须把区域交付作为二级菜单容器");

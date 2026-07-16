@@ -97,6 +97,17 @@ export const SupplyPlanStatus = {
   CANCELLED: "CANCELLED",
 };
 
+export const SupplyDecisionStrategyStatus = {
+  ACTIVE: "ACTIVE",
+  DRAFT: "DRAFT",
+  ARCHIVED: "ARCHIVED",
+};
+
+export const SupplyDecisionRunStatus = {
+  SUCCEEDED: "SUCCEEDED",
+  FAILED: "FAILED",
+};
+
 export const ProductionBatchStatus = {
   PLANNED: "PLANNED",
   IN_PRODUCTION: "IN_PRODUCTION",
@@ -134,6 +145,23 @@ export function initializeDefaultBusinessTargets(now = defaultNow()) {
     average_variable_cost_per_order: 18,
     daily_fixed_operating_cost: 5000,
     minimum_contribution_margin_rate: 0.3,
+    created_at: now,
+    updated_at: now,
+  }];
+}
+
+export function initializeDefaultSupplyDecisionStrategies(now = defaultNow()) {
+  return [{
+    supply_decision_strategy_id: "SD-STR-001",
+    strategy_name: "产能约束供应决策",
+    strategy_status: SupplyDecisionStrategyStatus.ACTIVE,
+    strategy_version: "1.0.0",
+    decision_algorithm: "CAPACITY_CONSTRAINED",
+    target_zone_ids: ["Z-001", "Z-002"],
+    demand_coverage_rate: 1,
+    safety_capacity_ratio: 0.05,
+    include_in_transit_supply: true,
+    capacity_constraint_mode: "PRODUCTION_AND_DELIVERY",
     created_at: now,
     updated_at: now,
   }];
@@ -291,7 +319,7 @@ export function updateLongTermDemandForecastStrategyConfig({ strategy, patch = {
 export function initializeDefaultFleetAllocationStrategies(now = defaultNow()) {
   return [{
     fleet_allocation_strategy_id: "FAS-001",
-    strategy_name: "区域分配策略",
+    strategy_name: "交付编排策略",
     strategy_status: FleetAllocationStrategyStatus.ACTIVE,
     strategy_version: "1.0.0",
     allocation_algorithm: "ZONE_SUPPLY_URGENCY_ALLOCATION",
@@ -396,26 +424,31 @@ export function executeLongTermDemandForecastStrategy({
 export function createSupplyPlanFromForecast({
   forecast,
   supplyProductionProfiles = [],
+  supplyDecisionStrategy = null,
+  supplyDecisionRunId = null,
   context = {},
 } = {}) {
   const occurredAt = resolveNow(context);
   if (!forecast?.forecast_result_id) {
     return { succeeded: false, reason: "FORECAST_RESULT_REQUIRED", supplyPlan: null };
   }
-  const plannedRobotaxiCount = Math.max(0, Number(
-    forecast.recommended_production_quantity
-      ?? forecast.planned_production_quantity
-      ?? forecast.robotaxi_gap_quantity
-      ?? forecast.fleet_gap_quantity
-      ?? 0,
-  ));
-  if (plannedRobotaxiCount <= 0) {
+  const rawGap = Math.max(0, Number(forecast.robotaxi_gap_quantity ?? forecast.fleet_gap_quantity ?? 0));
+  if (rawGap <= 0) {
     return { succeeded: false, reason: "NO_FLEET_GAP", supplyPlan: null };
   }
   const productionProfile = supplyProductionProfiles.find((item) => item.profile_id === forecast.supply_production_profile_id)
     || supplyProductionProfiles.find((item) => item.profile_status === SupplyProductionProfileStatus.ACTIVE)
     || supplyProductionProfiles[0]
     || {};
+  const periodCount = Math.max(1, Number(forecast.forecast_period_count || 1));
+  const coverageRate = Math.max(0, Number(supplyDecisionStrategy?.demand_coverage_rate ?? 1));
+  const safetyRatio = Math.max(0, Number(supplyDecisionStrategy?.safety_capacity_ratio ?? 0));
+  const requiredSupply = Math.ceil(rawGap * coverageRate * (1 + safetyRatio));
+  const productionCapacity = Math.max(0, Number(productionProfile.production_capacity_per_period || requiredSupply)) * periodCount;
+  const deliveryCapacity = Math.max(0, Number(productionProfile.delivery_capacity_per_period || requiredSupply)) * periodCount;
+  const feasibleQuantity = Math.max(0, Math.floor(Math.min(requiredSupply, productionCapacity || requiredSupply, deliveryCapacity || requiredSupply)));
+  const plannedRobotaxiCount = feasibleQuantity;
+  if (plannedRobotaxiCount <= 0) return { succeeded: false, reason: "NO_FEASIBLE_SUPPLY_CAPACITY", supplyPlan: null };
   const supplyPlan = withLifecycleStatus({
     supply_plan_id: resolveSupplyPlanId(context),
     plan_name: `${forecast.zone_name || forecast.zone_id || "区域"}生产计划`,
@@ -423,16 +456,19 @@ export function createSupplyPlanFromForecast({
     forecast_id: forecast.forecast_result_id,
     forecast_result_id: forecast.forecast_result_id,
     forecast_run_id: forecast.forecast_run_id,
+    supply_decision_strategy_id: supplyDecisionStrategy?.supply_decision_strategy_id || null,
+    supply_decision_run_id: supplyDecisionRunId,
     target_zone_id: forecast.zone_id,
     target_zone_name: forecast.zone_name,
     supply_production_profile_id: productionProfile.profile_id || null,
     planned_robotaxi_count: plannedRobotaxiCount,
     required_robotaxi_quantity: forecast.required_robotaxi_quantity ?? null,
     effective_current_robotaxi: forecast.effective_current_robotaxi ?? null,
-    robotaxi_gap_quantity: forecast.robotaxi_gap_quantity ?? plannedRobotaxiCount,
-    feasible_manufacturing_quantity: forecast.feasible_manufacturing_quantity ?? null,
-    feasible_delivery_quantity: forecast.feasible_delivery_quantity ?? null,
-    uncovered_robotaxi_gap: forecast.uncovered_robotaxi_gap ?? null,
+    robotaxi_gap_quantity: rawGap,
+    required_supply_quantity: requiredSupply,
+    feasible_manufacturing_quantity: Math.min(requiredSupply, productionCapacity || requiredSupply),
+    feasible_delivery_quantity: Math.min(requiredSupply, deliveryCapacity || requiredSupply),
+    uncovered_robotaxi_gap: Math.max(0, requiredSupply - plannedRobotaxiCount),
     production_lead_time_days: productionProfile.production_lead_time_days ?? null,
     planned_start_date: forecast.forecast_start_date || occurredAt.slice(0, 10),
     planned_end_date: forecast.full_supply_completion_date || forecast.first_delivery_date || addDaysIsoDate(occurredAt, Number(productionProfile.production_lead_time_days || 180)),
@@ -449,6 +485,61 @@ export function createSupplyPlanFromForecast({
     occurredAt,
   });
   return { succeeded: true, supplyPlan };
+}
+
+export function executeSupplyDecisionStrategy({
+  strategy,
+  forecast,
+  supplyProductionProfiles = [],
+  existingSupplyPlans = [],
+  context = {},
+} = {}) {
+  const occurredAt = resolveNow(context);
+  const runIdFactory = context.nextRunId || context.nextSupplyDecisionRunId;
+  const runId = typeof runIdFactory === "function" ? runIdFactory() : context.supplyDecisionRunId || "SD-RUN-0001";
+  const failed = (reason) => ({
+    run: {
+      supply_decision_run_id: runId,
+      supply_decision_strategy_id: strategy?.supply_decision_strategy_id || null,
+      forecast_result_id: forecast?.forecast_result_id || null,
+      run_status: SupplyDecisionRunStatus.FAILED,
+      supply_plan_id: null,
+      failure_reason: reason,
+      strategy_snapshot: strategy ? { ...strategy } : null,
+      forecast_snapshot: forecast ? { ...forecast } : null,
+      started_at: occurredAt,
+      completed_at: occurredAt,
+    },
+    supplyPlan: null,
+    succeeded: false,
+    reason,
+  });
+  if (!strategy?.supply_decision_strategy_id || strategy.strategy_status !== SupplyDecisionStrategyStatus.ACTIVE) return failed("SUPPLY_DECISION_STRATEGY_NOT_ACTIVE");
+  if (!forecast?.forecast_result_id) return failed("FORECAST_RESULT_REQUIRED");
+  if ((existingSupplyPlans || []).some((item) => item.forecast_result_id === forecast.forecast_result_id && item.plan_status !== SupplyPlanStatus.CANCELLED)) return failed("SUPPLY_PLAN_ALREADY_EXISTS");
+  const result = createSupplyPlanFromForecast({ forecast, supplyProductionProfiles, supplyDecisionStrategy: strategy, supplyDecisionRunId: runId, context });
+  if (!result.succeeded) return failed(result.reason);
+  return {
+    succeeded: true,
+    supplyPlan: result.supplyPlan,
+    run: {
+      supply_decision_run_id: runId,
+      supply_decision_strategy_id: strategy.supply_decision_strategy_id,
+      forecast_result_id: forecast.forecast_result_id,
+      supply_production_profile_id: result.supplyPlan.supply_production_profile_id,
+      target_zone_id: result.supplyPlan.target_zone_id,
+      run_status: SupplyDecisionRunStatus.SUCCEEDED,
+      supply_plan_id: result.supplyPlan.supply_plan_id,
+      planned_robotaxi_count: result.supplyPlan.planned_robotaxi_count,
+      uncovered_robotaxi_gap: result.supplyPlan.uncovered_robotaxi_gap,
+      failure_reason: null,
+      strategy_snapshot: { ...strategy },
+      forecast_snapshot: { ...forecast },
+      production_profile_snapshot: supplyProductionProfiles.find((item) => item.profile_id === result.supplyPlan.supply_production_profile_id) || null,
+      started_at: occurredAt,
+      completed_at: occurredAt,
+    },
+  };
 }
 
 export function confirmSupplyPlan({ supplyPlan, context = {} } = {}) {
@@ -776,6 +867,7 @@ export function completeDeliveryOrder({ deliveryOrder, robotaxis = [], readiness
 export function completeSupplyManagementLoopFromForecast({
   forecast,
   supplyProductionProfiles = [],
+  supplyDecisionStrategies = [],
   fleetAllocationStrategies = [],
   existingRobotaxis = [],
   existingSupplyPlans = [],
@@ -783,11 +875,19 @@ export function completeSupplyManagementLoopFromForecast({
   readinessTasks = [],
   context = {},
 } = {}) {
-  const supplyPlanResult = createSupplyPlanFromForecast({
+  const supplyDecisionStrategy = supplyDecisionStrategies.find((item) => item.strategy_status === SupplyDecisionStrategyStatus.ACTIVE)
+    || supplyDecisionStrategies[0]
+    || initializeDefaultSupplyDecisionStrategies(context.now)[0];
+  const supplyDecisionResult = executeSupplyDecisionStrategy({
+    strategy: supplyDecisionStrategy,
     forecast,
     supplyProductionProfiles,
+    existingSupplyPlans,
     context,
   });
+  const supplyPlanResult = supplyDecisionResult.succeeded
+    ? { succeeded: true, supplyPlan: supplyDecisionResult.supplyPlan }
+    : supplyDecisionResult;
   if (!supplyPlanResult.succeeded) {
     return { succeeded: false, reason: supplyPlanResult.reason, step: "CREATE_SUPPLY_PLAN", supplyPlan: null };
   }
@@ -937,6 +1037,7 @@ export function completeSupplyManagementLoopFromForecast({
   ));
   return {
     succeeded: true,
+    supplyDecisionRun: supplyDecisionResult.run,
     supplyPlan: confirmedPlanResult.supplyPlan,
     productionBatch: completedBatchResult.productionBatch,
     robotaxis: deliveryCompletedResult.robotaxis,
@@ -1244,7 +1345,7 @@ function updateRobotaxisForDelivery(robotaxis = [], robotaxiIds = [], patch = {}
   });
 }
 
-function withLifecycleStatus(item, {
+export function withLifecycleStatus(item, {
   objectType,
   idField,
   statusField,

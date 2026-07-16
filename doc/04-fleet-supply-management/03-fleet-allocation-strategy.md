@@ -1,13 +1,13 @@
-# FleetAllocationStrategy：区域分配策略
+# FleetAllocationStrategy：交付编排兼容服务
 
 ## 1. 对象定位
 
-区域分配策略决定待交付 Robotaxi 应分配到哪个 Zone、哪个运营中心，并明确具体车辆编号。它采用标准的策略、执行、结果结构。
+该技术对象保留旧快照兼容，但业务职责收敛为交付编排：目标 Zone 和数量必须来自生产计划，本服务只选择目标运营中心、具体 Robotaxi 和交付批次，不重新进行区域供应决策。
 
 ```mermaid
 flowchart LR
-  A["待交付 Robotaxi 池"] --> B["区域分配策略"]
-  C["生产计划区域缺口"] --> B
+  A["待交付 Robotaxi 池"] --> B["交付编排策略"]
+  C["生产计划目标区域与数量"] --> B
   D["运营中心容量"] --> B
   B --> E["分配执行"] --> F["分配结果"] --> G["交付单"]
 ```
@@ -16,11 +16,11 @@ flowchart LR
 
 |对象|职责|
 |---|---|
-|`FleetAllocationStrategy`|保存算法、区域范围、单次交付上限和策略状态|
+|`FleetAllocationStrategy`|保存运营中心选择、批次上限和交付编排规则|
 |`FleetAllocationRun`|保存一次执行、策略快照、成功或失败原因|
 |`FleetAllocationResult`|保存目标区域、运营中心、分配数量和具体 Robotaxi 列表|
 
-结果粒度是“某区域获得哪些 Robotaxi”，不是“某个 Robotaxi 有多少辆”。当前只有有限区域时仍执行相同策略合同，便于未来扩展多区域紧急度、容量和成本约束。
+结果粒度是“生产计划中的目标区域由哪些 Robotaxi、交付到哪个运营中心履约”。区域数量是供应决策和生产计划事实，不允许本服务覆盖。
 
 ## 3. 当前计算
 

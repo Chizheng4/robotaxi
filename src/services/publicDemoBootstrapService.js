@@ -1,6 +1,7 @@
 export const PublicDemoBootstrapAction = Object.freeze({
   NONE: "NONE",
   EXECUTE_FORECAST: "EXECUTE_FORECAST",
+  EXECUTE_SHORT_TERM_FORECAST: "EXECUTE_SHORT_TERM_FORECAST",
   CREATE_SIMULATION: "CREATE_SIMULATION",
   START_SIMULATION: "START_SIMULATION",
 });
@@ -23,18 +24,21 @@ export function isPublicDemoEnvironment(locationLike = globalThis.location) {
 export function createPublicDemoBootstrapPlan({
   locationLike = globalThis.location,
   forecastResults = [],
+  shortTermForecastResults = [],
   simulationRuns = [],
 } = {}) {
   if (!isPublicDemoEnvironment(locationLike)) {
     return {
       enabled: false,
       forecastAction: PublicDemoBootstrapAction.NONE,
+      shortTermForecastAction: PublicDemoBootstrapAction.NONE,
       simulationAction: PublicDemoBootstrapAction.NONE,
       simulationRunId: null,
     };
   }
 
   const hasForecastResult = forecastResults.some((item) => item?.forecast_result_id);
+  const hasShortTermForecastResult = shortTermForecastResults.some((item) => item?.short_term_forecast_result_id);
   const readySimulationRun = simulationRuns.find((item) => item?.simulation_status === "READY") || null;
   const hasExecutedSimulation = simulationRuns.some((item) => executedSimulationStatuses.has(item?.simulation_status));
 
@@ -43,12 +47,55 @@ export function createPublicDemoBootstrapPlan({
     forecastAction: hasForecastResult
       ? PublicDemoBootstrapAction.NONE
       : PublicDemoBootstrapAction.EXECUTE_FORECAST,
+    shortTermForecastAction: hasShortTermForecastResult
+      ? PublicDemoBootstrapAction.NONE
+      : PublicDemoBootstrapAction.EXECUTE_SHORT_TERM_FORECAST,
     simulationAction: hasExecutedSimulation
       ? PublicDemoBootstrapAction.NONE
       : readySimulationRun
         ? PublicDemoBootstrapAction.START_SIMULATION
         : PublicDemoBootstrapAction.CREATE_SIMULATION,
     simulationRunId: readySimulationRun?.simulation_run_id || null,
+  };
+}
+
+export function executePublicDemoShortTermForecast({
+  planningService,
+  operationalData = {},
+  context = {},
+} = {}) {
+  if (operationalData.shortTermDemandForecastResults?.some((item) => item?.short_term_forecast_result_id)) {
+    return { executed: false, succeeded: true, operationalData, run: null, results: [] };
+  }
+
+  const strategy = (operationalData.shortTermDemandForecastStrategies || [])
+    .find((item) => item.strategy_status === "ACTIVE")
+    || operationalData.shortTermDemandForecastStrategies?.[0]
+    || null;
+  if (!planningService?.executeShortTermDemandForecast || !strategy) {
+    return { executed: false, succeeded: false, operationalData, run: null, results: [] };
+  }
+
+  const result = planningService.executeShortTermDemandForecast({
+    strategy,
+    demandProfiles: operationalData.demandProfiles || [],
+    serviceOrders: operationalData.serviceOrders || [],
+    trips: operationalData.trips || [],
+    zones: operationalData.zones || [],
+    places: operationalData.places || [],
+    serviceAreas: operationalData.serviceAreas || [],
+    context,
+  });
+  return {
+    executed: true,
+    succeeded: Boolean(result.results?.length),
+    run: result.run,
+    results: result.results || [],
+    operationalData: {
+      ...operationalData,
+      shortTermDemandForecastRuns: [result.run, ...(operationalData.shortTermDemandForecastRuns || [])],
+      shortTermDemandForecastResults: [...(result.results || []), ...(operationalData.shortTermDemandForecastResults || [])],
+    },
   };
 }
 

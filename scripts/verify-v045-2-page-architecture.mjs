@@ -8,7 +8,7 @@ const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), 
 const rulesSource = fs.readFileSync(new URL("../doc/rules/04-frontend-ux-rules.md", import.meta.url), "utf8");
 const leafKeys = flattenLeafKeys(navigationGroups);
 
-assert.equal(leafKeys.length, 79, "导航叶子页面数量发生变化时必须同步更新页面架构合同");
+assert.equal(leafKeys.length, 84, "导航叶子页面数量发生变化时必须同步更新页面架构合同");
 assert.equal(Object.keys(pageArchitectureRegistry).length, leafKeys.length, "每个页面必须且只能有一个架构合同");
 assert.deepEqual(validatePageArchitecture(leafKeys), { valid: true, errors: [] }, "页面架构注册表必须完整有效");
 
@@ -19,7 +19,7 @@ leafKeys.forEach((page) => {
   if (contract.mode === "analysis") assert.equal(contract.detailMode, "none", `${page} 不应显示记录详情栏`);
 });
 
-assert.equal(getPageArchitecture("supplyDemandBalanceResults").eventPanel, null, "纯策略结果不得显示最近任务事件");
+assert.equal(getPageArchitecture("shortTermDemandForecastResults").eventPanel, null, "纯预测结果不得显示最近任务事件");
 assert.equal(getPageArchitecture("fleetAllocationResults").eventPanel.label, "最近操作事件", "可操作结果应使用操作事件语义");
 assert.equal(getPageArchitecture("serviceOrders").resourceKind, "document", "服务订单必须声明为业务单据");
 assert.equal(getPageArchitecture("metricObservations").resourceKind, "result", "指标观测必须声明为数据结果");

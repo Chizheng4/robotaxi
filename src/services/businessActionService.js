@@ -203,7 +203,7 @@ export function failReadinessTask({ state, objectId, runtime, issueType = taskTy
   return success("READINESS_FAILED", `准入任务 ${objectId} 检查不通过`, { objectType: "readinessTask", objectId, robotaxiId: task.robotaxi_id, issueType }, updates);
 }
 
-export function createDeploymentTask({ state, runtime }) {
+export function createDeploymentTask({ state, runtime, request = {} }) {
   if (runtime.timeContext?.time_mode === "SIMULATION" && runtime.timeContext.is_worker_working_time === false) {
     return success("DEPLOYMENT_SKIPPED_OUT_OF_WORK_TIME", "未到作业人员工作时间，跳过运营投放任务创建", { objectType: "deploymentTask", objectId: null }, {});
   }
@@ -227,9 +227,16 @@ export function createDeploymentTask({ state, runtime }) {
       trigger_object_id: null,
     },
   }));
-  const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi, index) => planningResults[index]?.allowed);
+  const candidate = (state.robotaxis || appData.robotaxis || []).find((robotaxi, index) => planningResults[index]?.allowed && (!request.robotaxi_id || request.robotaxi_id === robotaxi.robotaxi_id));
   if (!candidate) return failure("NO_CANDIDATE_ROBOTAXI", "投放任务创建失败：无可投放 Robotaxi", "deploymentTask", null, "无可投放 Robotaxi");
-  const target = routePlanningService.getRandomDeploymentTarget(appData, {
+  const plannedTarget = request.target_cell_id ? {
+    target_zone_id: request.target_zone_id || null,
+    target_service_area_id: request.target_service_area_id || null,
+    target_cell_id: request.target_cell_id,
+    deployment_target_model: "DEPLOYMENT_PLAN_TARGET",
+    rebalance_reason: request.rebalance_reason || "SHORT_TERM_DEMAND_FORECAST",
+  } : null;
+  const target = plannedTarget || routePlanningService.getRandomDeploymentTarget(appData, {
     originCellId: candidate.current_cell_id,
     robotaxiId: candidate.robotaxi_id,
     seed: `${candidate.robotaxi_id}-${runtime.now()}`,
@@ -245,6 +252,8 @@ export function createDeploymentTask({ state, runtime }) {
     task_priority: taskTypes.TaskPriority.LOW,
     trigger_type: runtime.context?.trigger_type || taskTypes.TriggerType.AUTO,
     source_type: runtime.context?.source_type || taskTypes.TaskSourceType.SUPPLY_ADJUSTMENT_PLAN,
+    deployment_plan_id: request.deployment_plan_id || null,
+    short_term_forecast_run_id: request.short_term_forecast_run_id || null,
     robotaxi_id: candidate.robotaxi_id,
     route_execution_id: executionId,
     origin_cell_id: candidate.current_cell_id,
@@ -312,6 +321,39 @@ export function createDeploymentTask({ state, runtime }) {
       ...runtime.audit(),
     })),
   });
+}
+
+export function createDeploymentTasksFromPlan({ state, plan, runtime }) {
+  if (!plan?.deployment_plan_id || plan.plan_status !== "CONFIRMED") {
+    return failure("DEPLOYMENT_PLAN_NOT_CONFIRMED", "投放计划未确认，不能生成投放任务", "deploymentPlan", plan?.deployment_plan_id || null, "投放计划未确认");
+  }
+  const requestedCount = Math.max(0, Number(plan.planned_robotaxi_count || 0));
+  if (!requestedCount) return failure("NO_PLANNED_ROBOTAXI", "投放计划没有需要投放的 Robotaxi", "deploymentPlan", plan.deployment_plan_id, "计划投放数量为零");
+  let workingState = state;
+  const taskIds = [];
+  const failures = [];
+  for (let index = 0; index < requestedCount; index += 1) {
+    const result = createDeploymentTask({
+      state: workingState,
+      runtime,
+      request: {
+        deployment_plan_id: plan.deployment_plan_id,
+        short_term_forecast_run_id: plan.short_term_forecast_run_id,
+        target_zone_id: plan.target_zone_id,
+        target_service_area_id: plan.target_service_area_id,
+        target_cell_id: plan.target_cell_id,
+        rebalance_reason: "SHORT_TERM_DEMAND_FORECAST",
+      },
+    });
+    if (!result?.success) {
+      failures.push(result?.reason || result?.resultType || "DEPLOYMENT_TASK_CREATE_FAILED");
+      break;
+    }
+    taskIds.push(result.data?.objectId || result.updates?.deploymentTasks?.[0]?.task_id);
+    workingState = { ...workingState, ...(result.updates || {}) };
+  }
+  if (!taskIds.length) return failure("NO_DEPLOYMENT_TASK_CREATED", "投放计划没有生成任务", "deploymentPlan", plan.deployment_plan_id, failures[0] || "无符合条件的 Robotaxi");
+  return success("DEPLOYMENT_PLAN_DISPATCHED", `投放计划 ${plan.deployment_plan_id} 已生成 ${taskIds.length} 条投放任务`, { objectType: "deploymentPlan", objectId: plan.deployment_plan_id, taskIds, failureReasons: failures }, workingState);
 }
 
 export function executeRoutePlanning({ state, objectType, objectId, runtime }) {

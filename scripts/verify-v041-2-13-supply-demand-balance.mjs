@@ -99,10 +99,9 @@ assert.equal(inactiveExecution.run.failure_reason, "SUPPLY_DEMAND_BALANCE_STRATE
 
 const main = fs.readFileSync("src/main.jsx", "utf8");
 const navigation = fs.readFileSync("src/ui/navigationRegistry.js", "utf8");
-assert.ok(navigation.includes('group("supplyDemandBalancePolicyGroup", "供需平衡策略"'), "供需投放菜单必须包含供需平衡策略分组");
-assert.ok(navigation.includes('page("supplyDemandBalanceStrategies", "策略配置")'), "供需平衡策略必须包含配置页面");
-assert.ok(navigation.includes('page("supplyDemandBalanceRuns", "策略执行")'), "供需平衡策略必须包含执行页面");
-assert.ok(navigation.includes('page("supplyDemandBalanceResults", "策略结果")'), "供需平衡策略必须包含结果页面");
+assert.equal(navigation.includes('page("supplyDemandBalanceStrategies"'), false, "旧供需平衡页面不得继续作为导航事实源");
+assert.ok(navigation.includes('group("shortTermDemandForecastManagement", "短期需求预测"'), "供需投放必须显式拆分短期需求预测");
+assert.ok(navigation.includes('group("deploymentDecisionManagement", "投放决策"'), "供需投放必须显式拆分投放决策");
 assert.ok(main.includes("supplyDemandBalanceService.executeSupplyDemandBalanceStrategy"), "页面必须调用服务执行供需平衡策略");
 assert.equal(main.includes("createDeploymentTasksFromSupplyDemandBalance"), false, "供需平衡当前版本不得接入投放任务创建");
 
@@ -118,8 +117,8 @@ const fieldDictionary = fs.readFileSync("src/domain/fieldDictionary.js", "utf8")
   assert.ok(fieldDictionary.includes(text), `字段字典必须包含 ${text}`);
 });
 
-const designDoc = fs.readFileSync("doc/06-fleet-operations-management/01-fleet-deployment/01-supply-demand-balance-strategy-design.md", "utf8");
-assert.ok(designDoc.includes("不接入现有投放任务单触发逻辑"), "设计文档必须明确当前不接入投放任务");
-assert.ok(designDoc.includes("虚拟需求模拟"), "设计文档必须区分虚拟需求模拟");
+const designDoc = fs.readFileSync("doc/06-fleet-operations-management/01-fleet-deployment/01-short-term-demand-and-deployment-planning.md", "utf8");
+assert.ok(designDoc.includes("短期需求预测"), "正式设计必须明确短期需求预测边界");
+assert.ok(designDoc.includes("投放计划"), "正式设计必须明确投放决策直接形成投放计划");
 
 console.log("v041.2.13 供需平衡策略合同验证通过");

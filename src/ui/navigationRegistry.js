@@ -13,6 +13,10 @@ export const navigationGroups = Object.freeze([
       page("longTermDemandForecastRuns", "预测执行"),
       page("longTermDemandForecasts", "预测结果"),
     ]),
+    group("supplyDecisionManagement", "供应决策", [
+      page("supplyDecisionStrategies", "决策策略"),
+      page("supplyDecisionRuns", "决策执行"),
+    ]),
   ]),
   page("decisionCenter", "决策中心"),
   group("businessAnalysis", "经营分析", [
@@ -31,10 +35,10 @@ export const navigationGroups = Object.freeze([
     page("supplyPlans", "生产计划"),
     page("productionBatches", "生产批次"),
     group("regionDeliveryManagement", "区域交付", [
-      group("fleetAllocationManagement", "区域分配策略", [
-        page("fleetAllocationStrategies", "分配策略配置"),
-        page("fleetAllocationRuns", "分配策略执行"),
-        page("fleetAllocationResults", "分配策略结果"),
+      group("fleetAllocationManagement", "交付编排", [
+        page("fleetAllocationStrategies", "编排策略"),
+        page("fleetAllocationRuns", "编排执行"),
+        page("fleetAllocationResults", "编排结果"),
       ]),
       page("robotaxiDeliveryOrders", "交付单"),
     ]),
@@ -52,12 +56,17 @@ export const navigationGroups = Object.freeze([
     page("serviceFulfillmentRecords", "履约行驶"),
   ]),
   group("supplyDemandDeploymentManagement", "供需投放", [
-      page("deploymentTasks", "投放任务"),
-      group("supplyDemandBalancePolicyGroup", "供需平衡策略", [
-        page("supplyDemandBalanceStrategies", "策略配置"),
-        page("supplyDemandBalanceRuns", "策略执行"),
-        page("supplyDemandBalanceResults", "策略结果"),
+      group("shortTermDemandForecastManagement", "短期需求预测", [
+        page("shortTermDemandForecastStrategies", "预测策略"),
+        page("shortTermDemandForecastRuns", "预测执行"),
+        page("shortTermDemandForecastResults", "预测结果"),
       ]),
+      group("deploymentDecisionManagement", "投放决策", [
+        page("deploymentDecisionStrategies", "决策策略"),
+        page("deploymentDecisionRuns", "决策执行"),
+      ]),
+      page("deploymentPlans", "投放计划"),
+      page("deploymentTasks", "投放任务"),
     ]),
   group("travelServiceManagement", "出行服务", [
       page("serviceOrders", "服务订单"),

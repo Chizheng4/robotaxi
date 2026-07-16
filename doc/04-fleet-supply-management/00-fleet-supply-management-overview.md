@@ -2,7 +2,7 @@
 
 ## 1. 定位
 
-供应管理消费经营规划输出，把长期 Robotaxi 缺口转化为资产形成、区域分配、物流交付和运营准入。经营规划回答“需要多少、何时需要”，供应管理回答“如何生产、分配和交付”。
+供应管理消费经营规划输出，把长期 Robotaxi 缺口转化为供应决策、资产形成、物流交付和运营准入。长期需求预测回答“需要多少、何时需要”，供应决策回答“生产多少和按什么节奏形成供给”，区域交付负责具体资产履约。
 
 ## 2. 唯一主流程
 
@@ -12,11 +12,13 @@ flowchart LR
   B["需求画像"] --> D
   C["预测策略"] --> D
   D --> E["需求预测结果"]
-  F["生产画像"] --> E
-  E --> G["生产计划"]
+  F["生产画像"] --> S["供应决策执行"]
+  E --> S
+  S --> G["生产计划"]
   G --> H["生产批次"]
   H --> I["Robotaxi 资产"]
-  I --> J["区域分配策略"]
+  I --> J["交付编排"]
+  G --> J
   J --> K["交付单"]
   K --> L["运营中心"]
   L --> M["运营准入任务"]
@@ -31,14 +33,14 @@ flowchart LR
 |`SupplyPlan`|确认生产数量、节奏和来源预测结果|直接创建 Robotaxi|
 |`ProductionBatch`|执行一批生产并形成具体资产|决定资产交付区域|
 |`Robotaxi`|保存独立资产、位置和生命周期事实|被上游页面直接拼装|
-|`FleetAllocationStrategy/Run/Result`|决定哪些 Robotaxi 分配到哪些区域和运营中心|创建 Robotaxi|
+|`FleetAllocationStrategy/Run/Result`（兼容技术对象）|按生产计划编排具体 Robotaxi、运营中心和交付批次，对外统一称交付编排|重新决定区域供给数量或创建 Robotaxi|
 |`RobotaxiDeliveryOrder`|占用已分配资产并完成物流交付|生产资产或执行准入|
 |`ReadinessCheckTask`|逐车完成运营准入检查|代替交付或生产|
 
 ## 4. 关键状态边界
 
 1. 生产批次完成：创建 `PENDING_DELIVERY` Robotaxi，当前位置和目标运营中心为空。
-2. 区域分配完成：记录目标 Zone、目标运营中心和具体 Robotaxi ID，不改变实际位置。
+2. 交付编排完成：严格按生产计划目标 Zone 选择目标运营中心和具体 Robotaxi ID，不改变实际位置。
 3. 交付开始：Robotaxi 进入运输中，不可参与运营分配。
 4. 交付完成：写入运营中心 Cell，Robotaxi 进入 `PENDING_ADMISSION`，逐车创建运营准入任务。
 5. 准入通过：Robotaxi 进入 `AVAILABLE`，才可参与投放和服务订单匹配。

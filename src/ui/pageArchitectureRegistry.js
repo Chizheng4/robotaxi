@@ -52,8 +52,9 @@ register([
 });
 
 register([
-  "longTermDemandForecastStrategies", "metricDefinitions", "fleetAllocationStrategies",
-  "routePlanningStrategies", "supplyDemandBalanceStrategies", "demandSimulationStrategies",
+  "longTermDemandForecastStrategies", "supplyDecisionStrategies", "shortTermDemandForecastStrategies",
+  "deploymentDecisionStrategies", "metricDefinitions", "fleetAllocationStrategies",
+  "routePlanningStrategies", "demandSimulationStrategies",
   "pricingStrategies", "orderMatchingStrategies", "fleetOperationPolicies",
   "fleetOperationDispatchStrategies", "robotaxiTaskPlanningStrategies", "costParameterRules",
   "costModelProfiles", "simulationPolicies", "workflowTimingRules",
@@ -66,7 +67,8 @@ register([
 });
 
 register([
-  "longTermDemandForecastRuns", "fleetAllocationRuns", "routePlanningRuns", "supplyDemandBalanceRuns",
+  "longTermDemandForecastRuns", "supplyDecisionRuns", "shortTermDemandForecastRuns",
+  "deploymentDecisionRuns", "fleetAllocationRuns", "routePlanningRuns",
   "demandSimulationRuns", "pricingStrategyRuns", "orderMatchingRuns", "fleetOperationPolicyRuns",
   "fleetOperationDispatchRuns", "robotaxiTaskPlanningRuns", "revenueCalculationRuns",
   "costCalculationRuns", "metricCalculationRuns", "timedOperations",
@@ -79,7 +81,7 @@ register([
 });
 
 register([
-  "fleetAllocationResults", "routes", "supplyDemandBalanceResults", "demandSimulationResults",
+  "fleetAllocationResults", "shortTermDemandForecastResults", "routes", "demandSimulationResults",
   "pricingDecisions", "orderMatchingDecisions", "fleetOperationPolicyResults",
   "fleetOperationDispatchDecisions", "robotaxiTaskPlanningResults", "metricObservations",
   "revenueRecords", "costRecords",
@@ -92,7 +94,7 @@ register([
 });
 
 register([
-  "supplyPlans", "productionBatches", "robotaxiDeliveryOrders", "readinessTasks", "routeExecutions",
+  "supplyPlans", "productionBatches", "robotaxiDeliveryOrders", "deploymentPlans", "readinessTasks", "routeExecutions",
   "serviceFulfillmentRecords", "deploymentTasks", "serviceOrders", "cleaningTasks", "chargingTasks",
   "maintenanceTasks", "failureHandlingTasks", "retirementTasks", "simulationRuns",
 ], {
@@ -105,6 +107,7 @@ register([
 
 const specializedDetailPages = new Set([
   "businessTargets", "demandProfiles", "supplyProductionProfiles", "longTermDemandForecastStrategies",
+  "supplyDecisionStrategies", "shortTermDemandForecastStrategies", "deploymentDecisionStrategies",
   "metricDefinitions", "metricObservations", "metricCalculationRuns", "readinessTasks", "robotaxis",
   "routes", "routeExecutions", "serviceFulfillmentRecords", "deploymentTasks", "serviceOrders",
   "cleaningTasks", "chargingTasks", "maintenanceTasks", "failureHandlingTasks", "retirementTasks",
@@ -114,9 +117,9 @@ const specializedDetailPages = new Set([
 
 const rowActionPages = new Set([
   "businessTargets", "demandProfiles", "supplyProductionProfiles", "longTermDemandForecastStrategies",
-  "supplyPlans", "productionBatches", "fleetAllocationStrategies", "fleetAllocationResults",
+  "supplyPlans", "productionBatches", "deploymentPlans", "fleetAllocationStrategies", "fleetAllocationResults",
   "robotaxiDeliveryOrders", "readinessTasks", "robotaxis", "routePlanningRuns", "routeExecutions",
-  "serviceFulfillmentRecords", "deploymentTasks", "supplyDemandBalanceStrategies", "serviceOrders",
+  "serviceFulfillmentRecords", "deploymentTasks", "serviceOrders",
   "pricingStrategyRuns", "orderMatchingRuns", "cleaningTasks", "chargingTasks", "maintenanceTasks",
   "failureHandlingTasks", "retirementTasks", "fleetOperationPolicies", "costParameterRules",
   "simulationRuns", "workflowTimingRules",
@@ -124,10 +127,12 @@ const rowActionPages = new Set([
 
 const eventPanels = Object.freeze({
   longTermDemandForecastStrategies: { label: "最近预测执行" },
+  supplyDecisionStrategies: { label: "最近供应决策执行" },
+  shortTermDemandForecastStrategies: { label: "最近短期预测执行" },
+  deploymentDecisionStrategies: { label: "最近投放决策执行" },
   fleetAllocationStrategies: { label: "最近分配执行" },
   fleetAllocationResults: { label: "最近操作事件" },
   routePlanningStrategies: { label: "最近路径规划执行" },
-  supplyDemandBalanceStrategies: { label: "最近供需平衡执行" },
   demandSimulationStrategies: { label: "最近需求模拟执行" },
   pricingStrategies: { label: "最近定价执行" },
   orderMatchingStrategies: { label: "最近匹配执行" },
@@ -146,6 +151,7 @@ const eventPanels = Object.freeze({
   serviceOrders: { label: "最近订单事件" },
   supplyPlans: { label: "最近单据事件" },
   productionBatches: { label: "最近单据事件" },
+  deploymentPlans: { label: "最近单据事件" },
   robotaxiDeliveryOrders: { label: "最近单据事件" },
   simulationRuns: { label: "模拟运行事件" },
 });

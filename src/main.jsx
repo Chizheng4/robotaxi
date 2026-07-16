@@ -55,6 +55,7 @@ let fleetOperationDispatchService;
 let taskDispatchStrategyService;
 let robotaxiTaskPlanningService;
 let businessPlanningService;
+let operatingPlanningService;
 let supplyDemandBalanceService;
 let publicDemoBootstrapService;
 let platformExperience;
@@ -85,6 +86,11 @@ let taskPlanningRunSequence = 0;
 let taskPlanningResultSequence = 0;
 let longTermDemandForecastRunSequence = 0;
 let longTermDemandForecastResultSequence = 0;
+let supplyDecisionRunSequence = 0;
+let shortTermDemandForecastRunSequence = 0;
+let shortTermDemandForecastResultSequence = 0;
+let deploymentDecisionRunSequence = 0;
+let deploymentPlanSequence = 0;
 let supplyPlanSequence = 0;
 let productionBatchSequence = 0;
 let fleetAllocationRunSequence = 0;
@@ -293,6 +299,16 @@ const tableConfig = {
     description: "需求预测执行记录一次长期需求预测策略运行的输入、配置快照和执行状态。",
     columns: ["forecast_run_id", "forecast_strategy_id", "business_target_id", "supply_production_profile_id", "strategy_version", "run_status", "target_zone_ids", "forecast_period_unit", "forecast_period_count", "forecast_start_date", "forecast_end_date", "started_at", "completed_at", "result_count", "failure_reason"],
   },
+  supplyDecisionStrategies: {
+    title: "供应决策策略",
+    description: "依据长期需求预测和生产画像，决定各区域的生产数量与交付节奏。",
+    columns: ["supply_decision_strategy_id", "strategy_name", "strategy_status", "strategy_version", "decision_algorithm", "demand_coverage_rate", "safety_capacity_ratio", "capacity_constraint_mode", "updated_at"],
+  },
+  supplyDecisionRuns: {
+    title: "供应决策执行",
+    description: "记录供应决策的输入、执行状态及其直接形成的生产计划。",
+    columns: ["supply_decision_run_id", "supply_decision_strategy_id", "forecast_result_id", "run_status", "supply_plan_id", "started_at", "completed_at", "failure_reason"],
+  },
   supplyPlans: {
     title: "生产计划",
     description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
@@ -304,18 +320,18 @@ const tableConfig = {
     columns: ["production_batch_id", "batch_name", "batch_status", "supply_plan_id", "target_zone_id", "planned_robotaxi_count", "produced_robotaxi_count", "produced_robotaxi_ids", "production_started_at", "production_completed_at", "created_at"],
   },
   fleetAllocationStrategies: {
-    title: "区域分配策略",
-    description: "区域分配策略根据区域供给需求紧急度、需求缺口和可交付车辆等因素，将待交付 Robotaxi 分配到目标运营区域。",
+    title: "交付编排策略",
+    description: "交付编排策略依据生产计划确定的区域和数量，选择具体 Robotaxi、运营中心与交付批次。",
     columns: ["fleet_allocation_strategy_id", "strategy_name", "strategy_status", "strategy_version", "allocation_algorithm", "target_zone_ids", "target_ops_center_ids", "urgency_weight", "demand_gap_weight", "production_ready_weight", "max_robotaxi_per_delivery_order", "created_at", "updated_at"],
   },
   fleetAllocationRuns: {
-    title: "区域分配执行",
-    description: "记录每次区域分配策略执行过程、配置快照和结果数量。",
+    title: "交付编排执行",
+    description: "记录每次交付编排的输入、策略快照和结果数量。",
     columns: ["fleet_allocation_run_id", "fleet_allocation_strategy_id", "strategy_version", "run_status", "target_zone_ids", "target_ops_center_ids", "started_at", "completed_at", "result_count", "failure_reason"],
   },
   fleetAllocationResults: {
-    title: "区域分配结果",
-    description: "按区域和运营中心记录本次分配出的 Robotaxi ID 列表，可用于创建交付单。",
+    title: "交付编排结果",
+    description: "按生产计划、目标区域和运营中心记录具体 Robotaxi 列表，可用于创建交付单。",
     columns: ["fleet_allocation_result_id", "fleet_allocation_run_id", "result_status", "target_zone_id", "target_ops_center_id", "supply_plan_id", "allocated_quantity", "allocated_robotaxi_ids", "candidate_robotaxi_ids", "created_at"],
   },
   robotaxiDeliveryOrders: {
@@ -432,6 +448,36 @@ const tableConfig = {
     title: "运营投放任务",
     description: "用于将可运营 Robotaxi 投放到指定服务区或待命位置。",
     columns: ["task_id", "task_status", "trigger_type", "robotaxi_id", "origin_cell_id", "planned_target_cell_id", "target_cell_id", "actual_target_cell_id", "arrival_behavior", "blocked_handling_policy", "arrival_execution_result", "planned_target_service_area_id", "target_service_area_id", "actual_target_service_area_id", "route_id", "route_strategy_id", "route_summary", "created_at", "simulation_created_at"],
+  },
+  shortTermDemandForecastStrategies: {
+    title: "短期需求预测策略",
+    description: "基于需求画像、历史订单、近期趋势和日期类型预测短期需求。",
+    columns: ["short_term_forecast_strategy_id", "strategy_name", "strategy_status", "strategy_version", "forecast_horizon_value", "forecast_horizon_unit", "time_bucket_unit", "recent_window_days", "profile_weight", "historical_weight", "recent_trend_weight", "updated_at"],
+  },
+  shortTermDemandForecastRuns: {
+    title: "短期需求预测执行",
+    description: "记录一次短期需求预测的时间窗口、输入快照和结果数量。",
+    columns: ["short_term_forecast_run_id", "short_term_forecast_strategy_id", "run_status", "forecast_start_at", "forecast_end_at", "time_bucket_unit", "target_zone_ids", "result_count", "started_at", "completed_at", "failure_reason"],
+  },
+  shortTermDemandForecastResults: {
+    title: "短期需求预测结果",
+    description: "按时间粒度和空间对象记录预测订单量及置信区间。",
+    columns: ["short_term_forecast_result_id", "short_term_forecast_run_id", "forecast_status", "target_object_type", "target_object_name", "target_zone_id", "forecast_bucket_start_at", "forecast_bucket_end_at", "time_bucket_unit", "predicted_order_count", "predicted_order_lower_bound", "predicted_order_upper_bound", "data_quality_level", "forecast_method", "created_at"],
+  },
+  deploymentDecisionStrategies: {
+    title: "投放决策策略",
+    description: "结合短期需求、当前供给和经济性，决定各服务区域的投放数量与优先级。",
+    columns: ["deployment_decision_strategy_id", "strategy_name", "strategy_status", "strategy_version", "decision_algorithm", "target_utilization_rate", "average_fulfillment_duration_min", "demand_weight", "supply_gap_weight", "service_pressure_weight", "profit_weight", "updated_at"],
+  },
+  deploymentDecisionRuns: {
+    title: "投放决策执行",
+    description: "记录投放决策使用的预测执行、车辆快照和计划数量。",
+    columns: ["deployment_decision_run_id", "deployment_decision_strategy_id", "short_term_forecast_run_id", "run_status", "plan_count", "started_at", "completed_at", "failure_reason"],
+  },
+  deploymentPlans: {
+    title: "投放计划",
+    description: "投放计划是投放决策的正式输出，确认后可分解为运营投放任务。",
+    columns: ["deployment_plan_id", "plan_name", "plan_status", "target_object_type", "target_object_name", "target_zone_id", "plan_start_at", "plan_end_at", "predicted_order_count", "expected_robotaxi_demand", "current_supply_quantity", "robotaxi_gap_quantity", "planned_robotaxi_count", "deployment_priority_rank", "expected_revenue_amount", "estimated_deployment_cost_amount", "expected_profit_amount", "created_at"],
   },
   supplyDemandBalanceStrategies: {
     title: "供需平衡策略",
@@ -634,6 +680,8 @@ const pageObjectType = {
   longTermDemandForecasts: "longTermDemandForecast",
   longTermDemandForecastStrategies: "longTermDemandForecastStrategy",
   longTermDemandForecastRuns: "longTermDemandForecastRun",
+  supplyDecisionStrategies: "supplyDecisionStrategy",
+  supplyDecisionRuns: "supplyDecisionRun",
   supplyPlans: "supplyPlan",
   productionBatches: "productionBatch",
   fleetAllocationStrategies: "fleetAllocationStrategy",
@@ -662,6 +710,12 @@ const pageObjectType = {
   taskDispatchResults: "taskDispatchResult",
   taskPriorityConfig: "taskPriorityConfig",
   deploymentTasks: "deploymentTask",
+  shortTermDemandForecastStrategies: "shortTermDemandForecastStrategy",
+  shortTermDemandForecastRuns: "shortTermDemandForecastRun",
+  shortTermDemandForecastResults: "shortTermDemandForecastResult",
+  deploymentDecisionStrategies: "deploymentDecisionStrategy",
+  deploymentDecisionRuns: "deploymentDecisionRun",
+  deploymentPlans: "deploymentPlan",
   supplyDemandBalanceStrategies: "supplyDemandBalanceStrategy",
   supplyDemandBalanceRuns: "supplyDemandBalanceRun",
   supplyDemandBalanceResults: "supplyDemandBalanceResult",
@@ -717,6 +771,8 @@ const idFieldByType = {
   supplyProductionProfile: "profile_id",
   longTermDemandForecastStrategy: "forecast_strategy_id",
   longTermDemandForecastRun: "forecast_run_id",
+  supplyDecisionStrategy: "supply_decision_strategy_id",
+  supplyDecisionRun: "supply_decision_run_id",
   route: "route_id",
   customer: "customer_id",
   demandSimulationStrategy: "demand_simulation_strategy_id",
@@ -755,6 +811,12 @@ const idFieldByType = {
   taskDispatchResult: "task_dispatch_result_id",
   taskPriorityConfig: "config_id",
   deploymentTask: "task_id",
+  shortTermDemandForecastStrategy: "short_term_forecast_strategy_id",
+  shortTermDemandForecastRun: "short_term_forecast_run_id",
+  shortTermDemandForecastResult: "short_term_forecast_result_id",
+  deploymentDecisionStrategy: "deployment_decision_strategy_id",
+  deploymentDecisionRun: "deployment_decision_run_id",
+  deploymentPlan: "deployment_plan_id",
   supplyDemandBalanceStrategy: "supply_demand_balance_strategy_id",
   supplyDemandBalanceRun: "supply_demand_balance_run_id",
   supplyDemandBalanceResult: "supply_demand_balance_result_id",
@@ -808,6 +870,8 @@ const statusFieldByPage = {
   longTermDemandForecasts: "forecast_status",
   longTermDemandForecastStrategies: "strategy_status",
   longTermDemandForecastRuns: "run_status",
+  supplyDecisionStrategies: "strategy_status",
+  supplyDecisionRuns: "run_status",
   supplyPlans: "plan_status",
   productionBatches: "batch_status",
   fleetAllocationStrategies: "strategy_status",
@@ -836,6 +900,12 @@ const statusFieldByPage = {
   taskDispatchResults: "decision_result",
   taskPriorityConfig: "config_status",
   deploymentTasks: "task_status",
+  shortTermDemandForecastStrategies: "strategy_status",
+  shortTermDemandForecastRuns: "run_status",
+  shortTermDemandForecastResults: "forecast_status",
+  deploymentDecisionStrategies: "strategy_status",
+  deploymentDecisionRuns: "run_status",
+  deploymentPlans: "plan_status",
   supplyDemandBalanceStrategies: "strategy_status",
   supplyDemandBalanceRuns: "run_status",
   supplyDemandBalanceResults: "result_status",
@@ -1507,12 +1577,21 @@ function App({ currentUser, onLogout }) {
       longTermDemandForecastStrategies: operationalData.longTermDemandForecastStrategies,
       longTermDemandForecastRuns: operationalData.longTermDemandForecastRuns,
       longTermDemandForecasts: operationalData.longTermDemandForecasts,
+      supplyDecisionStrategies: operationalData.supplyDecisionStrategies,
+      supplyDecisionRuns: operationalData.supplyDecisionRuns,
+      supplyPlans: operationalData.supplyPlans,
       fleetAllocationStrategies: operationalData.fleetAllocationStrategies,
       fleetAllocationRuns: operationalData.fleetAllocationRuns,
       fleetAllocationResults: operationalData.fleetAllocationResults,
       supplyDemandBalanceStrategies: operationalData.supplyDemandBalanceStrategies,
       supplyDemandBalanceRuns: operationalData.supplyDemandBalanceRuns,
       supplyDemandBalanceResults: operationalData.supplyDemandBalanceResults,
+      shortTermDemandForecastStrategies: operationalData.shortTermDemandForecastStrategies,
+      shortTermDemandForecastRuns: operationalData.shortTermDemandForecastRuns,
+      shortTermDemandForecastResults: operationalData.shortTermDemandForecastResults,
+      deploymentDecisionStrategies: operationalData.deploymentDecisionStrategies,
+      deploymentDecisionRuns: operationalData.deploymentDecisionRuns,
+      deploymentPlans: operationalData.deploymentPlans,
       routePlanningStrategies: createRoutePlanningStrategyRows(data, routePlanningRuns),
       routePlanningRuns,
       routes: data.routes,
@@ -1543,6 +1622,7 @@ function App({ currentUser, onLogout }) {
   const publicDemoBootstrapRef = useRef({
     completed: false,
     forecastRequested: false,
+    shortTermForecastRequested: false,
     simulationCreated: false,
     startedSimulationRunIds: new Set(),
   });
@@ -1588,12 +1668,20 @@ function App({ currentUser, onLogout }) {
         longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || [],
         longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || [],
         longTermDemandForecasts: snapshot.operationalData?.longTermDemandForecasts || initialData.longTermDemandForecasts || [],
+        supplyDecisionStrategies: snapshot.operationalData?.supplyDecisionStrategies || initialData.supplyDecisionStrategies || [],
+        supplyDecisionRuns: snapshot.operationalData?.supplyDecisionRuns || initialData.supplyDecisionRuns || [],
         supplyPlans: snapshot.operationalData?.supplyPlans || initialData.supplyPlans || [],
         productionBatches: snapshot.operationalData?.productionBatches || initialData.productionBatches || [],
         fleetAllocationStrategies: snapshot.operationalData?.fleetAllocationStrategies || initialData.fleetAllocationStrategies || [],
         fleetAllocationRuns: snapshot.operationalData?.fleetAllocationRuns || initialData.fleetAllocationRuns || [],
         fleetAllocationResults: snapshot.operationalData?.fleetAllocationResults || initialData.fleetAllocationResults || [],
         robotaxiDeliveryOrders: snapshot.operationalData?.robotaxiDeliveryOrders || initialData.robotaxiDeliveryOrders || [],
+        shortTermDemandForecastStrategies: snapshot.operationalData?.shortTermDemandForecastStrategies || initialData.shortTermDemandForecastStrategies || [],
+        shortTermDemandForecastRuns: snapshot.operationalData?.shortTermDemandForecastRuns || initialData.shortTermDemandForecastRuns || [],
+        shortTermDemandForecastResults: snapshot.operationalData?.shortTermDemandForecastResults || initialData.shortTermDemandForecastResults || [],
+        deploymentDecisionStrategies: snapshot.operationalData?.deploymentDecisionStrategies || initialData.deploymentDecisionStrategies || [],
+        deploymentDecisionRuns: snapshot.operationalData?.deploymentDecisionRuns || initialData.deploymentDecisionRuns || [],
+        deploymentPlans: snapshot.operationalData?.deploymentPlans || initialData.deploymentPlans || [],
       }));
       setReadinessTasks(Array.isArray(snapshot.readinessTasks) ? snapshot.readinessTasks : []);
       setCleaningTasks(Array.isArray(snapshot.cleaningTasks) ? snapshot.cleaningTasks : []);
@@ -1706,12 +1794,20 @@ function App({ currentUser, onLogout }) {
     longTermDemandForecastStrategies: data.longTermDemandForecastStrategies || [],
     longTermDemandForecastRuns: data.longTermDemandForecastRuns || [],
     longTermDemandForecasts: data.longTermDemandForecasts || [],
+    supplyDecisionStrategies: data.supplyDecisionStrategies || [],
+    supplyDecisionRuns: data.supplyDecisionRuns || [],
     supplyPlans: data.supplyPlans || [],
     productionBatches: data.productionBatches || [],
     fleetAllocationStrategies: data.fleetAllocationStrategies || [],
     fleetAllocationRuns: data.fleetAllocationRuns || [],
     fleetAllocationResults: data.fleetAllocationResults || [],
     robotaxiDeliveryOrders: data.robotaxiDeliveryOrders || [],
+    shortTermDemandForecastStrategies: data.shortTermDemandForecastStrategies || [],
+    shortTermDemandForecastRuns: data.shortTermDemandForecastRuns || [],
+    shortTermDemandForecastResults: data.shortTermDemandForecastResults || [],
+    deploymentDecisionStrategies: data.deploymentDecisionStrategies || [],
+    deploymentDecisionRuns: data.deploymentDecisionRuns || [],
+    deploymentPlans: data.deploymentPlans || [],
     supplyDemandBalanceStrategies: data.supplyDemandBalanceStrategies || [],
     supplyDemandBalanceRuns: data.supplyDemandBalanceRuns || [],
     supplyDemandBalanceResults: data.supplyDemandBalanceResults || [],
@@ -1858,12 +1954,20 @@ function App({ currentUser, onLogout }) {
       longTermDemandForecastStrategy: rowsByPage.longTermDemandForecastStrategies,
       longTermDemandForecastRun: rowsByPage.longTermDemandForecastRuns,
       longTermDemandForecast: rowsByPage.longTermDemandForecasts,
+      supplyDecisionStrategy: rowsByPage.supplyDecisionStrategies,
+      supplyDecisionRun: rowsByPage.supplyDecisionRuns,
       supplyPlan: rowsByPage.supplyPlans,
       productionBatch: rowsByPage.productionBatches,
       fleetAllocationStrategy: rowsByPage.fleetAllocationStrategies,
       fleetAllocationRun: rowsByPage.fleetAllocationRuns,
       fleetAllocationResult: rowsByPage.fleetAllocationResults,
       robotaxiDeliveryOrder: rowsByPage.robotaxiDeliveryOrders,
+      shortTermDemandForecastStrategy: rowsByPage.shortTermDemandForecastStrategies,
+      shortTermDemandForecastRun: rowsByPage.shortTermDemandForecastRuns,
+      shortTermDemandForecastResult: rowsByPage.shortTermDemandForecastResults,
+      deploymentDecisionStrategy: rowsByPage.deploymentDecisionStrategies,
+      deploymentDecisionRun: rowsByPage.deploymentDecisionRuns,
+      deploymentPlan: rowsByPage.deploymentPlans,
       supplyOrder: rowsByPage.supplyOrders,
       dealerSupply: rowsByPage.dealerSupplies,
       ownerSupply: rowsByPage.ownerSupplies,
@@ -2271,10 +2375,12 @@ function App({ currentUser, onLogout }) {
     const plan = publicDemoBootstrapService.createPublicDemoBootstrapPlan({
       locationLike: window.location,
       forecastResults: operationalData.longTermDemandForecasts || [],
+      shortTermForecastResults: operationalData.shortTermDemandForecastResults || [],
       simulationRuns,
     });
     if (!plan.enabled) return;
     if (plan.forecastAction === publicDemoBootstrapService.PublicDemoBootstrapAction.NONE
+      && plan.shortTermForecastAction === publicDemoBootstrapService.PublicDemoBootstrapAction.NONE
       && plan.simulationAction === publicDemoBootstrapService.PublicDemoBootstrapAction.NONE) {
       bootstrapState.completed = true;
       return;
@@ -2293,6 +2399,20 @@ function App({ currentUser, onLogout }) {
         },
       });
       if (forecast.executed) setOperationalData(forecast.operationalData);
+    }
+
+    if (plan.shortTermForecastAction === publicDemoBootstrapService.PublicDemoBootstrapAction.EXECUTE_SHORT_TERM_FORECAST
+      && !bootstrapState.shortTermForecastRequested) {
+      bootstrapState.shortTermForecastRequested = true;
+      setOperationalData((current) => publicDemoBootstrapService.executePublicDemoShortTermForecast({
+        planningService: operatingPlanningService,
+        operationalData: current,
+        context: {
+          now,
+          nextRunId: nextShortTermDemandForecastRunId,
+          nextResultId: nextShortTermDemandForecastResultId,
+        },
+      }).operationalData);
     }
 
     const actions = simActionsRef.current;
@@ -2315,9 +2435,10 @@ function App({ currentUser, onLogout }) {
     if (new URLSearchParams(window.location.search).get("publicDemo") !== "1") return;
     window.__robotaxiPublicDemoState = {
       forecastResultCount: operationalData.longTermDemandForecasts?.length || 0,
+      shortTermForecastResultCount: operationalData.shortTermDemandForecastResults?.length || 0,
       simulationStatuses: simulationRuns.map((item) => item.simulation_status),
     };
-  }, [operationalData.longTermDemandForecasts, simulationRuns]);
+  }, [operationalData.longTermDemandForecasts, operationalData.shortTermDemandForecastResults, simulationRuns]);
 
   useEffect(() => {
     return () => { if (simActionsRef.current) simActionsRef.current.cleanup(); };
@@ -2989,12 +3110,83 @@ function App({ currentUser, onLogout }) {
     }
   }
 
+  function runShortTermDemandForecastStrategy(strategy) {
+    if (!operatingPlanningService?.executeShortTermDemandForecast || !strategy) return;
+    const result = operatingPlanningService.executeShortTermDemandForecast({
+      strategy,
+      demandProfiles: data.demandProfiles || [],
+      serviceOrders,
+      trips,
+      zones: data.zones || [],
+      places: data.places || [],
+      serviceAreas: data.serviceAreas || [],
+      context: { now, nextRunId: nextShortTermDemandForecastRunId, nextResultId: nextShortTermDemandForecastResultId },
+    });
+    setOperationalData((current) => ({
+      ...current,
+      shortTermDemandForecastRuns: [result.run, ...(current.shortTermDemandForecastRuns || [])],
+      shortTermDemandForecastResults: [...(result.results || []), ...(current.shortTermDemandForecastResults || [])],
+    }));
+    if (result.results?.length) {
+      setActivePageAndMenu("shortTermDemandForecastResults");
+      selectForPage("shortTermDemandForecastResults", "shortTermDemandForecastResult", result.results[0].short_term_forecast_result_id);
+    }
+  }
+
+  function runDeploymentDecisionStrategy(strategy) {
+    if (!operatingPlanningService?.executeDeploymentDecision || !strategy) return;
+    const result = operatingPlanningService.executeDeploymentDecision({
+      strategy,
+      forecastResults: data.shortTermDemandForecastResults || [],
+      robotaxis: data.robotaxis || [],
+      serviceOrders,
+      trips,
+      zones: data.zones || [],
+      places: data.places || [],
+      serviceAreas: data.serviceAreas || [],
+      context: { now, nextRunId: nextDeploymentDecisionRunId, nextPlanId: nextDeploymentPlanId },
+    });
+    setOperationalData((current) => ({
+      ...current,
+      deploymentDecisionRuns: [result.run, ...(current.deploymentDecisionRuns || [])],
+      deploymentPlans: [...(result.plans || []), ...(current.deploymentPlans || [])],
+    }));
+    if (result.plans?.length) {
+      setActivePageAndMenu("deploymentPlans");
+      selectForPage("deploymentPlans", "deploymentPlan", result.plans[0].deployment_plan_id);
+    }
+  }
+
+  function runSupplyDecisionStrategy(strategy) {
+    const forecast = (data.longTermDemandForecasts || [])[0];
+    if (!forecast || !businessPlanningService?.executeSupplyDecisionStrategy) return;
+    const result = businessPlanningService.executeSupplyDecisionStrategy({
+      strategy,
+      forecast,
+      supplyProductionProfiles: data.supplyProductionProfiles || [],
+      existingSupplyPlans: data.supplyPlans || [],
+      context: { now, nextRunId: nextSupplyDecisionRunId, nextSupplyPlanId },
+    });
+    setOperationalData((current) => ({
+      ...current,
+      supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
+      supplyPlans: result.succeeded ? [result.supplyPlan, ...(current.supplyPlans || [])] : current.supplyPlans,
+    }));
+    if (result.succeeded) {
+      setActivePageAndMenu("supplyPlans");
+      selectForPage("supplyPlans", "supplyPlan", result.supplyPlan.supply_plan_id);
+    }
+  }
+
   function createSupplyPlanFromForecast(row) {
-    if (!businessPlanningService?.createSupplyPlanFromForecast || !row) return;
-    const result = businessPlanningService.createSupplyPlanFromForecast({
+    if (!businessPlanningService?.executeSupplyDecisionStrategy || !row) return;
+    const strategy = (data.supplyDecisionStrategies || []).find((item) => item.strategy_status === "ACTIVE") || data.supplyDecisionStrategies?.[0];
+    const result = businessPlanningService.executeSupplyDecisionStrategy({
+      strategy,
       forecast: row,
       supplyProductionProfiles: data.supplyProductionProfiles || [],
-      context: { now, nextSupplyPlanId },
+      existingSupplyPlans: data.supplyPlans || [],
+      context: { now, nextRunId: nextSupplyDecisionRunId, nextSupplyPlanId },
     });
     if (!result.succeeded) {
       appendRecordOperationEvent("longTermDemandForecasts", {
@@ -3010,6 +3202,7 @@ function App({ currentUser, onLogout }) {
     }
     setOperationalData((current) => ({
       ...current,
+      supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
       supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
     }));
     selectForPage("supplyPlans", "supplyPlan", result.supplyPlan.supply_plan_id);
@@ -3020,6 +3213,7 @@ function App({ currentUser, onLogout }) {
     const result = businessPlanningService.completeSupplyManagementLoopFromForecast({
       forecast: row,
       supplyProductionProfiles: data.supplyProductionProfiles || [],
+      supplyDecisionStrategies: data.supplyDecisionStrategies || [],
       fleetAllocationStrategies: data.fleetAllocationStrategies || [],
       existingRobotaxis: data.robotaxis || [],
       existingSupplyPlans: data.supplyPlans || [],
@@ -3028,6 +3222,7 @@ function App({ currentUser, onLogout }) {
       context: {
         now,
         nextSupplyPlanId,
+        nextRunId: nextSupplyDecisionRunId,
         nextProductionBatchId,
         nextRobotaxiId: nextProducedRobotaxiId,
         nextFleetAllocationRunId,
@@ -3051,6 +3246,7 @@ function App({ currentUser, onLogout }) {
     setOperationalData((current) => ({
       ...current,
       supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
+      supplyDecisionRuns: [result.supplyDecisionRun, ...(current.supplyDecisionRuns || [])],
       productionBatches: [result.productionBatch, ...(current.productionBatches || [])],
       robotaxis: result.robotaxis,
       fleetAllocationRuns: [result.fleetAllocationRun, ...(current.fleetAllocationRuns || [])],
@@ -3230,7 +3426,7 @@ function App({ currentUser, onLogout }) {
         result_type: "NO_ACTIVE_FLEET_ALLOCATION_STRATEGY",
         event_type: "DELIVERY_ORDER_CREATE",
         event_result: taskTypes.TaskEventResult.FAILED,
-        message: "没有可用的区域分配策略",
+        message: "没有可用的交付编排策略",
       });
       return;
     }
@@ -3478,6 +3674,9 @@ function App({ currentUser, onLogout }) {
                   editFleetOperationPolicy,
                   runLongTermDemandForecastStrategy,
                   editLongTermDemandForecastStrategy,
+                  runSupplyDecisionStrategy,
+                  runShortTermDemandForecastStrategy,
+                  runDeploymentDecisionStrategy,
                   runSupplyDemandBalanceStrategy,
                   createSupplyPlanFromForecast,
                   completeSupplyManagementLoopFromForecast,
@@ -3494,6 +3693,9 @@ function App({ currentUser, onLogout }) {
                   startCheck,
                   submitCheckResult,
                   createDeploymentTasks,
+                  confirmDeploymentPlan,
+                  cancelDeploymentPlan,
+                  dispatchDeploymentPlan,
                   createServiceOrderFromDemand,
                   estimateServiceOrderPrice,
                   callRobotaxiForServiceOrder,
@@ -3528,6 +3730,9 @@ function App({ currentUser, onLogout }) {
                   routePlanningRuns: rowsByPage.routePlanningRuns,
                   demandSimulationRuns: rowsByPage.demandSimulationRuns,
                   longTermDemandForecastRuns: rowsByPage.longTermDemandForecastRuns,
+                  supplyDecisionRuns: rowsByPage.supplyDecisionRuns,
+                  shortTermDemandForecastRuns: rowsByPage.shortTermDemandForecastRuns,
+                  deploymentDecisionRuns: rowsByPage.deploymentDecisionRuns,
                   fleetAllocationRuns: rowsByPage.fleetAllocationRuns,
                   supplyDemandBalanceRuns: rowsByPage.supplyDemandBalanceRuns,
                   pricingStrategyRuns: rowsByPage.pricingStrategyRuns,
@@ -3871,6 +4076,11 @@ function App({ currentUser, onLogout }) {
     taskPlanningResultSequence = 0;
     longTermDemandForecastRunSequence = 0;
     longTermDemandForecastResultSequence = 0;
+    supplyDecisionRunSequence = 0;
+    shortTermDemandForecastRunSequence = 0;
+    shortTermDemandForecastResultSequence = 0;
+    deploymentDecisionRunSequence = 0;
+    deploymentPlanSequence = 0;
     supplyPlanSequence = 0;
     productionBatchSequence = 0;
     fleetAllocationRunSequence = 0;
@@ -5263,6 +5473,41 @@ function App({ currentUser, onLogout }) {
     selectForPage("deploymentTasks", "deploymentTask", created[0]?.objectId);
   }
 
+  function confirmDeploymentPlan(plan) {
+    const result = operatingPlanningService?.confirmDeploymentPlan({ plan, context: { now } });
+    if (!result?.succeeded) return;
+    setOperationalData((current) => ({ ...current, deploymentPlans: replaceCollectionItem(current.deploymentPlans || [], "deployment_plan_id", result.plan) }));
+  }
+
+  function cancelDeploymentPlan(plan) {
+    const result = operatingPlanningService?.cancelDeploymentPlan({ plan, context: { now } });
+    if (!result?.succeeded) return;
+    setOperationalData((current) => ({ ...current, deploymentPlans: replaceCollectionItem(current.deploymentPlans || [], "deployment_plan_id", result.plan) }));
+  }
+
+  function dispatchDeploymentPlan(plan) {
+    if (plan?.plan_status !== "CONFIRMED") return;
+    const result = runRepeatedManualBusinessAction(
+      (params) => businessActionService.createDeploymentTask({
+        ...params,
+        request: {
+          deployment_plan_id: plan.deployment_plan_id,
+          short_term_forecast_run_id: plan.short_term_forecast_run_id,
+          target_cell_id: plan.target_cell_id,
+          target_service_area_id: plan.target_service_area_id,
+          target_zone_id: plan.target_zone_id,
+        },
+        runtime: { ...params.runtime, context: { ...(params.runtime.context || {}), trigger_type: taskTypes.TriggerType.MANUAL, source_type: "DEPLOYMENT_PLAN" } },
+      }),
+      { maxIterations: Math.max(1, Number(plan.planned_robotaxi_count || 0)), isProgressResult: (item) => item.resultType === "DEPLOYMENT_CREATED" },
+    );
+    const created = result?.data?.results || [];
+    if (!created.length) return;
+    const transition = operatingPlanningService.markDeploymentPlanDispatched({ plan, taskIds: created.map((item) => item.objectId), context: { now } });
+    if (transition.succeeded) setOperationalData((current) => ({ ...current, deploymentPlans: replaceCollectionItem(current.deploymentPlans || [], "deployment_plan_id", transition.plan) }));
+    selectForPage("deploymentTasks", "deploymentTask", created[0].objectId);
+  }
+
   function createServiceOrderFromDemand(orderChannel) {
     const result = runManualBusinessAction((params) => businessActionService.createServiceOrder({
       ...params,
@@ -6223,6 +6468,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isBusinessTargetPage = page === "businessTargets";
   const isSupplyProductionProfilePage = page === "supplyProductionProfiles";
   const isLongTermDemandForecastStrategyPage = page === "longTermDemandForecastStrategies";
+  const isSupplyDecisionStrategyPage = page === "supplyDecisionStrategies";
+  const isShortTermDemandForecastStrategyPage = page === "shortTermDemandForecastStrategies";
+  const isDeploymentDecisionStrategyPage = page === "deploymentDecisionStrategies";
+  const isDeploymentPlanPage = page === "deploymentPlans";
   const isLongTermDemandForecastPage = page === "longTermDemandForecasts";
   const isOperatingModelPage = page === "operatingModel";
   const isDecisionCenterPage = page === "decisionCenter";
@@ -6233,10 +6482,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isSupplyDemandBalanceStrategyPage = page === "supplyDemandBalanceStrategies";
   const isRobotaxiDeliveryOrderPage = page === "robotaxiDeliveryOrders";
   const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
-  const isSupplyDocumentPage = isSupplyPlanPage || isProductionBatchPage || isRobotaxiDeliveryOrderPage;
+  const isSupplyDocumentPage = isSupplyPlanPage || isProductionBatchPage || isRobotaxiDeliveryOrderPage || isDeploymentPlanPage;
   const isBusinessOperationResultPage = isFleetAllocationResultPage || page === "supplyDemandBalanceResults";
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
-  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isFleetAllocationStrategyPage || isSupplyDemandBalanceStrategyPage;
+  const isStrategyExecutionPanelPage = isFleetOperationPolicyPage || isFleetOperationDispatchStrategyPage || isRobotaxiTaskPlanningStrategyPage || isTaskDispatchStrategyPage || isFleetAllocationStrategyPage || isSupplyDemandBalanceStrategyPage || isSupplyDecisionStrategyPage || isShortTermDemandForecastStrategyPage || isDeploymentDecisionStrategyPage;
   const hasEventPanel = Boolean(pageArchitecture?.eventPanel);
   const config = tableConfig[page];
   const objectType = pageObjectType[page];
@@ -6294,10 +6543,10 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     ...columns,
     compactActionColumn,
   ] : columns;
-  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isSupplyDocumentPage ? createDocumentEventRows(displayRows, objectType, idField, actions.taskEventLogs, page) : isBusinessOperationResultPage ? createRecordOperationEventRows(actions.taskEventLogs, displayRows, objectType, idField, page) : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isLongTermDemandForecastStrategyPage ? createStrategyRunRows(actions.longTermDemandForecastRuns || [], displayRows, "forecast_strategy_id") : isFleetAllocationStrategyPage ? createStrategyRunRows(actions.fleetAllocationRuns || [], displayRows, "fleet_allocation_strategy_id") : isSupplyDemandBalanceStrategyPage ? createStrategyRunRows(actions.supplyDemandBalanceRuns || [], displayRows, "supply_demand_balance_strategy_id") : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
+  const eventRows = isSimulationRunPage || isSimulationEventPage ? actions.simulationEvents : isSupplyDocumentPage ? createDocumentEventRows(displayRows, objectType, idField, actions.taskEventLogs, page) : isBusinessOperationResultPage ? createRecordOperationEventRows(actions.taskEventLogs, displayRows, objectType, idField, page) : isTripPage ? createTripEventRows(rows) : isServiceOrderPage ? createServiceOrderEventRows(actions.taskEventLogs, displayRows) : isLongTermDemandForecastStrategyPage ? createStrategyRunRows(actions.longTermDemandForecastRuns || [], displayRows, "forecast_strategy_id") : isSupplyDecisionStrategyPage ? createStrategyRunRows(actions.supplyDecisionRuns || [], displayRows, "supply_decision_strategy_id") : isShortTermDemandForecastStrategyPage ? createStrategyRunRows(actions.shortTermDemandForecastRuns || [], displayRows, "short_term_forecast_strategy_id") : isDeploymentDecisionStrategyPage ? createStrategyRunRows(actions.deploymentDecisionRuns || [], displayRows, "deployment_decision_strategy_id") : isFleetAllocationStrategyPage ? createStrategyRunRows(actions.fleetAllocationRuns || [], displayRows, "fleet_allocation_strategy_id") : isSupplyDemandBalanceStrategyPage ? createStrategyRunRows(actions.supplyDemandBalanceRuns || [], displayRows, "supply_demand_balance_strategy_id") : isFleetOperationPolicyPage ? createFleetOperationPolicyRunRows(actions.fleetOperationPolicyRuns, displayRows) : isFleetOperationDispatchStrategyPage ? createStrategyRunRows(actions.fleetOperationDispatchRuns, displayRows, "fleet_operation_dispatch_strategy_id") : isRobotaxiTaskPlanningStrategyPage ? createStrategyRunRows(actions.robotaxiTaskPlanningRuns, displayRows, "robotaxi_task_planning_strategy_id") : isTaskDispatchStrategyPage ? actions.taskDispatchRuns : isFleetOperationTaskPage ? createFleetTaskEventRows(actions.taskEventLogs, displayRows, page) : isDemandSimulationStrategyPage ? actions.demandSimulationRuns : isRoutePlanningPage ? actions.routePlanningRuns : isPricingPage ? actions.pricingStrategyRuns : isOrderMatchingPage ? actions.orderMatchingRuns : actions.taskEventLogs;
   const visibleEventRows = eventRows.slice(0, 300);
-  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isSupplyDocumentPage || isBusinessOperationResultPage ? ["event_id", "occurred_at", "business_object_type", "business_object_id", "action_type", "result_type", "message", "from_status", "to_status"] : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isLongTermDemandForecastStrategyPage ? tableConfig.longTermDemandForecastRuns.columns : isFleetAllocationStrategyPage ? tableConfig.fleetAllocationRuns.columns : isSupplyDemandBalanceStrategyPage ? tableConfig.supplyDemandBalanceRuns.columns : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isFleetOperationDispatchStrategyPage ? tableConfig.fleetOperationDispatchRuns.columns : isRobotaxiTaskPlanningStrategyPage ? tableConfig.robotaxiTaskPlanningRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
-  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isSupplyDocumentPage ? "event_id" : isTripPage ? "event_id" : isLongTermDemandForecastStrategyPage ? "forecast_run_id" : isFleetAllocationStrategyPage ? "fleet_allocation_run_id" : isSupplyDemandBalanceStrategyPage ? "supply_demand_balance_run_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isFleetOperationDispatchStrategyPage ? "fleet_operation_dispatch_run_id" : isRobotaxiTaskPlanningStrategyPage ? "robotaxi_task_planning_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
+  const eventColumns = isSimulationRunPage || isSimulationEventPage ? tableConfig.simulationEvents.columns : isSupplyDocumentPage || isBusinessOperationResultPage ? ["event_id", "occurred_at", "business_object_type", "business_object_id", "action_type", "result_type", "message", "from_status", "to_status"] : isTripPage ? ["event_id", "event_time", "event_type", "event_result", "message", "trip_id", "service_order_id", "robotaxi_id", "route_id", "cell_id", "previous_status", "next_status"] : isServiceOrderPage ? ["event_id", "created_at", "event_type", "event_result", "message", "service_order_id", "trip_id", "pricing_decision_id", "pricing_strategy_run_id", "robotaxi_id"] : isLongTermDemandForecastStrategyPage ? tableConfig.longTermDemandForecastRuns.columns : isSupplyDecisionStrategyPage ? tableConfig.supplyDecisionRuns.columns : isShortTermDemandForecastStrategyPage ? tableConfig.shortTermDemandForecastRuns.columns : isDeploymentDecisionStrategyPage ? tableConfig.deploymentDecisionRuns.columns : isFleetAllocationStrategyPage ? tableConfig.fleetAllocationRuns.columns : isSupplyDemandBalanceStrategyPage ? tableConfig.supplyDemandBalanceRuns.columns : isFleetOperationPolicyPage ? tableConfig.fleetOperationPolicyRuns.columns : isFleetOperationDispatchStrategyPage ? tableConfig.fleetOperationDispatchRuns.columns : isRobotaxiTaskPlanningStrategyPage ? tableConfig.robotaxiTaskPlanningRuns.columns : isTaskDispatchStrategyPage ? tableConfig.taskDispatchRuns.columns : isDemandSimulationStrategyPage ? tableConfig.demandSimulationRuns.columns : isRoutePlanningPage ? tableConfig.routePlanningRuns.columns : isPricingPage ? tableConfig.pricingStrategyRuns.columns : isOrderMatchingPage ? tableConfig.orderMatchingRuns.columns : tableConfig.taskEventLogs.columns;
+  const eventRowKey = isSimulationRunPage || isSimulationEventPage ? "simulation_event_id" : isSupplyDocumentPage ? "event_id" : isTripPage ? "event_id" : isLongTermDemandForecastStrategyPage ? "forecast_run_id" : isSupplyDecisionStrategyPage ? "supply_decision_run_id" : isShortTermDemandForecastStrategyPage ? "short_term_forecast_run_id" : isDeploymentDecisionStrategyPage ? "deployment_decision_run_id" : isFleetAllocationStrategyPage ? "fleet_allocation_run_id" : isSupplyDemandBalanceStrategyPage ? "supply_demand_balance_run_id" : isFleetOperationPolicyPage ? "fleet_operation_policy_run_id" : isFleetOperationDispatchStrategyPage ? "fleet_operation_dispatch_run_id" : isRobotaxiTaskPlanningStrategyPage ? "robotaxi_task_planning_run_id" : isTaskDispatchStrategyPage ? "task_dispatch_run_id" : isDemandSimulationStrategyPage ? "demand_simulation_run_id" : isRoutePlanningPage ? "route_planning_run_id" : isPricingPage ? "pricing_strategy_run_id" : isOrderMatchingPage ? "order_matching_run_id" : "event_id";
   useEffect(() => {
     const node = tableSectionRef.current;
     if (!node) return undefined;
@@ -6761,6 +7010,25 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
             <RowActionButton type="default" onClick={() => actions.editLongTermDemandForecastStrategy(row)}>配置</RowActionButton>
           </RowActionGroup>
         )),
+      };
+    }
+    if (isSupplyDecisionStrategyPage) {
+      return { key: "actions", title: "操作", fixed: "right", width: 120, render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runSupplyDecisionStrategy(row)}>执行</RowActionButton>) };
+    }
+    if (isShortTermDemandForecastStrategyPage) {
+      return { key: "actions", title: "操作", fixed: "right", width: 120, render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runShortTermDemandForecastStrategy(row)}>执行</RowActionButton>) };
+    }
+    if (isDeploymentDecisionStrategyPage) {
+      return { key: "actions", title: "操作", fixed: "right", width: 120, render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runDeploymentDecisionStrategy(row)}>执行</RowActionButton>) };
+    }
+    if (isDeploymentPlanPage) {
+      return {
+        key: "actions", title: "操作", fixed: "right", width: 180,
+        render: (_, row) => renderActionCell(row, <RowActionGroup>
+          {row.plan_status === "DRAFT" && <RowActionButton onClick={() => actions.confirmDeploymentPlan(row)}>确认计划</RowActionButton>}
+          {row.plan_status === "CONFIRMED" && <RowActionButton onClick={() => actions.dispatchDeploymentPlan(row)}>生成投放任务</RowActionButton>}
+          {!["CANCELLED", "DISPATCHED"].includes(row.plan_status) && <RowActionButton type="default" onClick={() => actions.cancelDeploymentPlan(row)}>取消</RowActionButton>}
+        </RowActionGroup>),
       };
     }
     if (isSupplyPlanPage) {
@@ -10102,6 +10370,7 @@ async function bootstrap() {
 		    taskDispatchStrategyServiceModule,
 		    robotaxiTaskPlanningServiceModule,
 		    businessPlanningServiceModule,
+		    operatingPlanningServiceModule,
 		    supplyDemandBalanceServiceModule,
 		    supplyManagementInitializationModule,
 		    spatialBusinessProfileInitializationModule,
@@ -10177,6 +10446,7 @@ async function bootstrap() {
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
 		    import("./services/businessPlanningService.js?v=20260713-v043-0-0"),
+		    import("./services/operatingPlanningService.js?v=20260716-v046-0-0"),
 		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
 		    import("./data/supplyManagementInitialization.js"),
 		    import("./data/spatialBusinessProfileInitialization.js?v=20260713-v043-0-0"),
@@ -10252,6 +10522,7 @@ async function bootstrap() {
 		  taskDispatchStrategyService = taskDispatchStrategyServiceModule;
 		  robotaxiTaskPlanningService = robotaxiTaskPlanningServiceModule;
 		  businessPlanningService = businessPlanningServiceModule;
+		  operatingPlanningService = operatingPlanningServiceModule;
 		  supplyDemandBalanceService = supplyDemandBalanceServiceModule;
 		  publicDemoBootstrapService = publicDemoBootstrapServiceModule;
 		  initializeSupplyManagement = supplyManagementInitializationModule.initializeSupplyManagement;
@@ -11584,6 +11855,31 @@ function nextLongTermDemandForecastResultBaseId() {
   return `LDF-RES-${String(longTermDemandForecastResultSequence).padStart(4, "0")}`;
 }
 
+function nextSupplyDecisionRunId() {
+  supplyDecisionRunSequence += 1;
+  return `SD-RUN-${String(supplyDecisionRunSequence).padStart(4, "0")}`;
+}
+
+function nextShortTermDemandForecastRunId() {
+  shortTermDemandForecastRunSequence += 1;
+  return `STF-RUN-${String(shortTermDemandForecastRunSequence).padStart(4, "0")}`;
+}
+
+function nextShortTermDemandForecastResultId() {
+  shortTermDemandForecastResultSequence += 1;
+  return `STF-RES-${String(shortTermDemandForecastResultSequence).padStart(4, "0")}`;
+}
+
+function nextDeploymentDecisionRunId() {
+  deploymentDecisionRunSequence += 1;
+  return `DD-RUN-${String(deploymentDecisionRunSequence).padStart(4, "0")}`;
+}
+
+function nextDeploymentPlanId() {
+  deploymentPlanSequence += 1;
+  return `DPL-${String(deploymentPlanSequence).padStart(4, "0")}`;
+}
+
 function nextSupplyPlanId() {
   supplyPlanSequence += 1;
   return `FPP-${String(supplyPlanSequence).padStart(4, "0")}`;
@@ -11866,12 +12162,20 @@ function loadRuntimeSnapshot(initialData) {
       longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || [],
       longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || [],
       longTermDemandForecasts: snapshot.operationalData?.longTermDemandForecasts || initialData.longTermDemandForecasts || [],
+      supplyDecisionStrategies: snapshot.operationalData?.supplyDecisionStrategies || initialData.supplyDecisionStrategies || [],
+      supplyDecisionRuns: snapshot.operationalData?.supplyDecisionRuns || initialData.supplyDecisionRuns || [],
       supplyPlans: snapshot.operationalData?.supplyPlans || initialData.supplyPlans || [],
       productionBatches: snapshot.operationalData?.productionBatches || initialData.productionBatches || [],
       fleetAllocationStrategies: snapshot.operationalData?.fleetAllocationStrategies || initialData.fleetAllocationStrategies || [],
       fleetAllocationRuns: snapshot.operationalData?.fleetAllocationRuns || initialData.fleetAllocationRuns || [],
       fleetAllocationResults: snapshot.operationalData?.fleetAllocationResults || initialData.fleetAllocationResults || [],
       robotaxiDeliveryOrders: snapshot.operationalData?.robotaxiDeliveryOrders || initialData.robotaxiDeliveryOrders || [],
+      shortTermDemandForecastStrategies: snapshot.operationalData?.shortTermDemandForecastStrategies || initialData.shortTermDemandForecastStrategies || [],
+      shortTermDemandForecastRuns: snapshot.operationalData?.shortTermDemandForecastRuns || initialData.shortTermDemandForecastRuns || [],
+      shortTermDemandForecastResults: snapshot.operationalData?.shortTermDemandForecastResults || initialData.shortTermDemandForecastResults || [],
+      deploymentDecisionStrategies: snapshot.operationalData?.deploymentDecisionStrategies || initialData.deploymentDecisionStrategies || [],
+      deploymentDecisionRuns: snapshot.operationalData?.deploymentDecisionRuns || initialData.deploymentDecisionRuns || [],
+      deploymentPlans: snapshot.operationalData?.deploymentPlans || initialData.deploymentPlans || [],
       supplyDemandBalanceStrategies: snapshot.operationalData?.supplyDemandBalanceStrategies || initialData.supplyDemandBalanceStrategies || [],
       supplyDemandBalanceRuns: snapshot.operationalData?.supplyDemandBalanceRuns || initialData.supplyDemandBalanceRuns || [],
       supplyDemandBalanceResults: snapshot.operationalData?.supplyDemandBalanceResults || initialData.supplyDemandBalanceResults || [],
@@ -11902,6 +12206,11 @@ function loadRuntimeSnapshot(initialData) {
     taskPlanningResultSequence = deriveSequence(robotaxiTaskPlanningResults, "robotaxi_task_planning_result_id", "TPRS-");
     longTermDemandForecastRunSequence = deriveSequence(operationalData.longTermDemandForecastRuns || [], "forecast_run_id", "LDF-RUN-");
     longTermDemandForecastResultSequence = deriveSequence(operationalData.longTermDemandForecasts || [], "forecast_result_id", "LDF-RES-");
+    supplyDecisionRunSequence = deriveSequence(operationalData.supplyDecisionRuns || [], "supply_decision_run_id", "SD-RUN-");
+    shortTermDemandForecastRunSequence = deriveSequence(operationalData.shortTermDemandForecastRuns || [], "short_term_forecast_run_id", "STF-RUN-");
+    shortTermDemandForecastResultSequence = deriveSequence(operationalData.shortTermDemandForecastResults || [], "short_term_forecast_result_id", "STF-RES-");
+    deploymentDecisionRunSequence = deriveSequence(operationalData.deploymentDecisionRuns || [], "deployment_decision_run_id", "DD-RUN-");
+    deploymentPlanSequence = deriveSequence(operationalData.deploymentPlans || [], "deployment_plan_id", "DPL-");
     supplyPlanSequence = deriveSequence(operationalData.supplyPlans || [], "supply_plan_id", "FPP-");
     productionBatchSequence = deriveSequence(operationalData.productionBatches || [], "production_batch_id", "PB-");
     fleetAllocationRunSequence = deriveSequence(operationalData.fleetAllocationRuns || [], "fleet_allocation_run_id", "FAR-");
@@ -12303,6 +12612,11 @@ function restoreRuntimeSequences(snapshot) {
   const operationalData = snapshot.operationalData || {};
   longTermDemandForecastRunSequence = deriveSequence(operationalData.longTermDemandForecastRuns || [], "forecast_run_id", "LDF-RUN-");
   longTermDemandForecastResultSequence = deriveSequence(operationalData.longTermDemandForecasts || [], "forecast_result_id", "LDF-RES-");
+  supplyDecisionRunSequence = deriveSequence(operationalData.supplyDecisionRuns || [], "supply_decision_run_id", "SD-RUN-");
+  shortTermDemandForecastRunSequence = deriveSequence(operationalData.shortTermDemandForecastRuns || [], "short_term_forecast_run_id", "STF-RUN-");
+  shortTermDemandForecastResultSequence = deriveSequence(operationalData.shortTermDemandForecastResults || [], "short_term_forecast_result_id", "STF-RES-");
+  deploymentDecisionRunSequence = deriveSequence(operationalData.deploymentDecisionRuns || [], "deployment_decision_run_id", "DD-RUN-");
+  deploymentPlanSequence = deriveSequence(operationalData.deploymentPlans || [], "deployment_plan_id", "DPL-");
   supplyPlanSequence = deriveSequence(operationalData.supplyPlans || [], "supply_plan_id", "FPP-");
   productionBatchSequence = deriveSequence(operationalData.productionBatches || [], "production_batch_id", "PB-");
   fleetAllocationRunSequence = deriveSequence(operationalData.fleetAllocationRuns || [], "fleet_allocation_run_id", "FAR-");

@@ -1325,9 +1325,9 @@
 |longTermDemandForecast|需求预测结果|长期需求预测执行生成的区域车队需求结果|
 |supplyPlan|生产计划|把需求预测结果转化为自有生产 Robotaxi 数量和交付节奏的业务单据|
 |productionBatch|生产批次|自有工厂生产 Robotaxi 的执行单据，完成后形成具体 Robotaxi 资产|
-|fleetAllocationStrategy|区域分配策略|根据区域供给需求紧急度、需求缺口和可交付车辆等因素分配 Robotaxi 的策略|
-|fleetAllocationRun|区域分配执行|一次区域分配策略执行记录|
-|fleetAllocationResult|区域分配结果|一次区域分配执行生成的区域 / 运营中心 Robotaxi ID 列表|
+|fleetAllocationStrategy|交付编排策略|依据生产计划确定的区域和数量，选择具体 Robotaxi、运营中心与交付批次的策略|
+|fleetAllocationRun|交付编排执行|一次交付编排策略执行记录|
+|fleetAllocationResult|交付编排结果|一次交付编排生成的区域 / 运营中心 Robotaxi ID 列表|
 |supplyDemandBalanceStrategy|供需平衡策略|运营阶段短期供需投放预测和利润优化策略|
 |supplyDemandBalanceRun|供需平衡执行|一次供需平衡策略执行记录|
 |supplyDemandBalanceResult|供需平衡结果|按 Zone、Place、服务区域形成的 Robotaxi 缺口、优先级和经济性结果|
@@ -1421,16 +1421,16 @@
 |produced_robotaxi_ids|已生产 Robotaxi 列表|运行态字段|生产批次完成后创建的 Robotaxi ID 列表|
 |production_started_at|生产开始时间|运行态字段|生产批次开始生产的真实时间|
 |production_completed_at|生产完成时间|运行态字段|生产批次完成并创建 Robotaxi 的真实时间|
-|fleet_allocation_strategy_id|区域分配策略编号|持久化字段|区域分配策略唯一编号|
-|fleet_allocation_run_id|区域分配执行编号|持久化字段|一次区域分配执行唯一编号|
-|fleet_allocation_result_id|区域分配结果编号|持久化字段|区域分配结果唯一编号|
-|allocation_algorithm|分配算法|配置字段|区域分配策略使用的算法|
+|fleet_allocation_strategy_id|交付编排策略编号|持久化字段|交付编排策略唯一编号|
+|fleet_allocation_run_id|交付编排执行编号|持久化字段|一次交付编排执行唯一编号|
+|fleet_allocation_result_id|交付编排结果编号|持久化字段|交付编排结果唯一编号|
+|allocation_algorithm|编排算法|配置字段|交付编排策略使用的算法|
 |target_ops_center_ids|目标运营中心列表|配置字段|策略覆盖的目标运营中心集合|
 |urgency_weight|紧急度权重|配置字段|区域供给需求紧急度在分配评分中的权重|
 |demand_gap_weight|需求缺口权重|配置字段|区域车辆缺口在分配评分中的权重|
 |production_ready_weight|可交付车辆权重|配置字段|可交付 Robotaxi 在分配评分中的权重|
 |max_robotaxi_per_delivery_order|单交付单最大车辆数|配置字段|每张交付单最多包含的 Robotaxi 数量|
-|result_status|结果状态|运行态字段|区域分配结果状态|
+|result_status|结果状态|运行态字段|交付编排结果状态|
 |target_ops_center_id|目标运营中心|持久化字段|分配或交付目标运营中心|
 |allocated_quantity|分配数量|运行态字段|本条分配结果中分配的 Robotaxi 数量|
 |allocated_robotaxi_ids|分配 Robotaxi 列表|运行态字段|本条分配结果中具体 Robotaxi ID 列表|
@@ -1462,6 +1462,39 @@
 |expected_profit_amount|预计利润金额|计算字段|预计收入金额减预估投放成本|
 |profit_score|利润评分|计算字段|预计利润归一化评分|
 |deployment_demand_order_id|投放需求单编号|关联字段|未来供需平衡结果触发投放需求单后的编号，当前为空|
+|supply_decision_strategy_id|供应决策策略编号|持久化字段|将长期需求预测和生产画像转化为生产计划的策略编号|
+|supply_decision_run_id|供应决策执行编号|持久化字段|一次供应决策执行编号|
+|decision_algorithm|决策算法|配置字段|供应或投放决策使用的算法类型|
+|demand_coverage_rate|需求覆盖率|配置字段|供应决策计划覆盖预测缺口的目标比例|
+|safety_capacity_ratio|安全产能比例|配置字段|为预测波动保留的额外产能比例|
+|capacity_constraint_mode|产能约束方式|配置字段|生产和交付能力参与供应决策的约束方式|
+|short_term_forecast_strategy_id|短期预测策略编号|持久化字段|运营阶段短期需求预测策略编号|
+|short_term_forecast_run_id|短期预测执行编号|持久化字段|一次短期需求预测执行编号|
+|short_term_forecast_result_id|短期预测结果编号|持久化字段|一个时间桶和空间对象的短期预测结果编号|
+|forecast_horizon_value|预测跨度|配置字段|短期预测向未来覆盖的单位数量|
+|forecast_horizon_unit|预测跨度单位|配置字段|短期预测跨度使用小时或日|
+|time_bucket_unit|时间粒度|配置字段|预测结果的时间桶粒度|
+|recent_window_days|近期数据窗口（天）|配置字段|计算近期趋势使用的历史天数|
+|profile_weight|需求画像权重|配置字段|需求画像基准在短期预测中的权重|
+|historical_weight|历史数据权重|配置字段|历史订单事实在短期预测中的权重|
+|recent_trend_weight|近期趋势权重|配置字段|近期变化趋势在短期预测中的权重|
+|forecast_bucket_start_at|时段开始时间|计算字段|短期预测时间桶开始时间|
+|forecast_bucket_end_at|时段结束时间|计算字段|短期预测时间桶结束时间|
+|predicted_order_count|预测订单数|计算字段|时间桶和目标空间内预计产生的订单数量|
+|predicted_order_lower_bound|预测订单下限|计算字段|考虑预测误差后的订单量下限|
+|predicted_order_upper_bound|预测订单上限|计算字段|考虑预测误差后的订单量上限|
+|deployment_decision_strategy_id|投放决策策略编号|持久化字段|将短期预测和当前供给转化为投放计划的策略编号|
+|deployment_decision_run_id|投放决策执行编号|持久化字段|一次投放决策执行编号|
+|deployment_plan_id|投放计划编号|持久化字段|投放决策直接形成的计划编号|
+|target_utilization_rate|目标利用率|配置字段|投放决策希望维持的 Robotaxi 目标利用率|
+|average_fulfillment_duration_min|平均履约时长（分钟）|配置字段|订单需求换算车辆需求时使用的平均履约时长|
+|supply_gap_weight|供给缺口权重|配置字段|供给缺口在投放优先级中的权重|
+|service_pressure_weight|服务压力权重|配置字段|预计需求无法及时履约的压力权重|
+|plan_start_at|计划开始时间|持久化字段|投放计划覆盖窗口的开始时间|
+|plan_end_at|计划结束时间|持久化字段|投放计划覆盖窗口的结束时间|
+|expected_robotaxi_demand|预计 Robotaxi 需求|计算字段|预测订单量按时长和利用率换算的车辆需求|
+|deployment_priority_score|投放优先级评分|计算字段|需求、缺口、服务压力和利润形成的排序评分|
+|generated_task_ids|已生成任务列表|运行态字段|投放计划分解形成的运营投放任务编号列表|
 |delivery_order_id|交付单编号|持久化字段|区域交付单唯一编号|
 |delivery_order_name|交付单名称|持久化字段|区域交付单名称|
 |delivery_status|交付状态|运行态字段|区域交付单状态|
@@ -1502,7 +1535,7 @@
 |SUCCEEDED|已成功|策略执行状态|
 |FAILED|已失败|策略执行状态|
 |GENERATED|已生成|预测或分配结果状态|
-|USED_FOR_DELIVERY|已用于交付|区域分配结果状态|
+|USED_FOR_DELIVERY|已用于交付|交付编排结果状态|
 |IN_DELIVERY|交付中|区域交付单状态|
 |DELIVERED|已交付|区域交付单状态|
 |PENDING_DELIVERY|待交付|区域交付相关状态|
@@ -1538,9 +1571,9 @@
 |longTermDemandForecast|需求预测结果|业务对象类型|
 |supplyPlan / supplyPlans|生产计划|业务对象类型 / 页面来源|
 |productionBatch / productionBatches|生产批次|业务对象类型 / 页面来源|
-|fleetAllocationStrategy|区域分配策略|业务对象类型|
-|fleetAllocationRun|区域分配执行|业务对象类型|
-|fleetAllocationResult|区域分配结果|业务对象类型|
+|fleetAllocationStrategy|交付编排策略|业务对象类型|
+|fleetAllocationRun|交付编排执行|业务对象类型|
+|fleetAllocationResult|交付编排结果|业务对象类型|
 |robotaxiDeliveryOrder / robotaxiDeliveryOrders|区域交付|业务对象类型 / 页面来源|
 |supplyDemandBalanceStrategy|供需平衡策略|业务对象类型|
 |supplyDemandBalanceRun|供需平衡执行|业务对象类型|

@@ -21,10 +21,11 @@ flowchart LR
   SAP["服务承载画像<br/>ServiceArea CapacityProfile"] --> RUN
   ZP["区域规划画像<br/>Zone PlanningProfile"] --> RUN
   RP["Robotaxi 资产与能力"] --> RUN
-  PP["生产画像<br/>SupplyProductionProfile"] --> RUN
   ST["预测策略<br/>ForecastStrategy"] --> RUN
   RUN --> RESULT["预测结果<br/>ForecastResult"]
-  RESULT --> PLAN["生产计划<br/>SupplyPlan"]
+  RESULT --> DECISION["供应决策执行"]
+  PP["生产画像<br/>SupplyProductionProfile"] --> DECISION
+  DECISION --> PLAN["生产计划<br/>SupplyPlan"]
 ```
 
 - `BusinessTarget` 表达管理层希望达到的经营状态，不生成市场需求。
@@ -32,7 +33,8 @@ flowchart LR
 - `ForecastStrategy` 保存计算规则和可配置参数，不保存市场事实。
 - `ForecastRun` 是一次独立执行，冻结全部输入快照并记录校验结果。
 - `ForecastResult` 是不可变的分析结论，不因后续配置变化而重算。
-- `SupplyPlan` 消费预测结果形成生产单据，预测服务不得直接创建 Robotaxi。
+- 预测结果只表达长期需求和 Robotaxi 缺口，不决定生产数量。
+- 供应决策同时消费预测结果与生产画像，并直接形成 `SupplyPlan`；预测服务不得创建计划或 Robotaxi。
 - 页面只触发服务和展示结果，不在页面层拼装执行、结果或生产计划。
 - 本闭环属于业务底层经营规划，默认不接入模拟运行主路径。
 
