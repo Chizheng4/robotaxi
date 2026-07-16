@@ -121,13 +121,19 @@ try {
   const entryResult = await send("Runtime.evaluate", {
     expression: `JSON.stringify({
       hasLogin: Boolean(document.querySelector(".platform-login-shell")),
-      hasWorkbench: Boolean(document.querySelector(".workbench"))
+      hasWorkbench: Boolean(document.querySelector(".workbench")),
+      loginTitle: document.querySelector("#platform-login-title")?.textContent?.trim() || "",
+      hasLoginSubtitle: Boolean(document.querySelector(".platform-login-subtitle")),
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
     })`,
     returnByValue: true,
   });
   const entryState = JSON.parse(entryResult.result?.result?.value || "{}");
   assert(entryState.hasLogin || entryState.hasWorkbench, `页面既未渲染登录入口也未渲染工作台：${JSON.stringify({ ...entryState, exceptions, messages })}`);
   if (entryState.hasLogin) {
+    assert.equal(entryState.loginTitle, "Robotaxi经营模拟", "登录页必须使用统一短品牌名称");
+    assert.equal(entryState.hasLoginSubtitle, false, "登录标题下方不得显示额外说明文字");
+    assert.equal(entryState.documentOverflow, 0, "登录页不得产生横向溢出");
     const loginResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const input = document.querySelector(".platform-login-form input");
@@ -144,6 +150,18 @@ try {
     assert(loginResult.result?.result?.value?.submitted, "登录入口缺少可提交的输入框或表单");
     await delay(2500);
   }
+
+  const platformBrandResult = await send("Runtime.evaluate", {
+    expression: `JSON.stringify({
+      brand: document.querySelector(".brand-title-full")?.textContent?.trim() || "",
+      brandLabel: document.querySelector(".brand-title-button")?.getAttribute("aria-label") || "",
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+    })`,
+    returnByValue: true,
+  });
+  const platformBrand = JSON.parse(platformBrandResult.result?.result?.value || "{}");
+  assert(platformBrand.brand === "Robotaxi经营模拟" || platformBrand.brandLabel === "Robotaxi经营模拟，返回运营中控台", "站内 Logo 必须使用统一短品牌名称");
+  assert.equal(platformBrand.documentOverflow, 0, "进入平台后不得产生页面级横向溢出");
 
   if (publicDemoAssertionEnabled) {
     await delay(1200);
