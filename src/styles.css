@@ -1227,7 +1227,7 @@
 }
 
 .map-hover-card > strong {
-  font-size: var(--font-md);
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -6134,19 +6134,6 @@ html[data-keyboard-open="true"] .platform-login-panel {
 
 .detail-tabs-content-only > .ant-tabs-nav {
   display: none !important;
-}
-
-.brand-title-full {
-  display: block;
-  min-width: 0;
-  color: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.3;
-  text-align: left;
-  overflow: hidden;
-  text-overflow: clip;
-  white-space: nowrap;
 }
 
 .row-action-cell {

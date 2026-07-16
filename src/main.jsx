@@ -3552,9 +3552,7 @@ function App({ currentUser, onLogout }) {
             type="text"
             onClick={goToConsole}
           >
-            {collapsed ? "R" : (
-              <span className="brand-title-full">Robotaxi 经营模拟</span>
-            )}
+            {collapsed ? "R" : "Robotaxi 经营模拟"}
           </Button>
           <Button type="text" size="small" aria-label={collapsed ? "展开菜单" : "收起菜单"} onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? "≡" : "‹"}

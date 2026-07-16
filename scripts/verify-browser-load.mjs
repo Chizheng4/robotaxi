@@ -153,14 +153,16 @@ try {
 
   const platformBrandResult = await send("Runtime.evaluate", {
     expression: `JSON.stringify({
-      brand: document.querySelector(".brand-title-full")?.textContent?.trim() || "",
+      brand: document.querySelector(".brand-title-button")?.textContent?.trim() || "",
       brandLabel: document.querySelector(".brand-title-button")?.getAttribute("aria-label") || "",
+      collapsed: Boolean(document.querySelector(".system-brand.collapsed")),
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
     })`,
     returnByValue: true,
   });
   const platformBrand = JSON.parse(platformBrandResult.result?.result?.value || "{}");
-  assert(platformBrand.brand === "Robotaxi 经营模拟" || platformBrand.brandLabel === "Robotaxi 经营模拟，返回运营中控台", "站内 Logo 必须使用统一短品牌名称和自然中英文间距");
+  assert.equal(platformBrand.brandLabel, "Robotaxi 经营模拟，返回运营中控台", "站内 Logo 必须提供统一品牌语义");
+  assert.equal(platformBrand.brand, platformBrand.collapsed ? "R" : "Robotaxi 经营模拟", "站内 Logo 必须复用旧版自适应展示结构");
   assert.equal(platformBrand.documentOverflow, 0, "进入平台后不得产生页面级横向溢出");
 
   if (publicDemoAssertionEnabled) {
