@@ -16,17 +16,20 @@ const objectTypeLabels = Object.freeze({
   RevenueRecord: "收入记录",
   CostRecord: "成本记录",
   MetricObservation: "指标观测",
+  StrategyRun: "策略执行",
+  StrategyResult: "策略结果",
 });
 
 export const operatingModelDefinition = Object.freeze({
   operating_model_id: "OM-001",
   operating_model_name: "Robotaxi 经营模型",
   operating_model_status: OperatingModelStatus.ACTIVE,
-  operating_model_version: "1.0.0",
-  model_description: "统一解释需求、供给、服务、资产、财务与经营反馈之间的关系。",
+  operating_model_version: "1.1.0",
+  model_description: "统一解释规划、决策、需求、供给、服务、资产、财务与经营反馈之间的关系。",
   model_domains: Object.freeze([
     domain("DEMAND", "需求", "市场需要多少出行服务", ["BusinessTarget", "DemandProfile"], ["ServiceOrder"], ["DEMAND-TREND-001", "OUTCOME-SERVICE-001"]),
     domain("SUPPLY", "供给", "需要形成多少 Robotaxi", ["SupplyProductionProfile", "LongTermDemandForecastResult"], ["SupplyPlan", "ProductionBatch", "RobotaxiDeliveryOrder"], ["PROCESS-SUPPLY-001"]),
+    domain("DECISION", "决策控制", "策略是否可靠执行并改善经营表现", ["BusinessTarget"], ["StrategyRun", "StrategyResult"], ["PROCESS-DECISION-002", "PROCESS-DECISION-003", "PROCESS-DECISION-004"]),
     domain("SERVICE", "服务", "现有供给能否稳定完成需求", ["BusinessTarget"], ["ServiceOrder", "Trip", "OrderMatchingDecision"], ["OUTCOME-SERVICE-003", "PROCESS-EFF-001", "PROCESS-EFF-002"]),
     domain("ASSET", "资产", "Robotaxi 是否可用并被有效使用", ["BusinessTarget", "LongTermDemandForecastResult"], ["Robotaxi", "RouteExecution"], ["OUTCOME-ASSET-001", "PROCESS-ASSET-001"]),
     domain("FINANCE", "财务", "经营是否形成可持续收益", ["BusinessTarget"], ["RevenueRecord", "CostRecord"], ["OUTCOME-FIN-002", "OUTCOME-FIN-005", "OUTCOME-FIN-006"]),
@@ -38,10 +41,12 @@ export const operatingModelDefinition = Object.freeze({
     relation("SERVICE", "ASSET", "履约过程形成资产使用事实"),
     relation("SERVICE", "FINANCE", "服务完成形成收入与运营成本"),
     relation("ASSET", "FINANCE", "资产使用形成能耗、运维和折旧成本"),
+    relation("DECISION", "SERVICE", "策略控制匹配、路径、定价和运维执行"),
     relation("FINANCE", "FEEDBACK", "经营结果进入目标和预测偏差分析"),
+    relation("FEEDBACK", "DECISION", "经营偏差支持策略调整和异常治理"),
     relation("FEEDBACK", "DEMAND", "偏差反馈支持下一轮目标和模型调整"),
   ]),
-  updated_at: "2026-07-15T00:00:00+08:00",
+  updated_at: "2026-07-16T00:00:00+08:00",
 });
 
 export function getOperatingModelDefinition() {

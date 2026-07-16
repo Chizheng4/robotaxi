@@ -99,9 +99,10 @@ assert.equal(inactiveExecution.run.failure_reason, "SUPPLY_DEMAND_BALANCE_STRATE
 
 const main = fs.readFileSync("src/main.jsx", "utf8");
 const navigation = fs.readFileSync("src/ui/navigationRegistry.js", "utf8");
-assert.ok(navigation.includes('page("supplyDemandBalanceStrategies", "供需平衡策略")'), "供需投放菜单必须包含供需平衡策略");
-assert.ok(navigation.includes('page("supplyDemandBalanceRuns", "供需平衡执行")'), "供需投放菜单必须包含供需平衡执行");
-assert.ok(navigation.includes('page("supplyDemandBalanceResults", "供需平衡结果")'), "供需投放菜单必须包含供需平衡结果");
+assert.ok(navigation.includes('group("supplyDemandBalancePolicyGroup", "供需平衡策略"'), "供需投放菜单必须包含供需平衡策略分组");
+assert.ok(navigation.includes('page("supplyDemandBalanceStrategies", "策略配置")'), "供需平衡策略必须包含配置页面");
+assert.ok(navigation.includes('page("supplyDemandBalanceRuns", "策略执行")'), "供需平衡策略必须包含执行页面");
+assert.ok(navigation.includes('page("supplyDemandBalanceResults", "策略结果")'), "供需平衡策略必须包含结果页面");
 assert.ok(main.includes("supplyDemandBalanceService.executeSupplyDemandBalanceStrategy"), "页面必须调用服务执行供需平衡策略");
 assert.equal(main.includes("createDeploymentTasksFromSupplyDemandBalance"), false, "供需平衡当前版本不得接入投放任务创建");
 

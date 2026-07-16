@@ -14,6 +14,7 @@ export const navigationGroups = Object.freeze([
       page("longTermDemandForecasts", "预测结果"),
     ]),
   ]),
+  page("decisionCenter", "决策中心"),
   group("businessAnalysis", "经营分析", [
     page("operatingMetricsOverview", "经营总览"),
     page("financialMetrics", "财务表现"),
@@ -41,7 +42,7 @@ export const navigationGroups = Object.freeze([
     page("ownerSupplies", "车主供应"),
   ]),
   group("robotaxi", "Robotaxi", [
-    page("robotaxis", "Robotaxi 列表"),
+    page("robotaxis", "Robotaxi"),
     group("routePlanningManagement", "路径规划", [
       page("routePlanningStrategies", "路径规划策略"),
       page("routePlanningRuns", "路径规划执行"),
@@ -50,20 +51,16 @@ export const navigationGroups = Object.freeze([
     page("routeExecutions", "运营行驶"),
     page("serviceFulfillmentRecords", "履约行驶"),
   ]),
-  group("operationsManagement", "运营管理", [
-    group("supplyDemandDeploymentManagement", "供需投放", [
-      page("deploymentTasks", "投放任务单"),
-      page("supplyDemandBalanceStrategies", "供需平衡策略"),
-      page("supplyDemandBalanceRuns", "供需平衡执行"),
-      page("supplyDemandBalanceResults", "供需平衡结果"),
-    ]),
-    group("travelServiceManagement", "出行服务", [
-      page("serviceOrders", "服务订单管理"),
-      group("demandSimulationPolicyGroup", "虚拟需求策略", [
-        page("demandSimulationStrategies", "虚拟需求配置"),
-        page("demandSimulationRuns", "虚拟需求执行"),
-        page("demandSimulationResults", "虚拟需求结果"),
+  group("supplyDemandDeploymentManagement", "供需投放", [
+      page("deploymentTasks", "投放任务"),
+      group("supplyDemandBalancePolicyGroup", "供需平衡策略", [
+        page("supplyDemandBalanceStrategies", "策略配置"),
+        page("supplyDemandBalanceRuns", "策略执行"),
+        page("supplyDemandBalanceResults", "策略结果"),
       ]),
+    ]),
+  group("travelServiceManagement", "出行服务", [
+      page("serviceOrders", "服务订单"),
       group("pricingPolicyGroup", "动态定价策略", [
         page("pricingStrategies", "定价策略配置"),
         page("pricingStrategyRuns", "定价策略执行"),
@@ -75,7 +72,7 @@ export const navigationGroups = Object.freeze([
         page("orderMatchingDecisions", "匹配策略结果"),
       ]),
     ]),
-    group("operationSupportManagement", "运维支持", [
+  group("operationSupportManagement", "运维支持", [
       page("cleaningTasks", "清洁任务"),
       page("chargingTasks", "充电任务"),
       page("maintenanceTasks", "维修任务"),
@@ -97,7 +94,6 @@ export const navigationGroups = Object.freeze([
         page("robotaxiTaskPlanningResults", "规划策略结果"),
       ]),
     ]),
-  ]),
   group("financialManagement", "财务管理", [
     page("revenueRecords", "收入记录"),
     page("costRecords", "成本记录"),
@@ -107,8 +103,8 @@ export const navigationGroups = Object.freeze([
     page("costModelProfiles", "成本模型配置"),
   ]),
   group("operationOrganization", "运营组织", [
-    page("opsCenters", "运营中心列表"),
-    page("workers", "作业人员列表"),
+    page("opsCenters", "运营中心"),
+    page("workers", "作业人员"),
   ]),
   group("space", "地图空间", [
     page("maps", "地图管理"),
@@ -123,6 +119,11 @@ export const navigationGroups = Object.freeze([
   group("simulation", "运营模拟", [
     page("simulationRuns", "模拟运行"),
     page("timedOperations", "时间作业"),
+    group("demandSimulationPolicyGroup", "虚拟需求策略", [
+      page("demandSimulationStrategies", "策略配置"),
+      page("demandSimulationRuns", "策略执行"),
+      page("demandSimulationResults", "策略结果"),
+    ]),
     group("simulationConfigManagement", "配置管理", [
       page("simulationPolicies", "模拟规则"),
       page("workflowTimingRules", "工作流时效"),
@@ -133,11 +134,14 @@ export const navigationGroups = Object.freeze([
 export const navigationIcons = Object.freeze({
   console: "⌁",
   businessPlanning: "◇",
+  decisionCenter: "◎",
   businessAnalysis: "◫",
   customer: "○",
   supplyManagement: "⇧",
   robotaxi: "R",
-  operationsManagement: "↔",
+  supplyDemandDeploymentManagement: "↔",
+  travelServiceManagement: "◉",
+  operationSupportManagement: "⊕",
   financialManagement: "¥",
   operationOrganization: "⊙",
   space: "⌖",

@@ -469,7 +469,35 @@
 |planning_source_refs|规划来源|运行态字段|经营目标、预测结果和供给计划引用|
 |fact_source_refs|事实来源|运行态字段|业务事实或指标观测引用|
 
-### 1.2.5 SimulationRun 指标汇总字段
+### 1.2.5 DecisionControlView：决策控制只读投影
+
+该对象由决策能力目录和各价值流的策略事实即时生成，不持久化、不回写源对象，也不进入模拟 Tick。
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|decision_capability_id|决策能力编号|运行态字段|跨价值流决策能力唯一编号|
+|decision_capability_name|决策能力|运行态字段|统一中文能力名称|
+|decision_domain|决策领域|运行态字段|经营规划、供应、供需、路径、出行、运维或模拟|
+|value_stream_name|价值流|运行态字段|源策略所属业务价值流|
+|strategy_count|策略数量|运行态字段|能力下的策略总数|
+|active_strategy_count|启用策略数|运行态字段|当前启用策略数量|
+|run_count|执行次数|运行态字段|当前投影范围内执行数量|
+|successful_run_count|成功执行数|运行态字段|归一化状态为 SUCCESS 的执行数|
+|partial_run_count|部分成功数|运行态字段|归一化状态为 PARTIAL 的执行数|
+|failed_run_count|失败执行数|运行态字段|归一化状态为 FAILED 的执行数|
+|no_action_run_count|无动作执行数|运行态字段|归一化状态为 NO_ACTION 的执行数|
+|decision_result_count|决策结果数|运行态字段|源结果对象数量|
+|decision_exception_count|决策异常数|运行态字段|失败与部分成功执行数量|
+|decision_execution_success_rate|策略执行成功率|运行态字段|成功执行数除以已结束执行数|
+|decision_result_coverage_rate|决策结果覆盖率|运行态字段|形成结果的执行数除以全部执行数|
+|decision_exception_rate|决策异常率|运行态字段|失败与部分成功执行数除以已结束执行数|
+|average_decision_duration_seconds|平均决策耗时（秒）|运行态字段|有效执行耗时平均值|
+|latest_run_at|最近执行时间|运行态字段|能力最近一次执行时间|
+|strategy_page_key|策略配置页面|运行态字段|源策略页面导航编号|
+|run_page_key|策略执行页面|运行态字段|源执行页面导航编号|
+|result_page_key|策略结果页面|运行态字段|源结果页面导航编号|
+
+### 1.2.6 SimulationRun 指标汇总字段
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
@@ -479,7 +507,7 @@
 |metric_result_summary|指标结果摘要|运行态字段|指标计算结果摘要|
 |metric_calculation_errors|指标计算错误|运行态字段|指标计算质量问题或错误|
 
-### 1.2.6 指标枚举中文
+### 1.2.7 指标枚举中文
 
 |英文值|中文名|用途|
 |---|---|---|
@@ -495,6 +523,7 @@
 |SUPPLY|供给|指标领域|
 |DEMAND|需求|指标领域|
 |QUALITY|质量|指标领域|
+|DECISION|决策|指标领域|
 |ACTIVE|启用|指标状态|
 |RESERVED|预留|指标状态|
 |DISABLED|停用|指标状态|

@@ -11,9 +11,9 @@ const modelDocument = fs.readFileSync(new URL("../doc/08-strategy-operating-metr
 
 const model = getOperatingModelDefinition();
 assert.equal(validateOperatingModelDefinition(model).valid, true, "经营模型合同必须完整");
-assert.deepEqual(model.model_domains.map((item) => item.model_domain_name), ["需求", "供给", "服务", "资产", "财务", "经营反馈"]);
+assert.deepEqual(model.model_domains.map((item) => item.model_domain_name), ["需求", "供给", "决策控制", "服务", "资产", "财务", "经营反馈"]);
 
-const expectedGroupOrder = ["console", "businessPlanning", "businessAnalysis", "customer", "supplyManagement", "robotaxi", "operationsManagement", "financialManagement", "operationOrganization", "space", "simulation"];
+const expectedGroupOrder = ["console", "businessPlanning", "decisionCenter", "businessAnalysis", "customer", "supplyManagement", "robotaxi", "supplyDemandDeploymentManagement", "travelServiceManagement", "operationSupportManagement", "financialManagement", "operationOrganization", "space", "simulation"];
 assert.deepEqual(navigationGroups.map((item) => item.key), expectedGroupOrder, "一级菜单顺序必须符合经营结构");
 assert.deepEqual(findNavigationPath("operatingModel").map((item) => item.key), ["businessPlanning", "operatingModel"]);
 

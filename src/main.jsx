@@ -69,6 +69,7 @@ let metricObjectPresentationService;
 let navigationRegistry;
 let pageArchitectureRegistry;
 let operatingModelService;
+let decisionControlService;
 let releaseHistory = [];
 let projectReadmeService;
 let taskSequence = 0;
@@ -144,6 +145,11 @@ const tableConfig = {
     title: "经营模型",
     description: "统一展示需求、供给、服务、资产、财务和经营反馈之间的经营结构。",
     columns: ["operating_model_id", "operating_model_name", "operating_model_status", "operating_model_version", "model_description", "updated_at"],
+  },
+  decisionCenter: {
+    title: "决策中心",
+    description: "统一观察跨价值流策略能力、执行、结果、异常和经营效果。",
+    columns: ["decision_capability_name", "value_stream_name", "strategy_count", "active_strategy_count", "run_count", "decision_result_count", "decision_exception_count", "decision_execution_success_rate", "latest_run_at"],
   },
   maps: {
     title: "地图管理",
@@ -601,6 +607,7 @@ const tableConfig = {
 
 const pageObjectType = {
   operatingModel: "operatingModel",
+  decisionCenter: "decisionCapability",
   maps: "map",
   cells: "cell",
   roads: "road",
@@ -693,6 +700,7 @@ const pageObjectType = {
 
 const idFieldByType = {
   operatingModel: "operating_model_id",
+  decisionCapability: "decision_capability_id",
   map: "map_id",
   cell: "cell_id",
   road: "road_id",
@@ -780,6 +788,7 @@ const idFieldByType = {
 };
 
 const statusFieldByPage = {
+  decisionCenter: "decision_domain",
   roads: "road_status",
   roadNodes: "node_status",
   roadSegments: "segment_status",
@@ -1493,6 +1502,42 @@ function App({ currentUser, onLogout }) {
     robotaxis: operationalData.robotaxis,
   }), [metricCalculationRuns, metricDefinitions, metricObservations, metricPeriodType, operationalData.businessTargets, operationalData.longTermDemandForecasts, operationalData.supplyPlans, operationalData.robotaxis, simulationRuns]);
   const metricDisplayRows = operatingDataPool.rows;
+  const decisionControlView = useMemo(() => decisionControlService.createDecisionControlView({
+    collections: {
+      longTermDemandForecastStrategies: operationalData.longTermDemandForecastStrategies,
+      longTermDemandForecastRuns: operationalData.longTermDemandForecastRuns,
+      longTermDemandForecasts: operationalData.longTermDemandForecasts,
+      fleetAllocationStrategies: operationalData.fleetAllocationStrategies,
+      fleetAllocationRuns: operationalData.fleetAllocationRuns,
+      fleetAllocationResults: operationalData.fleetAllocationResults,
+      supplyDemandBalanceStrategies: operationalData.supplyDemandBalanceStrategies,
+      supplyDemandBalanceRuns: operationalData.supplyDemandBalanceRuns,
+      supplyDemandBalanceResults: operationalData.supplyDemandBalanceResults,
+      routePlanningStrategies: createRoutePlanningStrategyRows(data, routePlanningRuns),
+      routePlanningRuns,
+      routes: data.routes,
+      pricingStrategies: createPricingStrategyRows(data, pricingStrategyRuns),
+      pricingStrategyRuns,
+      pricingDecisions,
+      orderMatchingStrategies: createOrderMatchingStrategyRows(data, orderMatchingRuns),
+      orderMatchingRuns,
+      orderMatchingDecisions,
+      fleetOperationPolicies,
+      fleetOperationPolicyRuns,
+      fleetOperationPolicyResults,
+      fleetOperationDispatchStrategies,
+      fleetOperationDispatchRuns,
+      fleetOperationDispatchDecisions,
+      robotaxiTaskPlanningStrategies,
+      robotaxiTaskPlanningRuns,
+      robotaxiTaskPlanningResults,
+      demandSimulationStrategies: createDemandSimulationStrategyRows(data, demandSimulationRuns),
+      demandSimulationRuns,
+      demandSimulationResults: createDemandSimulationResultRows(demandSimulationRuns),
+    },
+    metricRows: operatingDataPool.pages.decisionCenter,
+    comparisons: operatingDataPool.comparisons,
+  }), [data, demandSimulationRuns, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, operatingDataPool.comparisons, operatingDataPool.pages.decisionCenter, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routePlanningRuns]);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
   const autoMetricCalculationRunIdsRef = useRef(new Set());
   const publicDemoBootstrapRef = useRef({
@@ -1634,6 +1679,7 @@ function App({ currentUser, onLogout }) {
     };
     return {
       operatingModel: [operatingModelService.getOperatingModelDefinition()],
+      decisionCenter: decisionControlView.capabilities,
       maps: data.maps,
     cells: data.cells,
     roads: data.roads,
@@ -1734,7 +1780,7 @@ function App({ currentUser, onLogout }) {
     timedOperations,
     validations,
     };
-  }, [allFleetOperationTasks, chargingTasks, cleaningTasks, data, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
+  }, [allFleetOperationTasks, chargingTasks, cleaningTasks, data, decisionControlView.capabilities, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -1848,12 +1894,12 @@ function App({ currentUser, onLogout }) {
 
   const menuItems = pageGroups.map((group) => {
     const icon = <span className="menu-group-icon" aria-hidden="true">{menuGroupIcons[group.key] || "·"}</span>;
-    if (group.key === "console") return { key: "console", label: "运营中控台", icon };
+    const children = createMenuItems(group.children || []);
     return {
       key: group.key,
       label: group.label,
       icon,
-      children: createMenuItems(group.children || []),
+      ...(children.length ? { children } : {}),
     };
   });
   const activeConfig = tableConfig[activePage];
@@ -2613,6 +2659,19 @@ function App({ currentUser, onLogout }) {
       orderMatchingDecisions,
       routePlanningRuns,
       demandSimulationRuns,
+      demandSimulationResults: createDemandSimulationResultRows(demandSimulationRuns),
+      longTermDemandForecastRuns: data.longTermDemandForecastRuns || [],
+      longTermDemandForecasts: data.longTermDemandForecasts || [],
+      fleetAllocationRuns: data.fleetAllocationRuns || [],
+      fleetAllocationResults: data.fleetAllocationResults || [],
+      supplyDemandBalanceRuns: data.supplyDemandBalanceRuns || [],
+      supplyDemandBalanceResults: data.supplyDemandBalanceResults || [],
+      fleetOperationPolicyRuns,
+      fleetOperationPolicyResults,
+      fleetOperationDispatchRuns,
+      fleetOperationDispatchDecisions,
+      robotaxiTaskPlanningRuns,
+      robotaxiTaskPlanningResults,
       routes: data.routes,
       robotaxis: data.robotaxis,
       maps: data.maps,
@@ -3500,6 +3559,8 @@ function App({ currentUser, onLogout }) {
                   metricCalculationRuns,
                   metricObservations,
                   operatingDataPool,
+                  decisionControlView,
+                  navigateToPage: activateWorkspacePage,
                   simulationRuns,
                   simulationEvents,
                   timedOperations,
@@ -6164,6 +6225,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isLongTermDemandForecastStrategyPage = page === "longTermDemandForecastStrategies";
   const isLongTermDemandForecastPage = page === "longTermDemandForecasts";
   const isOperatingModelPage = page === "operatingModel";
+  const isDecisionCenterPage = page === "decisionCenter";
   const isSupplyPlanPage = page === "supplyPlans";
   const isProductionBatchPage = page === "productionBatches";
   const isFleetAllocationStrategyPage = page === "fleetAllocationStrategies";
@@ -6255,7 +6317,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const tableScrollX = finalColumns.reduce((sum, column) => sum + Number(column.width || 128), 0);
   const eventTableScrollX = eventColumns.reduce((sum, key) => sum + getColumnWidth(key, visibleEventRows), 0);
   const isForecastAnalysisPage = isLongTermDemandForecastPage;
-  const showMainTable = isForecastAnalysisPage || isOperatingModelPage ? false : (!isMetricAnalysisPage || metricTableVisible);
+  const showMainTable = isForecastAnalysisPage || isOperatingModelPage || isDecisionCenterPage ? false : (!isMetricAnalysisPage || metricTableVisible);
 
   useEffect(() => {
     if (isMetricAnalysisPage) setMetricTableVisible(false);
@@ -6267,6 +6329,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     pagePresentation.mode === "analysis" ? "analytical-workspace" : "",
     isReadinessPage ? "readiness-page" : "",
     isOperatingModelPage ? "operating-model-page" : "",
+    isDecisionCenterPage ? "decision-center-page" : "",
     isMetricAnalysisPage ? "metric-analysis-page" : "",
     isForecastAnalysisPage ? "forecast-analysis-page" : "",
   ].filter(Boolean).join(" ");
@@ -6287,7 +6350,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           onSelect={(row) => onSelect(objectType, row[idField])}
         />
       )}
-      {!isMetricAnalysisPage && !isForecastAnalysisPage && !isOperatingModelPage && statusOptions.length > 0 && (
+      {pagePresentation.mode !== "analysis" && statusOptions.length > 0 && (
         <div className="status-segment-bar">
           <Button
             size="small"
@@ -6308,7 +6371,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           ))}
         </div>
       )}
-      {!isMetricAnalysisPage && !isForecastAnalysisPage && !isOperatingModelPage && (
+      {pagePresentation.mode !== "analysis" && (
       <div className="list-filter-bar">
         <div className="filter-field keyword-field">
           <span>关键词</span>
@@ -6443,6 +6506,11 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <OperatingModelPanel model={displayRows[0] || operatingModelService.getOperatingModelDefinition()} />
         </AnalysisContentViewport>
       )}
+      {isDecisionCenterPage && (
+        <AnalysisContentViewport>
+          <DecisionCenterPanel view={actions.decisionControlView} onNavigate={actions.navigateToPage} />
+        </AnalysisContentViewport>
+      )}
       {isMetricAnalysisPage && (
         <AnalysisContentViewport>
           <MetricExperiencePanel
@@ -6506,7 +6574,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           />
         </div>
       )}
-      {!isForecastAnalysisPage && !isOperatingModelPage && <ModuleFooter
+      {!isForecastAnalysisPage && !isOperatingModelPage && !isDecisionCenterPage && <ModuleFooter
         page={page}
         totalCount={rows.length}
         displayCount={displayRows.length}
@@ -8176,6 +8244,101 @@ function OperatingModelPanel({ model }) {
       </section>
     </div>
   );
+}
+
+function DecisionCenterPanel({ view, onNavigate }) {
+  const summary = view?.summary || {};
+  const capabilities = view?.capabilities || [];
+  const activities = (view?.activities || []).slice(0, 12);
+  const exceptions = (view?.exceptions || []).slice(0, 6);
+  const summaryItems = [
+    ["决策能力", summary.decision_capability_count, "项"],
+    ["启用策略", summary.active_strategy_count, "项"],
+    ["策略执行", summary.run_count, "次"],
+    ["执行成功率", summary.decision_execution_success_rate, "percent"],
+    ["结果覆盖率", summary.decision_result_coverage_rate, "percent"],
+    ["决策异常", summary.decision_exception_count, "项"],
+  ];
+  return (
+    <div className="decision-center-panel">
+      <header className="decision-center-header">
+        <div>
+          <span className="analysis-eyebrow">经营决策控制</span>
+          <h2>跨价值流决策运行视图</h2>
+          <p>策略事实仍由各价值流独立拥有；这里统一观察执行质量、异常和经营效果。</p>
+        </div>
+        <div className={summary.decision_exception_count > 0 ? "decision-health is-warning" : "decision-health"}>
+          <span>{summary.decision_exception_count > 0 ? "存在待处理异常" : "决策运行正常"}</span>
+          <strong>{summary.decision_exception_count || 0}</strong>
+        </div>
+      </header>
+      <section className="decision-summary-grid" aria-label="决策运行摘要">
+        {summaryItems.map(([label, value, unit]) => (
+          <div key={label} className="decision-summary-item">
+            <span>{label}</span>
+            <strong>{unit === "percent" ? formatDecisionRate(value) : `${formatPlanningValue(value)}${unit || ""}`}</strong>
+          </div>
+        ))}
+      </section>
+      <section className="decision-section">
+        <div className="decision-section-heading"><div><span className="analysis-eyebrow">能力目录</span><h3>策略能力与运行状态</h3></div><small>选择入口可进入原业务页面</small></div>
+        <div className="decision-capability-grid">
+          {capabilities.map((item) => (
+            <article className="decision-capability" key={item.decision_capability_id}>
+              <div className="decision-capability-title"><div><span>{item.value_stream_name}</span><h4>{item.decision_capability_name}</h4></div><Tag color={item.decision_exception_count ? "warning" : item.run_count ? "success" : "default"}>{item.decision_exception_count ? `${item.decision_exception_count} 项异常` : item.run_count ? "正常" : "未执行"}</Tag></div>
+              <dl>
+                <div><dt>策略</dt><dd>{item.active_strategy_count} / {item.strategy_count} 启用</dd></div>
+                <div><dt>执行</dt><dd>{item.run_count} 次</dd></div>
+                <div><dt>成功率</dt><dd>{formatDecisionRate(item.decision_execution_success_rate)}</dd></div>
+                <div><dt>结果</dt><dd>{item.decision_result_count} 条</dd></div>
+              </dl>
+              <div className="decision-capability-actions">
+                <Button size="small" type="text" onClick={() => onNavigate?.(item.strategy_page_key)}>策略配置</Button>
+                <Button size="small" type="text" onClick={() => onNavigate?.(item.run_page_key)}>执行记录</Button>
+                <Button size="small" type="text" onClick={() => onNavigate?.(item.result_page_key)}>决策结果</Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="decision-section decision-execution-section">
+        <div className="decision-section-heading"><div><span className="analysis-eyebrow">执行监控</span><h3>最近策略执行</h3></div><small>跨领域状态已归一化，源状态保持不变</small></div>
+        {activities.length ? (
+          <div className="decision-table-scroll"><table className="decision-table"><thead><tr><th>决策能力</th><th>价值流</th><th>策略</th><th>执行状态</th><th>结果数</th><th>发生时间</th></tr></thead><tbody>{activities.map((item) => <tr key={item.decision_activity_id}><td>{item.decision_capability_name}</td><td>{item.value_stream_name}</td><td>{item.strategy_name}</td><td><span className={`decision-status is-${String(item.normalized_status).toLowerCase()}`}>{getDisplayValue(item.normalized_status)}</span></td><td>{item.decision_result_count}</td><td>{item.occurred_at || "暂无时间"}</td></tr>)}</tbody></table></div>
+        ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="执行策略后将在这里形成跨价值流运行记录" />}
+      </section>
+      <section className="decision-lower-grid">
+        <div className="decision-section">
+          <div className="decision-section-heading"><div><span className="analysis-eyebrow">异常治理</span><h3>待关注执行</h3></div></div>
+          {exceptions.length ? <div className="decision-exception-list">{exceptions.map((item) => <button type="button" key={item.decision_activity_id} onClick={() => onNavigate?.(item.run_page_key)}><span>{item.decision_capability_name} · {getDisplayValue(item.normalized_status)}</span><strong>{item.result_summary || item.source_run_id}</strong></button>)}</div> : <div className="decision-empty-state">当前没有失败或部分成功的策略执行</div>}
+        </div>
+        <div className="decision-section">
+          <div className="decision-section-heading"><div><span className="analysis-eyebrow">经营效果</span><h3>关联核心指标</h3></div><small>来自统一经营数据池</small></div>
+          <div className="decision-effect-list">{dedupeDecisionEffectMetrics(capabilities).slice(0, 8).map((metric) => <div key={metric.metric_definition_id || metric.performance_indicator_id}><span>{metric.metric_name_cn || metric.performance_indicator_name}</span><strong>{formatDecisionMetric(metric)}</strong></div>)}</div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function dedupeDecisionEffectMetrics(capabilities = []) {
+  const byId = new Map();
+  capabilities.flatMap((item) => item.effect_metrics || []).forEach((metric) => {
+    const id = metric.metric_definition_id || metric.performance_indicator_id;
+    if (id && !byId.has(id)) byId.set(id, metric);
+  });
+  return [...byId.values()];
+}
+
+function formatDecisionRate(value) {
+  return value === null || value === undefined ? "暂无" : formatPlanningPercent(value);
+}
+
+function formatDecisionMetric(metric = {}) {
+  const value = metric.metric_value ?? metric.actual_value;
+  const unit = metric.metric_unit || metric.value_unit;
+  if (unit === "percent" || unit === "比例") return formatPlanningPercent(value);
+  return value === null || value === undefined ? "数据待更新" : `${formatPlanningValue(value)}${unit && !["count", "currency"].includes(unit) ? ` ${getDisplayValue(unit)}` : ""}`;
 }
 
 function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreateSupplyPlan, onCompleteSupplyLoop }) {
@@ -9953,6 +10116,7 @@ async function bootstrap() {
 		    navigationRegistryModule,
 		    pageArchitectureRegistryModule,
 		    operatingModelServiceModule,
+		    decisionControlServiceModule,
 		    releaseHistoryModule,
 		    projectReadmeModule,
 		    publicDemoBootstrapServiceModule,
@@ -10027,6 +10191,7 @@ async function bootstrap() {
 		    import("./ui/navigationRegistry.js?v=20260715-v045-0-0"),
 		    import("./ui/pageArchitectureRegistry.js?v=20260715-v045-2-0"),
 		    import("./services/operatingModelService.js?v=20260715-v045-0-0"),
+		    import("./services/decisionControlService.js?v=20260716-v045-3-0"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
 		    import("./services/publicDemoBootstrapService.js?v=20260715-v043-0-7"),
@@ -10105,6 +10270,7 @@ async function bootstrap() {
 		  navigationRegistry = navigationRegistryModule;
 		  pageArchitectureRegistry = pageArchitectureRegistryModule;
 		  operatingModelService = operatingModelServiceModule;
+		  decisionControlService = decisionControlServiceModule;
 		  pageGroups = navigationRegistry.navigationGroups;
 		  menuGroupIcons = navigationRegistry.navigationIcons;
 		  const navigationValidation = navigationRegistry.validateNavigationRegistry(Object.keys(tableConfig));

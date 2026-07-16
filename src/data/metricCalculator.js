@@ -2,6 +2,7 @@ export const MetricLayer = {
   PROCESS: "PROCESS",
   OUTCOME: "OUTCOME",
   QUALITY: "QUALITY",
+  DECISION: "DECISION",
 };
 
 export const MetricDomain = {
@@ -73,6 +74,11 @@ export const defaultMetricDefinitions = [
   definition("PROCESS-EFF-001", "平均履约距离", "Average Fulfillment Distance", MetricDomain.EFFICIENCY, "sum(ServiceOrder.fulfillment_distance_km) / Completed Orders", ["ServiceOrder"], ["fulfillment_distance_km", "order_status"], MetricUnit.KM, false, MetricLayer.PROCESS),
   definition("PROCESS-EFF-002", "平均履约耗时", "Average Fulfillment Duration", MetricDomain.EFFICIENCY, "sum(ServiceOrder.fulfillment_duration_min) / Completed Orders", ["ServiceOrder"], ["fulfillment_duration_min", "order_status"], MetricUnit.MINUTE, false, MetricLayer.PROCESS),
   definition("QUALITY-DATA-001", "关键数据完整率", "Critical Data Completeness Rate", MetricDomain.QUALITY, "complete critical inputs / required critical inputs", ["SimulationRun", "RevenueRecord", "CostRecord", "ServiceOrder"], ["cost_calculation_status", "revenue_calculation_status", "simulation_created_at"], MetricUnit.PERCENT, true, MetricLayer.QUALITY),
+  definition("PROCESS-DECISION-001", "策略执行次数", "Decision Execution Count", MetricDomain.DECISION, "count(StrategyRun)", ["StrategyRun"], ["source_run_id"], MetricUnit.COUNT, true, MetricLayer.PROCESS),
+  definition("PROCESS-DECISION-002", "策略执行成功率", "Decision Execution Success Rate", MetricDomain.DECISION, "successful ended StrategyRun / ended StrategyRun", ["StrategyRun"], ["normalized_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
+  definition("PROCESS-DECISION-003", "决策结果覆盖率", "Decision Result Coverage Rate", MetricDomain.DECISION, "StrategyRun with result / StrategyRun", ["StrategyRun", "StrategyResult"], ["source_run_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
+  definition("PROCESS-DECISION-004", "决策异常率", "Decision Exception Rate", MetricDomain.DECISION, "failed or partially succeeded StrategyRun / ended StrategyRun", ["StrategyRun"], ["normalized_status"], MetricUnit.PERCENT, false, MetricLayer.PROCESS),
+  definition("PROCESS-DECISION-005", "平均决策耗时", "Average Decision Duration", MetricDomain.DECISION, "sum(StrategyRun.duration_seconds) / valid StrategyRun", ["StrategyRun"], ["started_at", "completed_at"], MetricUnit.SECOND, false, MetricLayer.PROCESS),
 ];
 
 export function initializeDefaultMetricDefinitions() {
@@ -333,6 +339,12 @@ function filterScopeByOperatingPeriod(scope, runIds, period) {
     orderMatchingDecisions: (scope.orderMatchingDecisions || []).filter(shouldKeep),
     routePlanningRuns: (scope.routePlanningRuns || []).filter(shouldKeep),
     demandSimulationRuns: (scope.demandSimulationRuns || []).filter(shouldKeep),
+    longTermDemandForecastRuns: (scope.longTermDemandForecastRuns || []).filter(shouldKeep),
+    fleetAllocationRuns: (scope.fleetAllocationRuns || []).filter(shouldKeep),
+    supplyDemandBalanceRuns: (scope.supplyDemandBalanceRuns || []).filter(shouldKeep),
+    fleetOperationPolicyRuns: (scope.fleetOperationPolicyRuns || []).filter(shouldKeep),
+    fleetOperationDispatchRuns: (scope.fleetOperationDispatchRuns || []).filter(shouldKeep),
+    robotaxiTaskPlanningRuns: (scope.robotaxiTaskPlanningRuns || []).filter(shouldKeep),
   };
 }
 
@@ -400,6 +412,11 @@ function calculateObservations(metricDefinition, context, nextSequence) {
     "PROCESS-EFF-001": () => averageCompletedOrderDistance(completedOrders(context)),
     "PROCESS-EFF-002": () => averageCompletedOrderDurationMinutes(completedOrders(context)),
     "QUALITY-DATA-001": () => calculateCriticalDataCompleteness(context),
+    "PROCESS-DECISION-001": () => decisionRuns(context).length,
+    "PROCESS-DECISION-002": () => decisionExecutionSuccessRate(context),
+    "PROCESS-DECISION-003": () => decisionResultCoverageRate(context),
+    "PROCESS-DECISION-004": () => decisionExceptionRate(context),
+    "PROCESS-DECISION-005": () => averageDecisionDuration(context),
   };
   const rawValue = calculators[metricDefinition.metric_definition_id]?.();
   const values = Array.isArray(rawValue) ? rawValue : [rawValue];
@@ -550,6 +567,59 @@ function successfulRoutePlanningRuns(context) {
 
 function trips(context) {
   return context.scope?.trips || [];
+}
+
+function decisionRuns(context) {
+  return [
+    "longTermDemandForecastRuns", "fleetAllocationRuns", "supplyDemandBalanceRuns", "routePlanningRuns",
+    "pricingStrategyRuns", "orderMatchingRuns", "fleetOperationPolicyRuns", "fleetOperationDispatchRuns",
+    "robotaxiTaskPlanningRuns", "demandSimulationRuns",
+  ].flatMap((key) => context.scope?.[key] || []);
+}
+
+function normalizeDecisionRunStatus(run = {}) {
+  const value = String(run.forecast_run_status || run.planning_result || run.simulation_result || run.execution_status || run.run_status || run.run_result || run.calculation_status || run.result_type || "").toUpperCase();
+  if (["SUCCESS", "SUCCEEDED", "COMPLETED", "GENERATED", "DISPATCHED", "SELECTED"].includes(value)) return "SUCCESS";
+  if (["PARTIAL_SUCCESS", "PARTIALLY_SUCCEEDED", "WARN"].includes(value)) return "PARTIAL";
+  if (["FAILED", "REJECTED", "ERROR", "NO_CAPACITY", "NO_MATCHING_CAPABILITY"].includes(value) || run.failure_reason) return "FAILED";
+  if (["NO_ACTION", "NO_CANDIDATE", "SKIPPED", "NO_ELIGIBLE_CENTER"].includes(value)) return "NO_ACTION";
+  return "UNKNOWN";
+}
+
+function decisionExecutionSuccessRate(context) {
+  const ended = decisionRuns(context).filter((run) => ["SUCCESS", "PARTIAL", "FAILED", "NO_ACTION"].includes(normalizeDecisionRunStatus(run)));
+  return ratio(ended.filter((run) => normalizeDecisionRunStatus(run) === "SUCCESS").length, ended.length);
+}
+
+function decisionResultCoverageRate(context) {
+  const runs = decisionRuns(context);
+  const resultRunIds = new Set([
+    ...(context.scope?.longTermDemandForecasts || []), ...(context.scope?.fleetAllocationResults || []),
+    ...(context.scope?.supplyDemandBalanceResults || []), ...(context.scope?.routes || []),
+    ...(context.scope?.pricingDecisions || []), ...(context.scope?.orderMatchingDecisions || []),
+    ...(context.scope?.fleetOperationPolicyResults || []), ...(context.scope?.fleetOperationDispatchDecisions || []),
+    ...(context.scope?.robotaxiTaskPlanningResults || []), ...(context.scope?.demandSimulationResults || []),
+  ].flatMap((result) => Object.entries(result).filter(([key, value]) => key.endsWith("_run_id") && value).map(([, value]) => value)));
+  const covered = runs.filter((run) => {
+    const runId = Object.entries(run).find(([key, value]) => key.endsWith("_run_id") && value)?.[1];
+    return runId && resultRunIds.has(runId);
+  });
+  return ratio(covered.length, runs.length);
+}
+
+function decisionExceptionRate(context) {
+  const ended = decisionRuns(context).filter((run) => ["SUCCESS", "PARTIAL", "FAILED", "NO_ACTION"].includes(normalizeDecisionRunStatus(run)));
+  const exceptions = ended.filter((run) => ["PARTIAL", "FAILED"].includes(normalizeDecisionRunStatus(run)));
+  return ratio(exceptions.length, ended.length);
+}
+
+function averageDecisionDuration(context) {
+  const durations = decisionRuns(context).map((run) => {
+    const start = Date.parse(run.started_at || run.created_at || "");
+    const end = Date.parse(run.completed_at || run.updated_at || "");
+    return Number.isFinite(start) && Number.isFinite(end) && end >= start ? (end - start) / 1000 : NaN;
+  }).filter(Number.isFinite);
+  return ratio(durations.reduce((sum, value) => sum + value, 0), durations.length);
 }
 
 function completedTrips(context) {
@@ -730,6 +800,12 @@ function sourceRecordCount(metricDefinition, context) {
     if (objectType === "ReadinessTask") return count + (context.scope?.readinessTasks?.length || 0);
     if (objectType === "DeploymentTask") return count + (context.scope?.deploymentTasks?.length || 0);
     if (objectType === "RouteExecution") return count + (context.scope?.routeExecutions?.length || 0);
+    if (objectType === "StrategyRun") return count + decisionRuns(context).length;
+    if (objectType === "StrategyResult") return count + [
+      "longTermDemandForecasts", "fleetAllocationResults", "supplyDemandBalanceResults", "routes",
+      "pricingDecisions", "orderMatchingDecisions", "fleetOperationPolicyResults",
+      "fleetOperationDispatchDecisions", "robotaxiTaskPlanningResults", "demandSimulationResults",
+    ].reduce((total, key) => total + (context.scope?.[key]?.length || 0), 0);
     return count;
   }, 0);
 }
@@ -765,6 +841,12 @@ function sourceObjectRefs(metricDefinition, context) {
   }
   if ((metricDefinition.source_objects || []).includes("RouteExecution")) {
     refs.push(...(context.scope?.routeExecutions || []).slice(0, 20).map((execution) => ({ object_type: "routeExecution", object_id: execution.route_execution_id })));
+  }
+  if ((metricDefinition.source_objects || []).includes("StrategyRun")) {
+    refs.push(...decisionRuns(context).slice(0, 20).map((run) => ({
+      object_type: "strategyRun",
+      object_id: Object.entries(run).find(([key, value]) => key.endsWith("_run_id") && value)?.[1] || "无编号",
+    })));
   }
   return refs;
 }

@@ -2,6 +2,7 @@ import { resolvePagePresentation as resolveRegisteredPagePresentation } from "./
 
 const PAGE_DESCRIPTION_OVERRIDES = Object.freeze({
   operatingModel: "统一解释需求、供给、服务、资产、财务和经营反馈，连接经营规划、业务执行与经营分析。",
+  decisionCenter: "统一观察跨价值流策略能力、执行过程、异常和经营效果，源策略仍由各业务服务独立拥有。",
   operatingMetricsOverview: "汇总经营目标、预测基线与实际经营结果，识别整体达成情况和关键偏差。",
   financialMetrics: "对比收入、成本、利润及经营目标，解释财务结果与计划的差异。",
   serviceMetrics: "分析订单需求、履约效率和服务趋势，判断需求变化与服务能力是否匹配。",

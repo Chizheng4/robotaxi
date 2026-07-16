@@ -177,6 +177,7 @@ node scripts/verify-v043-0-7-public-demo-bootstrap.mjs
 node scripts/verify-v044-operating-data-pool.mjs
 node scripts/verify-v045-operating-model.mjs
 node scripts/verify-v045-2-page-architecture.mjs
+node scripts/verify-v045-3-0-decision-control.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

@@ -15,7 +15,7 @@ register(["console"], {
   eventPanel: null,
 });
 
-register(["operatingModel"], {
+register(["operatingModel", "decisionCenter"], {
   mode: "analysis",
   resourceKind: "model",
   detailMode: "none",
