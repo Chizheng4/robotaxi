@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v046.0.5",
+    "title": "让本地启动指令默认在 Codex Browser 中打开 Robotaxi，缩短前端修改与验证路径",
+    "changes": [
+      "`start-robotaxi.command` 启动成功后优先调用 Codex 的 Chromium 接口打开本地网站。",
+      "已存在 Robotaxi 本地标签时直接复用并刷新版本 URL，避免重复创建标签。",
+      "不存在本地标签时新建 Codex Browser 标签；Codex 接口异常时才回退系统默认浏览器。",
+      "保留 Bundle 构建、服务就绪、白屏检查、无缓存和运行数据保护等原有启动门禁。"
+    ],
+    "audienceTitle": "启动后直达 Codex Browser",
+    "audienceChanges": [
+      "双击启动指令后，网站会直接在 Codex Browser 中打开。",
+      "已打开的 Robotaxi 标签会自动复用，修改和验证更方便。",
+      "原有启动检查与系统浏览器兜底保持有效。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v046.0.4",
     "title": "按更新前结构恢复站内 Logo 的原生自适应展示，保留新的短品牌名称",
     "changes": [
