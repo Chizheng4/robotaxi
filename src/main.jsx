@@ -1214,7 +1214,8 @@ function PlatformLogin({ onEnter }) {
     <main className="platform-login-shell">
       <section className="platform-login-panel" aria-labelledby="platform-login-title">
         <div className="platform-login-brand">
-          <h1 id="platform-login-title">Robotaxi 运营平台</h1>
+          <h1 id="platform-login-title">Robotaxi 经营闭环模拟平台</h1>
+          <p className="platform-login-subtitle">从企业业务架构、B 端产品到工程实现的 Robotaxi 数字化实践</p>
         </div>
         <form className="platform-login-form" onSubmit={submitLogin}>
           <input
@@ -3546,7 +3547,19 @@ function App({ currentUser, onLogout }) {
     <Layout className="ops-shell">
       <header className="global-system-bar">
         <div className={collapsed ? "system-brand collapsed" : "system-brand"}>
-          <Button className="brand-title-button" type="text" onClick={goToConsole}>{collapsed ? "R" : "Robotaxi 运营平台"}</Button>
+          <Button
+            aria-label="Robotaxi 经营闭环模拟平台，返回运营中控台"
+            className="brand-title-button"
+            type="text"
+            onClick={goToConsole}
+          >
+            {collapsed ? "R" : (
+              <span className="brand-title-full">
+                <span>Robotaxi</span>
+                <span>经营闭环模拟平台</span>
+              </span>
+            )}
+          </Button>
           <Button type="text" size="small" aria-label={collapsed ? "展开菜单" : "收起菜单"} onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? "≡" : "‹"}
           </Button>

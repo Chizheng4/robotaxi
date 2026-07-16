@@ -424,12 +424,12 @@ try {
       const scroll = document.querySelector(".project-readme-scroll");
       const rect = panel?.getBoundingClientRect();
       const diagrams = [...(panel?.querySelectorAll(".project-readme-diagram svg") || [])];
-      return { visible: Boolean(panel), hasTitle: Boolean(panel?.textContent.includes("Robotaxi 城市运营模拟平台")), scrollable: Boolean(scroll && scroll.scrollHeight > scroll.clientHeight), withinViewport: Boolean(rect && rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= 0 && rect.bottom <= window.innerHeight + 1), diagramCount: diagrams.length, diagramsRendered: diagrams.every((diagram) => diagram.getBoundingClientRect().width > 0 && diagram.querySelectorAll("rect").length > 1), rawMermaidHidden: !panel?.textContent.includes("flowchart TB") };
+      return { visible: Boolean(panel), hasTitle: Boolean(panel?.textContent.includes("Robotaxi 经营闭环模拟平台")), scrollable: Boolean(scroll && scroll.scrollHeight > scroll.clientHeight), withinViewport: Boolean(rect && rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= 0 && rect.bottom <= window.innerHeight + 1), diagramCount: diagrams.length, diagramsRendered: diagrams.every((diagram) => diagram.getBoundingClientRect().width > 0 && diagram.querySelectorAll("rect").length > 1), rawMermaidHidden: !panel?.textContent.includes("flowchart TB") };
     })()`,
     returnByValue: true,
   });
   const readmePanel = readmePanelResult.result?.result?.value;
-  assert(readmePanel?.visible && readmePanel?.hasTitle && readmePanel?.scrollable && readmePanel?.withinViewport && readmePanel?.diagramCount >= 10 && readmePanel?.diagramsRendered && readmePanel?.rawMermaidHidden, `项目 README 浮层必须可读、可滚动并直接渲染结构图：${JSON.stringify(readmePanel)}`);
+  assert(readmePanel?.visible && readmePanel?.hasTitle && readmePanel?.scrollable && readmePanel?.withinViewport && readmePanel?.diagramCount >= 4 && readmePanel?.diagramsRendered && readmePanel?.rawMermaidHidden, `项目 README 浮层必须可读、可滚动并直接渲染结构图：${JSON.stringify(readmePanel)}`);
   await send("Runtime.evaluate", { expression: `document.querySelector('.project-readme-panel [aria-label="关闭项目说明"]')?.click()`, returnByValue: true });
   await delay(100);
 

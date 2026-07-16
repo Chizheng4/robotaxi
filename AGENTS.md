@@ -1,6 +1,6 @@
 # AGENTS.md — AI Agent 行为规则
 
-Robotaxi 自动驾驶运营模拟平台。前端单页 React 应用，后端 Python 静态服务。
+Robotaxi 经营闭环模拟平台。前端单页 React 应用，后端 Python 静态服务。
 
 ## 核心架构约束（编码前必须理解）
 
