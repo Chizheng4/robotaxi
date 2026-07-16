@@ -117,13 +117,13 @@ export const navigationGroups = Object.freeze([
     page("zones", "Zone 管理"),
   ]),
   group("simulation", "运营模拟", [
-    page("simulationRuns", "模拟运行"),
-    page("timedOperations", "时间作业"),
-    group("demandSimulationPolicyGroup", "虚拟需求策略", [
+    group("demandSimulationPolicyGroup", "需求模拟", [
       page("demandSimulationStrategies", "策略配置"),
       page("demandSimulationRuns", "策略执行"),
       page("demandSimulationResults", "策略结果"),
     ]),
+    page("simulationRuns", "模拟运行"),
+    page("timedOperations", "时间作业"),
     group("simulationConfigManagement", "配置管理", [
       page("simulationPolicies", "模拟规则"),
       page("workflowTimingRules", "工作流时效"),

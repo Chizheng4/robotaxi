@@ -32,6 +32,10 @@ assert.equal(navigationGroups.find((item) => item.key === "decisionCenter")?.chi
 assert.equal(getPageArchitecture("decisionCenter")?.mode, "analysis");
 assert.equal(getPageArchitecture("decisionCenter")?.detailMode, "none");
 
+const simulationGroup = navigationGroups.find((item) => item.key === "simulation");
+assert.equal(simulationGroup?.children?.[0]?.key, "demandSimulationPolicyGroup", "需求模拟必须位于模拟运行之前");
+assert.equal(simulationGroup?.children?.[0]?.label, "需求模拟", "需求模拟菜单名称必须简洁统一");
+
 const allLeafKeys = [];
 const walk = (items) => items.forEach((item) => item.children?.length ? walk(item.children) : allLeafKeys.push(item.key));
 walk(navigationGroups);

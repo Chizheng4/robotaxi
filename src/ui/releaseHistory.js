@@ -1,6 +1,21 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v045.3.1",
+    "title": "优化运营模拟菜单的信息顺序和名称，使需求生成能力先于模拟运行呈现",
+    "changes": [
+      "将“虚拟需求策略”统一改为“需求模拟”，减少菜单名称与页面对象含义之间的理解成本。",
+      "将需求模拟分组移动到模拟运行之前，完整保留策略配置、策略执行和策略结果三级页面。",
+      "仅调整统一导航注册表，不修改需求模拟服务、模拟运行闭环、页面对象和历史数据。"
+    ],
+    "audienceTitle": "需求模拟菜单优化",
+    "audienceChanges": [
+      "运营模拟菜单首先展示“需求模拟”，随后才是“模拟运行”。",
+      "原有策略配置、执行和结果功能保持不变。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v045.3.0",
     "title": "建立连接经营规划与业务执行的决策控制中心，以统一只读投影观察跨价值流策略能力、执行、异常和经营效果",
     "changes": [
