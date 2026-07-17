@@ -239,7 +239,7 @@ market_forecast_daily_orders
 |英文字段|中文字段|
 |---|---|
 |`target_end_daily_orders`|目标期末日订单|
-|`target_order_fulfillment_rate`|目标订单履约率|
+|`target_order_fulfillment_rate`|目标成熟订单履约率|
 |`target_task_utilization_rate`|目标任务利用率|
 |`target_minimum_robotaxi_quantity`|目标最低 Robotaxi 数量|
 |`planning_mode`|规划模式|
@@ -267,7 +267,7 @@ target_market_shortfall
 |`average_revenue_per_order`|单均收入|
 |`average_variable_cost_per_order`|单均变动成本|
 |`daily_fixed_operating_cost`|日固定运营成本|
-|`minimum_contribution_margin_rate`|最低贡献毛利率|
+|`minimum_contribution_margin_rate`|最低经营贡献率|
 
 ```text
 contribution_margin_per_order
@@ -428,7 +428,7 @@ uncovered_robotaxi_gap
 - Robotaxi 需求：单车有效日产能、日常需求、峰值需求、经营最低量、最终数量和驱动来源；
 - 当前资产：当前有效数量、调入、调出、退役和净缺口；
 - 生产可行性：可生产、可交付、计划生产和未覆盖缺口；
-- 经济性：盈亏平衡订单、贡献毛利率和经营目标可行区间；
+- 经济性：盈亏平衡订单、经营贡献率和经营目标可行区间；
 - 解释质量：数据质量、缺失字段、默认假设、完整计算步骤。
 
 固定 `confidence_level` 废弃。当前阶段使用 `data_quality_score / data_quality_level / missing_input_fields / assumption_fields` 表达输入质量，不伪造统计置信度。

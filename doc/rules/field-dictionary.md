@@ -384,15 +384,20 @@
 |metric_name_en|指标英文名|持久化字段|指标英文业务名称|
 |metric_layer|指标层级|持久化字段|STATE、PROCESS、OUTCOME、QUALITY|
 |metric_domain|指标领域|持久化字段|DEMAND、ASSET、FINANCE、SERVICE、EFFICIENCY 等|
+|metric_role|指标角色|持久化字段|RESULT（经营结果）、DRIVER（经营驱动）、GUARDRAIL（风险保障）|
+|measurement_type|度量类型|持久化字段|SNAPSHOT（截止点状态）、FLOW（期间流量）、RATE（比率）、AVERAGE（均值）、AMOUNT（金额）|
+|management_question|经营问题|持久化字段|指标支持回答的经营判断|
 |business_definition|业务定义|持久化字段|指标回答的经营问题|
 |calculation_formula|计算公式|持久化字段|使用正式字段描述的计算公式|
 |source_objects|来源对象|持久化字段|指标消费的业务对象或事实对象|
 |source_fields|来源字段|持久化字段|指标消费的正式字段|
+|fact_filter|事实过滤条件|持久化字段|进入计算的业务状态、时间和来源条件|
+|denominator_definition|分母定义|持久化字段|比率或均值使用的正式分母口径|
 |time_basis|时间口径|持久化字段|SIMULATION_TIME（模拟时间）|
 |default_time_window|默认时间窗|持久化字段|SIMULATION_RUN（单次模拟运行）、DAY、HOUR、10_MINUTE|
 |zero_denominator_rule|零分母规则|持久化字段|NULL_WITH_REASON（按原因置空）|
 |supported_dimensions|支持维度|持久化字段|simulation_run_id、service_area_id 等|
-|data_readiness|数据就绪度|持久化字段|READY、DERIVABLE、MISSING_DATA|
+|data_readiness|数据就绪度|持久化字段|READY、DERIVABLE、MISSING_DATA、MISSING_FACT|
 |display_unit|展示单位|持久化字段|currency、percent、count、second、minute、km|
 |higher_is_better|越高越好|持久化字段|指标趋势解释方向|
 |metric_status|指标状态|持久化字段|ACTIVE、RESERVED、DISABLED|
@@ -446,6 +451,7 @@
 |quality_reason|质量说明|运行态字段|指标质量解释|
 |source_record_count|来源记录数|运行态字段|参与计算的来源记录数|
 |source_object_refs|来源对象引用|运行态字段|可下钻来源对象|
+|as_of_at|状态截止时间|运行态字段|截止点状态指标对应的事实截止时间；期间流量为空|
 |created_at|创建时间|持久化字段|真实审计创建时间|
 
 ### 1.2.4 OperatingPerformanceComparison：经营表现比较
@@ -1226,7 +1232,7 @@
 |average_revenue_per_order|单均收入|配置字段|基础经济性假设|
 |average_variable_cost_per_order|单均变动成本|配置字段|基础经济性假设|
 |daily_fixed_operating_cost|日固定运营成本|配置字段|基础经济性假设|
-|minimum_contribution_margin_rate|最低贡献毛利率|配置字段|目标经济性约束|
+|minimum_contribution_margin_rate|最低经营贡献率|配置字段|经营贡献占实收收入的最低目标比例|
 |resident_trip_weight|居民出行权重|配置字段|居民对日出行暴露量的修正|
 |worker_trip_weight|工作人口出行权重|配置字段|工作人口对日出行暴露量的修正|
 |visitor_trip_weight|访客出行权重|配置字段|访客对日出行暴露量的修正|
@@ -1387,7 +1393,7 @@
 |target_service_order_count|目标服务订单数|配置字段|规划期服务订单目标|
 |target_fleet_size|目标车队规模|配置字段|规划期目标 Robotaxi 规模|
 |target_asset_utilization_rate|目标资产利用率|配置字段|规划期 Robotaxi 资产利用率目标|
-|target_order_fulfillment_rate|目标订单履约率|配置字段|规划期订单履约率目标|
+|target_order_fulfillment_rate|目标成熟订单履约率|配置字段|规划期终态订单中已完成订单的目标比例|
 |forecast_id|预测编号|持久化字段|长期需求预测唯一编号|
 |forecast_name|预测名称|持久化字段|长期需求预测名称|
 |forecast_status|预测状态|持久化字段|预测是否可用|

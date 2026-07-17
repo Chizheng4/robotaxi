@@ -1,4 +1,5 @@
 export const MetricLayer = {
+  STATE: "STATE",
   PROCESS: "PROCESS",
   OUTCOME: "OUTCOME",
   QUALITY: "QUALITY",
@@ -15,6 +16,21 @@ export const MetricDomain = {
   ROUTING: "ROUTING",
   SUPPLY: "SUPPLY",
   QUALITY: "QUALITY",
+  DECISION: "DECISION",
+};
+
+export const MetricRole = {
+  RESULT: "RESULT",
+  DRIVER: "DRIVER",
+  GUARDRAIL: "GUARDRAIL",
+};
+
+export const MetricMeasurementType = {
+  SNAPSHOT: "SNAPSHOT",
+  FLOW: "FLOW",
+  RATE: "RATE",
+  AVERAGE: "AVERAGE",
+  AMOUNT: "AMOUNT",
 };
 
 export const MetricCalculationStatus = {
@@ -52,33 +68,50 @@ export const MetricPeriodType = {
 };
 
 export const defaultMetricDefinitions = [
-  definition("OUTCOME-FIN-001", "应收收入", "Receivable Revenue", MetricDomain.FINANCE, "sum(RECEIVABLE_REVENUE.revenue_amount)", ["RevenueRecord"], ["revenue_type", "revenue_amount"], MetricUnit.CURRENCY, true),
-  definition("OUTCOME-FIN-002", "实收收入", "Collected Revenue", MetricDomain.FINANCE, "sum(COLLECTED_REVENUE.revenue_amount)", ["RevenueRecord"], ["revenue_type", "revenue_amount"], MetricUnit.CURRENCY, true),
-  definition("OUTCOME-FIN-003", "未收收入", "Unreceived Revenue", MetricDomain.FINANCE, "sum(UNRECEIVED_REVENUE.revenue_amount)", ["RevenueRecord"], ["revenue_type", "revenue_amount"], MetricUnit.CURRENCY, false),
-  definition("OUTCOME-FIN-004", "运营总成本", "Total Operating Cost", MetricDomain.FINANCE, "sum(CostRecord.cost_amount)", ["CostRecord"], ["cost_amount"], MetricUnit.CURRENCY, false),
-  definition("OUTCOME-FIN-005", "贡献利润", "Contribution Profit", MetricDomain.FINANCE, "COLLECTED_REVENUE - TOTAL_OPERATING_COST", ["RevenueRecord", "CostRecord"], ["revenue_amount", "cost_amount"], MetricUnit.CURRENCY, true),
-  definition("OUTCOME-FIN-006", "贡献利润率", "Contribution Margin", MetricDomain.FINANCE, "Contribution Profit / Collected Revenue", ["RevenueRecord", "CostRecord"], ["revenue_amount", "cost_amount"], MetricUnit.PERCENT, true),
-  definition("OUTCOME-SERVICE-001", "创建订单数", "Created Orders", MetricDomain.SERVICE, "count(ServiceOrder)", ["ServiceOrder"], ["service_order_id"], MetricUnit.COUNT, true),
-  definition("OUTCOME-SERVICE-002", "完成订单数", "Completed Orders", MetricDomain.SERVICE, "count(order_status = COMPLETED)", ["ServiceOrder"], ["order_status"], MetricUnit.COUNT, true),
-  definition("OUTCOME-SERVICE-003", "订单履约率", "Order Fulfillment Rate", MetricDomain.SERVICE, "Completed Orders / Created Orders", ["ServiceOrder"], ["order_status"], MetricUnit.PERCENT, true),
-  definition("OUTCOME-SERVICE-004", "订单取消率", "Order Cancellation Rate", MetricDomain.SERVICE, "Cancelled Orders / Created Orders", ["ServiceOrder"], ["order_status"], MetricUnit.PERCENT, false),
-  definition("OUTCOME-EFF-001", "单均收入", "Revenue per Completed Order", MetricDomain.FINANCE, "Collected Revenue / Completed Orders", ["RevenueRecord", "ServiceOrder"], ["revenue_amount", "order_status"], MetricUnit.CURRENCY, true),
-  definition("OUTCOME-EFF-002", "单均运营成本", "Operating Cost per Completed Order", MetricDomain.FINANCE, "Total Operating Cost / Completed Orders", ["CostRecord", "ServiceOrder"], ["cost_amount", "order_status"], MetricUnit.CURRENCY, false),
-  definition("OUTCOME-EFF-003", "单均贡献利润", "Contribution Profit per Completed Order", MetricDomain.FINANCE, "Contribution Profit / Completed Orders", ["RevenueRecord", "CostRecord", "ServiceOrder"], ["revenue_amount", "cost_amount", "order_status"], MetricUnit.CURRENCY, true),
-  definition("DEMAND-TREND-001", "每小时订单数", "Hourly Order Count", MetricDomain.DEMAND, "count(ServiceOrder) by simulation hour", ["ServiceOrder"], ["simulation_created_at"], MetricUnit.COUNT, true, MetricLayer.PROCESS, ["simulation_hour"]),
-  definition("DEMAND-TREND-002", "时段订单数", "Time Segment Order Count", MetricDomain.DEMAND, "count(ServiceOrder) by PEAK / NORMAL / OFF_PEAK", ["ServiceOrder"], ["simulation_created_at"], MetricUnit.COUNT, true, MetricLayer.PROCESS, ["time_segment"]),
-  definition("PROCESS-ASSET-001", "履约车辆覆盖率", "Fulfillment Robotaxi Coverage Rate", MetricDomain.ASSET, "Robotaxi with completed ServiceOrder / effective Robotaxi", ["Robotaxi", "ServiceOrder"], ["robotaxi_id", "order_status", "availability_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
-  definition("PROCESS-MATCH-001", "Robotaxi 分配成功率", "Robotaxi Assignment Success Rate", MetricDomain.MATCHING, "Assigned Orders / Created Orders", ["ServiceOrder", "OrderMatchingDecision"], ["order_status", "selected_robotaxi_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
-  definition("PROCESS-ROUTE-001", "路径规划成功率", "Route Planning Success Rate", MetricDomain.ROUTING, "Successful RoutePlanningRun / RoutePlanningRun", ["RoutePlanningRun"], ["planning_result", "result_route_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
-  definition("PROCESS-TRIP-001", "履约完成率", "Trip Completion Rate", MetricDomain.SERVICE, "Completed Trips / Trips", ["Trip"], ["trip_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
-  definition("PROCESS-EFF-001", "平均履约距离", "Average Fulfillment Distance", MetricDomain.EFFICIENCY, "sum(ServiceOrder.fulfillment_distance_km) / Completed Orders", ["ServiceOrder"], ["fulfillment_distance_km", "order_status"], MetricUnit.KM, false, MetricLayer.PROCESS),
-  definition("PROCESS-EFF-002", "平均履约耗时", "Average Fulfillment Duration", MetricDomain.EFFICIENCY, "sum(ServiceOrder.fulfillment_duration_min) / Completed Orders", ["ServiceOrder"], ["fulfillment_duration_min", "order_status"], MetricUnit.MINUTE, false, MetricLayer.PROCESS),
-  definition("QUALITY-DATA-001", "关键数据完整率", "Critical Data Completeness Rate", MetricDomain.QUALITY, "complete critical inputs / required critical inputs", ["SimulationRun", "RevenueRecord", "CostRecord", "ServiceOrder"], ["cost_calculation_status", "revenue_calculation_status", "simulation_created_at"], MetricUnit.PERCENT, true, MetricLayer.QUALITY),
-  definition("PROCESS-DECISION-001", "策略执行次数", "Decision Execution Count", MetricDomain.DECISION, "count(StrategyRun)", ["StrategyRun"], ["source_run_id"], MetricUnit.COUNT, true, MetricLayer.PROCESS),
-  definition("PROCESS-DECISION-002", "策略执行成功率", "Decision Execution Success Rate", MetricDomain.DECISION, "successful ended StrategyRun / ended StrategyRun", ["StrategyRun"], ["normalized_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
-  definition("PROCESS-DECISION-003", "决策结果覆盖率", "Decision Result Coverage Rate", MetricDomain.DECISION, "StrategyRun with result / StrategyRun", ["StrategyRun", "StrategyResult"], ["source_run_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS),
-  definition("PROCESS-DECISION-004", "决策异常率", "Decision Exception Rate", MetricDomain.DECISION, "failed or partially succeeded StrategyRun / ended StrategyRun", ["StrategyRun"], ["normalized_status"], MetricUnit.PERCENT, false, MetricLayer.PROCESS),
-  definition("PROCESS-DECISION-005", "平均决策耗时", "Average Decision Duration", MetricDomain.DECISION, "sum(StrategyRun.duration_seconds) / valid StrategyRun", ["StrategyRun"], ["started_at", "completed_at"], MetricUnit.SECOND, false, MetricLayer.PROCESS),
+  definition("OUTCOME-FIN-001", "应收收入", "Receivable Revenue", MetricDomain.FINANCE, "sum(RECEIVABLE_REVENUE.revenue_amount)", ["RevenueRecord"], ["revenue_type", "revenue_amount"], MetricUnit.CURRENCY, true, MetricLayer.OUTCOME, ["GLOBAL"], semantics("统计周期内已形成付款义务的收入总额。", MetricRole.RESULT, MetricMeasurementType.AMOUNT, "收入记录类型为应收收入")),
+  definition("OUTCOME-FIN-002", "实收收入", "Collected Revenue", MetricDomain.FINANCE, "sum(COLLECTED_REVENUE.revenue_amount)", ["RevenueRecord"], ["revenue_type", "revenue_amount"], MetricUnit.CURRENCY, true, MetricLayer.OUTCOME, ["GLOBAL"], semantics("统计周期内已经完成收款的收入总额。", MetricRole.RESULT, MetricMeasurementType.AMOUNT, "收入记录类型为实收收入")),
+  definition("OUTCOME-FIN-003", "未收收入", "Unreceived Revenue", MetricDomain.FINANCE, "sum(UNRECEIVED_REVENUE.revenue_amount)", ["RevenueRecord"], ["revenue_type", "revenue_amount"], MetricUnit.CURRENCY, false, MetricLayer.OUTCOME, ["GLOBAL"], semantics("统计周期内已形成但尚未收取的收入总额。", MetricRole.GUARDRAIL, MetricMeasurementType.AMOUNT, "收入记录类型为未收收入")),
+  definition("OUTCOME-FIN-004", "模拟运营总成本", "Simulated Total Operating Cost", MetricDomain.FINANCE, "sum(CostRecord.cost_amount)", ["CostRecord"], ["cost_type", "cost_amount"], MetricUnit.CURRENCY, false, MetricLayer.OUTCOME, ["GLOBAL"], semantics("统计周期内变动运营成本、资产折旧和固定运营成本的合计。", MetricRole.RESULT, MetricMeasurementType.AMOUNT, "全部运营成本记录")),
+  definition("OUTCOME-FIN-005", "经营贡献", "Operating Contribution", MetricDomain.FINANCE, "COLLECTED_REVENUE - VARIABLE_OPERATING_COST", ["RevenueRecord", "CostRecord"], ["revenue_amount", "cost_type", "cost_amount"], MetricUnit.CURRENCY, true, MetricLayer.OUTCOME, ["GLOBAL"], semantics("实收收入扣除距离、能源和人力变动成本后的经营贡献。", MetricRole.RESULT, MetricMeasurementType.AMOUNT, "实收收入与变动运营成本")),
+  definition("OUTCOME-FIN-006", "经营贡献率", "Operating Contribution Margin", MetricDomain.FINANCE, "Operating Contribution / Collected Revenue", ["RevenueRecord", "CostRecord"], ["revenue_amount", "cost_type", "cost_amount"], MetricUnit.PERCENT, true, MetricLayer.OUTCOME, ["GLOBAL"], semantics("经营贡献占实收收入的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "实收收入大于零", "实收收入")),
+  definition("OUTCOME-FIN-007", "变动运营成本", "Variable Operating Cost", MetricDomain.FINANCE, "sum(DISTANCE_COST + ENERGY_COST + LABOR_COST)", ["CostRecord"], ["cost_type", "cost_amount"], MetricUnit.CURRENCY, false, MetricLayer.OUTCOME, ["GLOBAL"], semantics("随行驶或作业量变化的距离、能源和人力成本。", MetricRole.DRIVER, MetricMeasurementType.AMOUNT, "成本类型为距离、能源或人力成本")),
+  definition("OUTCOME-FIN-008", "资产折旧", "Asset Depreciation", MetricDomain.FINANCE, "sum(ASSET_DEPRECIATION_COST)", ["CostRecord"], ["cost_type", "cost_amount"], MetricUnit.CURRENCY, false, MetricLayer.OUTCOME, ["GLOBAL"], semantics("Robotaxi 在统计周期内因行驶产生的资产折旧成本。", MetricRole.DRIVER, MetricMeasurementType.AMOUNT, "成本类型为资产折旧成本")),
+  definition("OUTCOME-FIN-009", "固定运营成本", "Fixed Operating Cost", MetricDomain.FINANCE, "sum(FIXED_OPERATING_COST)", ["CostRecord"], ["cost_type", "cost_amount"], MetricUnit.CURRENCY, false, MetricLayer.OUTCOME, ["GLOBAL"], semantics("不随单次订单或行驶直接变化的固定运营成本。", MetricRole.DRIVER, MetricMeasurementType.AMOUNT, "成本类型为固定运营成本")),
+  definition("OUTCOME-FIN-010", "模拟运营利润", "Simulated Operating Profit", MetricDomain.FINANCE, "COLLECTED_REVENUE - TOTAL_OPERATING_COST", ["RevenueRecord", "CostRecord"], ["revenue_amount", "cost_amount"], MetricUnit.CURRENCY, true, MetricLayer.OUTCOME, ["GLOBAL"], semantics("实收收入扣除全部模拟运营成本后的利润。", MetricRole.RESULT, MetricMeasurementType.AMOUNT, "实收收入与全部运营成本")),
+  definition("OUTCOME-FIN-011", "模拟运营利润率", "Simulated Operating Margin", MetricDomain.FINANCE, "Simulated Operating Profit / Collected Revenue", ["RevenueRecord", "CostRecord"], ["revenue_amount", "cost_amount"], MetricUnit.PERCENT, true, MetricLayer.OUTCOME, ["GLOBAL"], semantics("模拟运营利润占实收收入的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "实收收入大于零", "实收收入")),
+  definition("OUTCOME-SERVICE-001", "观察订单量", "Observed Order Count", MetricDomain.DEMAND, "count(ServiceOrder)", ["ServiceOrder"], ["service_order_id"], MetricUnit.COUNT, true, MetricLayer.OUTCOME, ["GLOBAL", "ZONE", "TIME"], semantics("统计周期内实际创建的服务订单量，是平台观察到的需求，不等同于全部市场需求。", MetricRole.RESULT, MetricMeasurementType.FLOW, "服务订单在统计周期内创建")),
+  definition("OUTCOME-SERVICE-002", "完成订单量", "Completed Order Count", MetricDomain.SERVICE, "count(order_status = COMPLETED)", ["ServiceOrder"], ["order_status"], MetricUnit.COUNT, true, MetricLayer.OUTCOME, ["GLOBAL", "ZONE", "TIME"], semantics("统计周期内已经完成履约和结算闭环的服务订单量。", MetricRole.RESULT, MetricMeasurementType.FLOW, "订单状态为已完成")),
+  definition("OUTCOME-SERVICE-003", "成熟订单履约率", "Matured Order Fulfillment Rate", MetricDomain.SERVICE, "Completed Orders / Terminal Orders", ["ServiceOrder"], ["order_status"], MetricUnit.PERCENT, true, MetricLayer.OUTCOME, ["GLOBAL", "ZONE"], semantics("完成订单占已经进入终态订单的比例；在途订单不进入分母。", MetricRole.RESULT, MetricMeasurementType.RATE, "订单状态为已完成、已取消或已失败", "终态订单量")),
+  definition("OUTCOME-SERVICE-004", "成熟订单取消率", "Matured Order Cancellation Rate", MetricDomain.SERVICE, "Cancelled Orders / Terminal Orders", ["ServiceOrder"], ["order_status"], MetricUnit.PERCENT, false, MetricLayer.OUTCOME, ["GLOBAL", "ZONE"], semantics("取消订单占已经进入终态订单的比例；在途订单不进入分母。", MetricRole.GUARDRAIL, MetricMeasurementType.RATE, "订单状态为已完成、已取消或已失败", "终态订单量")),
+  definition("OUTCOME-SERVICE-005", "失败订单量", "Failed Order Count", MetricDomain.SERVICE, "count(order_status in FAILED_STATUSES)", ["ServiceOrder"], ["order_status"], MetricUnit.COUNT, false, MetricLayer.OUTCOME, ["GLOBAL", "ZONE"], semantics("统计周期内进入失败终态的服务订单量。", MetricRole.GUARDRAIL, MetricMeasurementType.FLOW, "订单状态为失败或匹配失败")),
+  definition("STATE-SERVICE-001", "在途订单量", "In-progress Order Count", MetricDomain.SERVICE, "count(non_terminal ServiceOrder)", ["ServiceOrder"], ["order_status"], MetricUnit.COUNT, false, MetricLayer.STATE, ["GLOBAL"], semantics("统计截止时点仍未进入终态的服务订单数量。", MetricRole.DRIVER, MetricMeasurementType.SNAPSHOT, "订单状态不是已完成、已取消或已失败")),
+  definition("STATE-SERVICE-002", "在途履约量", "In-progress Trip Count", MetricDomain.SERVICE, "count(non_terminal Trip)", ["Trip"], ["trip_status"], MetricUnit.COUNT, false, MetricLayer.STATE, ["GLOBAL"], semantics("统计截止时点仍在推进中的履约行驶记录数量。", MetricRole.DRIVER, MetricMeasurementType.SNAPSHOT, "履约行驶状态不是已完成、已取消或已失败")),
+  definition("OUTCOME-EFF-001", "单均实收收入", "Collected Revenue per Completed Order", MetricDomain.FINANCE, "Collected Revenue / Completed Orders", ["RevenueRecord", "ServiceOrder"], ["revenue_amount", "order_status"], MetricUnit.CURRENCY, true, MetricLayer.OUTCOME, ["GLOBAL"], semantics("每个已完成订单对应的平均实收收入。", MetricRole.DRIVER, MetricMeasurementType.AVERAGE, "已完成订单", "完成订单量")),
+  definition("OUTCOME-EFF-002", "单均变动成本", "Variable Cost per Completed Order", MetricDomain.FINANCE, "Variable Operating Cost / Completed Orders", ["CostRecord", "ServiceOrder"], ["cost_type", "cost_amount", "order_status"], MetricUnit.CURRENCY, false, MetricLayer.OUTCOME, ["GLOBAL"], semantics("每个已完成订单承担的平均变动运营成本。", MetricRole.DRIVER, MetricMeasurementType.AVERAGE, "变动运营成本与已完成订单", "完成订单量")),
+  definition("OUTCOME-EFF-003", "单均经营贡献", "Operating Contribution per Completed Order", MetricDomain.FINANCE, "Operating Contribution / Completed Orders", ["RevenueRecord", "CostRecord", "ServiceOrder"], ["revenue_amount", "cost_type", "cost_amount", "order_status"], MetricUnit.CURRENCY, true, MetricLayer.OUTCOME, ["GLOBAL"], semantics("每个已完成订单平均形成的经营贡献。", MetricRole.RESULT, MetricMeasurementType.AVERAGE, "实收收入、变动运营成本与已完成订单", "完成订单量")),
+  definition("DEMAND-TREND-001", "订单需求趋势", "Order Demand Trend", MetricDomain.DEMAND, "count(ServiceOrder) by time dimension", ["ServiceOrder"], ["simulation_created_at"], MetricUnit.COUNT, true, MetricLayer.PROCESS, ["SIMULATION_HOUR", "DEMAND_TIME_SEGMENT"], semantics("按小时和经营时段观察服务订单需求分布。", MetricRole.DRIVER, MetricMeasurementType.FLOW, "具有有效模拟发生时间的服务订单")),
+  definition("DEMAND-TREND-002", "旧时段订单趋势", "Legacy Time Segment Trend", MetricDomain.DEMAND, "legacy", ["ServiceOrder"], ["simulation_created_at"], MetricUnit.COUNT, true, MetricLayer.PROCESS, ["DEMAND_TIME_SEGMENT"], { ...semantics("兼容历史观测，不再生成新结果。", MetricRole.DRIVER, MetricMeasurementType.FLOW, "历史兼容"), metric_status: "DISABLED" }),
+  definition("PROCESS-ASSET-001", "履约车辆覆盖率", "Fulfillment Robotaxi Coverage Rate", MetricDomain.ASSET, "Robotaxi with completed ServiceOrder / effective Robotaxi", ["Robotaxi", "ServiceOrder"], ["robotaxi_id", "order_status", "availability_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL"], semantics("统计周期内至少完成过一个订单的 Robotaxi 占有效 Robotaxi 的比例；该指标不是时间利用率。", MetricRole.DRIVER, MetricMeasurementType.RATE, "有效 Robotaxi 与完成订单", "有效 Robotaxi 数量")),
+  definition("PROCESS-ASSET-002", "资产时间利用率", "Asset Time Utilization", MetricDomain.ASSET, "fulfillment occupied time / operable time", ["Robotaxi", "Trip"], ["robotaxi_id", "trip_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL", "ROBOTAXI"], { ...semantics("有效履约占用时间占 Robotaxi 可运营时间的比例；缺少连续状态区间时不伪造结果。", MetricRole.RESULT, MetricMeasurementType.RATE, "Robotaxi 可运营状态区间和履约占用区间", "Robotaxi 可运营时长"), data_readiness: "MISSING_FACT", metric_status: "RESERVED" }),
+  definition("PROCESS-ASSET-003", "空驶里程占比", "Empty Distance Share", MetricDomain.ASSET, "Operational Route Distance / Total Driven Distance", ["RouteExecution", "Trip"], ["total_distance_km", "trip_total_distance_km"], MetricUnit.PERCENT, false, MetricLayer.PROCESS, ["GLOBAL", "ROBOTAXI"], semantics("未承载客户履约的运营行驶里程占全部行驶里程的比例。", MetricRole.GUARDRAIL, MetricMeasurementType.RATE, "运营行驶与履约行驶记录", "全部行驶里程")),
+  definition("PROCESS-ASSET-004", "单车完成订单量", "Completed Orders per Effective Robotaxi", MetricDomain.ASSET, "Completed Orders / Effective Robotaxi", ["Robotaxi", "ServiceOrder"], ["availability_status", "order_status"], MetricUnit.COUNT, true, MetricLayer.PROCESS, ["GLOBAL"], semantics("统计周期内每辆有效 Robotaxi 平均完成的订单量。", MetricRole.RESULT, MetricMeasurementType.AVERAGE, "有效 Robotaxi 与已完成订单", "有效 Robotaxi 数量")),
+  definition("STATE-ASSET-001", "有效 Robotaxi", "Effective Robotaxi Count", MetricDomain.ASSET, "count(effective Robotaxi)", ["Robotaxi"], ["availability_status", "operational_status"], MetricUnit.COUNT, true, MetricLayer.STATE, ["GLOBAL", "ZONE"], semantics("统计截止时点已形成资产且未待交付、待准入或退役的 Robotaxi 数量。", MetricRole.DRIVER, MetricMeasurementType.SNAPSHOT, "有效 Robotaxi")),
+  definition("STATE-ASSET-002", "可运营 Robotaxi", "Operable Robotaxi Count", MetricDomain.ASSET, "count(operable Robotaxi)", ["Robotaxi"], ["availability_status", "operational_status"], MetricUnit.COUNT, true, MetricLayer.STATE, ["GLOBAL", "ZONE"], semantics("统计截止时点可参与订单或投放分配的 Robotaxi 数量。", MetricRole.DRIVER, MetricMeasurementType.SNAPSHOT, "Robotaxi 运营状态为可运营")),
+  definition("STATE-ASSET-003", "运维中 Robotaxi", "Robotaxi in Maintenance Count", MetricDomain.ASSET, "count(Robotaxi in maintenance)", ["Robotaxi"], ["availability_status", "operational_status"], MetricUnit.COUNT, false, MetricLayer.STATE, ["GLOBAL", "ZONE"], semantics("统计截止时点因运维任务被占用的 Robotaxi 数量。", MetricRole.GUARDRAIL, MetricMeasurementType.SNAPSHOT, "Robotaxi 运营状态为运维中")),
+  definition("PROCESS-MATCH-001", "最终分配成功率", "Final Robotaxi Assignment Success Rate", MetricDomain.MATCHING, "Assigned Terminal Orders / Ended Matching Orders", ["ServiceOrder", "OrderMatchingDecision"], ["order_status", "selected_robotaxi_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL"], semantics("已经结束匹配过程的订单中最终成功分配 Robotaxi 的比例；等待重试的订单不进入分母。", MetricRole.DRIVER, MetricMeasurementType.RATE, "已分配或匹配终止的服务订单", "已结束匹配过程的订单量")),
+  definition("PROCESS-ROUTE-001", "路径规划成功率", "Route Planning Success Rate", MetricDomain.ROUTING, "Successful RoutePlanningRun / Ended RoutePlanningRun", ["RoutePlanningRun"], ["planning_result", "result_route_id"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL"], semantics("已结束的路径规划执行中形成有效路线的比例。", MetricRole.DRIVER, MetricMeasurementType.RATE, "已结束路径规划执行", "已结束路径规划执行量")),
+  definition("PROCESS-TRIP-001", "履约行驶完成率", "Trip Completion Rate", MetricDomain.SERVICE, "Completed Trips / Terminal Trips", ["Trip"], ["trip_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL"], semantics("已进入终态的履约行驶记录中正常完成的比例；在途行驶不进入分母。", MetricRole.DRIVER, MetricMeasurementType.RATE, "履约行驶状态为已完成、已取消或已失败", "终态履约行驶量")),
+  definition("PROCESS-EFF-001", "平均履约距离", "Average Fulfillment Distance", MetricDomain.EFFICIENCY, "sum(valid completed order distance) / valid completed orders", ["ServiceOrder"], ["fulfillment_distance_km", "order_status"], MetricUnit.KM, false, MetricLayer.PROCESS, ["GLOBAL"], semantics("具有有效距离的完成订单平均履约距离；缺失距离的订单不进入分母并形成质量提示。", MetricRole.DRIVER, MetricMeasurementType.AVERAGE, "已完成且履约距离有效的订单", "履约距离有效的完成订单量")),
+  definition("PROCESS-EFF-002", "平均履约耗时", "Average Fulfillment Duration", MetricDomain.EFFICIENCY, "sum(valid completed order duration) / valid completed orders", ["ServiceOrder"], ["fulfillment_duration_min", "order_status"], MetricUnit.MINUTE, false, MetricLayer.PROCESS, ["GLOBAL"], semantics("具有有效耗时的完成订单平均履约耗时；缺失耗时的订单不进入分母并形成质量提示。", MetricRole.DRIVER, MetricMeasurementType.AVERAGE, "已完成且履约耗时有效的订单", "履约耗时有效的完成订单量")),
+  definition("PROCESS-SUPPLY-001", "生产计划达成率", "Production Plan Attainment", MetricDomain.SUPPLY, "Produced Robotaxi / Planned Robotaxi", ["SupplyPlan", "ProductionBatch"], ["planned_robotaxi_count", "produced_robotaxi_count"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL", "ZONE"], semantics("已完成生产批次形成的 Robotaxi 数量占有效生产计划数量的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "有效生产计划与已完成生产批次", "计划生产数量")),
+  definition("PROCESS-SUPPLY-002", "区域交付达成率", "Regional Delivery Attainment", MetricDomain.SUPPLY, "Delivered Robotaxi / Delivery Order Robotaxi", ["RobotaxiDeliveryOrder"], ["robotaxi_ids", "delivery_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL", "ZONE"], semantics("已完成交付的 Robotaxi 数量占进入终态交付单 Robotaxi 数量的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "已完成、失败或取消的区域交付单", "终态交付 Robotaxi 数量")),
+  definition("PROCESS-SUPPLY-003", "运营准入通过率", "Operating Admission Pass Rate", MetricDomain.SUPPLY, "Passed Readiness Tasks / Terminal Readiness Tasks", ["ReadinessTask"], ["task_status", "admission_result"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL", "ZONE"], semantics("已结束运营准入任务中通过准入的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "已完成、失败或取消的运营准入任务", "终态运营准入任务量")),
+  definition("QUALITY-DATA-001", "关键数据完整率", "Critical Data Completeness Rate", MetricDomain.QUALITY, "complete critical inputs / required critical inputs", ["SimulationRun", "RevenueRecord", "CostRecord", "ServiceOrder"], ["cost_calculation_status", "revenue_calculation_status", "simulation_created_at"], MetricUnit.PERCENT, true, MetricLayer.QUALITY, ["GLOBAL"], semantics("本次经营分析依赖的关键来源和字段通过完整性检查的比例。", MetricRole.GUARDRAIL, MetricMeasurementType.RATE, "关键来源和必要字段", "关键数据检查项")),
+  definition("PROCESS-DECISION-001", "决策过程量", "Decision Process Count", MetricDomain.DECISION, "count(DecisionProcess)", ["DecisionProcess"], ["decision_process_id"], MetricUnit.COUNT, true, MetricLayer.DECISION, ["GLOBAL", "DECISION_DOMAIN"], semantics("按业务对象聚合后的决策过程数量，不等同于原始策略尝试次数。", MetricRole.DRIVER, MetricMeasurementType.FLOW, "统一决策监控过程")),
+  definition("PROCESS-DECISION-002", "决策最终成功率", "Final Decision Success Rate", MetricDomain.DECISION, "successful terminal DecisionProcess / terminal DecisionProcess", ["DecisionProcess"], ["process_status"], MetricUnit.PERCENT, true, MetricLayer.DECISION, ["GLOBAL", "DECISION_DOMAIN"], semantics("已结束决策过程中最终成功或等待后成功的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "已结束决策过程", "已结束决策过程量")),
+  definition("PROCESS-DECISION-003", "决策结果覆盖率", "Decision Result Coverage Rate", MetricDomain.DECISION, "DecisionProcess with result / DecisionProcess", ["DecisionProcess"], ["result_count"], MetricUnit.PERCENT, true, MetricLayer.DECISION, ["GLOBAL", "DECISION_DOMAIN"], semantics("统一决策过程中至少形成一条结果记录的比例。", MetricRole.GUARDRAIL, MetricMeasurementType.RATE, "统一决策过程", "决策过程量")),
+  definition("PROCESS-DECISION-004", "业务影响异常率", "Business-impact Decision Exception Rate", MetricDomain.DECISION, "business-impact exception processes / terminal processes", ["DecisionProcess"], ["exception_category", "affected_business_object_count"], MetricUnit.PERCENT, false, MetricLayer.DECISION, ["GLOBAL", "DECISION_DOMAIN"], semantics("真正造成业务对象失败、取消或终止的决策异常过程占比；正常重试单独下钻。", MetricRole.GUARDRAIL, MetricMeasurementType.RATE, "已结束且影响业务结果的决策过程", "已结束决策过程量")),
+  definition("PROCESS-DECISION-005", "平均决策耗时", "Average Decision Duration", MetricDomain.DECISION, "sum(DecisionProcess.duration_seconds) / valid DecisionProcess", ["DecisionProcess"], ["duration_seconds"], MetricUnit.SECOND, false, MetricLayer.DECISION, ["GLOBAL", "DECISION_DOMAIN"], semantics("具有有效开始和结束时间的决策过程平均耗时。", MetricRole.DRIVER, MetricMeasurementType.AVERAGE, "具有有效耗时的决策过程", "有效耗时决策过程量")),
 ];
 
 export function initializeDefaultMetricDefinitions() {
@@ -167,6 +200,9 @@ function createCalculationFromContext(context, definitions, algorithmVersion) {
       metric_scope_type: context.metricScopeType,
       metric_period_type: context.metricPeriodType,
       metric_period_label: context.metricPeriodLabel,
+      window_start_seconds: Number(context.simulationRun?.start_simulation_seconds || 0),
+      window_end_seconds: Number(context.simulationRun?.end_simulation_seconds ?? context.simulationRun?.current_simulation_seconds ?? 0),
+      time_basis: "SIMULATION_TIME",
       simulation_run_id: context.simulationRun?.simulation_run_id || null,
       simulation_run_ids: context.simulationRunIds,
       simulation_timeline_id: context.simulationTimelineId,
@@ -345,6 +381,15 @@ function filterScopeByOperatingPeriod(scope, runIds, period) {
     fleetOperationPolicyRuns: (scope.fleetOperationPolicyRuns || []).filter(shouldKeep),
     fleetOperationDispatchRuns: (scope.fleetOperationDispatchRuns || []).filter(shouldKeep),
     robotaxiTaskPlanningRuns: (scope.robotaxiTaskPlanningRuns || []).filter(shouldKeep),
+    decisionProcesses: (scope.decisionProcesses || []).filter(shouldKeep),
+    supplyPlans: (scope.supplyPlans || []).filter(shouldKeep),
+    productionBatches: (scope.productionBatches || []).filter(shouldKeep),
+    robotaxiDeliveryOrders: (scope.robotaxiDeliveryOrders || []).filter(shouldKeep),
+    cleaningTasks: (scope.cleaningTasks || []).filter(shouldKeep),
+    chargingTasks: (scope.chargingTasks || []).filter(shouldKeep),
+    maintenanceTasks: (scope.maintenanceTasks || []).filter(shouldKeep),
+    failureHandlingTasks: (scope.failureHandlingTasks || []).filter(shouldKeep),
+    retirementTasks: (scope.retirementTasks || []).filter(shouldKeep),
   };
 }
 
@@ -354,8 +399,8 @@ function filterRecordsByOperatingPeriod(records = [], runIds, period) {
 
 function recordBelongsToOperatingPeriod(record, runIds, period) {
   if (!record) return false;
-  if (record.simulation_run_id) return runIds.has(record.simulation_run_id);
   if (period.periodType === MetricPeriodType.ALL) return true;
+  if (record.simulation_run_id && !runIds.has(record.simulation_run_id)) return false;
   const seconds = resolveRecordSimulationSeconds(record);
   return Number.isFinite(seconds) && seconds >= period.startSeconds && seconds <= period.endSeconds;
 }
@@ -375,12 +420,15 @@ export function normalizeMetricDefinitions(definitions = []) {
   const fallback = initializeDefaultMetricDefinitions();
   if (!Array.isArray(definitions) || definitions.length === 0) return fallback;
   const fallbackById = new Map(fallback.map((item) => [item.metric_definition_id, item]));
-  const normalizedDefinitions = definitions.map((item) => ({
-    ...(fallbackById.get(item.metric_definition_id) || {}),
-    ...item,
-    metric_status: item.metric_definition_id === "PROCESS-SUPPLY-001" ? "DISABLED" : item.metric_status || "ACTIVE",
-    definition_version: Number(item.definition_version || 1),
-  }));
+  const normalizedDefinitions = definitions.map((item) => {
+    const canonical = fallbackById.get(item.metric_definition_id);
+    return {
+      ...item,
+      ...(canonical || {}),
+      metric_status: canonical?.metric_status || item.metric_status || "ACTIVE",
+      definition_version: Number(canonical?.definition_version || item.definition_version || 1),
+    };
+  });
   const existingIds = new Set(normalizedDefinitions.map((item) => item.metric_definition_id));
   return [
     ...normalizedDefinitions,
@@ -394,25 +442,41 @@ function calculateObservations(metricDefinition, context, nextSequence) {
     "OUTCOME-FIN-002": () => sumRevenue(context.revenueRecords, "COLLECTED_REVENUE"),
     "OUTCOME-FIN-003": () => sumRevenue(context.revenueRecords, "UNRECEIVED_REVENUE"),
     "OUTCOME-FIN-004": () => sumCost(context.costRecords),
-    "OUTCOME-FIN-005": () => sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumCost(context.costRecords),
-    "OUTCOME-FIN-006": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumCost(context.costRecords), sumRevenue(context.revenueRecords, "COLLECTED_REVENUE")),
+    "OUTCOME-FIN-005": () => roundMoney(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumVariableOperatingCost(context.costRecords)),
+    "OUTCOME-FIN-006": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumVariableOperatingCost(context.costRecords), sumRevenue(context.revenueRecords, "COLLECTED_REVENUE")),
+    "OUTCOME-FIN-007": () => sumVariableOperatingCost(context.costRecords),
+    "OUTCOME-FIN-008": () => sumCostByTypes(context.costRecords, ["ASSET_DEPRECIATION_COST"]),
+    "OUTCOME-FIN-009": () => sumCostByTypes(context.costRecords, ["FIXED_OPERATING_COST"]),
+    "OUTCOME-FIN-010": () => roundMoney(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumCost(context.costRecords)),
+    "OUTCOME-FIN-011": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumCost(context.costRecords), sumRevenue(context.revenueRecords, "COLLECTED_REVENUE")),
     "OUTCOME-SERVICE-001": () => serviceOrders(context).length,
     "OUTCOME-SERVICE-002": () => completedOrders(context).length,
-    "OUTCOME-SERVICE-003": () => ratio(completedOrders(context).length, serviceOrders(context).length),
-    "OUTCOME-SERVICE-004": () => ratio(cancelledOrders(context).length, serviceOrders(context).length),
+    "OUTCOME-SERVICE-003": () => ratio(completedOrders(context).length, terminalOrders(context).length),
+    "OUTCOME-SERVICE-004": () => ratio(cancelledOrders(context).length, terminalOrders(context).length),
+    "OUTCOME-SERVICE-005": () => failedOrders(context).length,
+    "STATE-SERVICE-001": () => inProgressOrders(context).length,
+    "STATE-SERVICE-002": () => inProgressTrips(context).length,
     "OUTCOME-EFF-001": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE"), completedOrders(context).length),
-    "OUTCOME-EFF-002": () => ratio(sumCost(context.costRecords), completedOrders(context).length),
-    "OUTCOME-EFF-003": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumCost(context.costRecords), completedOrders(context).length),
-    "DEMAND-TREND-001": () => createHourlyOrderTrend(context),
-    "DEMAND-TREND-002": () => createTimeSegmentOrderTrend(context),
+    "OUTCOME-EFF-002": () => ratio(sumVariableOperatingCost(context.costRecords), completedOrders(context).length),
+    "OUTCOME-EFF-003": () => ratio(sumRevenue(context.revenueRecords, "COLLECTED_REVENUE") - sumVariableOperatingCost(context.costRecords), completedOrders(context).length),
+    "DEMAND-TREND-001": () => [...createHourlyOrderTrend(context), ...createTimeSegmentOrderTrend(context)],
     "PROCESS-ASSET-001": () => calculateRobotaxiAssetUtilization(context),
-    "PROCESS-MATCH-001": () => ratio(assignedOrders(context).length, serviceOrders(context).length),
-    "PROCESS-ROUTE-001": () => ratio(successfulRoutePlanningRuns(context).length, routePlanningRuns(context).length),
-    "PROCESS-TRIP-001": () => ratio(completedTrips(context).length, trips(context).length),
+    "PROCESS-ASSET-002": () => unavailableMetric("缺少 Robotaxi 可运营状态区间和履约占用区间，暂不计算资产时间利用率"),
+    "PROCESS-ASSET-003": () => calculateEmptyDistanceShare(context),
+    "PROCESS-ASSET-004": () => ratio(completedOrders(context).length, effectiveRobotaxis(context).length),
+    "STATE-ASSET-001": () => effectiveRobotaxis(context).length,
+    "STATE-ASSET-002": () => operableRobotaxis(context).length,
+    "STATE-ASSET-003": () => maintenanceRobotaxis(context).length,
+    "PROCESS-MATCH-001": () => calculateFinalAssignmentRate(context),
+    "PROCESS-ROUTE-001": () => ratio(successfulRoutePlanningRuns(context).length, endedRoutePlanningRuns(context).length),
+    "PROCESS-TRIP-001": () => ratio(completedTrips(context).length, terminalTrips(context).length),
     "PROCESS-EFF-001": () => averageCompletedOrderDistance(completedOrders(context)),
     "PROCESS-EFF-002": () => averageCompletedOrderDurationMinutes(completedOrders(context)),
+    "PROCESS-SUPPLY-001": () => calculateProductionPlanAttainment(context),
+    "PROCESS-SUPPLY-002": () => calculateDeliveryAttainment(context),
+    "PROCESS-SUPPLY-003": () => calculateReadinessPassRate(context),
     "QUALITY-DATA-001": () => calculateCriticalDataCompleteness(context),
-    "PROCESS-DECISION-001": () => decisionRuns(context).length,
+    "PROCESS-DECISION-001": () => decisionProcesses(context).length,
     "PROCESS-DECISION-002": () => decisionExecutionSuccessRate(context),
     "PROCESS-DECISION-003": () => decisionResultCoverageRate(context),
     "PROCESS-DECISION-004": () => decisionExceptionRate(context),
@@ -449,17 +513,20 @@ function calculateObservation(metricDefinition, context, sequence, rawValue) {
     quality_reason: quality.qualityReason,
     source_record_count: rawValue?.sourceRecordCount ?? sourceRecordCount(metricDefinition, context),
     source_object_refs: rawValue?.sourceObjectRefs ?? sourceObjectRefs(metricDefinition, context),
+    as_of_at: metricDefinition.measurement_type === MetricMeasurementType.SNAPSHOT
+      ? rawValue?.asOfAt || context.metricPeriodLabel
+      : null,
     created_at: context.createdAt,
   };
 }
 
 function evaluateQuality(metricDefinition, context, value) {
-  if (metricDefinition.display_unit === MetricUnit.PERCENT && value?.denominator === 0) {
+  if (value?.unavailableReason) {
     return {
       qualityStatus: MetricQualityStatus.WARN,
-      qualityReason: "分母为 0，指标值为空",
-      numeratorValue: value.numerator,
-      denominatorValue: value.denominator,
+      qualityReason: value.unavailableReason,
+      numeratorValue: null,
+      denominatorValue: null,
     };
   }
   if (metricDefinition.source_objects.includes("RevenueRecord") && context.revenueRecords.length === 0) {
@@ -478,6 +545,15 @@ function evaluateQuality(metricDefinition, context, value) {
       denominatorValue: value?.denominator ?? null,
     };
   }
+  if ([MetricMeasurementType.RATE, MetricMeasurementType.AVERAGE].includes(metricDefinition.measurement_type) && value?.denominator === 0) {
+    const expectedFactsMissing = ["PROCESS-EFF-001", "PROCESS-EFF-002"].includes(metricDefinition.metric_definition_id) && completedOrders(context).length > 0;
+    return {
+      qualityStatus: expectedFactsMissing ? MetricQualityStatus.WARN : MetricQualityStatus.PASS,
+      qualityReason: expectedFactsMissing ? "已完成订单缺少计算该均值所需的有效字段" : "当前统计周期尚未形成适用的终态事实，指标值为空",
+      numeratorValue: value.numerator,
+      denominatorValue: value.denominator,
+    };
+  }
   if (metricDefinition.metric_definition_id === "QUALITY-DATA-001") {
     return {
       qualityStatus: Number(value?.value ?? 0) >= 0.8 ? MetricQualityStatus.PASS : MetricQualityStatus.WARN,
@@ -485,6 +561,18 @@ function evaluateQuality(metricDefinition, context, value) {
       numeratorValue: value?.numerator ?? null,
       denominatorValue: value?.denominator ?? null,
     };
+  }
+  if (["PROCESS-EFF-001", "PROCESS-EFF-002"].includes(metricDefinition.metric_definition_id)) {
+    const completedCount = completedOrders(context).length;
+    const validCount = Number(value?.denominator || 0);
+    if (completedCount > validCount) {
+      return {
+        qualityStatus: MetricQualityStatus.WARN,
+        qualityReason: `${completedCount - validCount} 条完成订单缺少有效${metricDefinition.metric_definition_id.endsWith("001") ? "履约距离" : "履约耗时"}，均值仅使用完整记录`,
+        numeratorValue: value?.numerator ?? null,
+        denominatorValue: value?.denominator ?? null,
+      };
+    }
   }
   return {
     qualityStatus: MetricQualityStatus.PASS,
@@ -494,26 +582,42 @@ function evaluateQuality(metricDefinition, context, value) {
   };
 }
 
-function definition(metricDefinitionId, metricNameCn, metricNameEn, domain, formula, sourceObjects, sourceFields, displayUnit, higherIsBetter, layer = MetricLayer.OUTCOME, supportedDimensions = ["simulation_run_id"]) {
+function definition(metricDefinitionId, metricNameCn, metricNameEn, domain, formula, sourceObjects, sourceFields, displayUnit, higherIsBetter, layer = MetricLayer.OUTCOME, supportedDimensions = ["GLOBAL"], details = {}) {
   return {
     metric_definition_id: metricDefinitionId,
     metric_name_cn: metricNameCn,
     metric_name_en: metricNameEn,
     metric_layer: layer,
     metric_domain: domain,
-    business_definition: metricNameCn,
+    business_definition: details.business_definition || metricNameCn,
+    management_question: details.management_question || details.business_definition || metricNameCn,
+    metric_role: details.metric_role || (layer === MetricLayer.QUALITY ? MetricRole.GUARDRAIL : MetricRole.RESULT),
+    measurement_type: details.measurement_type || (displayUnit === MetricUnit.PERCENT ? MetricMeasurementType.RATE : MetricMeasurementType.FLOW),
     calculation_formula: formula,
     source_objects: sourceObjects,
     source_fields: sourceFields,
-    time_basis: "SIMULATION_TIME",
-    default_time_window: "SIMULATION_RUN",
+    time_basis: details.time_basis || "SIMULATION_TIME",
+    default_time_window: details.default_time_window || "OPERATING_PERIOD",
     supported_dimensions: supportedDimensions,
     zero_denominator_rule: "NULL_WITH_REASON",
-    data_readiness: "READY",
+    fact_filter: details.fact_filter || "统计周期内符合指标定义的业务事实",
+    denominator_definition: details.denominator_definition || null,
+    data_readiness: details.data_readiness || "READY",
     display_unit: displayUnit,
     higher_is_better: higherIsBetter,
-    metric_status: "ACTIVE",
-    definition_version: 1,
+    metric_status: details.metric_status || "ACTIVE",
+    definition_version: 2,
+  };
+}
+
+function semantics(businessDefinition, metricRole, measurementType, factFilter, denominatorDefinition = null) {
+  return {
+    business_definition: businessDefinition,
+    management_question: businessDefinition,
+    metric_role: metricRole,
+    measurement_type: measurementType,
+    fact_filter: factFilter,
+    denominator_definition: denominatorDefinition,
   };
 }
 
@@ -525,6 +629,19 @@ function sumRevenue(records, revenueType) {
 
 function sumCost(records) {
   return roundMoney(records.reduce((sum, record) => sum + Number(record.cost_amount || 0), 0));
+}
+
+function sumCostByTypes(records, types) {
+  const typeSet = new Set(types);
+  return roundMoney(records.filter((record) => typeSet.has(record.cost_type)).reduce((sum, record) => sum + Number(record.cost_amount || 0), 0));
+}
+
+function sumVariableOperatingCost(records) {
+  return sumCostByTypes(records, ["DISTANCE_COST", "ENERGY_COST", "LABOR_COST"]);
+}
+
+function unavailableMetric(reason) {
+  return { value: null, unavailableReason: reason };
 }
 
 function ratio(numerator, denominator) {
@@ -549,6 +666,21 @@ function cancelledOrders(context) {
   return serviceOrders(context).filter((order) => order.order_status === "CANCELLED");
 }
 
+const TERMINAL_ORDER_STATUSES = new Set(["COMPLETED", "CANCELLED", "FAILED", "MATCH_FAILED", "MATCHING_FAILED", "ROBOTAXI_ASSIGNMENT_FAILED"]);
+const FAILED_ORDER_STATUSES = new Set(["FAILED", "MATCH_FAILED", "MATCHING_FAILED", "ROBOTAXI_ASSIGNMENT_FAILED"]);
+
+function terminalOrders(context) {
+  return serviceOrders(context).filter((order) => TERMINAL_ORDER_STATUSES.has(order.order_status));
+}
+
+function failedOrders(context) {
+  return serviceOrders(context).filter((order) => FAILED_ORDER_STATUSES.has(order.order_status));
+}
+
+function inProgressOrders(context) {
+  return serviceOrders(context).filter((order) => !TERMINAL_ORDER_STATUSES.has(order.order_status));
+}
+
 function assignedOrders(context) {
   const assignedOrderIds = new Set((context.scope?.orderMatchingDecisions || [])
     .filter((decision) => Boolean(decision.selected_robotaxi_id))
@@ -565,8 +697,22 @@ function successfulRoutePlanningRuns(context) {
   return routePlanningRuns(context).filter((run) => run.planning_result === "SUCCESS" || Boolean(run.result_route_id));
 }
 
+function endedRoutePlanningRuns(context) {
+  return routePlanningRuns(context).filter((run) => Boolean(run.planning_result || run.result_route_id || run.failure_reason));
+}
+
 function trips(context) {
   return context.scope?.trips || [];
+}
+
+const TERMINAL_TRIP_STATUSES = new Set(["COMPLETED", "FAILED", "CANCELLED"]);
+
+function terminalTrips(context) {
+  return trips(context).filter((trip) => TERMINAL_TRIP_STATUSES.has(trip.trip_status));
+}
+
+function inProgressTrips(context) {
+  return trips(context).filter((trip) => !TERMINAL_TRIP_STATUSES.has(trip.trip_status));
 }
 
 function decisionRuns(context) {
@@ -575,6 +721,10 @@ function decisionRuns(context) {
     "pricingStrategyRuns", "orderMatchingRuns", "fleetOperationPolicyRuns", "fleetOperationDispatchRuns",
     "robotaxiTaskPlanningRuns", "demandSimulationRuns",
   ].flatMap((key) => context.scope?.[key] || []);
+}
+
+function decisionProcesses(context) {
+  return context.scope?.decisionProcesses || [];
 }
 
 function normalizeDecisionRunStatus(run = {}) {
@@ -587,11 +737,19 @@ function normalizeDecisionRunStatus(run = {}) {
 }
 
 function decisionExecutionSuccessRate(context) {
+  const processes = decisionProcesses(context);
+  if (processes.length) {
+    const ended = processes.filter((item) => ["SUCCESS", "PARTIAL", "FAILED", "NO_ACTION"].includes(String(item.final_decision_status || "").toUpperCase()));
+    const successful = ended.filter((item) => String(item.final_decision_status || "").toUpperCase() === "SUCCESS");
+    return ratio(successful.length, ended.length);
+  }
   const ended = decisionRuns(context).filter((run) => ["SUCCESS", "PARTIAL", "FAILED", "NO_ACTION"].includes(normalizeDecisionRunStatus(run)));
   return ratio(ended.filter((run) => normalizeDecisionRunStatus(run) === "SUCCESS").length, ended.length);
 }
 
 function decisionResultCoverageRate(context) {
+  const processes = decisionProcesses(context);
+  if (processes.length) return ratio(processes.filter((item) => Boolean(item.result_summary) || String(item.final_decision_status || "").toUpperCase() === "SUCCESS").length, processes.length);
   const runs = decisionRuns(context);
   const resultRunIds = new Set([
     ...(context.scope?.longTermDemandForecasts || []), ...(context.scope?.fleetAllocationResults || []),
@@ -608,12 +766,29 @@ function decisionResultCoverageRate(context) {
 }
 
 function decisionExceptionRate(context) {
+  const processes = decisionProcesses(context);
+  if (processes.length) {
+    const ended = processes.filter((item) => ["SUCCESS", "PARTIAL", "FAILED", "NO_ACTION"].includes(String(item.final_decision_status || "").toUpperCase()));
+    const impacted = ended.filter((item) => ["BUSINESS_FAILED", "BUSINESS_CANCELLED", "SYSTEM_EXCEPTION"].includes(String(item.business_impact_status || item.exception_category || "").toUpperCase()));
+    return ratio(impacted.length, ended.length);
+  }
   const ended = decisionRuns(context).filter((run) => ["SUCCESS", "PARTIAL", "FAILED", "NO_ACTION"].includes(normalizeDecisionRunStatus(run)));
   const exceptions = ended.filter((run) => ["PARTIAL", "FAILED"].includes(normalizeDecisionRunStatus(run)));
   return ratio(exceptions.length, ended.length);
 }
 
 function averageDecisionDuration(context) {
+  const processes = decisionProcesses(context);
+  if (processes.length) {
+    const durations = processes.map((item) => {
+      const direct = Number(item.duration_seconds);
+      if (Number.isFinite(direct) && direct >= 0) return direct;
+      const start = Date.parse(item.first_attempt_at || "");
+      const end = Date.parse(item.latest_attempt_at || "");
+      return Number.isFinite(start) && Number.isFinite(end) && end >= start ? (end - start) / 1000 : NaN;
+    }).filter((value) => Number.isFinite(value) && value >= 0);
+    return ratio(durations.reduce((sum, value) => sum + value, 0), durations.length);
+  }
   const durations = decisionRuns(context).map((run) => {
     const start = Date.parse(run.started_at || run.created_at || "");
     const end = Date.parse(run.completed_at || run.updated_at || "");
@@ -628,6 +803,18 @@ function completedTrips(context) {
 
 function robotaxis(context) {
   return context.scope?.robotaxis || [];
+}
+
+function effectiveRobotaxis(context) {
+  return robotaxis(context).filter((item) => !["PENDING_ADMISSION", "PENDING_DELIVERY", "RETIRED"].includes(item.availability_status || item.operational_status));
+}
+
+function operableRobotaxis(context) {
+  return robotaxis(context).filter((item) => ["AVAILABLE", "OPERABLE"].includes(item.availability_status || item.operational_status));
+}
+
+function maintenanceRobotaxis(context) {
+  return robotaxis(context).filter((item) => ["IN_MAINTENANCE", "MAINTENANCE", "OPERATIONS_IN_PROGRESS"].includes(item.availability_status || item.operational_status));
 }
 
 function sumTripDistance(records = []) {
@@ -654,11 +841,61 @@ function firstFiniteNumber(...values) {
 }
 
 function calculateRobotaxiAssetUtilization(context) {
-  const effectiveRobotaxis = robotaxis(context).filter((item) => !["PENDING_ADMISSION", "PENDING_DELIVERY", "RETIRED"].includes(item.availability_status || item.operational_status));
+  const effective = effectiveRobotaxis(context);
   const servedRobotaxiIds = new Set(completedOrders(context)
     .map((order) => order.robotaxi_id || order.matched_robotaxi_id || order.assigned_robotaxi_id)
     .filter(Boolean));
-  return ratio(servedRobotaxiIds.size, effectiveRobotaxis.length);
+  return ratio(servedRobotaxiIds.size, effective.length);
+}
+
+function calculateEmptyDistanceShare(context) {
+  const operationalDistance = sumRouteDistance(context.scope?.routeExecutions || []);
+  const fulfillmentDistance = sumTripDistance(trips(context));
+  return ratio(operationalDistance, operationalDistance + fulfillmentDistance);
+}
+
+function sumRouteDistance(records = []) {
+  return Number(records.reduce((sum, item) => sum + Number(item.total_distance_km || item.distance_traveled_km || item.route_distance_km || 0), 0).toFixed(2));
+}
+
+function calculateFinalAssignmentRate(context) {
+  const ended = serviceOrders(context).filter((order) => (
+    assignedOrders(context).includes(order)
+    || ["CANCELLED", "FAILED", "MATCH_FAILED", "MATCHING_FAILED", "ROBOTAXI_ASSIGNMENT_FAILED"].includes(order.order_status)
+  ));
+  const endedIds = new Set(ended.map((order) => order.service_order_id));
+  const assigned = assignedOrders(context).filter((order) => endedIds.has(order.service_order_id));
+  return ratio(assigned.length, ended.length);
+}
+
+function calculateProductionPlanAttainment(context) {
+  const plans = (context.scope?.supplyPlans || []).filter((item) => !["CANCELLED", "REJECTED"].includes(item.plan_status));
+  const batches = (context.scope?.productionBatches || []).filter((item) => item.batch_status === "COMPLETED");
+  const planned = plans.reduce((sum, item) => sum + Number(item.planned_robotaxi_count || item.planned_quantity || 0), 0);
+  const produced = batches.reduce((sum, item) => sum + Number(item.produced_robotaxi_count || item.actual_production_quantity || item.production_quantity || 0), 0);
+  return ratio(produced, planned);
+}
+
+function calculateDeliveryAttainment(context) {
+  const orders = context.scope?.robotaxiDeliveryOrders || [];
+  const terminal = orders.filter((item) => ["COMPLETED", "DELIVERED", "FAILED", "CANCELLED"].includes(item.delivery_status || item.order_status));
+  const total = terminal.reduce((sum, item) => sum + normalizeIdList(item.robotaxi_ids || item.robotaxi_id_list).length, 0);
+  const delivered = terminal.filter((item) => ["COMPLETED", "DELIVERED"].includes(item.delivery_status || item.order_status))
+    .reduce((sum, item) => sum + normalizeIdList(item.robotaxi_ids || item.robotaxi_id_list).length, 0);
+  return ratio(delivered, total);
+}
+
+function calculateReadinessPassRate(context) {
+  const tasks = context.scope?.readinessTasks || [];
+  const terminal = tasks.filter((item) => ["COMPLETED", "FAILED", "CANCELLED", "ADMISSION_FAILED"].includes(item.task_status));
+  const passed = terminal.filter((item) => item.task_status === "COMPLETED" && !["FAILED", "REJECTED"].includes(item.admission_result || item.inspection_result)).length;
+  return ratio(passed, terminal.length);
+}
+
+function normalizeIdList(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (!value) return [];
+  return String(value).split(/[,，]/).map((item) => item.trim()).filter(Boolean);
 }
 
 function createHourlyOrderTrend(context) {
@@ -673,7 +910,8 @@ function createHourlyOrderTrend(context) {
   }
   orders.forEach((order) => {
     const seconds = resolveOrderSimulationSeconds(order);
-    const hourStart = Number.isFinite(seconds) ? Math.floor(seconds / 3600) * 3600 : periodStart;
+    if (!Number.isFinite(seconds)) return;
+    const hourStart = Math.floor(seconds / 3600) * 3600;
     const key = String(hourStart);
     buckets.set(key, [...(buckets.get(key) || []), order]);
   });
@@ -707,7 +945,8 @@ function createTimeSegmentOrderTrend(context) {
   const grouped = new Map(segments.map((segment) => [segment.id, []]));
   serviceOrders(context).forEach((order) => {
     const seconds = resolveOrderSimulationSeconds(order);
-    const secondsInDay = Number.isFinite(seconds) ? ((seconds % 86400) + 86400) % 86400 : 0;
+    if (!Number.isFinite(seconds)) return;
+    const secondsInDay = ((seconds % 86400) + 86400) % 86400;
     const hour = Math.floor(secondsInDay / 3600);
     const segment = segments.find((item) => item.match(hour)) || segments[1];
     grouped.set(segment.id, [...(grouped.get(segment.id) || []), order]);
@@ -765,11 +1004,15 @@ function normalizeDurationSeconds(value) {
 }
 
 function calculateCriticalDataCompleteness(context) {
+  const orders = serviceOrders(context);
+  const completed = completedOrders(context);
   const checks = [
-    Boolean(context.simulationRun.simulation_run_id),
+    Boolean(context.simulationRun.simulation_run_id || context.simulationRunIds?.length || context.metricPeriodType === MetricPeriodType.ALL),
     ["SUCCEEDED", "PARTIALLY_SUCCEEDED"].includes(context.simulationRun.cost_calculation_status) || context.costRecords.length > 0,
     ["SUCCEEDED", "PARTIALLY_SUCCEEDED"].includes(context.simulationRun.revenue_calculation_status) || context.revenueRecords.length > 0,
-    serviceOrders(context).every((order) => Boolean(order.simulation_created_at)),
+    orders.length === 0 || orders.every((order) => Number.isFinite(resolveOrderSimulationSeconds(order))),
+    completed.length === 0 || completed.every((order) => Number.isFinite(firstFiniteNumber(order.fulfillment_distance_km, order.trip_total_distance_km, order.trip_distance_traveled_km))),
+    completed.length === 0 || completed.every((order) => Number.isFinite(firstFiniteNumber(order.fulfillment_duration_min, order.trip_total_duration_min))),
   ];
   const passed = checks.filter(Boolean).length;
   return {
@@ -801,6 +1044,10 @@ function sourceRecordCount(metricDefinition, context) {
     if (objectType === "DeploymentTask") return count + (context.scope?.deploymentTasks?.length || 0);
     if (objectType === "RouteExecution") return count + (context.scope?.routeExecutions?.length || 0);
     if (objectType === "StrategyRun") return count + decisionRuns(context).length;
+    if (objectType === "DecisionProcess") return count + decisionProcesses(context).length;
+    if (objectType === "SupplyPlan") return count + (context.scope?.supplyPlans?.length || 0);
+    if (objectType === "ProductionBatch") return count + (context.scope?.productionBatches?.length || 0);
+    if (objectType === "RobotaxiDeliveryOrder") return count + (context.scope?.robotaxiDeliveryOrders?.length || 0);
     if (objectType === "StrategyResult") return count + [
       "longTermDemandForecasts", "fleetAllocationResults", "supplyDemandBalanceResults", "routes",
       "pricingDecisions", "orderMatchingDecisions", "fleetOperationPolicyResults",
@@ -817,6 +1064,9 @@ function sourceObjectRefs(metricDefinition, context) {
   }
   if ((metricDefinition.source_objects || []).includes("CostRecord")) {
     refs.push(...context.costRecords.slice(0, 20).map((record) => ({ object_type: "costRecord", object_id: record.cost_record_id })));
+  }
+  if ((metricDefinition.source_objects || []).includes("DecisionProcess")) {
+    refs.push(...decisionProcesses(context).slice(0, 20).map((record) => ({ object_type: "decisionProcess", object_id: record.decision_process_id || record.process_id })));
   }
   if ((metricDefinition.source_objects || []).includes("ServiceOrder")) {
     refs.push(...serviceOrders(context).slice(0, 20).map((order) => ({ object_type: "serviceOrder", object_id: order.service_order_id })));

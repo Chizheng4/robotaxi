@@ -44,7 +44,7 @@
 |英文字段|中文字段|性质|说明|
 |---|---|---|---|
 |`target_end_daily_orders`|目标期末日订单|配置|期末典型日希望完成的服务订单|
-|`target_order_fulfillment_rate`|目标订单履约率|配置|目标订单完成比例|
+|`target_order_fulfillment_rate`|目标成熟订单履约率|配置|规划期终态订单中已完成订单的目标比例|
 |`target_task_utilization_rate`|目标任务利用率|配置|Robotaxi 可运营时间用于任务的比例|
 |`target_minimum_robotaxi_quantity`|目标最低 Robotaxi 数量|配置|管理层要求的最低资产规模|
 |`planning_mode`|规划模式|配置|市场驱动、目标驱动或平衡规划|
@@ -62,7 +62,7 @@
 |`average_revenue_per_order`|单均收入|配置|
 |`average_variable_cost_per_order`|单均变动成本|配置|
 |`daily_fixed_operating_cost`|日固定运营成本|配置|
-|`minimum_contribution_margin_rate`|最低贡献毛利率|配置|
+|`minimum_contribution_margin_rate`|最低经营贡献率|配置|
 
 经济字段只用于计算盈亏平衡点、贡献毛利和目标可行区间。系统不替代管理层自动确定目标。
 

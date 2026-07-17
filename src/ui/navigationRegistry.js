@@ -21,9 +21,10 @@ export const navigationGroups = Object.freeze([
   page("decisionCenter", "决策中心"),
   group("businessAnalysis", "经营分析", [
     page("operatingMetricsOverview", "经营总览"),
-    page("financialMetrics", "财务表现"),
-    page("serviceMetrics", "服务分析"),
-    page("processDiagnostics", "过程诊断"),
+    page("serviceMetrics", "需求服务"),
+    page("supplyAssetMetrics", "供给资产"),
+    page("financialMetrics", "财务效率"),
+    page("processDiagnostics", "经营诊断"),
     group("dataCalculationManagement", "数据计算", [
       page("metricDefinitions", "指标定义"),
       page("metricObservations", "指标观测"),

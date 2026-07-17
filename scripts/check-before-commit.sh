@@ -97,6 +97,7 @@ node --check src/services/robotaxiTaskPlanningService.js
 node --check src/services/supplyDemandBalanceService.js
 node --check src/services/operatingPlanningService.js
 node --check scripts/verify-v046-operating-supply-planning.mjs
+node --check scripts/verify-v047-operating-analytics-model.mjs
 node --check src/services/spatialCatalogService.js
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
@@ -181,6 +182,7 @@ node scripts/verify-v045-operating-model.mjs
 node scripts/verify-v045-2-page-architecture.mjs
 node scripts/verify-v045-3-0-decision-control.mjs
 node scripts/verify-v046-operating-supply-planning.mjs
+node scripts/verify-v047-operating-analytics-model.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

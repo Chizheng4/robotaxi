@@ -8,7 +8,7 @@ const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), 
 const rulesSource = fs.readFileSync(new URL("../doc/rules/04-frontend-ux-rules.md", import.meta.url), "utf8");
 const leafKeys = flattenLeafKeys(navigationGroups);
 
-assert.equal(leafKeys.length, 84, "导航叶子页面数量发生变化时必须同步更新页面架构合同");
+assert.equal(leafKeys.length, 85, "导航叶子页面数量发生变化时必须同步更新页面架构合同");
 assert.equal(Object.keys(pageArchitectureRegistry).length, leafKeys.length, "每个页面必须且只能有一个架构合同");
 assert.deepEqual(validatePageArchitecture(leafKeys), { valid: true, errors: [] }, "页面架构注册表必须完整有效");
 

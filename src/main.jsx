@@ -603,29 +603,34 @@ const tableConfig = {
     columns: ["revenue_calculation_run_id", "simulation_run_id", "calculation_status", "calculation_progress_percent", "processed_object_count", "generated_revenue_record_count", "total_receivable_revenue_amount", "total_collected_revenue_amount", "total_unreceived_revenue_amount", "error_count", "started_at", "completed_at"],
   },
   operatingMetricsOverview: {
-    title: "经营指标总览",
-    description: "汇总模拟运行的核心收入、成本、利润、履约和效率指标。",
+    title: "经营总览",
+    description: "汇总规划基线、经营事实和关键结果，识别经营目标达成与主要偏差。",
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   financialMetrics: {
-    title: "财务表现分析",
-    description: "展示收入、成本、利润、利润率和单均经营结果，帮助判断经营结果是否健康。",
+    title: "财务效率",
+    description: "区分变动成本、折旧和固定成本，判断经营贡献、模拟运营利润与单均经济性。",
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   serviceMetrics: {
-    title: "服务经营分析",
-    description: "展示订单创建、完成、取消和履约相关服务结果，帮助定位服务规模与服务质量。",
+    title: "需求服务",
+    description: "分析观察需求、成熟订单结果和履约效率，判断需求变化与服务能力是否匹配。",
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
+  supplyAssetMetrics: {
+    title: "供给资产",
+    description: "连接生产、交付、准入与 Robotaxi 资产状态，判断供给形成和资产使用效率。",
+    columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "metric_period_label"],
+  },
   processDiagnostics: {
-    title: "运营过程诊断",
-    description: "查看匹配、路径规划、履约、供给任务和数据质量的过程指标，用于异常下钻。",
+    title: "经营诊断",
+    description: "从服务过程、决策影响和数据质量解释经营偏差，定位需要处理的原因。",
     columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "metric_period_label"],
   },
   metricDefinitions: {
     title: "指标定义",
     description: "指标定义明确经营指标的口径、公式、来源字段、窗口和质量规则。",
-    columns: ["metric_definition_id", "metric_name_cn", "metric_layer", "metric_domain", "calculation_formula", "display_unit", "data_readiness", "metric_status", "definition_version"],
+    columns: ["metric_definition_id", "metric_name_cn", "metric_domain", "metric_role", "measurement_type", "management_question", "calculation_formula", "display_unit", "data_readiness", "metric_status", "definition_version"],
   },
   metricCalculationRuns: {
     title: "计算记录",
@@ -746,6 +751,7 @@ const pageObjectType = {
   operatingMetricsOverview: "metricObservation",
   financialMetrics: "metricObservation",
   serviceMetrics: "metricObservation",
+  supplyAssetMetrics: "metricObservation",
   processDiagnostics: "metricObservation",
   metricDefinitions: "metricDefinition",
   metricCalculationRuns: "metricCalculationRun",
@@ -940,6 +946,7 @@ const statusFieldByPage = {
   operatingMetricsOverview: "quality_status",
   financialMetrics: "quality_status",
   serviceMetrics: "quality_status",
+  supplyAssetMetrics: "quality_status",
   processDiagnostics: "quality_status",
   metricDefinitions: "metric_status",
   metricCalculationRuns: "calculation_status",
@@ -1871,6 +1878,7 @@ function App({ currentUser, onLogout }) {
     operatingMetricsOverview: operatingDataPool.pages.operatingMetricsOverview,
     financialMetrics: operatingDataPool.pages.financialMetrics,
     serviceMetrics: operatingDataPool.pages.serviceMetrics,
+    supplyAssetMetrics: operatingDataPool.pages.supplyAssetMetrics,
     processDiagnostics: operatingDataPool.pages.processDiagnostics,
     metricDefinitions,
     metricCalculationRuns,
@@ -2776,6 +2784,11 @@ function App({ currentUser, onLogout }) {
       serviceOrders,
       trips,
       readinessTasks,
+      cleaningTasks,
+      chargingTasks,
+      maintenanceTasks,
+      failureHandlingTasks,
+      retirementTasks,
       deploymentTasks,
       routeExecutions,
       pricingStrategyRuns,
@@ -2797,6 +2810,10 @@ function App({ currentUser, onLogout }) {
       fleetOperationDispatchDecisions,
       robotaxiTaskPlanningRuns,
       robotaxiTaskPlanningResults,
+      supplyPlans: data.supplyPlans || [],
+      productionBatches: data.productionBatches || [],
+      robotaxiDeliveryOrders: data.robotaxiDeliveryOrders || [],
+      decisionProcesses: decisionControlView.processes || [],
       routes: data.routes,
       robotaxis: data.robotaxis,
       maps: data.maps,
@@ -6492,7 +6509,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isFleetAllocationResultPage = page === "fleetAllocationResults";
   const isSupplyDemandBalanceStrategyPage = page === "supplyDemandBalanceStrategies";
   const isRobotaxiDeliveryOrderPage = page === "robotaxiDeliveryOrders";
-  const isMetricAnalysisPage = ["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"].includes(page);
+  const isMetricAnalysisPage = ["operatingMetricsOverview", "serviceMetrics", "supplyAssetMetrics", "financialMetrics", "processDiagnostics"].includes(page);
   const isSupplyDocumentPage = isSupplyPlanPage || isProductionBatchPage || isRobotaxiDeliveryOrderPage || isDeploymentPlanPage;
   const isBusinessOperationResultPage = isFleetAllocationResultPage || page === "supplyDemandBalanceResults";
   const isTaskOperationPage = isReadinessPage || isFleetOperationTaskPage || isDeploymentPage || isRouteExecutionPage;
@@ -6781,6 +6798,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
             metricPeriodType={actions.metricPeriodType}
             planningBaseline={actions.operatingDataPool?.planningBaseline}
             comparisons={actions.operatingDataPool?.comparisons}
+            analysisModel={actions.operatingDataPool?.analysisModels?.[page]}
             onSelect={(row) => onSelect(objectType, row[idField])}
           />
         </AnalysisContentViewport>
@@ -8883,14 +8901,15 @@ function formatForecastAxisLabel(value, timeUnit) {
   return String(value).slice(5, 10) || String(value);
 }
 
-function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculationRuns = [], metricPeriodType = "ALL", planningBaseline = {}, comparisons = [], onSelect }) {
+function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculationRuns = [], metricPeriodType = "ALL", planningBaseline = {}, comparisons = [], analysisModel = null, onSelect }) {
   const [demandTrendMode, setDemandTrendMode] = useState("HOURLY");
   const latestRows = operatingDataPoolService.getLatestMetricRows(rows);
   const insightSourceRows = allRows.filter((row) => (
     row.metric_scope_type === "OPERATING_PERIOD"
     && row.metric_period_type === metricPeriodType
   ));
-  const hourlyDemandRows = createMetricTrendRows(insightSourceRows, "DEMAND-TREND-001");
+  const hourlyDemandRows = createMetricTrendRows(insightSourceRows, "DEMAND-TREND-001")
+    .filter((row) => row.dimension_type === "SIMULATION_HOUR");
   const trendDayOptions = createTrendDayOptions(hourlyDemandRows);
   const [selectedTrendDay, setSelectedTrendDay] = useState(null);
   const activeTrendDay = selectedTrendDay && trendDayOptions.some((option) => option.value === selectedTrendDay)
@@ -8900,7 +8919,8 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
   const displayedDemandRows = demandTrendMode === "DAILY"
     ? dailyDemandRows
     : hourlyDemandRows.filter((row) => getMetricTrendDayValue(row) === activeTrendDay);
-  const timeSegmentDemandRows = createMetricTrendRows(insightSourceRows, "DEMAND-TREND-002");
+  const timeSegmentDemandRows = createMetricTrendRows(insightSourceRows, "DEMAND-TREND-001")
+    .filter((row) => row.dimension_type === "DEMAND_TIME_SEGMENT");
   const overviewRows = page === "operatingMetricsOverview"
     ? operatingDataPoolService.OPERATING_ANALYSIS_PAGE_METRICS.operatingMetricsOverview
       .map((id) => latestRows.find((row) => row.metric_definition_id === id))
@@ -8916,40 +8936,23 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
   const calculationSummary = latestCalculationRun
     ? `${latestCalculationRun.metric_calculation_run_id} · ${getDisplayValue(latestCalculationRun.calculation_status, "calculation_status")}`
     : "暂无更新批次";
-  const insightGroups = [
-    createMetricInsightGroup({
-      title: "财务结果",
-      description: "收入、成本和利润形成经营结果判断。",
-      primary: metricById.get("OUTCOME-FIN-005"),
-      secondary: [metricById.get("OUTCOME-FIN-002"), metricById.get("OUTCOME-FIN-004")],
-    }),
-    createMetricInsightGroup({
-      title: "服务效率",
-      description: "订单规模和履约效率决定收入质量。",
-      primary: metricById.get("PROCESS-EFF-002") || metricById.get("OUTCOME-SERVICE-003"),
-      secondary: [metricById.get("PROCESS-EFF-001"), metricById.get("OUTCOME-SERVICE-002")],
-    }),
-    createMetricInsightGroup({
-      title: "资产利用",
-      description: "有过履约服务的 Robotaxi 占比解释资产是否被有效使用。",
-      primary: metricById.get("PROCESS-ASSET-001"),
-      secondary: [metricById.get("OUTCOME-SERVICE-002"), metricById.get("PROCESS-MATCH-001")],
-    }),
-    createMetricInsightGroup({
-      title: "过程质量",
-      description: "匹配、路径和数据质量解释异常来源。",
-      primary: metricById.get("PROCESS-MATCH-001") || metricById.get("PROCESS-ROUTE-001"),
-      secondary: [metricById.get("PROCESS-ROUTE-001"), metricById.get("QUALITY-DATA-001")],
-    }),
-  ];
+  const insightGroups = (analysisModel?.insightGroups || []).map((group) => createMetricInsightGroup({
+    title: group.title,
+    description: metricById.get(group.primaryMetricId)?.business_definition || analysisModel?.managementQuestion || "查看经营结果与驱动关系。",
+    primary: metricById.get(group.primaryMetricId),
+    secondary: (group.secondaryMetricIds || []).map((id) => metricById.get(id)),
+  }));
+  const pageComparisons = (comparisons || []).filter((item) => (
+    !analysisModel?.comparisonDomains || analysisModel.comparisonDomains.includes(item.performance_domain)
+  ));
   const activeTarget = planningBaseline?.businessTarget;
   return (
     <div className="metric-experience-panel">
       <section className="metric-planning-baseline">
         <div>
-          <span>经营规划基线</span>
+          <span>{analysisModel?.title || "经营规划基线"}</span>
           <strong>{activeTarget?.target_name || "尚未建立经营目标"}</strong>
-          <small>{activeTarget ? `${activeTarget.forecast_start_date || ""} 至 ${activeTarget.forecast_end_date || ""}` : "完成经营规划后将自动进入统一数据池"}</small>
+          <small>{analysisModel?.managementQuestion || (activeTarget ? `${activeTarget.forecast_start_date || ""} 至 ${activeTarget.forecast_end_date || ""}` : "完成经营规划后将自动进入统一数据池")}</small>
         </div>
         <div className="metric-planning-facts">
           <span>预测结果 <strong>{planningBaseline?.forecasts?.length || 0}</strong></span>
@@ -8957,8 +8960,8 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
           <span>事实截止 <strong>{periodLabel}</strong></span>
         </div>
       </section>
-      <section className="metric-comparison-grid" aria-label="规划与实际对比">
-        {(comparisons || []).map((item) => (
+      {pageComparisons.length > 0 && <section className="metric-comparison-grid" aria-label="规划与实际对比">
+        {pageComparisons.map((item) => (
           <article key={item.performance_indicator_id} className={`metric-comparison-card status-${String(item.performance_status || "").toLowerCase()}`}>
             <header><span>{item.performance_domain}</span><em>{getDisplayValue(item.performance_status)}</em></header>
             <h3>{item.performance_indicator_name}</h3>
@@ -8973,7 +8976,7 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
             </footer>
           </article>
         ))}
-      </section>
+      </section>}
       <div className="metric-card-grid">
         {overviewRows.length > 0 ? overviewRows.map((row) => (
           <button key={row.metric_observation_id} className="metric-summary-card" onClick={() => onSelect(row)}>
@@ -8995,7 +8998,7 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
           </button>
         ))}
       </div>
-      {page === "serviceMetrics" && (
+      {analysisModel?.showDemandTrend && (
         <div className="metric-trend-toolbar">
           <span>需求趋势</span>
           <Button size="small" type={demandTrendMode === "HOURLY" ? "primary" : "default"} onClick={() => setDemandTrendMode("HOURLY")}>按小时</Button>
@@ -9012,7 +9015,7 @@ function MetricExperiencePanel({ page, rows = [], allRows = [], metricCalculatio
           )}
         </div>
       )}
-      {page === "serviceMetrics" && (
+      {analysisModel?.showDemandTrend && (
         <div className="metric-trend-grid">
           <DataSeriesChart
             title={demandTrendMode === "DAILY" ? "每日订单量" : "每小时订单量"}
@@ -10449,8 +10452,8 @@ async function bootstrap() {
 		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"),
 		    import("./data/costModelCalculator.js?v=20260625-v029-1"),
 		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
-		    import("./data/metricCalculator.js?v=20260629-v034-6"),
-		    import("./services/operatingDataPoolService.js?v=20260715-v044-1-0"),
+		    import("./data/metricCalculator.js?v=20260717-v047-0-0"),
+		    import("./services/operatingDataPoolService.js?v=20260717-v047-0-0"),
 		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
 		    import("./services/routePlanningService.js?v=20260712-v042-0-0"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
@@ -10473,12 +10476,12 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
-		    import("./ui/pageContextService.js?v=20260715-v044-4-0"),
+		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
 		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
-		    import("./ui/metricObjectPresentationService.js?v=20260715-v044-5-1"),
-		    import("./ui/navigationRegistry.js?v=20260717-v046-0-7"),
-		    import("./ui/pageArchitectureRegistry.js?v=20260716-v046-0-6"),
-		    import("./services/operatingModelService.js?v=20260715-v045-0-0"),
+		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),
+		    import("./ui/navigationRegistry.js?v=20260717-v047-0-0"),
+		    import("./ui/pageArchitectureRegistry.js?v=20260717-v047-0-0"),
+		    import("./services/operatingModelService.js?v=20260717-v047-0-0"),
 		    import("./services/decisionControlService.js?v=20260717-v046-0-7"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),

@@ -1,16 +1,21 @@
 export const metricObjectSchemas = Object.freeze({
   metricDefinition: {
     tabs: [
-      { key: "basic", label: "基础定义", fields: ["metric_definition_id", "metric_name_cn", "metric_layer", "metric_domain", "metric_status", "definition_version"] },
-      { key: "business", label: "业务口径", fields: ["business_definition", "display_unit", "higher_is_better"] },
-      { key: "calculation", label: "计算逻辑", fields: ["calculation_formula", "source_objects", "source_fields", "time_basis", "default_time_window", "supported_dimensions"] },
+      { key: "basic", label: "基础定义", fields: ["metric_definition_id", "metric_name_cn", "metric_domain", "metric_role", "measurement_type", "metric_status", "definition_version"] },
+      { key: "business", label: "业务口径", fields: ["management_question", "business_definition", "display_unit", "higher_is_better"] },
+      { key: "calculation", label: "计算逻辑", fields: ["calculation_formula", "fact_filter", "denominator_definition", "source_objects", "source_fields", "time_basis", "default_time_window", "supported_dimensions"] },
       { key: "quality", label: "质量规则", fields: ["zero_denominator_rule", "data_readiness"] },
     ],
     explanations: {
       business_definition: "说明指标回答的经营问题，是理解指标含义的唯一业务口径。",
+      management_question: "说明该指标支持回答的经营判断，避免只有名称而缺少业务上下文。",
+      metric_role: "区分经营结果、经营驱动和风险保障，避免把不同管理用途混在一个层级。",
+      measurement_type: "区分截止点状态、期间流量、比率、均值和金额，决定时间与聚合规则。",
       calculation_formula: "说明指标如何由来源字段计算，公式使用统一字段字典中的正式字段。",
       source_objects: "参与计算的业务单据、业务对象或经营事实对象。",
       source_fields: "从来源对象读取的正式字段，字段中文名由统一字段字典提供。",
+      fact_filter: "说明哪些业务事实能够进入计算，状态和时间条件必须明确。",
+      denominator_definition: "说明比率或均值使用的分母；在途事实不得误入终态指标分母。",
       time_basis: "决定计算按真实时间还是模拟世界时间归集；当前经营指标使用模拟世界时间。",
       default_time_window: "未指定统计周期时采用的默认时间范围。",
       supported_dimensions: "指标可按哪些业务维度拆分观察，例如模拟运行、区域或服务区域。",
@@ -22,7 +27,7 @@ export const metricObjectSchemas = Object.freeze({
   metricObservation: {
     tabs: [
       { key: "result", label: "指标结果", fields: ["metric_observation_id", "metric_definition_id", "metric_value", "metric_unit", "quality_status", "quality_reason"] },
-      { key: "period", label: "周期与维度", fields: ["metric_scope_type", "metric_period_type", "metric_period_label", "window_type", "window_start_seconds", "window_end_seconds", "window_label", "dimension_type", "dimension_id"] },
+      { key: "period", label: "周期与维度", fields: ["metric_scope_type", "metric_period_type", "metric_period_label", "window_type", "window_start_seconds", "window_end_seconds", "window_label", "dimension_type", "dimension_id", "as_of_at"] },
       { key: "calculation", label: "计算依据", fields: ["numerator_value", "denominator_value", "source_record_count"] },
       { key: "source", label: "来源记录", fields: ["metric_calculation_run_id", "simulation_run_ids", "simulation_timeline_id", "source_object_refs", "created_at"] },
     ],

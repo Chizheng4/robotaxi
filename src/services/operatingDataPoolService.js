@@ -1,11 +1,40 @@
-import * as metricCalculator from "../data/metricCalculator.js?v=20260715-v044-1-0";
+import * as metricCalculator from "../data/metricCalculator.js?v=20260717-v047-0-0";
 
 export const OPERATING_ANALYSIS_PAGE_METRICS = Object.freeze({
-  operatingMetricsOverview: ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "PROCESS-ASSET-001", "PROCESS-EFF-002", "PROCESS-EFF-001", "OUTCOME-FIN-005"],
-  financialMetrics: ["OUTCOME-FIN-001", "OUTCOME-FIN-002", "OUTCOME-FIN-003", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-FIN-006", "OUTCOME-EFF-001", "OUTCOME-EFF-002", "OUTCOME-EFF-003"],
-  serviceMetrics: ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "OUTCOME-SERVICE-004", "DEMAND-TREND-001", "DEMAND-TREND-002", "PROCESS-ASSET-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "PROCESS-TRIP-001"],
-  processDiagnostics: ["PROCESS-ASSET-001", "PROCESS-MATCH-001", "PROCESS-ROUTE-001", "PROCESS-TRIP-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "QUALITY-DATA-001"],
-  decisionCenter: ["PROCESS-DECISION-001", "PROCESS-DECISION-002", "PROCESS-DECISION-003", "PROCESS-DECISION-004", "PROCESS-DECISION-005", "PROCESS-MATCH-001", "PROCESS-ROUTE-001", "OUTCOME-SERVICE-003", "PROCESS-ASSET-001", "OUTCOME-FIN-006"],
+  operatingMetricsOverview: ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "STATE-ASSET-002", "OUTCOME-FIN-005", "OUTCOME-FIN-010"],
+  serviceMetrics: ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "OUTCOME-SERVICE-004", "OUTCOME-SERVICE-005", "STATE-SERVICE-001", "STATE-SERVICE-002", "PROCESS-MATCH-001", "PROCESS-TRIP-001", "PROCESS-EFF-001", "PROCESS-EFF-002", "DEMAND-TREND-001"],
+  supplyAssetMetrics: ["STATE-ASSET-001", "STATE-ASSET-002", "STATE-ASSET-003", "PROCESS-ASSET-001", "PROCESS-ASSET-002", "PROCESS-ASSET-003", "PROCESS-ASSET-004", "PROCESS-SUPPLY-001", "PROCESS-SUPPLY-002", "PROCESS-SUPPLY-003"],
+  financialMetrics: ["OUTCOME-FIN-001", "OUTCOME-FIN-002", "OUTCOME-FIN-003", "OUTCOME-FIN-007", "OUTCOME-FIN-008", "OUTCOME-FIN-009", "OUTCOME-FIN-004", "OUTCOME-FIN-005", "OUTCOME-FIN-006", "OUTCOME-FIN-010", "OUTCOME-FIN-011", "OUTCOME-EFF-001", "OUTCOME-EFF-002", "OUTCOME-EFF-003"],
+  processDiagnostics: ["QUALITY-DATA-001", "PROCESS-DECISION-001", "PROCESS-DECISION-002", "PROCESS-DECISION-003", "PROCESS-DECISION-004", "PROCESS-DECISION-005", "PROCESS-MATCH-001", "PROCESS-ROUTE-001", "PROCESS-TRIP-001"],
+  decisionCenter: ["PROCESS-DECISION-001", "PROCESS-DECISION-002", "PROCESS-DECISION-003", "PROCESS-DECISION-004", "PROCESS-DECISION-005", "PROCESS-MATCH-001", "PROCESS-ROUTE-001", "OUTCOME-SERVICE-003", "PROCESS-ASSET-003", "OUTCOME-FIN-006"],
+});
+
+export const OPERATING_ANALYSIS_PAGE_MODELS = Object.freeze({
+  operatingMetricsOverview: analysisPage("经营总览", "经营结果是否达到规划要求，主要偏差来自哪里？", [
+    insight("经营结果", "OUTCOME-FIN-010", ["OUTCOME-FIN-005", "OUTCOME-SERVICE-003"]),
+    insight("需求与服务", "OUTCOME-SERVICE-001", ["OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003"]),
+    insight("可用供给", "STATE-ASSET-002", ["STATE-SERVICE-001", "PROCESS-ASSET-003"]),
+  ], { comparisonDomains: ["需求", "服务", "资产", "供给", "财务"] }),
+  serviceMetrics: analysisPage("需求服务", "观察需求如何变化，现有供给能否稳定完成订单？", [
+    insight("需求规模", "OUTCOME-SERVICE-001", ["STATE-SERVICE-001", "OUTCOME-SERVICE-005"]),
+    insight("履约结果", "OUTCOME-SERVICE-003", ["PROCESS-TRIP-001", "OUTCOME-SERVICE-004"]),
+    insight("服务效率", "PROCESS-EFF-002", ["PROCESS-EFF-001", "PROCESS-MATCH-001"]),
+  ], { showDemandTrend: true, comparisonDomains: ["需求", "服务"] }),
+  supplyAssetMetrics: analysisPage("供给资产", "供给形成到什么程度，Robotaxi 是否可用并被有效使用？", [
+    insight("可用供给", "STATE-ASSET-002", ["STATE-ASSET-001", "STATE-ASSET-003"]),
+    insight("供给形成", "PROCESS-SUPPLY-001", ["PROCESS-SUPPLY-002", "PROCESS-SUPPLY-003"]),
+    insight("资产效率", "PROCESS-ASSET-004", ["PROCESS-ASSET-001", "PROCESS-ASSET-003"]),
+  ], { comparisonDomains: ["供给", "资产"] }),
+  financialMetrics: analysisPage("财务效率", "收入是否覆盖变动成本和全部运营成本，单均经济性是否健康？", [
+    insight("经营贡献", "OUTCOME-FIN-005", ["OUTCOME-FIN-002", "OUTCOME-FIN-007"]),
+    insight("模拟运营利润", "OUTCOME-FIN-010", ["OUTCOME-FIN-008", "OUTCOME-FIN-009"]),
+    insight("单均经济性", "OUTCOME-EFF-003", ["OUTCOME-EFF-001", "OUTCOME-EFF-002"]),
+  ], { comparisonDomains: ["财务"] }),
+  processDiagnostics: analysisPage("经营诊断", "哪些过程、决策或数据问题正在影响经营结果？", [
+    insight("数据可信度", "QUALITY-DATA-001", ["PROCESS-EFF-001", "PROCESS-EFF-002"]),
+    insight("服务过程", "PROCESS-MATCH-001", ["PROCESS-ROUTE-001", "PROCESS-TRIP-001"]),
+    insight("决策影响", "PROCESS-DECISION-004", ["PROCESS-DECISION-002", "PROCESS-DECISION-003"]),
+  ], { comparisonDomains: [] }),
 });
 
 export function calculateOperatingDataPool({
@@ -50,7 +79,7 @@ export function createOperatingDataPool({
     pickLatestMetricRows(periodRows, metricIds),
   ]));
   const latestCalculationRun = getLatestCalculationRun(metricCalculationRuns, periodType);
-  const planningBaseline = createPlanningBaseline({ businessTargets, demandForecasts, supplyPlans });
+  const planningBaseline = createPlanningBaseline({ businessTargets, demandForecasts, supplyPlans, calculationRun: latestCalculationRun });
   const comparisons = createPlanningComparisons({
     planningBaseline,
     metricRows: getLatestMetricRows(periodRows),
@@ -72,17 +101,22 @@ export function createOperatingDataPool({
     pages,
     planningBaseline,
     comparisons,
+    analysisModels: OPERATING_ANALYSIS_PAGE_MODELS,
   });
 }
 
-export function createPlanningBaseline({ businessTargets = [], demandForecasts = [], supplyPlans = [] } = {}) {
+export function createPlanningBaseline({ businessTargets = [], demandForecasts = [], supplyPlans = [], calculationRun = null } = {}) {
   const businessTarget = newest(businessTargets.filter((item) => item.target_status === "ACTIVE"), "updated_at")
     || newest(businessTargets, "updated_at");
   const forecasts = latestBy(demandForecasts.filter((item) => item.forecast_status === "GENERATED"), "zone_id", "created_at");
   const plans = latestBy(supplyPlans.filter((item) => !["CANCELLED", "REJECTED"].includes(item.plan_status)), "target_zone_id", "updated_at");
+  const elapsedDays = Math.max(0, Math.floor(Number(calculationRun?.window_end_seconds || 0) / 86400));
+  const alignedForecasts = forecasts.map((forecast) => alignForecastToOperatingDay(forecast, elapsedDays));
   return Object.freeze({
     businessTarget,
     forecasts,
+    alignedForecasts,
+    elapsedOperatingDays: elapsedDays,
     supplyPlans: plans,
     targetSourceRefs: businessTarget ? [{ object_type: "BusinessTarget", object_id: businessTarget.business_target_id }] : [],
     forecastSourceRefs: forecasts.map((item) => ({ object_type: "LongTermDemandForecastResult", object_id: item.forecast_result_id })),
@@ -94,8 +128,9 @@ export function createPlanningComparisons({ planningBaseline = {}, metricRows = 
   const target = planningBaseline.businessTarget || {};
   const forecasts = planningBaseline.forecasts || [];
   const metricById = new Map(metricRows.map((row) => [row.metric_definition_id, row]));
-  const forecastDailyOrders = sum(forecasts, (item) => item.planned_daily_orders ?? item.market_forecast_daily_orders ?? item.forecast_daily_demand);
-  const forecastRequiredRobotaxi = sum(forecasts, (item) => item.required_robotaxi_quantity ?? item.required_fleet_quantity);
+  const alignedForecasts = planningBaseline.alignedForecasts?.length ? planningBaseline.alignedForecasts : forecasts;
+  const forecastDailyOrders = sum(alignedForecasts, (item) => item.aligned_planned_daily_orders ?? item.planned_daily_orders ?? item.market_forecast_daily_orders ?? item.forecast_daily_demand);
+  const forecastRequiredRobotaxi = sum(alignedForecasts, (item) => item.aligned_required_robotaxi_quantity ?? item.required_robotaxi_quantity ?? item.required_fleet_quantity);
   const plannedRobotaxi = sum(planningBaseline.supplyPlans || [], (item) => item.planned_robotaxi_count);
   const effectiveRobotaxi = robotaxis.filter((item) => !["PENDING_ADMISSION", "PENDING_DELIVERY", "RETIRED"].includes(item.availability_status || item.operational_status)).length;
   const createdOrders = numberValue(metricById.get("OUTCOME-SERVICE-001")?.metric_value);
@@ -108,12 +143,44 @@ export function createPlanningComparisons({ planningBaseline = {}, metricRows = 
   const averageRevenue = fulfilledOrders > 0 && collectedRevenue != null ? collectedRevenue / fulfilledOrders : null;
   return [
     comparison("PERFORMANCE-DEMAND-001", "日均订单规模", "需求", actualDailyOrders, forecastDailyOrders, target.target_end_daily_orders, "单/日", [...planningBaseline.forecastSourceRefs, ...planningBaseline.targetSourceRefs], sourceRefs(metricById.get("OUTCOME-SERVICE-001"))),
-    comparison("PERFORMANCE-SERVICE-001", "订单履约率", "服务", fulfillmentRate, null, numberValue(target.target_order_fulfillment_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-SERVICE-003"))),
+    comparison("PERFORMANCE-SERVICE-001", "成熟订单履约率", "服务", fulfillmentRate, null, numberValue(target.target_order_fulfillment_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-SERVICE-003"))),
     comparison("PERFORMANCE-ASSET-001", "有效 Robotaxi 规模", "资产", effectiveRobotaxi, forecastRequiredRobotaxi, numberValue(target.target_minimum_robotaxi_quantity), "辆", [...planningBaseline.forecastSourceRefs, ...planningBaseline.targetSourceRefs], robotaxis.map((item) => ({ object_type: "Robotaxi", object_id: item.robotaxi_id }))),
     comparison("PERFORMANCE-SUPPLY-001", "计划供给覆盖", "供给", plannedRobotaxi, forecastRequiredRobotaxi, null, "辆", [...planningBaseline.forecastSourceRefs, ...planningBaseline.supplySourceRefs], planningBaseline.supplySourceRefs),
     comparison("PERFORMANCE-FINANCE-001", "单均实收收入", "财务", averageRevenue, null, numberValue(target.average_revenue_per_order), "金额", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-FIN-002"))),
-    comparison("PERFORMANCE-FINANCE-002", "贡献利润率", "财务", contributionMarginRate, null, numberValue(target.minimum_contribution_margin_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-FIN-006"))),
+    comparison("PERFORMANCE-FINANCE-002", "经营贡献率", "财务", contributionMarginRate, null, numberValue(target.minimum_contribution_margin_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-FIN-006"))),
   ];
+}
+
+function alignForecastToOperatingDay(forecast, elapsedDays) {
+  const dailySeries = forecast?.forecast_trend_series?.DAY || [];
+  if (!dailySeries.length) return { ...forecast, aligned_elapsed_days: elapsedDays, aligned_forecast_date: null };
+  const point = dailySeries.reduce((best, item) => (
+    Math.abs(Number(item.elapsed_days || 0) - elapsedDays) < Math.abs(Number(best?.elapsed_days || 0) - elapsedDays) ? item : best
+  ), dailySeries[0]);
+  const supplyPoint = (forecast.supply_trend_series || []).reduce((best, item) => {
+    const start = Date.parse(forecast.forecast_start_date || "");
+    const date = Date.parse(item.trend_date || "");
+    const itemDays = Number.isFinite(start) && Number.isFinite(date) ? Math.max(0, Math.round((date - start) / 86400000)) : 0;
+    return Math.abs(itemDays - elapsedDays) < Math.abs(Number(best?.distance ?? Infinity)) ? { item, distance: itemDays - elapsedDays } : best;
+  }, null)?.item;
+  return {
+    ...forecast,
+    aligned_elapsed_days: elapsedDays,
+    aligned_forecast_date: point.trend_date,
+    aligned_planned_daily_orders: point.planned_daily_orders,
+    aligned_market_daily_orders: point.market_daily_orders,
+    aligned_required_robotaxi_quantity: forecast.required_robotaxi_quantity,
+    aligned_cumulative_production_quantity: supplyPoint?.cumulative_production_quantity ?? null,
+    aligned_cumulative_delivery_quantity: supplyPoint?.cumulative_delivery_quantity ?? null,
+  };
+}
+
+function analysisPage(title, managementQuestion, insightGroups, options = {}) {
+  return Object.freeze({ title, managementQuestion, insightGroups: Object.freeze(insightGroups), ...options });
+}
+
+function insight(title, primaryMetricId, secondaryMetricIds) {
+  return Object.freeze({ title, primaryMetricId, secondaryMetricIds: Object.freeze(secondaryMetricIds) });
 }
 
 export function getLatestMetricRows(rows = []) {

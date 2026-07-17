@@ -24,15 +24,15 @@ export const operatingModelDefinition = Object.freeze({
   operating_model_id: "OM-001",
   operating_model_name: "Robotaxi 经营模型",
   operating_model_status: OperatingModelStatus.ACTIVE,
-  operating_model_version: "1.1.0",
+  operating_model_version: "2.0.0",
   model_description: "统一解释规划、决策、需求、供给、服务、资产、财务与经营反馈之间的关系。",
   model_domains: Object.freeze([
     domain("DEMAND", "需求", "市场需要多少出行服务", ["BusinessTarget", "DemandProfile"], ["ServiceOrder"], ["DEMAND-TREND-001", "OUTCOME-SERVICE-001"]),
-    domain("SUPPLY", "供给", "需要形成多少 Robotaxi", ["SupplyProductionProfile", "LongTermDemandForecastResult"], ["SupplyPlan", "ProductionBatch", "RobotaxiDeliveryOrder"], ["PROCESS-SUPPLY-001"]),
+    domain("SUPPLY", "供给", "需要形成多少 Robotaxi，生产、交付和准入是否按计划完成", ["SupplyProductionProfile", "LongTermDemandForecastResult"], ["SupplyPlan", "ProductionBatch", "RobotaxiDeliveryOrder"], ["PROCESS-SUPPLY-001", "PROCESS-SUPPLY-002", "PROCESS-SUPPLY-003"]),
     domain("DECISION", "决策控制", "策略是否可靠执行并改善经营表现", ["BusinessTarget"], ["StrategyRun", "StrategyResult"], ["PROCESS-DECISION-002", "PROCESS-DECISION-003", "PROCESS-DECISION-004"]),
     domain("SERVICE", "服务", "现有供给能否稳定完成需求", ["BusinessTarget"], ["ServiceOrder", "Trip", "OrderMatchingDecision"], ["OUTCOME-SERVICE-003", "PROCESS-EFF-001", "PROCESS-EFF-002"]),
-    domain("ASSET", "资产", "Robotaxi 是否可用并被有效使用", ["BusinessTarget", "LongTermDemandForecastResult"], ["Robotaxi", "RouteExecution"], ["OUTCOME-ASSET-001", "PROCESS-ASSET-001"]),
-    domain("FINANCE", "财务", "经营是否形成可持续收益", ["BusinessTarget"], ["RevenueRecord", "CostRecord"], ["OUTCOME-FIN-002", "OUTCOME-FIN-005", "OUTCOME-FIN-006"]),
+    domain("ASSET", "资产", "Robotaxi 是否可用并被有效使用", ["BusinessTarget", "LongTermDemandForecastResult"], ["Robotaxi", "RouteExecution"], ["STATE-ASSET-002", "PROCESS-ASSET-003", "PROCESS-ASSET-004"]),
+    domain("FINANCE", "财务", "经营是否形成可持续收益", ["BusinessTarget"], ["RevenueRecord", "CostRecord"], ["OUTCOME-FIN-002", "OUTCOME-FIN-005", "OUTCOME-FIN-010"]),
     domain("FEEDBACK", "经营反馈", "实际结果与预测和目标存在什么差异", ["BusinessTarget", "LongTermDemandForecastResult"], ["MetricObservation"], ["PERFORMANCE-DEMAND-001", "PERFORMANCE-SERVICE-001", "PERFORMANCE-FINANCE-001"]),
   ]),
   model_relations: Object.freeze([
@@ -46,7 +46,7 @@ export const operatingModelDefinition = Object.freeze({
     relation("FEEDBACK", "DECISION", "经营偏差支持策略调整和异常治理"),
     relation("FEEDBACK", "DEMAND", "偏差反馈支持下一轮目标和模型调整"),
   ]),
-  updated_at: "2026-07-16T00:00:00+08:00",
+  updated_at: "2026-07-17T00:00:00+08:00",
 });
 
 export function getOperatingModelDefinition() {

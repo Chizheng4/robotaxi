@@ -49,7 +49,7 @@ assert.deepEqual(presentation.fields.map((item) => item.field), ["baseline_addre
 
 const context = resolvePageContext({ page: "financialMetrics", menuLabel: "财务表现", config: { title: "旧标题", description: "旧说明" } });
 assert.equal(context.title, "财务表现", "页面标题必须与菜单统一");
-assert.match(context.description, /经营目标/, "经营分析页面说明必须表达规划与事实关系");
+assert.match(context.description, /变动成本/, "财务效率页面说明必须表达成本分层与经营结果关系");
 
 const mainSource = fs.readFileSync("src/main.jsx", "utf8");
 const navigationSource = fs.readFileSync("src/ui/navigationRegistry.js", "utf8");

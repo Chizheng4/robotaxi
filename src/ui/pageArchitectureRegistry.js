@@ -31,7 +31,7 @@ register(["longTermDemandForecasts"], {
   eventPanel: null,
 });
 
-register(["operatingMetricsOverview", "financialMetrics", "serviceMetrics", "processDiagnostics"], {
+register(["operatingMetricsOverview", "serviceMetrics", "supplyAssetMetrics", "financialMetrics", "processDiagnostics"], {
   mode: "analysis",
   resourceKind: "metric",
   detailMode: "none",
