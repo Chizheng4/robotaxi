@@ -409,6 +409,8 @@ try {
     const planningResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const analysis = document.querySelector(".forecast-analysis");
+        const calculationDetails = document.querySelector(".forecast-calculation-details");
+        if (calculationDetails) calculationDetails.open = true;
         const summary = [...document.querySelectorAll(".analysis-summary-card")].map((node) => ({ label: node.querySelector("span")?.textContent, value: node.querySelector("strong")?.textContent }));
         const production = summary.find((item) => item.label === "计划生产数量");
         return {
@@ -430,6 +432,9 @@ try {
             const root = node?.parentElement;
             return Boolean(node && root && getComputedStyle(root).display !== "none" && root.getBoundingClientRect().width > 0);
           })(),
+          calculationStepCount: document.querySelectorAll(".forecast-calculation-step").length,
+          calculationTitles: [...document.querySelectorAll(".forecast-calculation-title b")].map((node) => node.textContent.trim()),
+          calculationFormulaText: [...document.querySelectorAll(".forecast-calculation-formula")].map((node) => node.textContent.trim()).join(" "),
           hasDetailPanel: Boolean(document.querySelector(".object-inspector")),
           productionQuantity: Number(String(production?.value || "0").replaceAll(",", "")),
           horizontalOverflow: analysis ? analysis.scrollWidth - analysis.clientWidth : null,
@@ -444,6 +449,9 @@ try {
     assert.equal(planning.chartEngineCount, 4, "四张预测图必须由统一成熟图表引擎渲染");
     assert(planning.chartPointCount > 8, "预测趋势必须接收完整的周期数据");
     assert(planning.chartTooltipVisible && planning.chartTooltipText, `图表鼠标或触摸交互必须显示时间和指标提示：${JSON.stringify(planning)}`);
+    assert(planning.calculationStepCount >= 20, "完整计算过程必须展示领域模型保存的全部步骤");
+    assert(planning.calculationTitles.every((title) => title && !/^\d+$/.test(title)), `计算步骤必须显示统一字段名称：${JSON.stringify(planning.calculationTitles)}`);
+    assert(!planning.calculationFormulaText.includes("无公式"), "每个预测计算步骤都必须显示领域模型公式");
     if (mobileAssertionEnabled) assert.equal(planning.chartViewportOverflow, false, "窄屏图表必须自适应容器且不产生横向溢出");
     assert.equal(planning.hasDetailPanel, false, "分析结果不得混入对象详情面板");
     assert(planning.productionQuantity > 0, "真实增长与缺口必须形成大于零的计划生产数量");

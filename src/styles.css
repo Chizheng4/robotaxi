@@ -6011,18 +6011,21 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .forecast-calculation-details { margin-top: 8px; background: var(--surface); border-top: 1px solid var(--line-soft); padding: 10px 0; }
 .forecast-calculation-details summary { display: flex; justify-content: space-between; gap: 12px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .forecast-calculation-details summary small { color: var(--muted); font-size: var(--font-xs); font-weight: 400; }
-.forecast-calculation-step { display: grid; grid-template-columns: minmax(180px, 0.7fr) minmax(320px, 2fr) minmax(104px, auto); gap: 14px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.forecast-calculation-step { display: grid; grid-template-columns: minmax(190px, 220px) minmax(0, 1fr) minmax(104px, auto); gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-soft); }
 .forecast-calculation-group h4 { margin: 10px 0 4px; color: var(--muted); font-size: var(--font-xs); font-weight: 600; }
 .forecast-calculation-step span { display: flex; gap: 7px; align-items: baseline; }
 .forecast-calculation-step em { min-width: 18px; color: var(--muted); font-size: 10px; font-style: normal; }
 .forecast-calculation-step small { color: var(--muted); }
 .forecast-calculation-step strong { text-align: right; }
-.forecast-calculation-title { flex-wrap: wrap; align-content: start; }
+.forecast-calculation-title { align-content: start; }
+.forecast-calculation-title > span { display: grid; gap: 2px; min-width: 0; }
 .forecast-calculation-title b { font-size: var(--font-sm); font-weight: 600; }
-.forecast-calculation-title i { flex-basis: 100%; padding-left: 25px; color: var(--muted); font-size: var(--font-xs); font-style: normal; }
+.forecast-calculation-title i { color: var(--muted); font-size: var(--font-xs); font-style: normal; }
 .forecast-calculation-explanation { display: grid; gap: 3px; min-width: 0; }
 .forecast-calculation-explanation small { overflow-wrap: anywhere; line-height: 1.55; }
 .forecast-calculation-explanation small b { color: var(--text-soft); font-weight: 600; }
+.forecast-calculation-source { margin-left: 14px; }
+.forecast-calculation-formula { color: var(--text-soft) !important; }
 
 @media (max-width: 767px) {
   .forecast-analysis { padding: 10px; }
@@ -6036,6 +6039,7 @@ html[data-keyboard-open="true"] .platform-login-panel {
   .forecast-analysis-grid { grid-template-columns: 1fr; }
   .forecast-calculation-step { grid-template-columns: 1fr; gap: 3px; }
   .forecast-calculation-step strong { text-align: left; }
+  .forecast-calculation-source { display: block; margin-left: 0; }
 }
 
 /* Shared page presentation contract. Keep this final so legacy page styles cannot override it. */

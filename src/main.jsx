@@ -8728,7 +8728,28 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
         <section><h3>Robotaxi 规模</h3><div className="forecast-analysis-row"><span>当前有效</span><strong>{formatPlanningValue(selected.effective_current_robotaxi)}</strong></div><div className="forecast-analysis-row"><span>需求驱动</span><strong>{getDisplayValue(selected.requirement_driver)}</strong></div><div className="forecast-analysis-row"><span>单车有效日产能</span><strong>{formatPlanningValue(selected.robotaxi_effective_daily_orders)}</strong></div></section>
         <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>建议生产数量</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>生产准备完成</span><strong>{selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>预测期可形成供给</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>全部供给完成</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
       </div>
-      <details className="forecast-calculation-details"><summary><span>{getFieldLabel("calculation_steps")}</span><small>按需展开查看输入、模型、公式、来源与结果</small></summary>{groupForecastCalculationSteps(selected.calculation_steps).map((group) => <section className="forecast-calculation-group" key={group.name}><h4>{group.name}</h4>{group.steps.map((step) => <div className="forecast-calculation-step" key={step.step_order || step.output_field}><span className="forecast-calculation-title"><em>{step.step_order}</em><b>{getFieldLabel(step.output_field)}</b><i>{step.step_action}</i></span><div className="forecast-calculation-explanation"><small><b>{getFieldLabel("input_values")}：</b>{formatPlanningCalculationInputs(step.input_values)}</small><small><b>{getFieldLabel("calculation_model")}：</b>{getDisplayValue(step.calculation_model)}</small><small><b>{getFieldLabel("formula_expression")}：</b>{formatPlanningCalculationExpression(step.formula_expression)}</small><small><b>{getFieldLabel("source_refs")}：</b>{formatPlanningSourceRefs(step.source_refs)}</small></div><strong>{formatPlanningValue(step.output_value)}{step.output_unit ? ` ${step.output_unit}` : ""}</strong></div>)}</section>)}</details>
+      <details className="forecast-calculation-details">
+        <summary><span>{getFieldLabel("calculation_steps")}</span><small>按需展开查看输入、模型、公式、来源与结果</small></summary>
+        {groupForecastCalculationSteps(selected.calculation_steps).map((group) => (
+          <section className="forecast-calculation-group" key={group.name}>
+            <h4>{group.name}</h4>
+            {group.steps.map((step) => (
+              <div className="forecast-calculation-step" key={step.step_order || step.output_field}>
+                <span className="forecast-calculation-title">
+                  <em>{step.step_order}</em>
+                  <span><b>{getFieldLabel(step.output_field)}</b><i>{step.step_action}</i></span>
+                </span>
+                <div className="forecast-calculation-explanation">
+                  <small><b>{getFieldLabel("input_values")}：</b>{formatPlanningCalculationInputs(step.input_values)}</small>
+                  <small><b>{getFieldLabel("calculation_model")}：</b>{getDisplayValue(step.calculation_model)}<span className="forecast-calculation-source"><b>{getFieldLabel("source_refs")}：</b>{formatPlanningSourceRefs(step.source_refs)}</span></small>
+                  <small className="forecast-calculation-formula"><b>{getFieldLabel("formula_expression")}：</b>{formatPlanningCalculationExpression(step.formula_expression)}</small>
+                </div>
+                <strong>{formatPlanningValue(step.output_value)}{step.output_unit ? ` ${step.output_unit}` : ""}</strong>
+              </div>
+            ))}
+          </section>
+        ))}
+      </details>
     </div>
   );
 }
@@ -10459,7 +10480,7 @@ async function bootstrap() {
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
-		    import("./services/businessPlanningService.js?v=20260713-v043-0-0"),
+		    import("./services/businessPlanningService.js?v=20260717-v047-0-3"),
 		    import("./services/operatingPlanningService.js?v=20260716-v046-0-6"),
 		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
 		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
@@ -12339,6 +12360,9 @@ function normalizeOperationalRouteStrategies(operationalData) {
   return {
     ...operationalData,
     routes: normalizeRouteStrategyReferences(operationalData.routes || []),
+    longTermDemandForecasts: businessPlanningService?.normalizeLongTermDemandForecastResults
+      ? businessPlanningService.normalizeLongTermDemandForecastResults(operationalData.longTermDemandForecasts)
+      : (operationalData.longTermDemandForecasts || []),
     shortTermDemandForecastStrategies: mergeDefaultConfiguredRecords(
       operationalData.shortTermDemandForecastStrategies,
       planningDefaults.shortTermDemandForecastStrategies,

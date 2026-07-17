@@ -1,5 +1,13 @@
 import { createRobotaxi } from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
-import { calculateLongTermDemandPlan, resolveForecastPeriod, validatePlanningInputs } from "../domain/longTermDemandPlanning.js";
+import {
+  calculateLongTermDemandPlan,
+  normalizeLongTermDemandForecastResult,
+  normalizeLongTermDemandForecastResults,
+  resolveForecastPeriod,
+  validatePlanningInputs,
+} from "../domain/longTermDemandPlanning.js?v=20260717-v047-0-3";
+
+export { normalizeLongTermDemandForecastResult, normalizeLongTermDemandForecastResults };
 
 export const SupplyProductionProfileStatus = {
   ACTIVE: "ACTIVE",

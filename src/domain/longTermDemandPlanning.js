@@ -456,3 +456,28 @@ function buildCalculationSteps(result) {
     }, "DAILY_CONTRIBUTION", "planned_daily_orders × contribution_margin_per_order - daily_fixed_operating_cost", "元 / 日", ["business_target_snapshot"]),
   ].map((item, index) => ({ ...item, step_order: index + 1 }));
 }
+
+export function normalizeLongTermDemandForecastResult(result = {}) {
+  const steps = Array.isArray(result.calculation_steps) ? result.calculation_steps : [];
+  const hasCurrentCalculationContract = steps.length >= 20 && steps.every((item) => (
+    item?.output_field
+    && item?.calculation_model
+    && item?.formula_expression
+    && item?.input_values
+    && Object.keys(item.input_values).length > 0
+  ));
+  if (hasCurrentCalculationContract) return result;
+  const normalizedResult = {
+    growth_model: "COMPOUND",
+    planning_mode: "BALANCED",
+    ...result,
+  };
+  return {
+    ...normalizedResult,
+    calculation_steps: buildCalculationSteps(normalizedResult),
+  };
+}
+
+export function normalizeLongTermDemandForecastResults(results = []) {
+  return (Array.isArray(results) ? results : []).map(normalizeLongTermDemandForecastResult);
+}
