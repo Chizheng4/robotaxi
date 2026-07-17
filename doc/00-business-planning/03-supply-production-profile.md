@@ -72,7 +72,8 @@ and (effective_to is null or effective_to >= forecast_start_date)
 ```text
 生产画像
   -> 约束需求预测结果
-  -> 需求预测结果生成生产计划
+  -> 需求预测结果触发供应决策
+  -> 供应决策结果生成生产计划
   -> 生产计划生成生产批次
   -> 生产批次完成后创建待区域分配 Robotaxi 资产
 ```

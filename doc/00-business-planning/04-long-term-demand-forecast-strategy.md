@@ -61,8 +61,8 @@ Zone
 flowchart TD
   A["Place 当前可争取日订单"] --> B["Zone 当前需求汇总"]
   B --> C["按预测周期计算市场需求"]
-  C --> D["与经营目标比较"]
-  D --> E["确定规划日订单"]
+  C --> D["形成期末市场日订单"]
+  D --> E["按规划模式确定计划承接日订单"]
   E --> F["计算日订单能力所需 Robotaxi"]
   E --> G["计算峰值并发所需 Robotaxi"]
   F --> H["确定最终 Robotaxi 需求"]
@@ -77,7 +77,7 @@ flowchart TD
   N --> O
 ```
 
-固定顺序：需求基线、周期增长、目标比较、规划订单、峰值并发、单车日产能、服务承载、当前资产、供给缺口、生产交付约束、基础经济性、最终结论。
+固定顺序：地点需求汇总、有效增长、市场预测、计划承接、完整服务周期、日常运力、峰值运力、服务承载、当前资产、供给缺口、生产交付约束、基础经济性、最终结论。每一步必须以统一字段键声明输入、模型、公式、输出和来源，前端不得另造计算名称。
 
 ## 5. 预测周期
 
@@ -252,13 +252,13 @@ market_forecast_daily_orders
 
 ```text
 market_opportunity_gap
-= max(0, market_serviceable_daily_orders - target_end_daily_orders)
+= max(0, market_forecast_daily_orders - target_end_daily_orders)
 
 target_market_shortfall
-= max(0, target_end_daily_orders - market_serviceable_daily_orders)
+= max(0, target_end_daily_orders - market_forecast_daily_orders)
 ```
 
-其中 `market_serviceable_daily_orders = market_forecast_daily_orders × target_order_fulfillment_rate`，保证市场请求口径与目标完成订单口径一致。
+`market_forecast_daily_orders` 是预测事实，`target_end_daily_orders` 是管理意图，`planned_daily_orders` 是规划模式确定的计划承接量，三者不得混为一个字段。`target_order_fulfillment_rate` 是服务质量目标，不参与市场需求折减；`market_serviceable_daily_orders` 仅保留为历史结果兼容字段。
 
 基础经济性输入：
 
@@ -423,7 +423,7 @@ uncovered_robotaxi_gap
 结果至少保存：
 
 - 市场需求：当前基线、周期增长率、增长因子、期末市场日订单；
-- 经营目标：目标日订单、规划模式、规划日订单、机会差异和目标支撑缺口；
+- 经营目标：目标日订单、规划模式、计划承接日订单、市场机会差异和目标市场支撑缺口；
 - 服务承载：日容量、峰值容量、等待容量及相应缺口；
 - Robotaxi 需求：单车有效日产能、日常需求、峰值需求、经营最低量、最终数量和驱动来源；
 - 当前资产：当前有效数量、调入、调出、退役和净缺口；
@@ -431,20 +431,22 @@ uncovered_robotaxi_gap
 - 经济性：盈亏平衡订单、经营贡献率和经营目标可行区间；
 - 解释质量：数据质量、缺失字段、默认假设、完整计算步骤。
 
+每个 `calculation_steps` 项必须保存：`step_group / step_action / input_values / calculation_model / formula_expression / output_field / output_value / output_unit / source_refs`。`output_field` 是步骤名称的唯一语义来源；页面只能通过字段字典展示其中文名，不能把“比较”“基线”“峰值并发”等过程描述冒充字段名称。
+
 固定 `confidence_level` 废弃。当前阶段使用 `data_quality_score / data_quality_level / missing_input_fields / assumption_fields` 表达输入质量，不伪造统计置信度。
 
 ## 14. 分析型前端
 
 预测结果页面不是普通对象表格的放大版，主视图按分析决策组织：
 
-1. 结论区：市场日订单、目标日订单、规划日订单、Robotaxi 缺口、承载缺口、可形成供给和剩余缺口；
-2. 需求趋势：当前基线、各预测周期、期末值，同时展示市场、经营目标和能力上限；
+1. 结论区：市场日订单、目标日订单、计划承接日订单、Robotaxi 缺口、承载缺口、可形成供给和剩余缺口；
+2. 需求趋势：各预测周期和期末值，同时展示市场预测与计划承接量；经营目标作为管理意图单独比较，不伪装成预测曲线；
 3. 瓶颈判断：市场需求、Robotaxi 最大履约能力、ServiceArea 承载能力；
 4. Robotaxi 规模拆解：日常、峰值、经营最低、当前有效和新增缺口；
 5. 生产时间线：生产准备、首批交付、可生产期数、计划数量和未覆盖缺口；
 6. 计算过程：默认展示摘要，可展开查看公式、输入、单位、中间结果、来源和校验。
 
-需求趋势必须由预测领域服务生成并随结果冻结，不允许前端依据期末值反推。结果同时保存日、周、月三种时间粒度：增长趋势表达各时间点的市场日订单和规划日订单，累计趋势表达从预测起点到当前时间点的市场订单总量和规划订单总量。增长模型支持复合增长与线性增长，趋势终点必须与预测结果的期末值一致。
+需求趋势必须由预测领域服务生成并随结果冻结，不允许前端依据期末值反推。结果同时保存日、周、月三种时间粒度：增长趋势表达各时间点的市场日订单和计划承接日订单，累计趋势表达从预测起点到当前时间点的市场订单总量和计划承接订单总量。增长模型支持复合增长与线性增长，趋势终点必须与预测结果的期末值一致。
 
 预测策略是可配置对象，预测执行是不可变过程记录，预测结果是不可变分析结果。已有独立执行和结果页面时，不在策略、执行或结果页面底部重复嵌入“最近任务事件”；只有具备生命周期动作的业务单据才使用事件区。
 

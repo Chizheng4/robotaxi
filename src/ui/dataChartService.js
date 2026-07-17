@@ -2,6 +2,79 @@ const DEFAULT_POINT_SPACING = 64;
 const DEFAULT_MIN_WIDTH = 620;
 const MAX_RENDER_POINTS = 360;
 
+export function createEchartsOption({ rows = [], series = [], variant = "LINE", zeroBased = false } = {}) {
+  const sampledRows = sampleRows(rows, MAX_RENDER_POINTS);
+  const activeSeries = series.filter((item) => item.visible !== false);
+  const hasLongSeries = sampledRows.length > 36;
+  return {
+    animation: false,
+    color: activeSeries.map((item) => item.color),
+    grid: { left: 12, right: 18, top: 14, bottom: hasLongSeries ? 42 : 30, containLabel: true },
+    tooltip: {
+      trigger: "axis",
+      triggerOn: "mousemove|click",
+      confine: true,
+      appendToBody: false,
+      axisPointer: { type: "line", snap: true, lineStyle: { color: "#7890a8", width: 1 } },
+      formatter: (params = []) => {
+        const index = params[0]?.dataIndex ?? 0;
+        const row = sampledRows[index];
+        if (!row) return "";
+        const values = params.map((param) => {
+          const definition = activeSeries.find((item) => item.key === param.seriesId);
+          const formatted = definition?.formatValue
+            ? definition.formatValue(param.value, row.raw)
+            : formatDataChartNumber(param.value);
+          const unit = definition?.unit ? ` ${escapeHtml(definition.unit)}` : "";
+          return `<span class="data-chart-tooltip-row"><i style="background:${escapeHtml(param.color)}"></i><span>${escapeHtml(definition?.label || param.seriesName)}</span><b>${escapeHtml(formatted)}${unit}</b></span>`;
+        }).join("");
+        return `<div class="data-chart-tooltip-content"><strong>${escapeHtml(row.tooltipLabel || row.label)}</strong>${values}</div>`;
+      },
+    },
+    xAxis: {
+      type: "category",
+      boundaryGap: variant === "BAR",
+      data: sampledRows.map((row) => row.label),
+      axisLine: { lineStyle: { color: "#d6e0e9" } },
+      axisTick: { show: false },
+      axisLabel: { color: "#6b7d90", fontSize: 10, hideOverlap: true, interval: "auto", margin: 10 },
+    },
+    yAxis: {
+      type: "value",
+      min: zeroBased ? 0 : undefined,
+      scale: !zeroBased,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: "#6b7d90", fontSize: 10, formatter: formatDataChartAxisNumber },
+      splitLine: { lineStyle: { color: "#e7edf3" } },
+    },
+    dataZoom: hasLongSeries ? [{
+      type: "inside",
+      filterMode: "none",
+      zoomOnMouseWheel: "shift",
+      moveOnMouseMove: true,
+      moveOnMouseWheel: true,
+      preventDefaultMouseMove: false,
+    }] : [],
+    series: activeSeries.map((item) => ({
+      id: item.key,
+      name: item.label,
+      type: variant === "BAR" ? "bar" : "line",
+      data: sampledRows.map((row) => toFiniteNumber(row.values?.[item.key])),
+      smooth: false,
+      showSymbol: sampledRows.length <= 48,
+      symbolSize: 5,
+      sampling: variant === "LINE" ? "lttb" : undefined,
+      large: variant === "BAR" && sampledRows.length > 120,
+      lineStyle: { width: 2 },
+      itemStyle: { color: item.color },
+      emphasis: { focus: "series" },
+    })),
+    __sampledRows: sampledRows,
+    __sampled: sampledRows.length < rows.length,
+  };
+}
+
 export function createDataChartModel({
   rows = [],
   series = [],
@@ -104,4 +177,13 @@ function toFiniteNumber(value) {
 
 function round(value) {
   return Number(value.toFixed(8));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }

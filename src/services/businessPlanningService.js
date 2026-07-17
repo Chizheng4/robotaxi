@@ -42,7 +42,7 @@ export const businessPlanningObjectSchemas = {
       forecast_period_count: "从规划起点向后预测的周期数量。",
       planning_mode: "决定市场预测与经营目标冲突时采用哪一种规划口径：市场导向按可服务需求、目标导向按经营目标、平衡规划取两者合理约束。",
       target_end_daily_orders: "预测期末典型经营日希望完成的订单数量，不是预测期累计订单。",
-      target_order_fulfillment_rate: "计划完成的市场可服务订单比例，用于从市场需求转为经营目标口径。",
+      target_order_fulfillment_rate: "规划期终态已完成服务订单占终态服务订单的目标比例，用于衡量服务质量，不用于折减市场需求。",
       target_task_utilization_rate: "Robotaxi 可运营时间中用于执行任务的目标比例。",
       target_minimum_robotaxi_quantity: "即使需求模型计算值更低，经营规划仍需保有的最低 Robotaxi 规模。",
       average_revenue_per_order: "用于经营可行性判断的平均单笔服务收入假设。",

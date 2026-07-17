@@ -82,6 +82,34 @@ const execution = executeLongTermDemandForecastStrategy({
   },
 });
 
+const lowerFulfillmentExecution = executeLongTermDemandForecastStrategy({
+  strategy: strategies[0],
+  businessTargets: [{ ...targetUpdate.businessTarget, target_order_fulfillment_rate: 0.2 }],
+  supplyProductionProfiles: [profileUpdate.profile],
+  demandProfiles: [{
+    profile_id: "DP-Z-Z-001",
+    target_object_type: "ZONE",
+    target_object_id: "Z-001",
+    target_object_name: "最小运营测试区",
+    profile_status: "ACTIVE",
+    baseline_addressable_daily_orders: 800,
+    busiest_hour_share: 0.2,
+    zone_period_growth_rate: 0.1,
+    growth_rate_unit: "MONTH",
+    effective_daily_capacity: 1000,
+    effective_peak_hour_capacity: 200,
+  }],
+  robotaxis: [
+    { robotaxi_id: "RTX-001", target_zone_id: "Z-001", availability_status: "AVAILABLE" },
+    { robotaxi_id: "RTX-002", target_zone_id: "Z-001", availability_status: "AVAILABLE" },
+  ],
+  context: {
+    now: () => "2026-07-09T01:00:00.000Z",
+    nextRunId: () => "LDF-RUN-RATE-CHECK",
+    nextResultBaseId: () => "LDF-RES-RATE-CHECK",
+  },
+});
+
 assert.equal(execution.run.run_status, "SUCCEEDED", "策略执行应成功");
 assert.equal(execution.run.result_count, 1, "策略执行应生成一条区域预测结果");
 assert.equal(execution.results.length, 1, "必须返回预测结果集合");
@@ -103,6 +131,16 @@ assert.equal(
 );
 assert.equal(execution.results[0].production_ready_date, "2027-01-08", "预测结果必须按生产和检验提前期计算准备日期");
 assert.equal(execution.results[0].supply_production_profile_id, "SPP-001", "预测结果必须关联生产画像");
+assert.equal(lowerFulfillmentExecution.results[0].market_forecast_daily_orders, execution.results[0].market_forecast_daily_orders, "服务质量目标不得折减市场预测");
+assert.equal(lowerFulfillmentExecution.results[0].planned_daily_orders, execution.results[0].planned_daily_orders, "服务质量目标不得改变计划承接量");
+assert.ok(execution.results[0].calculation_steps.length >= 20, "预测结果必须保存完整计算链");
+execution.results[0].calculation_steps.forEach((step) => {
+  ["step_action", "input_values", "calculation_model", "formula_expression", "output_field", "output_value", "source_refs"].forEach((key) => {
+    assert.ok(Object.hasOwn(step, key), `计算步骤必须包含 ${key}`);
+  });
+  assert.notEqual(step.output_value, undefined, `计算步骤 ${step.output_field} 必须具有输出值`);
+});
+assert.ok(!execution.results[0].calculation_steps.some((step) => ["当前需求基线", "经营目标比较", "峰值并发"].includes(step.step_name)), "计算步骤不得使用临时别名冒充字段名称");
 
 let supplyPlanSeq = 0;
 let batchSeq = 0;
@@ -272,8 +310,9 @@ assert.ok(main.includes("businessPlanningService.updateBusinessTargetConfig"), "
 assert.ok(main.includes("businessPlanningService.updateSupplyProductionProfileConfig"), "页面必须调用服务保存生产画像配置");
 assert.ok(main.includes("businessTargets: data.businessTargets || []"), "需求预测执行必须传入经营目标集合");
 assert.ok(main.includes("businessPlanningService.executeSupplyDecisionStrategy"), "页面必须通过供应决策服务从预测结果创建生产计划");
-assert.ok(main.includes("businessPlanningService.completeSupplyManagementLoopFromForecast"), "页面必须调用服务执行供应管理闭环编排");
-assert.ok(main.includes("执行供应闭环"), "预测结果页必须提供供应闭环人工入口");
+assert.ok(main.includes("businessPlanningService.completeSupplyManagementLoopFromForecast"), "演示数据服务必须保留供应管理闭环编排能力");
+assert.ok(main.includes("执行供应决策"), "预测结果页必须提供职责清晰的供应决策入口");
+assert.ok(!main.includes(">执行供应闭环</Button>"), "普通预测结果页不得暴露跨单据供应演示闭环入口");
 assert.ok(navigationRegistry.includes('group("regionDeliveryManagement", "区域交付"'), "供应管理必须把区域交付作为二级菜单容器");
 assert.ok(navigationRegistry.includes('page("robotaxiDeliveryOrders", "交付单")'), "区域交付容器下必须把区域交付单显示为交付单");
 assert.ok(main.includes("deriveInitialRuntimeSequences(fallback)"), "干净启动必须按初始 Robotaxi 派生新车编号序列，避免破坏 Robotaxi 管理");

@@ -1271,15 +1271,17 @@
 |market_daily_orders|市场日订单|计算字段|当前时间点预测的市场典型日订单|
 |target_daily_orders|目标日订单|快照字段|当前预测使用的经营目标期末日订单|
 |period_market_orders|当期市场订单|计算字段|相邻趋势时间点之间的市场订单量|
-|period_planned_orders|当期规划订单|计算字段|相邻趋势时间点之间的规划订单量|
+|period_planned_orders|当期计划承接订单|计算字段|相邻趋势时间点之间的计划承接订单量|
 |cumulative_market_orders|累计市场订单|计算字段|从预测开始至当前时间点的累计市场订单|
-|cumulative_planned_orders|累计规划订单|计算字段|从预测开始至当前时间点的累计规划订单|
+|cumulative_planned_orders|累计计划承接订单|计算字段|从预测开始至当前时间点的累计计划承接订单|
 |forecast_cumulative_market_orders|预测期累计市场订单|计算字段|完整预测周期的累计市场订单|
-|forecast_cumulative_planned_orders|预测期累计规划订单|计算字段|完整预测周期的累计规划订单|
-|market_serviceable_daily_orders|期末可履约日订单|计算字段|市场日订单乘目标履约率|
+|forecast_cumulative_planned_orders|预测期累计计划承接订单|计算字段|完整预测周期的累计计划承接订单|
+|market_serviceable_daily_orders|期末可履约日订单（兼容）|兼容字段|仅用于读取历史结果，新预测不再用目标履约率折减市场需求|
 |market_opportunity_gap|市场机会差异|计算字段|市场预测超过经营目标的部分|
 |target_market_shortfall|目标市场支撑缺口|计算字段|经营目标超过市场预测的部分|
-|planned_daily_orders|规划日订单|计算字段|规划模式确定的日订单|
+|planned_daily_orders|计划承接日订单|计算字段|规划模式在市场预测与经营目标之间确定的计划承接量|
+|buffered_daily_orders|缓冲后日订单|计算字段|计划承接日订单乘需求缓冲系数后的日订单|
+|planned_peak_hour_orders|计划峰值小时订单|计算字段|计划承接日订单乘最繁忙小时占比|
 |effective_service_cycle_min|完整服务周期|计算字段|接驾、载客和周转分钟数之和|
 |robotaxi_available_hours_per_day|Robotaxi 每日可运营小时|配置字段|单台 Robotaxi 每日可运营时间|
 |average_pickup_duration_min|平均接驾时间|配置字段|单次服务订单平均接驾分钟数|
@@ -1336,6 +1338,11 @@
 |missing_input_fields|缺失输入字段|计算字段|缺少的必要字段列表|
 |assumption_fields|默认假设字段|计算字段|使用默认值的字段列表|
 |calculation_steps|完整计算过程|持久化字段|公式、输入、单位、中间结果和来源|
+|step_action|步骤动作|持久化字段|当前计算步骤执行的业务动作|
+|calculation_model|计算模型|持久化字段|当前步骤采用的模型标识|
+|formula_expression|公式表达|持久化字段|使用统一字段键记录的计算表达式|
+|output_field|输出字段|持久化字段|当前步骤唯一输出字段键|
+|source_refs|来源引用|持久化字段|当前步骤引用的业务对象或快照编号|
 |step_group|计算分组|嵌套字段|完整计算过程中步骤所属的业务计算分组|
 |output_unit|结果单位|嵌套字段|计算步骤输出结果使用的业务单位|
 
