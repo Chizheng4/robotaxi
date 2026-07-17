@@ -8822,12 +8822,32 @@ function DataSeriesChart({
     const handleClick = (event) => {
       if (event.componentType === "series") onSelect?.(__sampledRows?.[event.dataIndex]?.raw);
     };
+    const showNearestTooltip = (offsetX, offsetY) => {
+      const axisValue = chart.convertFromPixel({ xAxisIndex: 0 }, [offsetX, offsetY]);
+      const labelIndex = __sampledRows?.findIndex((row) => row.label === axisValue) ?? -1;
+      const dataIndex = labelIndex >= 0
+        ? labelIndex
+        : Math.max(0, Math.min((__sampledRows?.length || 1) - 1, Math.round(Number(axisValue))));
+      if (!Number.isFinite(dataIndex) || !__sampledRows?.[dataIndex]) return;
+      chart.dispatchAction({ type: "showTip", seriesIndex: 0, dataIndex });
+    };
+    const handlePlotClick = (event) => showNearestTooltip(event.offsetX, event.offsetY);
+    const handleTouchEnd = (event) => {
+      const touch = event.changedTouches?.[0];
+      const rect = chartElementRef.current?.getBoundingClientRect();
+      if (!touch || !rect) return;
+      showNearestTooltip(touch.clientX - rect.left, touch.clientY - rect.top);
+    };
     chart.on("click", handleClick);
+    chart.getZr().on("click", handlePlotClick);
+    chartElementRef.current.addEventListener("touchend", handleTouchEnd, { passive: true, capture: true });
     const observer = new ResizeObserver(() => chart.resize({ animation: { duration: 0 } }));
     observer.observe(chartElementRef.current);
     return () => {
       observer.disconnect();
       chart.off("click", handleClick);
+      chart.getZr().off("click", handlePlotClick);
+      chartElementRef.current?.removeEventListener("touchend", handleTouchEnd, true);
       chart.dispose();
       chartInstanceRef.current = null;
     };
@@ -10450,7 +10470,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
-		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
+		    import("./ui/dataChartService.js?v=20260717-v047-0-2"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),
 		    import("./ui/navigationRegistry.js?v=20260717-v047-0-0"),
 		    import("./ui/pageArchitectureRegistry.js?v=20260717-v047-0-0"),

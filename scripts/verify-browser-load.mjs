@@ -381,7 +381,13 @@ try {
         deviceScaleFactor: 1,
         mobile: true,
       });
+      await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
       await delay(300);
+      await send("Runtime.evaluate", {
+        expression: `document.querySelector(".data-chart")?.scrollIntoView({ block: "center", inline: "nearest" })`,
+        returnByValue: true,
+      });
+      await delay(180);
     }
     const planningChartPointResult = await send("Runtime.evaluate", {
       expression: `(() => {
@@ -395,7 +401,11 @@ try {
     const planningChartPoint = planningChartPointResult.result?.result?.value;
     assert(planningChartPoint, "预测图表必须存在可交互画布");
     await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: planningChartPoint.x, y: planningChartPoint.y });
-    await delay(120);
+    if (mobileAssertionEnabled) {
+      await send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: planningChartPoint.x, y: planningChartPoint.y }] });
+      await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    }
+    await delay(250);
     const planningResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const analysis = document.querySelector(".forecast-analysis");
@@ -414,6 +424,12 @@ try {
           chartEngineCount: document.querySelectorAll(".data-chart canvas").length,
           chartPointCount: [...document.querySelectorAll(".data-chart-viewport")].reduce((total, node) => total + Number(node.dataset.pointCount || 0), 0),
           chartViewportOverflow: [...document.querySelectorAll(".data-chart-viewport")].some((node) => node.scrollWidth - node.clientWidth > 1),
+          chartTooltipText: document.querySelector(".data-chart-tooltip-content")?.textContent?.trim() || "",
+          chartTooltipVisible: (() => {
+            const node = document.querySelector(".data-chart-tooltip-content");
+            const root = node?.parentElement;
+            return Boolean(node && root && getComputedStyle(root).display !== "none" && root.getBoundingClientRect().width > 0);
+          })(),
           hasDetailPanel: Boolean(document.querySelector(".object-inspector")),
           productionQuantity: Number(String(production?.value || "0").replaceAll(",", "")),
           horizontalOverflow: analysis ? analysis.scrollWidth - analysis.clientWidth : null,
@@ -427,6 +443,7 @@ try {
     assert.equal(planning.chartRowCount, 2, "需求和供给各自使用独立纵向图表区域");
     assert.equal(planning.chartEngineCount, 4, "四张预测图必须由统一成熟图表引擎渲染");
     assert(planning.chartPointCount > 8, "预测趋势必须接收完整的周期数据");
+    assert(planning.chartTooltipVisible && planning.chartTooltipText, `图表鼠标或触摸交互必须显示时间和指标提示：${JSON.stringify(planning)}`);
     if (mobileAssertionEnabled) assert.equal(planning.chartViewportOverflow, false, "窄屏图表必须自适应容器且不产生横向溢出");
     assert.equal(planning.hasDetailPanel, false, "分析结果不得混入对象详情面板");
     assert(planning.productionQuantity > 0, "真实增长与缺口必须形成大于零的计划生产数量");
