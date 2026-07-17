@@ -487,15 +487,39 @@
 |failed_run_count|失败执行数|运行态字段|归一化状态为 FAILED 的执行数|
 |no_action_run_count|无动作执行数|运行态字段|归一化状态为 NO_ACTION 的执行数|
 |decision_result_count|决策结果数|运行态字段|源结果对象数量|
-|decision_exception_count|决策异常数|运行态字段|失败与部分成功执行数量|
+|decision_exception_count|异常决策过程数|运行态字段|至少发生一次异常尝试的唯一决策过程数量|
+|decision_exception_attempt_count|异常尝试数|运行态字段|失败与部分成功的原始执行事件数量|
+|affected_business_object_count|受影响业务对象数|运行态字段|异常决策过程关联的唯一业务单据或对象数量|
+|recovered_exception_process_count|异常后恢复数|运行态字段|发生异常后最终成功的决策过程数量|
+|unresolved_exception_process_count|待处理异常过程数|运行态字段|仍在重试或尚未恢复的异常决策过程数量|
+|terminal_impact_object_count|终局影响对象数|运行态字段|最终失败或取消的唯一业务对象数量|
+|decision_process_count|决策过程数|运行态字段|按决策能力和调用业务对象聚合后的过程数量|
+|decision_attempt_count|决策尝试数|运行态字段|一个决策过程包含的原始执行次数|
+|exception_attempt_count|过程异常尝试数|运行态字段|一个决策过程中的失败或部分成功执行次数|
+|source_business_object_type|来源业务对象类型|运行态字段|触发决策执行的业务对象类型|
+|source_business_object_id|来源业务对象编号|运行态字段|触发决策执行的业务对象编号|
+|exception_category|异常分类|运行态字段|资源不足、资格冲突、空间能力、策略执行、系统或部分结果异常|
+|business_impact_status|业务影响状态|运行态字段|无影响、异常后恢复、等待重试、终局失败或影响待确认|
+|decision_source_version|决策来源版本|运行态字段|由来源事实数量和最近更新时间形成的投影数据版本|
+|source_record_count|来源记录数|运行态字段|本次决策投影读取的策略、执行和结果记录总数|
+|source_updated_at|来源更新时间|运行态字段|来源事实中的最近更新时间|
+|metric_updated_at|指标更新时间|运行态字段|统一经营数据池中最近指标计算时间|
+|metrics_need_recalculation|经营指标待重算|运行态字段|来源事实晚于指标计算批次时为是|
+|projection_version|投影模型版本|运行态字段|决策中心只读投影合同版本|
+|projection_generated_at|投影生成时间|运行态字段|当前只读投影生成时间|
 |decision_execution_success_rate|策略执行成功率|运行态字段|成功执行数除以已结束执行数|
 |decision_result_coverage_rate|决策结果覆盖率|运行态字段|形成结果的执行数除以全部执行数|
-|decision_exception_rate|决策异常率|运行态字段|失败与部分成功执行数除以已结束执行数|
+|decision_exception_rate|决策异常率|运行态字段|发生异常的决策过程数除以已结束决策过程数|
+|decision_exception_attempt_rate|异常尝试率|运行态字段|失败与部分成功的原始执行数除以已结束执行数|
 |average_decision_duration_seconds|平均决策耗时（秒）|运行态字段|有效执行耗时平均值|
 |latest_run_at|最近执行时间|运行态字段|能力最近一次执行时间|
 |strategy_page_key|策略配置页面|运行态字段|源策略页面导航编号|
 |run_page_key|策略执行页面|运行态字段|源执行页面导航编号|
 |result_page_key|策略结果页面|运行态字段|源结果页面导航编号|
+
+异常分类：`RESOURCE_SHORTAGE` 资源不足、`ELIGIBILITY_CONFLICT` 资格冲突、`SPATIAL_CAPABILITY` 空间能力不足、`STRATEGY_EXECUTION` 策略执行异常、`SYSTEM_EXCEPTION` 系统异常、`PARTIAL_RESULT` 部分结果。
+
+业务影响状态：`NO_IMPACT` 无业务影响、`RECOVERED_AFTER_RETRY` 重试后恢复、`PENDING_RETRY` 等待重试、`TERMINAL_FAILURE` 终局失败、`IMPACT_UNCONFIRMED` 影响待确认。
 
 ### 1.2.6 SimulationRun 指标汇总字段
 

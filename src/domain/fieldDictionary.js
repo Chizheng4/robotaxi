@@ -1413,10 +1413,35 @@ export const fieldDictionary = {
   failed_run_count: "失败执行数",
   no_action_run_count: "无动作执行数",
   decision_result_count: "决策结果数",
-  decision_exception_count: "决策异常数",
+  decision_exception_count: "异常决策过程数",
+  decision_exception_attempt_count: "异常尝试数",
+  affected_business_object_count: "受影响业务对象数",
+  recovered_exception_process_count: "异常后恢复数",
+  unresolved_exception_process_count: "待处理异常过程数",
+  terminal_impact_object_count: "终局影响对象数",
+  decision_process_count: "决策过程数",
+  decision_attempt_count: "决策尝试数",
+  exception_attempt_count: "过程异常尝试数",
+  source_business_object_type: "来源业务对象类型",
+  source_business_object_id: "来源业务对象编号",
+  exception_category: "异常分类",
+  business_impact_status: "业务影响状态",
+  decision_source_version: "决策来源版本",
+  source_record_count: "来源记录数",
+  source_updated_at: "来源更新时间",
+  metric_updated_at: "指标更新时间",
+  metrics_need_recalculation: "经营指标待重算",
+  projection_version: "投影模型版本",
+  projection_generated_at: "投影生成时间",
+  decision_process_id: "决策过程编号",
+  final_decision_status: "最终决策状态",
+  first_attempt_at: "首次尝试时间",
+  latest_attempt_at: "最近尝试时间",
+  source_run_ids: "来源执行编号列表",
   decision_execution_success_rate: "策略执行成功率",
   decision_result_coverage_rate: "决策结果覆盖率",
   decision_exception_rate: "决策异常率",
+  decision_exception_attempt_rate: "异常尝试率",
   average_decision_duration_seconds: "平均决策耗时（秒）",
   latest_run_at: "最近执行时间",
   effect_metric_ids: "效果指标编号列表",
@@ -1970,6 +1995,18 @@ export const valueDictionary = {
   TARGET_UNAVAILABLE: "目标不可用",
   ROBOTAXI_UNAVAILABLE: "Robotaxi 不可用",
   SUCCESS: "成功",
+  RESOURCE_SHORTAGE: "资源不足",
+  ELIGIBILITY_CONFLICT: "资格冲突",
+  SPATIAL_CAPABILITY: "空间能力不足",
+  STRATEGY_EXECUTION: "策略执行异常",
+  SYSTEM_EXCEPTION: "系统异常",
+  PARTIAL_RESULT: "部分结果",
+  NO_IMPACT: "无业务影响",
+  RECOVERED_AFTER_RETRY: "重试后恢复",
+  PENDING_RETRY: "等待重试",
+  TERMINAL_FAILURE: "终局失败",
+  IMPACT_UNCONFIRMED: "影响待确认",
+  DECISION_CONTROL_V2: "决策监控第二版",
   SKIPPED: "跳过",
   PASS: "通过",
   FAIL: "未通过",
@@ -2895,5 +2932,11 @@ export const fieldValueDictionary = {
 };
 
 export function getDisplayValue(value, field = null) {
-  return fieldValueDictionary[field]?.[value] || valueDictionary[value] || value;
+  const displayValue = fieldValueDictionary[field]?.[value] || valueDictionary[value];
+  if (displayValue) return displayValue;
+  if (typeof value === "string" && /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(value)) {
+    if (typeof console !== "undefined") console.warn(`[字段字典] 缺少枚举中文名：${field ? `${field}:` : ""}${value}`);
+    return "未登记枚举值";
+  }
+  return value;
 }

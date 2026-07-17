@@ -1604,6 +1604,7 @@ function App({ currentUser, onLogout }) {
       orderMatchingStrategies: createOrderMatchingStrategyRows(data, orderMatchingRuns),
       orderMatchingRuns,
       orderMatchingDecisions,
+      serviceOrders,
       fleetOperationPolicies,
       fleetOperationPolicyRuns,
       fleetOperationPolicyResults,
@@ -1619,7 +1620,7 @@ function App({ currentUser, onLogout }) {
     },
     metricRows: operatingDataPool.pages.decisionCenter,
     comparisons: operatingDataPool.comparisons,
-  }), [data, demandSimulationRuns, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, operatingDataPool.comparisons, operatingDataPool.pages.decisionCenter, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routePlanningRuns]);
+  }), [data, demandSimulationRuns, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, operatingDataPool.comparisons, operatingDataPool.pages.decisionCenter, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routePlanningRuns, serviceOrders]);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
   const autoMetricCalculationRunIdsRef = useRef(new Set());
   const publicDemoBootstrapRef = useRef({
@@ -8531,13 +8532,14 @@ function DecisionCenterPanel({ view, onNavigate }) {
   const activities = (view?.activities || []).slice(0, 12);
   const exceptions = (view?.exceptions || []).slice(0, 6);
   const summaryItems = [
-    ["决策能力", summary.decision_capability_count, "项"],
-    ["启用策略", summary.active_strategy_count, "项"],
     ["策略执行", summary.run_count, "次"],
-    ["执行成功率", summary.decision_execution_success_rate, "percent"],
-    ["结果覆盖率", summary.decision_result_coverage_rate, "percent"],
-    ["决策异常", summary.decision_exception_count, "项"],
+    ["决策过程", summary.decision_process_count, "个"],
+    ["异常尝试", summary.decision_exception_attempt_count, "次"],
+    ["受影响对象", summary.affected_business_object_count, "个"],
+    ["重试后恢复", summary.recovered_exception_process_count, "个"],
+    ["终局影响", summary.terminal_impact_object_count, "个"],
   ];
+  const unresolvedCount = summary.unresolved_exception_process_count || 0;
   return (
     <div className="decision-center-panel">
       <header className="decision-center-header">
@@ -8546,11 +8548,16 @@ function DecisionCenterPanel({ view, onNavigate }) {
           <h2>跨价值流决策运行视图</h2>
           <p>策略事实仍由各价值流独立拥有；这里统一观察执行质量、异常和经营效果。</p>
         </div>
-        <div className={summary.decision_exception_count > 0 ? "decision-health is-warning" : "decision-health"}>
-          <span>{summary.decision_exception_count > 0 ? "存在待处理异常" : "决策运行正常"}</span>
-          <strong>{summary.decision_exception_count || 0}</strong>
+        <div className={unresolvedCount > 0 ? "decision-health is-warning" : "decision-health"}>
+          <span>{unresolvedCount > 0 ? "待处理决策过程" : summary.decision_exception_count ? "异常过程均已恢复" : "决策运行正常"}</span>
+          <strong>{unresolvedCount}</strong>
         </div>
       </header>
+      <div className="decision-data-contract">
+        <span>来源版本 {summary.decision_source_version || "暂无"}</span>
+        <span>来源更新 {summary.source_updated_at || "暂无"}</span>
+        <span>经营指标 {summary.metrics_need_recalculation ? "待重算" : summary.metric_updated_at ? `已更新 ${summary.metric_updated_at}` : "暂无计算"}</span>
+      </div>
       <section className="decision-summary-grid" aria-label="决策运行摘要">
         {summaryItems.map(([label, value, unit]) => (
           <div key={label} className="decision-summary-item">
@@ -8564,12 +8571,12 @@ function DecisionCenterPanel({ view, onNavigate }) {
         <div className="decision-capability-grid">
           {capabilities.map((item) => (
             <article className="decision-capability" key={item.decision_capability_id}>
-              <div className="decision-capability-title"><div><span>{item.value_stream_name}</span><h4>{item.decision_capability_name}</h4></div><Tag color={item.decision_exception_count ? "warning" : item.run_count ? "success" : "default"}>{item.decision_exception_count ? `${item.decision_exception_count} 项异常` : item.run_count ? "正常" : "未执行"}</Tag></div>
+              <div className="decision-capability-title"><div><span>{item.value_stream_name}</span><h4>{item.decision_capability_name}</h4></div><Tag color={item.unresolved_exception_process_count ? "warning" : item.run_count ? "success" : "default"}>{item.unresolved_exception_process_count ? `${item.unresolved_exception_process_count} 个待处理` : item.decision_exception_count ? "异常已恢复" : item.run_count ? "正常" : "未执行"}</Tag></div>
               <dl>
                 <div><dt>策略</dt><dd>{item.active_strategy_count} / {item.strategy_count} 启用</dd></div>
-                <div><dt>执行</dt><dd>{item.run_count} 次</dd></div>
+                <div><dt>执行 / 过程</dt><dd>{item.run_count} / {item.decision_process_count}</dd></div>
                 <div><dt>成功率</dt><dd>{formatDecisionRate(item.decision_execution_success_rate)}</dd></div>
-                <div><dt>结果</dt><dd>{item.decision_result_count} 条</dd></div>
+                <div><dt>异常尝试 / 影响</dt><dd>{item.decision_exception_attempt_count} / {item.affected_business_object_count}</dd></div>
               </dl>
               <div className="decision-capability-actions">
                 <Button size="small" type="text" onClick={() => onNavigate?.(item.strategy_page_key)}>策略配置</Button>
@@ -8583,13 +8590,13 @@ function DecisionCenterPanel({ view, onNavigate }) {
       <section className="decision-section decision-execution-section">
         <div className="decision-section-heading"><div><span className="analysis-eyebrow">执行监控</span><h3>最近策略执行</h3></div><small>跨领域状态已归一化，源状态保持不变</small></div>
         {activities.length ? (
-          <div className="decision-table-scroll"><table className="decision-table"><thead><tr><th>决策能力</th><th>价值流</th><th>策略</th><th>执行状态</th><th>结果数</th><th>发生时间</th></tr></thead><tbody>{activities.map((item) => <tr key={item.decision_activity_id}><td>{item.decision_capability_name}</td><td>{item.value_stream_name}</td><td>{item.strategy_name}</td><td><span className={`decision-status is-${String(item.normalized_status).toLowerCase()}`}>{getDisplayValue(item.normalized_status)}</span></td><td>{item.decision_result_count}</td><td>{item.occurred_at || "暂无时间"}</td></tr>)}</tbody></table></div>
+          <div className="decision-table-scroll"><table className="decision-table"><thead><tr><th>决策能力</th><th>价值流</th><th>策略</th><th>来源对象</th><th>执行状态</th><th>结果数</th><th>发生时间</th></tr></thead><tbody>{activities.map((item) => <tr key={item.decision_activity_id}><td>{item.decision_capability_name}</td><td>{item.value_stream_name}</td><td>{item.strategy_name}</td><td>{item.source_business_object_id || "无"}</td><td><span className={`decision-status is-${String(item.normalized_status).toLowerCase()}`}>{getDisplayValue(item.normalized_status)}</span></td><td>{item.decision_result_count}</td><td>{item.occurred_at || "暂无时间"}</td></tr>)}</tbody></table></div>
         ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="执行策略后将在这里形成跨价值流运行记录" />}
       </section>
       <section className="decision-lower-grid">
         <div className="decision-section">
           <div className="decision-section-heading"><div><span className="analysis-eyebrow">异常治理</span><h3>待关注执行</h3></div></div>
-          {exceptions.length ? <div className="decision-exception-list">{exceptions.map((item) => <button type="button" key={item.decision_activity_id} onClick={() => onNavigate?.(item.run_page_key)}><span>{item.decision_capability_name} · {getDisplayValue(item.normalized_status)}</span><strong>{item.result_summary || item.source_run_id}</strong></button>)}</div> : <div className="decision-empty-state">当前没有失败或部分成功的策略执行</div>}
+          {exceptions.length ? <div className="decision-exception-list">{exceptions.map((item) => <button type="button" key={item.decision_process_id} onClick={() => onNavigate?.(item.run_page_key)}><span>{item.decision_capability_name} · {getDisplayValue(item.exception_category)} · {getDisplayValue(item.business_impact_status)}</span><strong>{item.source_business_object_id || "无来源对象"} · {item.exception_attempt_count} 次异常尝试 · {getDisplayValue(item.result_summary || "无异常说明")}</strong></button>)}</div> : <div className="decision-empty-state">当前没有异常决策过程</div>}
         </div>
         <div className="decision-section">
           <div className="decision-section-heading"><div><span className="analysis-eyebrow">经营效果</span><h3>关联核心指标</h3></div><small>来自统一经营数据池</small></div>
@@ -10424,7 +10431,7 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260624-v028-1-5"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-	    import("./domain/fieldDisplayService.js?v=20260716-v046-0-6"),
+	    import("./domain/fieldDisplayService.js?v=20260717-v046-0-7"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
@@ -10469,10 +10476,10 @@ async function bootstrap() {
 		    import("./ui/pageContextService.js?v=20260715-v044-4-0"),
 		    import("./ui/dataChartService.js?v=20260714-v043-0-1"),
 		    import("./ui/metricObjectPresentationService.js?v=20260715-v044-5-1"),
-		    import("./ui/navigationRegistry.js?v=20260716-v046-0-6"),
+		    import("./ui/navigationRegistry.js?v=20260717-v046-0-7"),
 		    import("./ui/pageArchitectureRegistry.js?v=20260716-v046-0-6"),
 		    import("./services/operatingModelService.js?v=20260715-v045-0-0"),
-		    import("./services/decisionControlService.js?v=20260716-v045-3-0"),
+		    import("./services/decisionControlService.js?v=20260717-v046-0-7"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
 		    import("./services/publicDemoBootstrapService.js?v=20260715-v043-0-7"),

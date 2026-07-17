@@ -6022,6 +6022,7 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .decision-health span { color: var(--muted); font-size: var(--font-xs); }
 .decision-health strong { font-size: 22px; font-weight: 600; }
 .decision-summary-grid { display: grid; grid-template-columns: repeat(6, minmax(112px, 1fr)); border-block: 1px solid var(--line-soft); }
+.decision-data-contract { display: flex; gap: 14px; overflow-x: auto; padding: 7px 0; color: var(--muted); font-size: var(--font-xs); white-space: nowrap; scrollbar-width: none; }
 .decision-summary-item { display: grid; gap: 6px; padding: 12px 14px; border-right: 1px solid var(--line-soft); }
 .decision-summary-item:last-child { border-right: 0; }
 .decision-summary-item span { color: var(--muted); font-size: var(--font-xs); }

@@ -11,8 +11,8 @@ export const navigationGroups = Object.freeze([
     group("demandForecastManagement", "需求预测", [
       page("longTermDemandForecastStrategies", "预测策略"),
       page("longTermDemandForecastRuns", "预测执行"),
-      page("longTermDemandForecasts", "预测结果"),
     ]),
+    page("longTermDemandForecasts", "预测结果"),
     group("supplyDecisionManagement", "供应决策", [
       page("supplyDecisionStrategies", "决策策略"),
       page("supplyDecisionRuns", "决策执行"),

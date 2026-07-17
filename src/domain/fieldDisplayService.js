@@ -10,11 +10,14 @@ const INTERNAL_FIELD_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
 const INTERNAL_VALUE_PATTERN = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
 
 export function getFieldLabel(field) {
-  return fieldDictionary[field] || field;
+  if (fieldDictionary[field]) return fieldDictionary[field];
+  return isInternalFieldName(field) ? "未登记字段" : field;
 }
 
 export function getDisplayValue(value, field = null) {
-  return fieldValueDictionary[field]?.[value] || valueDictionary[value] || value;
+  const displayValue = fieldValueDictionary[field]?.[value] || valueDictionary[value];
+  if (displayValue) return displayValue;
+  return isInternalEnumValue(value) ? "未登记枚举值" : value;
 }
 
 export { getDetailTitle };
