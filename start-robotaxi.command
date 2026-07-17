@@ -9,39 +9,6 @@ APP_VERSION="$(date +%Y%m%d-%H%M%S)"
 URL="http://${HOST}:${PORT}/?v=${APP_VERSION}"
 LOG_FILE="${PROJECT_DIR}/.robotaxi-server.log"
 
-open_in_codex_browser() {
-  local target_url="$1"
-  osascript - "$target_url" <<'APPLESCRIPT'
-on run argv
-  set targetURL to item 1 of argv
-  set localPrefix to "http://127.0.0.1:4173/"
-
-  tell application id "com.openai.codex"
-    repeat with appWindow in windows
-      repeat with tabIndex from 1 to count of tabs of appWindow
-        set appTab to tab tabIndex of appWindow
-        if (URL of appTab starts with localPrefix) then
-          set URL of appTab to targetURL
-          set active tab index of appWindow to tabIndex
-          set index of appWindow to 1
-          activate
-          return "reused"
-        end if
-      end repeat
-    end repeat
-
-    if (count of windows) is 0 then make new window
-    tell front window
-      set newTab to make new tab with properties {URL:targetURL}
-      set active tab index to count of tabs
-    end tell
-    activate
-    return "opened"
-  end tell
-end run
-APPLESCRIPT
-}
-
 cd "$PROJECT_DIR"
 
 echo "==> Building frontend bundle from src/main.jsx ..."
@@ -99,11 +66,11 @@ sleep 1
 
 if python3 scripts/verify-server-readiness.py "${HOST}" "${PORT}"; then
   ROBOTAXI_BROWSER_VERIFY_URL="${URL}" node scripts/verify-browser-load.mjs
-  if CODEX_BROWSER_RESULT="$(open_in_codex_browser "$URL")"; then
-    echo "==> Opened ${URL} in Codex Browser (${CODEX_BROWSER_RESULT})"
+  if [ "${ROBOTAXI_SKIP_BROWSER_OPEN:-0}" = "1" ]; then
+    echo "==> Browser opening skipped for automated verification."
   else
-    echo "WARNING: Codex Browser unavailable; opening the system default browser instead."
     open "$URL"
+    echo "==> Opened ${URL} in the system default browser."
   fi
   echo "==> Concurrent resource check passed. Browser render check passed. Cache disabled. Runtime data preserved."
   echo "==> Server is running on ${URL}"

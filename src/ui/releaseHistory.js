@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v046.0.8",
+    "title": "移除启动脚本对 Codex 窗口和标签页的不稳定外部控制，恢复可靠的本地启动链路",
+    "changes": [
+      "删除通过 AppleScript 遍历、复用和修改 Codex Browser 标签页的逻辑，避免启动网站时触发 Codex 崩溃或重启。",
+      "本地服务继续完成 Bundle 构建、并发静态服务、就绪检查和真实浏览器白屏验证。",
+      "验证完成后由 macOS 使用系统默认浏览器打开本地网站；自动验证可通过环境开关跳过打开动作。",
+      "提交前检查禁止启动脚本重新引入 Codex 窗口控制，并同步更新本地运行说明。"
+    ],
+    "audienceTitle": "本地启动稳定性修复",
+    "audienceChanges": [
+      "双击启动文件不再直接操控 Codex 内部标签，避免 Codex 崩溃重启。",
+      "网站仍会完成构建和页面检查，然后由系统默认浏览器打开。",
+      "本地运行数据、无缓存访问和并发服务保持不变。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v046.0.7",
     "title": "按调用业务单据聚合决策过程，区分异常尝试与真实业务影响，并建立决策投影的数据版本和中文展示合同",
     "changes": [

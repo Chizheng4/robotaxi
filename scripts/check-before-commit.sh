@@ -189,6 +189,10 @@ if ! grep -q "ThreadingHTTPServer" start-robotaxi.command; then
   fail "启动脚本必须使用并发静态服务，避免单连接阻塞导致白屏"
 fi
 
+if rg -n "osascript|com\.openai\.codex" start-robotaxi.command; then
+  fail "启动脚本不得从外部操控 Codex 窗口或标签页"
+fi
+
 print_step "检查 Git diff 空白问题"
 git diff --check
 git diff --cached --check
