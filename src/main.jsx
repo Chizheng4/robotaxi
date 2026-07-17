@@ -3077,6 +3077,21 @@ function App({ currentUser, onLogout }) {
     }
   }
 
+  function getReusableLongTermDemandForecast(strategy) {
+    if (!businessPlanningService?.findReusableLongTermDemandForecast || !strategy) return null;
+    return businessPlanningService.findReusableLongTermDemandForecast({
+      strategy,
+      businessTargets: data.businessTargets || [],
+      demandProfiles: data.demandProfiles || [],
+      supplyProductionProfiles: data.supplyProductionProfiles || [],
+      robotaxis: data.robotaxis || [],
+      opsCenters: data.opsCenters || [],
+      zones: data.zones || [],
+      existingRuns: data.longTermDemandForecastRuns || [],
+      existingResults: data.longTermDemandForecasts || [],
+    });
+  }
+
   function editLongTermDemandForecastStrategy(strategy) {
     setPendingLongTermDemandForecastStrategy(strategy);
     setLongTermDemandForecastStrategyDraft(createPlanningConfigDraft(longTermDemandForecastStrategyConfigFields, strategy));
@@ -3706,6 +3721,7 @@ function App({ currentUser, onLogout }) {
                   completeFleetOperationWork,
                   editFleetOperationPolicy,
                   runLongTermDemandForecastStrategy,
+                  getReusableLongTermDemandForecast,
                   editLongTermDemandForecastStrategy,
                   runSupplyDecisionStrategy,
                   runShortTermDemandForecastStrategy,
@@ -7034,12 +7050,15 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         title: "操作",
         fixed: "right",
         width: 120,
-        render: (_, row) => renderActionCell(row, (
-          <RowActionGroup>
-            <RowActionButton onClick={() => actions.runLongTermDemandForecastStrategy(row)}>执行</RowActionButton>
-            <RowActionButton type="default" onClick={() => actions.editLongTermDemandForecastStrategy(row)}>配置</RowActionButton>
-          </RowActionGroup>
-        )),
+        render: (_, row) => {
+          const reusableForecast = actions.getReusableLongTermDemandForecast?.(row);
+          return renderActionCell(row, (
+            <RowActionGroup>
+              <RowActionButton onClick={() => actions.runLongTermDemandForecastStrategy(row)}>{reusableForecast ? "查看预测结果" : "执行预测"}</RowActionButton>
+              <RowActionButton type="default" onClick={() => actions.editLongTermDemandForecastStrategy(row)}>配置</RowActionButton>
+            </RowActionGroup>
+          ));
+        },
       };
     }
     if (isShortTermDemandForecastStrategyPage) {
@@ -8670,6 +8689,9 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
             value={selected.forecast_result_id}
             onChange={(value) => onSelect(rows.find((row) => row.forecast_result_id === value))}
             options={rows.map((row) => ({ value: row.forecast_result_id, label: formatForecastResultLabel(row) }))}
+            showSearch
+            optionFilterProp="label"
+            popupMatchSelectWidth={false}
             getPopupContainer={() => document.body}
           />
         </div>
@@ -8737,7 +8759,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
       </div>
       <div className="forecast-analysis-grid">
         <section><h3>能力与瓶颈</h3>{bottlenecks.map((key) => <div className="forecast-analysis-row" key={key}><span>{getFieldLabel(key)}</span><strong>{formatPlanningValue(selected[key])}</strong></div>)}</section>
-        <section><h3>Robotaxi 规模</h3><div className="forecast-analysis-row"><span>当前有效</span><strong>{formatPlanningValue(selected.effective_current_robotaxi)}</strong></div><div className="forecast-analysis-row"><span>需求驱动</span><strong>{getDisplayValue(selected.requirement_driver)}</strong></div><div className="forecast-analysis-row"><span>单车有效日产能</span><strong>{formatPlanningValue(selected.robotaxi_effective_daily_orders)}</strong></div></section>
+        <section><h3>Robotaxi 规模</h3><div className="forecast-analysis-row"><span>{getFieldLabel("effective_current_robotaxi")}</span><strong>{formatPlanningValue(selected.effective_current_robotaxi)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("requirement_driver")}</span><strong>{getDisplayValue(selected.requirement_driver)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("robotaxi_effective_daily_orders")}</span><strong>{formatPlanningValue(selected.robotaxi_effective_daily_orders)}</strong></div></section>
         <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>建议生产数量</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>生产准备完成</span><strong>{selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>预测期可形成供给</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>全部供给完成</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
       </div>
       <details className="forecast-calculation-details">
@@ -8773,10 +8795,11 @@ function formatPlanningPercent(value) {
 
 function formatForecastResultLabel(row = {}) {
   const name = row.zone_name || row.forecast_name || "预测结果";
-  if (!row.created_at) return name;
+  const period = row.forecast_start_date && row.forecast_end_date ? `${row.forecast_start_date} 至 ${row.forecast_end_date}` : null;
+  if (!row.created_at) return [name, period].filter(Boolean).join(" · ");
   const date = new Date(row.created_at);
-  if (Number.isNaN(date.getTime())) return name;
-  return `${name} · ${date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}`;
+  if (Number.isNaN(date.getTime())) return [name, period].filter(Boolean).join(" · ");
+  return [name, period, date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })].filter(Boolean).join(" · ");
 }
 
 function groupForecastCalculationSteps(steps = []) {
@@ -12363,6 +12386,18 @@ function removeRuntimeResetParam() {
 
 function normalizeOperationalRouteStrategies(operationalData) {
   const demandProfiles = normalizeDemandProfiles ? normalizeDemandProfiles(operationalData) : (operationalData.demandProfiles || []);
+  const longTermDemandForecasts = businessPlanningService?.normalizeLongTermDemandForecastResults
+    ? businessPlanningService.normalizeLongTermDemandForecastResults(operationalData.longTermDemandForecasts)
+    : (operationalData.longTermDemandForecasts || []);
+  const supplyPlans = businessPlanningService?.normalizeSupplyPlans
+    ? businessPlanningService.normalizeSupplyPlans({
+      supplyPlans: operationalData.supplyPlans || [],
+      forecasts: longTermDemandForecasts,
+      supplyDecisionRuns: operationalData.supplyDecisionRuns || [],
+      supplyDecisionStrategies: operationalData.supplyDecisionStrategies || [],
+      supplyProductionProfiles: operationalData.supplyProductionProfiles || [],
+    })
+    : (operationalData.supplyPlans || []);
   const planningDefaults = operatingPlanningService?.initializeOperatingPlanningData?.() || {};
   const legacyDemandProfileGroups = splitDemandProfilesByTarget ? splitDemandProfilesByTarget(demandProfiles) : {
     placeDemandProfiles: operationalData.placeDemandProfiles || [],
@@ -12372,9 +12407,8 @@ function normalizeOperationalRouteStrategies(operationalData) {
   return {
     ...operationalData,
     routes: normalizeRouteStrategyReferences(operationalData.routes || []),
-    longTermDemandForecasts: businessPlanningService?.normalizeLongTermDemandForecastResults
-      ? businessPlanningService.normalizeLongTermDemandForecastResults(operationalData.longTermDemandForecasts)
-      : (operationalData.longTermDemandForecasts || []),
+    longTermDemandForecasts,
+    supplyPlans,
     shortTermDemandForecastStrategies: mergeDefaultConfiguredRecords(
       operationalData.shortTermDemandForecastStrategies,
       planningDefaults.shortTermDemandForecastStrategies,

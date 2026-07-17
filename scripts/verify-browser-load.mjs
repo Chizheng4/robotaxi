@@ -372,7 +372,7 @@ try {
     await clickMenuItem("预测策略");
     await clickElementCenter(".row-action-menu-trigger");
     await delay(500);
-    await clickElementCenter(".ant-dropdown:not(.ant-dropdown-hidden) .ant-dropdown-menu-item", "执行");
+    await clickElementCenter(".ant-dropdown:not(.ant-dropdown-hidden) .ant-dropdown-menu-item", "执行预测");
     await delay(1500);
     if (mobileAssertionEnabled) {
       await send("Emulation.setDeviceMetricsOverride", {

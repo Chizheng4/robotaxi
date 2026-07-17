@@ -1,18 +1,47 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { createEchartsOption } from "../src/ui/dataChartService.js";
+import { normalizeDemandProfiles } from "../src/data/spatialBusinessProfileInitialization.js";
 import {
   executeLongTermDemandForecastStrategy,
   executeSupplyDecisionStrategy,
+  findReusableLongTermDemandForecast,
   initializeDefaultBusinessTargets,
   initializeDefaultLongTermDemandForecastStrategies,
   initializeDefaultSupplyDecisionStrategies,
   initializeDefaultSupplyProductionProfiles,
+  normalizeSupplyPlans,
 } from "../src/services/businessPlanningService.js";
 
 const now = "2026-07-17T00:00:00.000Z";
 const strategy = initializeDefaultLongTermDemandForecastStrategies(now)[0];
 const businessTarget = initializeDefaultBusinessTargets(now)[0];
 const productionProfile = initializeDefaultSupplyProductionProfiles(now)[0];
+assert.equal(strategy.robotaxi_available_hours_per_day, 24);
+assert.equal(businessTarget.forecast_period_count, 36);
+assert.equal(businessTarget.target_name, "三年运营增长目标");
+
+const place = { place_id: "P-001", place_name: "测试地点", place_type: "RESIDENTIAL", place_status: "ACTIVE" };
+const initializedProfiles = normalizeDemandProfiles({ places: [place], demandProfiles: [] });
+const initializedPlaceProfile = initializedProfiles.find((item) => item.target_object_id === place.place_id);
+assert.equal(initializedPlaceProfile.robotaxi_adoption_rate, 0.6);
+assert.equal(initializedPlaceProfile.service_acceptance_rate, 0.7);
+assert.equal(initializedPlaceProfile.competition_retention_rate, 0.4);
+
+const migratedProfiles = normalizeDemandProfiles({
+  places: [place],
+  demandProfiles: [{ ...initializedPlaceProfile, profile_version: 1, robotaxi_adoption_rate: 0.18, service_acceptance_rate: 0.9, competition_retention_rate: 0.85 }],
+});
+const migratedPlaceProfile = migratedProfiles.find((item) => item.target_object_id === place.place_id);
+assert.equal(migratedPlaceProfile.robotaxi_adoption_rate, 0.6);
+assert.equal(migratedPlaceProfile.service_acceptance_rate, 0.7);
+assert.equal(migratedPlaceProfile.competition_retention_rate, 0.4);
+assert.equal(migratedPlaceProfile.profile_version, 2);
+const preservedProfiles = normalizeDemandProfiles({
+  places: [place],
+  demandProfiles: [{ ...initializedPlaceProfile, profile_version: 2, robotaxi_adoption_rate: 0.52 }],
+});
+assert.equal(preservedProfiles.find((item) => item.target_object_id === place.place_id).robotaxi_adoption_rate, 0.52);
 const demandProfile = {
   profile_id: "DP-Z-Z-001",
   profile_status: "ACTIVE",
@@ -28,32 +57,33 @@ const demandProfile = {
 };
 const robotaxis = Array.from({ length: 20 }, (_, index) => ({
   robotaxi_id: `RTX-${index + 1}`,
-  current_cell_id: "C-1-1",
+  current_cell_id: index === 0 ? "C-1-2" : "C-1-1",
   availability_status: index === 0 ? "AVAILABLE" : "PENDING_ADMISSION",
 }));
-const execution = executeLongTermDemandForecastStrategy({
+const opsCenters = [{ ops_center_id: "OC-001", zone_id: "Z-001", cell_ids: ["C-1-1"] }];
+const zones = [{ zone_id: "Z-001", parent_zone_id: null, cell_ids: ["C-1-1"] }, { zone_id: "Z-001-A", parent_zone_id: "Z-001", cell_ids: ["C-1-2"] }];
+const executionInput = {
   strategy,
   businessTargets: [businessTarget],
   demandProfiles: [demandProfile],
   supplyProductionProfiles: [productionProfile],
   robotaxis,
-  opsCenters: [{ ops_center_id: "OC-001", cell_ids: ["C-1-1"] }],
-  zones: [{ zone_id: "Z-001", parent_zone_id: null, cell_ids: ["C-1-1"] }],
+  opsCenters,
+  zones,
+};
+const execution = executeLongTermDemandForecastStrategy({
+  ...executionInput,
   context: { now, nextRunId: () => "LDF-RUN-TEST", nextResultBaseId: () => "LDF-RES-TEST" },
 });
-assert.equal(strategy.robotaxi_available_hours_per_day, 24);
 assert.equal(execution.results[0].zone_non_retired_robotaxi_quantity, 20);
 assert.equal(execution.results[0].effective_current_robotaxi, 20);
 assert.ok(execution.run.input_fingerprint);
+assert.ok(execution.results[0].calculation_steps.every((item) => item.output_field && item.calculation_model && item.formula_expression && Object.keys(item.input_values || {}).length));
 
+const reusableForecast = findReusableLongTermDemandForecast({ ...executionInput, existingRuns: [execution.run], existingResults: execution.results });
+assert.equal(reusableForecast.results[0].forecast_result_id, execution.results[0].forecast_result_id);
 const reusedExecution = executeLongTermDemandForecastStrategy({
-  strategy,
-  businessTargets: [businessTarget],
-  demandProfiles: [demandProfile],
-  supplyProductionProfiles: [productionProfile],
-  robotaxis,
-  opsCenters: [{ ops_center_id: "OC-001", cell_ids: ["C-1-1"] }],
-  zones: [{ zone_id: "Z-001", parent_zone_id: null, cell_ids: ["C-1-1"] }],
+  ...executionInput,
   existingRuns: [execution.run],
   existingResults: execution.results,
   context: { now, nextRunId: () => "LDF-RUN-UNEXPECTED", nextResultBaseId: () => "LDF-RES-UNEXPECTED" },
@@ -80,9 +110,25 @@ const reusedSupplyDecision = executeSupplyDecisionStrategy({
 assert.equal(reusedSupplyDecision.reused, true);
 assert.equal(reusedSupplyDecision.supplyPlan.supply_plan_id, "SP-TEST");
 
+const [migratedSupplyPlan] = normalizeSupplyPlans({
+  supplyPlans: [{ supply_plan_id: "SP-LEGACY", forecast_result_id: execution.results[0].forecast_result_id, plan_status: "DRAFT", planned_robotaxi_count: 10 }],
+  forecasts: execution.results,
+  supplyDecisionRuns: [{ supply_decision_run_id: "SD-RUN-LEGACY", supply_plan_id: "SP-LEGACY", supply_decision_strategy_id: supplyStrategy.supply_decision_strategy_id }],
+  supplyDecisionStrategies: [supplyStrategy],
+  supplyProductionProfiles: [productionProfile],
+});
+assert.equal(migratedSupplyPlan.forecast_run_id, execution.run.forecast_run_id);
+assert.equal(migratedSupplyPlan.supply_decision_run_id, "SD-RUN-LEGACY");
+assert.ok(Number.isFinite(migratedSupplyPlan.required_supply_quantity));
+assert.ok(Number.isFinite(migratedSupplyPlan.feasible_manufacturing_quantity));
+
 const chartOption = createEchartsOption({
   rows: Array.from({ length: 60 }, (_, index) => ({ label: String(index), values: { value: index } })),
   series: [{ key: "value", label: "数值", visible: true }],
 });
 assert.equal(chartOption.dataZoom[0].moveOnMouseWheel, false);
-console.log("v047.1.0 经营规划执行合同验证通过");
+const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+assert.match(mainSource, /reusableForecast \? "查看预测结果" : "执行预测"/);
+assert.match(mainSource, /showSearch/);
+assert.match(mainSource, /getFieldLabel\("effective_current_robotaxi"\)/);
+console.log("v047.1.1 经营规划执行合同收口验证通过");

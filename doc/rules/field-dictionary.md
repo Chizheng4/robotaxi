@@ -1300,7 +1300,7 @@
 |committed_inbound_quantity|已承诺调入数量|计算字段|规划期已确定调入数量|
 |committed_outbound_quantity|已承诺调出数量|计算字段|规划期已确定调出数量|
 |planned_retirement_quantity|计划退役数量|计算字段|规划期计划退役数量|
-|effective_current_robotaxi|当前有效供给 Robotaxi|计算字段|区域未退役 Robotaxi 加承诺调入，减承诺调出和计划退役|
+|effective_current_robotaxi|规划资产基数|计算字段|区域未退役 Robotaxi 加承诺调入，减承诺调出和计划退役|
 |robotaxi_gap_quantity|Robotaxi 缺口|计算字段|最终所需减当前有效数量|
 |production_capacity_period_unit|生产能力周期单位|配置字段|周、月、季度或年|
 |production_capacity_per_period|每期生产能力|配置字段|生产能力唯一配置真值|

@@ -5,6 +5,11 @@ const TargetObjectType = {
 };
 
 const DEFAULT_PEAK_DEMAND_RATIO = 0.15;
+const LEGACY_PLACE_DEMAND_DEFAULTS = {
+  robotaxi_adoption_rate: 0.18,
+  service_acceptance_rate: 0.9,
+  competition_retention_rate: 0.85,
+};
 const DEFAULT_PLACE_GROWTH_RATE_BY_TYPE = {
   RESIDENTIAL: 0.012,
   OFFICE: 0.009,
@@ -33,6 +38,11 @@ function profileTargetName({ targetObjectType, targetObjectId, places = [], serv
 
 function roundValue(value, digits = 2) {
   return Number((Number(value) || 0).toFixed(digits));
+}
+
+function usesLegacyPlaceDemandDefaults(profile = {}) {
+  if (Number(profile.profile_version || 1) > 1) return false;
+  return Object.entries(LEGACY_PLACE_DEMAND_DEFAULTS).every(([key, value]) => Number(profile[key]) === value);
 }
 
 function currentRealCalculationTime() {
@@ -229,7 +239,8 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
   return places.map((place) => {
     const baseProfile = createPlaceDemandProfile(place);
     const existingProfile = placeProfileById.get(place.place_id) || {};
-    const nextCalculatedAt = calculatedAt || existingProfile.calculated_at || baseProfile.calculated_at;
+    const migrateLegacyDefaults = usesLegacyPlaceDemandDefaults(existingProfile);
+    const nextCalculatedAt = calculatedAt || (migrateLegacyDefaults ? baseProfile.calculated_at : existingProfile.calculated_at) || baseProfile.calculated_at;
     const residentPopulation = Number(existingProfile.resident_population ?? baseProfile.resident_population);
     const workingPopulation = Number(existingProfile.working_population ?? baseProfile.working_population);
     const dailyVisitors = Number(existingProfile.daily_visitors ?? baseProfile.daily_visitors);
@@ -238,9 +249,9 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
     const visitorTripWeight = Number(existingProfile.visitor_trip_weight ?? baseProfile.visitor_trip_weight ?? 1);
     const tripGenerationRate = Number(existingProfile.trip_generation_rate ?? baseProfile.trip_generation_rate);
     const demandWeight = Number(existingProfile.demand_weight ?? baseProfile.demand_weight);
-    const robotaxiAdoptionRate = Number(existingProfile.robotaxi_adoption_rate ?? baseProfile.robotaxi_adoption_rate);
-    const serviceAcceptanceRate = Number(existingProfile.service_acceptance_rate ?? baseProfile.service_acceptance_rate);
-    const competitionRetentionRate = Number(existingProfile.competition_retention_rate ?? baseProfile.competition_retention_rate ?? 0.4);
+    const robotaxiAdoptionRate = Number(migrateLegacyDefaults ? baseProfile.robotaxi_adoption_rate : existingProfile.robotaxi_adoption_rate ?? baseProfile.robotaxi_adoption_rate);
+    const serviceAcceptanceRate = Number(migrateLegacyDefaults ? baseProfile.service_acceptance_rate : existingProfile.service_acceptance_rate ?? baseProfile.service_acceptance_rate);
+    const competitionRetentionRate = Number(migrateLegacyDefaults ? baseProfile.competition_retention_rate : existingProfile.competition_retention_rate ?? baseProfile.competition_retention_rate ?? 0.4);
     const peakDemandRatio = Number(existingProfile.busiest_hour_share ?? existingProfile.peak_demand_ratio ?? baseProfile.busiest_hour_share);
     const growthRate = Number(existingProfile.place_period_growth_rate ?? existingProfile.growth_rate ?? baseProfile.place_period_growth_rate);
     const dailyPopulationExposure = residentPopulation * residentTripWeight + workingPopulation * workerTripWeight + dailyVisitors * visitorTripWeight;
@@ -250,7 +261,7 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
       ...baseProfile,
       profile_id: existingProfile.profile_id || baseProfile.profile_id,
       profile_name: existingProfile.profile_name || baseProfile.profile_name,
-      profile_version: Number(existingProfile.profile_version || baseProfile.profile_version),
+      profile_version: migrateLegacyDefaults ? 2 : Number(existingProfile.profile_version || baseProfile.profile_version),
       profile_status: existingProfile.profile_status || baseProfile.profile_status,
       effective_from: existingProfile.effective_from || baseProfile.effective_from,
       effective_to: existingProfile.effective_to ?? baseProfile.effective_to,

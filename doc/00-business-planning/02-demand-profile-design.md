@@ -62,6 +62,8 @@ SubZone 只表达空间组织关系，不生成画像。
 |`growth_rate_updated_at`|增长率更新时间|
 |`busiest_hour_share`|最繁忙小时占比|
 
+新初始化的地点画像统一使用 `robotaxi_adoption_rate = 0.6`、`service_acceptance_rate = 0.7`、`competition_retention_rate = 0.4`。运行态只迁移版本 1 且仍保持旧默认组合 `0.18 / 0.9 / 0.85` 的未配置画像；用户已修改或版本大于 1 的画像必须保留原值。
+
 ### 4.2 计算
 
 ```text

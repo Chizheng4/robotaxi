@@ -69,7 +69,7 @@ flowchart TD
   G --> H
   I["ServiceArea 承载能力"] --> J["容量与瓶颈校验"]
   E --> J
-  H --> K["扣减当前有效 Robotaxi"]
+  H --> K["扣减规划资产基数"]
   K --> L["Robotaxi 净缺口"]
   M["生产、检验与交付能力"] --> N["目标日前可形成供给"]
   L --> N
@@ -338,7 +338,7 @@ required_robotaxi_quantity
 
 结果必须保存 `requirement_driver`：`DAILY_ORDER_CAPACITY / PEAK_CONCURRENCY / BUSINESS_MINIMUM`，并分别展示三个来源，不只展示最大值。
 
-## 11. 当前有效 Robotaxi 与缺口
+## 11. 规划资产基数与缺口
 
 ```text
 effective_current_robotaxi
@@ -353,11 +353,11 @@ robotaxi_gap_quantity
 
 其中：
 
-- `zone_non_retired_robotaxi_quantity`：目标 Zone 运营中心内除已退役外的 Robotaxi 资产；
+- `zone_non_retired_robotaxi_quantity`：归属于目标一级 Zone 的全部非退役 Robotaxi 资产，包含其子 Zone；
 - `operational_robotaxi_quantity`：其中当前状态允许参与运营的 Robotaxi，只用于解释即时运营能力；
-- `effective_current_robotaxi`：长期规划中扣除已承诺调出和退役、加上已承诺调入后的可规划供给。
+- `effective_current_robotaxi`：长期规划中扣除已承诺调出和退役、加上已承诺调入后的规划资产基数；统一中文名为“规划资产基数”。
 
-每台 Robotaxi 必须优先按自身区域字段归属；自身未保存区域时，通过 `ops_center_id` 与运营中心的 Zone 关系解析。禁止对特定 Zone 读取全部 Robotaxi，也不得把待准入、清洁、充电或维修等短期状态直接视为需要重新生产的永久资产缺口。
+每台 Robotaxi 必须优先按自身区域字段归属；自身未保存区域时，通过 `ops_center_id` 或当前位置网格与 Zone 的关系解析，并统一向上归入一级 Zone。禁止对特定 Zone 读取全局 Robotaxi，也不得把待准入、清洁、充电或维修等短期状态直接视为需要重新生产的永久资产缺口。
 
 `robotaxi_available_hours_per_day` 表达每日计划运营时长，单位为小时；全天运营场景可配置为 24。清洁、充电、维修等不可用时间统一由 `operational_availability_rate` 折减，不能同时从计划运营时长和可用率重复扣除。`average_pickup_duration_min` 与 `average_turnaround_duration_min` 的展示名称必须包含“分钟”。
 
@@ -438,7 +438,7 @@ uncovered_robotaxi_gap
 - 经营目标：目标日订单、规划模式、计划承接日订单、市场机会差异和目标市场支撑缺口；
 - 服务承载：日容量、峰值容量、等待容量及相应缺口；
 - Robotaxi 需求：单车有效日产能、日常需求、峰值需求、经营最低量、最终数量和驱动来源；
-- 当前资产：当前有效数量、调入、调出、退役和净缺口；
+- 当前资产：规划资产基数、调入、调出、退役和净缺口；
 - 生产可行性：可生产、可交付、计划生产和未覆盖缺口；
 - 经济性：盈亏平衡订单、经营贡献率和经营目标可行区间；
 - 解释质量：数据质量、缺失字段、默认假设、完整计算步骤。
@@ -454,7 +454,7 @@ uncovered_robotaxi_gap
 1. 结论区：市场日订单、目标日订单、计划承接日订单、Robotaxi 缺口、承载缺口、可形成供给和剩余缺口；
 2. 需求趋势：各预测周期和期末值，同时展示市场预测与计划承接量；经营目标作为管理意图单独比较，不伪装成预测曲线；
 3. 瓶颈判断：市场需求、Robotaxi 最大履约能力、ServiceArea 承载能力；
-4. Robotaxi 规模拆解：日常、峰值、经营最低、当前有效和新增缺口；
+4. Robotaxi 规模拆解：日常、峰值、经营最低、规划资产基数和新增缺口；
 5. 生产时间线：生产准备、首批交付、可生产期数、计划数量和未覆盖缺口；
 6. 计算过程：默认展示摘要，可展开查看公式、输入、单位、中间结果、来源和校验。
 
@@ -479,7 +479,7 @@ uncovered_robotaxi_gap
 - 增长率单位与预测周期单位一致；
 - 画像不得提供本次执行的固定增长因子；
 - 建议生产量不超过 Robotaxi 缺口；预测期内可形成供给受生产能力和交付能力约束；
-- 当前有效 Robotaxi、未覆盖缺口不得小于零；
+- 规划资产基数、未覆盖缺口不得小于零；
 - 历史执行快照和结果不可被后续配置修改；
 - 所有前端字段和枚举通过统一字段字典显示中文。
 

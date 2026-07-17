@@ -335,7 +335,7 @@ export const fieldDictionary = {
   committed_inbound_quantity: "已承诺调入数量",
   committed_outbound_quantity: "已承诺调出数量",
   planned_retirement_quantity: "计划退役数量",
-  effective_current_robotaxi: "当前有效供给 Robotaxi",
+  effective_current_robotaxi: "规划资产基数",
   robotaxi_gap_quantity: "Robotaxi 缺口",
   production_capacity_period_unit: "生产能力周期单位",
   production_capacity_per_period: "每期生产能力",

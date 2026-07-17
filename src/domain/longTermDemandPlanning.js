@@ -226,14 +226,25 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
 
 function resolveRobotaxiZoneId(robotaxi = {}, opsCenters = [], zones = []) {
   const directZoneId = robotaxi.zone_id || robotaxi.target_zone_id || robotaxi.service_zone_id;
-  if (directZoneId) return directZoneId;
+  if (directZoneId) return resolveTopLevelZoneId(directZoneId, zones);
   const currentCellId = robotaxi.current_cell_id || robotaxi.current_location_cell_id;
   const opsCenterId = robotaxi.ops_center_id || robotaxi.current_ops_center_id || robotaxi.target_ops_center_id;
   const opsCenter = opsCenters.find((item) => item.ops_center_id === opsCenterId)
     || opsCenters.find((item) => currentCellId && (item.cell_ids || []).includes(currentCellId));
   const opsCenterZoneId = opsCenter?.zone_id || opsCenter?.target_zone_id || opsCenter?.service_zone_id;
-  if (opsCenterZoneId) return opsCenterZoneId;
-  return zones.find((zone) => !zone.parent_zone_id && currentCellId && (zone.cell_ids || []).includes(currentCellId))?.zone_id || null;
+  if (opsCenterZoneId) return resolveTopLevelZoneId(opsCenterZoneId, zones);
+  const cellZone = zones.find((zone) => currentCellId && (zone.cell_ids || []).includes(currentCellId));
+  return cellZone ? resolveTopLevelZoneId(cellZone.zone_id, zones) : null;
+}
+
+function resolveTopLevelZoneId(zoneId, zones = []) {
+  let current = zones.find((zone) => zone.zone_id === zoneId);
+  const visited = new Set();
+  while (current?.parent_zone_id && !visited.has(current.zone_id)) {
+    visited.add(current.zone_id);
+    current = zones.find((zone) => zone.zone_id === current.parent_zone_id) || current;
+  }
+  return current?.zone_id || zoneId || null;
 }
 
 function buildSupplyTrendSeries({
@@ -439,7 +450,7 @@ function buildCalculationSteps(result) {
       planned_peak_hour_orders: result.planned_peak_hour_orders,
       effective_peak_hour_capacity: result.effective_peak_hour_capacity,
     }, "SERVICE_AREA_PEAK_CAPACITY", "max(0, planned_peak_hour_orders - effective_peak_hour_capacity)", "订单 / 小时", ["service_area_capacity_snapshot"]),
-    step("资产缺口", "汇总当前有效资产", "effective_current_robotaxi", {
+    step("资产缺口", "汇总规划资产基数", "effective_current_robotaxi", {
       zone_non_retired_robotaxi_quantity: result.zone_non_retired_robotaxi_quantity,
       committed_inbound_quantity: result.committed_inbound_quantity,
       committed_outbound_quantity: result.committed_outbound_quantity,

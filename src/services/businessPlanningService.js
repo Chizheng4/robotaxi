@@ -452,6 +452,67 @@ export function executeLongTermDemandForecastStrategy({
   return { run, results, reused: false };
 }
 
+export function findReusableLongTermDemandForecast({
+  strategy,
+  businessTargets = [],
+  demandProfiles = [],
+  supplyProductionProfiles = [],
+  robotaxis = [],
+  opsCenters = [],
+  zones = [],
+  existingRuns = [],
+  existingResults = [],
+} = {}) {
+  const activeBusinessTarget = businessTargets.find((item) => item.target_status === BusinessTargetStatus.ACTIVE) || businessTargets[0] || null;
+  const forecastStartDate = activeBusinessTarget?.forecast_start_date || defaultNow().slice(0, 10);
+  const activeProductionProfile = supplyProductionProfiles.find((item) => item.profile_status === SupplyProductionProfileStatus.ACTIVE && isEffectiveOn(item, forecastStartDate)) || null;
+  const targetZoneIds = Array.isArray(strategy?.target_zone_ids) && strategy.target_zone_ids.length
+    ? strategy.target_zone_ids
+    : activeBusinessTarget?.target_zone_ids || [];
+  const zoneProfiles = demandProfiles.filter((profile) => profile.target_object_type === "ZONE" && targetZoneIds.includes(profile.target_object_id));
+  const inputFingerprint = createPlanningInputFingerprint({ strategy, businessTarget: activeBusinessTarget, productionProfile: activeProductionProfile, zoneProfiles, robotaxis, opsCenters, zones });
+  const run = existingRuns.find((item) => item.run_status === LongTermDemandForecastRunStatus.SUCCEEDED && item.input_fingerprint === inputFingerprint) || null;
+  const results = run ? existingResults.filter((item) => item.forecast_run_id === run.forecast_run_id) : [];
+  return run && results.length ? { run, results, inputFingerprint } : null;
+}
+
+export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyDecisionRuns = [], supplyDecisionStrategies = [], supplyProductionProfiles = [] } = {}) {
+  const forecastById = new Map((forecasts || []).map((item) => [item.forecast_result_id, item]));
+  const runByPlanId = new Map((supplyDecisionRuns || []).filter((item) => item.supply_plan_id).map((item) => [item.supply_plan_id, item]));
+  const strategyById = new Map((supplyDecisionStrategies || []).map((item) => [item.supply_decision_strategy_id, item]));
+  const profileById = new Map((supplyProductionProfiles || []).map((item) => [item.profile_id, item]));
+  return (supplyPlans || []).map((plan) => {
+    const forecast = forecastById.get(plan.forecast_result_id || plan.forecast_id) || {};
+    const run = runByPlanId.get(plan.supply_plan_id) || {};
+    const strategy = strategyById.get(plan.supply_decision_strategy_id || run.supply_decision_strategy_id) || {};
+    const profile = profileById.get(plan.supply_production_profile_id || run.supply_production_profile_id || forecast.supply_production_profile_id) || {};
+    const gap = Math.max(0, Number(plan.robotaxi_gap_quantity ?? plan.fleet_gap_quantity ?? forecast.robotaxi_gap_quantity ?? forecast.fleet_gap_quantity ?? 0));
+    const requiredSupply = Math.ceil(gap * Math.max(0, Number(strategy.demand_coverage_rate ?? 1)) * (1 + Math.max(0, Number(strategy.safety_capacity_ratio ?? 0))));
+    const periodCount = Math.max(1, Number(forecast.forecast_period_count || 1));
+    const productionCapacity = Math.max(0, Number(profile.production_capacity_per_period || requiredSupply)) * periodCount;
+    const deliveryCapacity = Math.max(0, Number(profile.delivery_capacity_per_period || requiredSupply)) * periodCount;
+    const feasibleManufacturing = Number(plan.feasible_manufacturing_quantity ?? plan.feasible_production_quantity ?? Math.min(requiredSupply, productionCapacity || requiredSupply));
+    const feasibleDelivery = Number(plan.feasible_delivery_quantity ?? Math.min(requiredSupply, deliveryCapacity || requiredSupply));
+    const plannedQuantity = Number(plan.planned_robotaxi_count ?? Math.min(feasibleManufacturing, feasibleDelivery));
+    return {
+      ...plan,
+      forecast_result_id: plan.forecast_result_id || plan.forecast_id || null,
+      forecast_run_id: plan.forecast_run_id || forecast.forecast_run_id || null,
+      supply_decision_strategy_id: plan.supply_decision_strategy_id || run.supply_decision_strategy_id || null,
+      supply_decision_run_id: plan.supply_decision_run_id || run.supply_decision_run_id || null,
+      supply_production_profile_id: plan.supply_production_profile_id || run.supply_production_profile_id || forecast.supply_production_profile_id || null,
+      required_robotaxi_quantity: plan.required_robotaxi_quantity ?? forecast.required_robotaxi_quantity ?? null,
+      effective_current_robotaxi: plan.effective_current_robotaxi ?? forecast.effective_current_robotaxi ?? null,
+      robotaxi_gap_quantity: gap,
+      required_supply_quantity: plan.required_supply_quantity ?? requiredSupply,
+      feasible_manufacturing_quantity: plan.feasible_manufacturing_quantity ?? feasibleManufacturing,
+      feasible_delivery_quantity: plan.feasible_delivery_quantity ?? feasibleDelivery,
+      planned_robotaxi_count: plannedQuantity,
+      uncovered_robotaxi_gap: plan.uncovered_robotaxi_gap ?? Math.max(0, requiredSupply - plannedQuantity),
+    };
+  });
+}
+
 export function createSupplyPlanFromForecast({
   forecast,
   supplyProductionProfiles = [],
