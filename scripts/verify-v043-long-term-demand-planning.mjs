@@ -43,7 +43,7 @@ assert.ok(calculation.result.feasible_supply_quantity <= calculation.result.feas
 assert.ok(calculation.result.feasible_supply_quantity <= calculation.result.feasible_delivery_quantity);
 assert.ok(calculation.result.supply_trend_series.length > 1);
 assert.equal(calculation.result.supply_trend_series.at(-1).remaining_robotaxi_gap, 0);
-assert.equal(calculation.result.calculation_steps.length, 11);
+assert.equal(calculation.result.calculation_steps.length, 23);
 assert.equal(calculation.result.growth_model, "LINEAR");
 assert.ok(calculation.result.forecast_trend_series.DAY.length > calculation.result.forecast_trend_series.WEEK.length);
 assert.ok(calculation.result.forecast_trend_series.WEEK.length > calculation.result.forecast_trend_series.MONTH.length);

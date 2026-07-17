@@ -23,6 +23,8 @@ flowchart LR
 
 不建立独立“供应决策结果”对象。生产计划就是本次决策的可执行输出，执行记录通过 `supply_plan_id` 引用它。
 
+供应决策必须从一条明确的需求预测结果触发。策略列表不提供脱离预测上下文的通用“执行”动作，避免系统隐式选择第一条预测结果。相同预测结果、供应策略版本和生产画像版本已经形成未取消生产计划时，服务返回既有计划，不新增失败执行或重复计划；任一输入版本变化后才允许重新决策。
+
 ## 业务闭环
 
 ```mermaid
@@ -46,6 +48,10 @@ flowchart LR
 - 生产计划确认后才能生成生产批次；生产批次完成时通过 Robotaxi 对象服务创建具体资产，初始为待交付。
 - 交付编排只选择具体 Robotaxi、运营中心和批次；交付完成后资产进入待准入，再由运营准入任务决定是否可运营。
 - 策略、执行、计划、批次、资产和交付单均是独立对象，通过编号和服务动作关联，不共享状态机。
+
+生产计划必须保存并展示统一字段：`forecast_result_id`、`supply_decision_run_id`、`supply_decision_strategy_id`、`supply_production_profile_id`、`required_robotaxi_quantity`、`effective_current_robotaxi`、`robotaxi_gap_quantity`、`required_supply_quantity`、`feasible_manufacturing_quantity`、`feasible_delivery_quantity`、`planned_robotaxi_count` 与 `uncovered_robotaxi_gap`。页面不得再读取 `fleet_gap_quantity / feasible_production_quantity / production_gap_quantity` 等旧字段。
+
+执行成功后，调用端必须进入新生成或已存在的生产计划并选中记录；失败时保留在来源预测结果，显示可理解的中文失败原因。动作状态统一为“执行供应决策 / 执行中 / 查看生产计划 / 重新决策”，不能在输入未变化时持续显示可重复执行。
 
 ## 验证要求
 

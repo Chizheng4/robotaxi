@@ -5,7 +5,7 @@ import {
   normalizeLongTermDemandForecastResults,
   resolveForecastPeriod,
   validatePlanningInputs,
-} from "../domain/longTermDemandPlanning.js?v=20260717-v047-0-3";
+} from "../domain/longTermDemandPlanning.js?v=20260717-v047-1-0";
 
 export { normalizeLongTermDemandForecastResult, normalizeLongTermDemandForecastResults };
 
@@ -91,10 +91,10 @@ export const businessPlanningObjectSchemas = {
       growth_adjustment_rate: "在区域画像增长率基础上增加的情景调整，不替代画像增长率。",
       demand_buffer_ratio: "为波动和预测误差预留的额外 Robotaxi 容量比例。",
       operational_availability_rate: "扣除充电、清洁、维修等不可运营时间后的资产可用比例。",
-      robotaxi_available_hours_per_day: "单台 Robotaxi 每日可投入运营的小时数。",
-      average_pickup_duration_min: "Robotaxi 前往乘客上车点的平均时间。",
+      robotaxi_available_hours_per_day: "单台 Robotaxi 每日计划运营时长。充电、清洁、维修等不可运营时间统一通过运营可用率折减，避免重复扣减。",
+      average_pickup_duration_min: "Robotaxi 前往乘客上车点的平均时间，单位为分钟。",
       average_trip_duration_min: "服务订单从上车到下车的平均履约时间。",
-      average_turnaround_duration_min: "一次服务结束到下一次可接单之间的平均周转时间。",
+      average_turnaround_duration_min: "一次服务结束到下一次可接单之间的平均周转时间，单位为分钟。",
     },
   },
 };
@@ -292,7 +292,7 @@ export function initializeDefaultLongTermDemandForecastStrategies(now = defaultN
     growth_adjustment_rate: 0,
     demand_buffer_ratio: 0.15,
     operational_availability_rate: 0.9,
-    robotaxi_available_hours_per_day: 12,
+    robotaxi_available_hours_per_day: 24,
     average_pickup_duration_min: 8,
     average_trip_duration_min: 30,
     average_turnaround_duration_min: 7,
@@ -348,6 +348,10 @@ export function executeLongTermDemandForecastStrategy({
   demandProfiles = [],
   supplyProductionProfiles = [],
   robotaxis = [],
+  opsCenters = [],
+  zones = [],
+  existingRuns = [],
+  existingResults = [],
   context = {},
 } = {}) {
   const startedAt = resolveNow(context);
@@ -378,6 +382,20 @@ export function executeLongTermDemandForecastStrategy({
       ? activeBusinessTarget.target_zone_ids
     : unique(demandProfiles.filter((item) => item.target_object_type === "ZONE" && item.profile_status === "ACTIVE").map((item) => item.target_object_id));
   const zoneProfiles = demandProfiles.filter((profile) => profile.target_object_type === "ZONE" && targetZoneIds.includes(profile.target_object_id));
+  const inputFingerprint = createPlanningInputFingerprint({
+    strategy,
+    businessTarget: activeBusinessTarget,
+    productionProfile: activeProductionProfile,
+    zoneProfiles,
+    robotaxis,
+    opsCenters,
+    zones,
+  });
+  const reusableRun = existingRuns.find((item) => item.run_status === LongTermDemandForecastRunStatus.SUCCEEDED && item.input_fingerprint === inputFingerprint);
+  const reusableResults = reusableRun
+    ? existingResults.filter((item) => item.forecast_run_id === reusableRun.forecast_run_id)
+    : [];
+  if (reusableRun && reusableResults.length) return { run: reusableRun, results: reusableResults, reused: true };
   const runId = resolveRunId(context);
   const resultBaseId = resolveResultBaseId(context);
   const completedAt = resolveNow(context);
@@ -396,6 +414,7 @@ export function executeLongTermDemandForecastStrategy({
         targetZoneIds,
         demandProfiles,
         robotaxis,
+        inputFingerprint,
       }),
       results: [],
     };
@@ -408,7 +427,10 @@ export function executeLongTermDemandForecastStrategy({
     profile,
     productionProfile: activeProductionProfile,
     robotaxis,
+    opsCenters,
+    zones,
     demandProfiles,
+    inputFingerprint,
     occurredAt: completedAt,
   })).filter(Boolean);
   const runStatus = zoneProfiles.length ? (results.length ? LongTermDemandForecastRunStatus.SUCCEEDED : LongTermDemandForecastRunStatus.FAILED) : LongTermDemandForecastRunStatus.NO_RESULT;
@@ -425,8 +447,9 @@ export function executeLongTermDemandForecastStrategy({
     productionProfile: activeProductionProfile,
     demandProfiles,
     robotaxis,
+    inputFingerprint,
   });
-  return { run, results };
+  return { run, results, reused: false };
 }
 
 export function createSupplyPlanFromForecast({
@@ -524,11 +547,13 @@ export function executeSupplyDecisionStrategy({
   });
   if (!strategy?.supply_decision_strategy_id || strategy.strategy_status !== SupplyDecisionStrategyStatus.ACTIVE) return failed("SUPPLY_DECISION_STRATEGY_NOT_ACTIVE");
   if (!forecast?.forecast_result_id) return failed("FORECAST_RESULT_REQUIRED");
-  if ((existingSupplyPlans || []).some((item) => item.forecast_result_id === forecast.forecast_result_id && item.plan_status !== SupplyPlanStatus.CANCELLED)) return failed("SUPPLY_PLAN_ALREADY_EXISTS");
+  const existingSupplyPlan = (existingSupplyPlans || []).find((item) => item.forecast_result_id === forecast.forecast_result_id && item.plan_status !== SupplyPlanStatus.CANCELLED);
+  if (existingSupplyPlan) return { succeeded: true, supplyPlan: existingSupplyPlan, run: null, reused: true };
   const result = createSupplyPlanFromForecast({ forecast, supplyProductionProfiles, supplyDecisionStrategy: strategy, supplyDecisionRunId: runId, context });
   if (!result.succeeded) return failed(result.reason);
   return {
     succeeded: true,
+    reused: false,
     supplyPlan: result.supplyPlan,
     run: {
       supply_decision_run_id: runId,
@@ -1094,6 +1119,7 @@ function createForecastRun({
   targetZoneIds = [],
   demandProfiles = [],
   robotaxis = [],
+  inputFingerprint = null,
 }) {
   const placeProfiles = demandProfiles.filter((item) => item.target_object_type === "PLACE");
   const zoneProfiles = demandProfiles.filter((item) => item.target_object_type === "ZONE" && (!targetZoneIds.length || targetZoneIds.includes(item.target_object_id)));
@@ -1116,6 +1142,7 @@ function createForecastRun({
     completed_at: completedAt,
     result_count: resultCount,
     failure_reason: failureReason,
+    input_fingerprint: inputFingerprint,
     strategy_snapshot: strategy ? { ...strategy } : null,
     business_target_snapshot: businessTarget ? { ...businessTarget } : null,
     production_profile_snapshot: productionProfile ? { ...productionProfile } : null,
@@ -1145,8 +1172,8 @@ function createForecastRun({
   };
 }
 
-function createPlanningForecastResult({ resultId, runId, strategy, businessTarget, profile, productionProfile, robotaxis, occurredAt }) {
-  const calculation = calculateLongTermDemandPlan({ strategy, businessTarget, zoneProfile: profile, productionProfile, robotaxis });
+function createPlanningForecastResult({ resultId, runId, strategy, businessTarget, profile, productionProfile, robotaxis, opsCenters = [], zones = [], inputFingerprint = null, occurredAt }) {
+  const calculation = calculateLongTermDemandPlan({ strategy, businessTarget, zoneProfile: profile, productionProfile, robotaxis, opsCenters, zones });
   if (!calculation.validation?.valid || !calculation.result) return null;
   const result = calculation.result;
   return {
@@ -1166,6 +1193,7 @@ function createPlanningForecastResult({ resultId, runId, strategy, businessTarge
     business_target_snapshot: { ...businessTarget },
     zone_demand_snapshot: { ...profile },
     production_profile_snapshot: { ...productionProfile },
+    input_fingerprint: inputFingerprint,
     input_validation_result: calculation.validation,
     created_at: occurredAt,
   };
@@ -1439,6 +1467,37 @@ function addDaysIsoDate(isoDateTime, days = 0) {
   const date = new Date(isoDateTime);
   date.setUTCDate(date.getUTCDate() + Math.max(0, Math.floor(Number(days || 0))));
   return date.toISOString().slice(0, 10);
+}
+
+function createPlanningInputFingerprint({ strategy, businessTarget, productionProfile, zoneProfiles = [], robotaxis = [], opsCenters = [], zones = [] } = {}) {
+  const payload = {
+    strategy,
+    businessTarget,
+    productionProfile,
+    zoneProfiles,
+    robotaxis: robotaxis.map((item) => ({
+      robotaxi_id: item.robotaxi_id,
+      availability_status: item.availability_status || item.operational_status || null,
+      zone_id: item.zone_id || item.target_zone_id || item.service_zone_id || null,
+      ops_center_id: item.ops_center_id || item.current_ops_center_id || null,
+      current_cell_id: item.current_cell_id || item.current_location_cell_id || null,
+    })),
+    opsCenters: opsCenters.map((item) => ({ ops_center_id: item.ops_center_id, zone_id: item.zone_id || item.target_zone_id || null, cell_ids: item.cell_ids || [] })),
+    zones: zones.filter((item) => !item.parent_zone_id).map((item) => ({ zone_id: item.zone_id, cell_ids: item.cell_ids || [] })),
+  };
+  const serialized = stableSerialize(payload);
+  let hash = 2166136261;
+  for (let index = 0; index < serialized.length; index += 1) {
+    hash ^= serialized.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `LDF-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function stableSerialize(value) {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(",")}}`;
+  return JSON.stringify(value ?? null);
 }
 
 function unique(values = []) {

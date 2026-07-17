@@ -1260,7 +1260,7 @@
 |zone_period_growth_rate|区域周期增长率|计算字段|Place 需求加权增长率|
 |growth_scenario|增长情景|配置字段|保守、基准或积极|
 |growth_model|增长模型|配置字段|复合增长或线性增长，决定预测周期内的增长路径|
-|growth_adjustment_rate|增长调整率|配置字段|策略对区域增长率的调整|
+|growth_adjustment_rate|策略增长调整率|配置字段|策略在区域画像周期增长率基础上的情景调整|
 |effective_period_growth_rate|有效周期增长率|计算字段|区域增长率加策略调整率|
 |market_forecast_daily_orders|期末市场日订单|计算字段|目标期末市场典型日订单|
 |forecast_trend_series|预测趋势序列|持久化字段|按日、周、月保存本次预测的增长与累计需求时间序列|
@@ -1283,9 +1283,9 @@
 |buffered_daily_orders|缓冲后日订单|计算字段|计划承接日订单乘需求缓冲系数后的日订单|
 |planned_peak_hour_orders|计划峰值小时订单|计算字段|计划承接日订单乘最繁忙小时占比|
 |effective_service_cycle_min|完整服务周期|计算字段|接驾、载客和周转分钟数之和|
-|robotaxi_available_hours_per_day|Robotaxi 每日可运营小时|配置字段|单台 Robotaxi 每日可运营时间|
-|average_pickup_duration_min|平均接驾时间|配置字段|单次服务订单平均接驾分钟数|
-|average_turnaround_duration_min|平均周转时间|配置字段|订单之间平均周转分钟数|
+|robotaxi_available_hours_per_day|Robotaxi 每日计划运营时长（小时）|配置字段|单台 Robotaxi 每日计划运营时长；运维影响由运营可用率统一折减|
+|average_pickup_duration_min|平均接驾时间（分钟）|配置字段|单次服务订单平均接驾分钟数|
+|average_turnaround_duration_min|平均周转时间（分钟）|配置字段|订单之间平均周转分钟数|
 |operational_availability_rate|运营可用率|配置字段|Robotaxi 在规划周期内可投入运营的比例|
 |robotaxi_theoretical_daily_orders|单车理论日产能|计算字段|可运营时间除以完整服务周期|
 |robotaxi_effective_daily_orders|单车有效日产能|计算字段|理论日产能乘利用率和可用率|
@@ -1295,11 +1295,12 @@
 |service_required_robotaxi|服务所需 Robotaxi|计算字段|日常和峰值需求的最大值|
 |required_robotaxi_quantity|最终所需 Robotaxi|计算字段|服务需求和经营最低数量的最大值|
 |requirement_driver|需求规模驱动|计算字段|日订单能力、峰值并发或经营最低规模|
-|operational_robotaxi_quantity|当前运营 Robotaxi|计算字段|区域内已交付并准入的 Robotaxi|
+|zone_non_retired_robotaxi_quantity|区域未退役 Robotaxi|计算字段|归属目标区域且运营状态不是已退役的 Robotaxi 数量|
+|operational_robotaxi_quantity|当前可运营 Robotaxi|计算字段|区域内当前处于可运营状态的 Robotaxi|
 |committed_inbound_quantity|已承诺调入数量|计算字段|规划期已确定调入数量|
 |committed_outbound_quantity|已承诺调出数量|计算字段|规划期已确定调出数量|
 |planned_retirement_quantity|计划退役数量|计算字段|规划期计划退役数量|
-|effective_current_robotaxi|当前有效 Robotaxi|计算字段|当前运营加调入减调出和退役|
+|effective_current_robotaxi|当前有效供给 Robotaxi|计算字段|区域未退役 Robotaxi 加承诺调入，减承诺调出和计划退役|
 |robotaxi_gap_quantity|Robotaxi 缺口|计算字段|最终所需减当前有效数量|
 |production_capacity_period_unit|生产能力周期单位|配置字段|周、月、季度或年|
 |production_capacity_per_period|每期生产能力|配置字段|生产能力唯一配置真值|
@@ -1333,6 +1334,7 @@
 |economic_assumption_snapshot|经济假设快照|持久化字段|本次执行使用的经济参数|
 |calculation_parameter_snapshot|计算参数快照|持久化字段|本次执行使用的派生参数|
 |input_validation_result|输入校验结果|持久化字段|执行前结构化校验结果|
+|input_fingerprint|输入版本指纹|持久化字段|经营目标、画像、策略和资产输入的稳定版本指纹，用于防止重复执行|
 |data_quality_score|数据质量评分|计算字段|关键输入完备度评分|
 |data_quality_level|数据质量等级|计算字段|低、中、高|
 |missing_input_fields|缺失输入字段|计算字段|缺少的必要字段列表|
@@ -1447,6 +1449,7 @@
 |plan_status|计划状态|持久化字段|计划状态|
 |target_zone_id|目标区域|持久化字段|计划覆盖的目标区域|
 |planned_robotaxi_count|计划 Robotaxi 数|配置字段|计划形成的 Robotaxi 数量|
+|required_supply_quantity|需补充供给数量|计算字段|车辆供给缺口按覆盖率和安全容量修正后的供给需求|
 |planned_start_date|计划开始日期|配置字段|计划开始日期|
 |planned_end_date|计划结束日期|配置字段|计划结束日期|
 |confirmed_at|确认时间|运行态字段|生产计划确认时间|
@@ -1588,6 +1591,9 @@
 |DISPATCHED|已下发|投放计划已生成全部投放任务|
 |DEPLOYMENT_TASKS_PARTIALLY_CREATED|投放任务部分生成|投放计划部分下发结果|
 |SHORT_TERM_FORECAST_RESULT_REQUIRED|缺少短期预测结果|投放决策执行失败原因|
+|SUPPLY_DECISION_STRATEGY_NOT_ACTIVE|供应决策策略未启用|供应决策执行失败原因|
+|SUPPLY_PLAN_ALREADY_EXISTS|当前预测结果已生成生产计划|供应决策重复执行结果|
+|NO_FEASIBLE_SUPPLY_CAPACITY|预测期内没有可形成的生产交付能力|供应决策执行失败原因|
 |ZONE_SUPPLY_URGENCY_ALLOCATION|区域供给紧急度分配|区域分配算法|
 |ZONE_GAP_TO_OPS_CENTER|区域缺口分配到运营中心（兼容）|区域分配算法兼容值|
 |SHORT_TERM_PROFIT_PRIORITY|短期利润优先平衡|供需平衡算法|

@@ -127,9 +127,9 @@ function createPlaceDemandProfile(place, { calculatedAt = currentRealCalculation
   const workingPopulation = place.place_type === "OFFICE" ? 1800 : 0;
   const dailyVisitors = Math.round(500 * demandWeight);
   const tripGenerationRate = 0.08;
-  const robotaxiAdoptionRate = 0.18;
-  const serviceAcceptanceRate = 0.9;
-  const competitionRetentionRate = 0.85;
+  const robotaxiAdoptionRate = 0.6;
+  const serviceAcceptanceRate = 0.7;
+  const competitionRetentionRate = 0.4;
   const residentTripWeight = 1;
   const workerTripWeight = 1;
   const visitorTripWeight = 1;
@@ -240,7 +240,7 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
     const demandWeight = Number(existingProfile.demand_weight ?? baseProfile.demand_weight);
     const robotaxiAdoptionRate = Number(existingProfile.robotaxi_adoption_rate ?? baseProfile.robotaxi_adoption_rate);
     const serviceAcceptanceRate = Number(existingProfile.service_acceptance_rate ?? baseProfile.service_acceptance_rate);
-    const competitionRetentionRate = Number(existingProfile.competition_retention_rate ?? baseProfile.competition_retention_rate ?? 0.85);
+    const competitionRetentionRate = Number(existingProfile.competition_retention_rate ?? baseProfile.competition_retention_rate ?? 0.4);
     const peakDemandRatio = Number(existingProfile.busiest_hour_share ?? existingProfile.peak_demand_ratio ?? baseProfile.busiest_hour_share);
     const growthRate = Number(existingProfile.place_period_growth_rate ?? existingProfile.growth_rate ?? baseProfile.place_period_growth_rate);
     const dailyPopulationExposure = residentPopulation * residentTripWeight + workingPopulation * workerTripWeight + dailyVisitors * visitorTripWeight;

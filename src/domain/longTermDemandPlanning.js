@@ -35,7 +35,7 @@ export function validatePlanningInputs({ strategy, businessTarget, zoneProfile, 
   return { valid: !missing.length && !errors.length, missing_input_fields: missing, errors };
 }
 
-export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProfile, productionProfile, robotaxis = [] }) {
+export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProfile, productionProfile, robotaxis = [], opsCenters = [], zones = [] }) {
   const period = resolveForecastPeriod(businessTarget, strategy);
   const validation = validatePlanningInputs({ strategy, businessTarget, zoneProfile, productionProfile });
   if (!validation.valid) return { validation };
@@ -78,15 +78,13 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   const requirementDriver = required === businessMinimum ? "BUSINESS_MINIMUM" : dailyRequired >= peakRequired ? "DAILY_ORDER_CAPACITY" : "PEAK_CONCURRENCY";
 
   const zoneId = zoneProfile.target_object_id || zoneProfile.zone_id;
-  const operational = robotaxis.filter((item) => {
-    const itemZoneId = item.zone_id || item.target_zone_id || item.service_zone_id;
-    const admitted = ["AVAILABLE", "IN_FLEET_OPERATION"].includes(item.availability_status || item.operational_status);
-    return itemZoneId === zoneId && admitted;
-  }).length;
+  const zoneRobotaxis = robotaxis.filter((item) => resolveRobotaxiZoneId(item, opsCenters, zones) === zoneId);
+  const nonRetired = zoneRobotaxis.filter((item) => (item.availability_status || item.operational_status) !== "RETIRED").length;
+  const operational = zoneRobotaxis.filter((item) => ["AVAILABLE", "IN_FLEET_OPERATION"].includes(item.availability_status || item.operational_status)).length;
   const inbound = positive(zoneProfile.committed_inbound_quantity);
   const outbound = positive(zoneProfile.committed_outbound_quantity);
   const retirements = positive(zoneProfile.planned_retirement_quantity);
-  const currentEffective = Math.max(0, operational + inbound - outbound - retirements);
+  const currentEffective = Math.max(0, nonRetired + inbound - outbound - retirements);
   const robotaxiGap = Math.max(0, required - currentEffective);
 
   const productionUnit = productionProfile.production_capacity_period_unit || "MONTH";
@@ -179,6 +177,7 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
     target_minimum_robotaxi_quantity: businessMinimum,
     required_robotaxi_quantity: required,
     requirement_driver: requirementDriver,
+    zone_non_retired_robotaxi_quantity: nonRetired,
     operational_robotaxi_quantity: operational,
     committed_inbound_quantity: inbound,
     committed_outbound_quantity: outbound,
@@ -223,6 +222,18 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   result.assumption_fields = assumptions;
   result.calculation_steps = buildCalculationSteps(result);
   return { validation, result, period };
+}
+
+function resolveRobotaxiZoneId(robotaxi = {}, opsCenters = [], zones = []) {
+  const directZoneId = robotaxi.zone_id || robotaxi.target_zone_id || robotaxi.service_zone_id;
+  if (directZoneId) return directZoneId;
+  const currentCellId = robotaxi.current_cell_id || robotaxi.current_location_cell_id;
+  const opsCenterId = robotaxi.ops_center_id || robotaxi.current_ops_center_id || robotaxi.target_ops_center_id;
+  const opsCenter = opsCenters.find((item) => item.ops_center_id === opsCenterId)
+    || opsCenters.find((item) => currentCellId && (item.cell_ids || []).includes(currentCellId));
+  const opsCenterZoneId = opsCenter?.zone_id || opsCenter?.target_zone_id || opsCenter?.service_zone_id;
+  if (opsCenterZoneId) return opsCenterZoneId;
+  return zones.find((zone) => !zone.parent_zone_id && currentCellId && (zone.cell_ids || []).includes(currentCellId))?.zone_id || null;
 }
 
 function buildSupplyTrendSeries({
@@ -429,11 +440,11 @@ function buildCalculationSteps(result) {
       effective_peak_hour_capacity: result.effective_peak_hour_capacity,
     }, "SERVICE_AREA_PEAK_CAPACITY", "max(0, planned_peak_hour_orders - effective_peak_hour_capacity)", "订单 / 小时", ["service_area_capacity_snapshot"]),
     step("资产缺口", "汇总当前有效资产", "effective_current_robotaxi", {
-      operational_robotaxi_quantity: result.operational_robotaxi_quantity,
+      zone_non_retired_robotaxi_quantity: result.zone_non_retired_robotaxi_quantity,
       committed_inbound_quantity: result.committed_inbound_quantity,
       committed_outbound_quantity: result.committed_outbound_quantity,
       planned_retirement_quantity: result.planned_retirement_quantity,
-    }, "EFFECTIVE_ASSET_INVENTORY", "operational_robotaxi_quantity + committed_inbound_quantity - committed_outbound_quantity - planned_retirement_quantity", "Robotaxi", ["robotaxi_inventory_snapshot"]),
+    }, "EFFECTIVE_ASSET_INVENTORY", "zone_non_retired_robotaxi_quantity + committed_inbound_quantity - committed_outbound_quantity - planned_retirement_quantity", "Robotaxi", ["robotaxi_inventory_snapshot"]),
     step("资产缺口", "计算 Robotaxi 缺口", "robotaxi_gap_quantity", {
       required_robotaxi_quantity: result.required_robotaxi_quantity,
       effective_current_robotaxi: result.effective_current_robotaxi,

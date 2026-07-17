@@ -53,7 +53,7 @@ export function createEchartsOption({ rows = [], series = [], variant = "LINE", 
       filterMode: "none",
       zoomOnMouseWheel: "shift",
       moveOnMouseMove: true,
-      moveOnMouseWheel: true,
+      moveOnMouseWheel: false,
       preventDefaultMouseMove: false,
     }] : [],
     series: activeSeries.map((item) => ({

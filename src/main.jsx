@@ -315,7 +315,7 @@ const tableConfig = {
   supplyPlans: {
     title: "生产计划",
     description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
-    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "target_zone_id", "planned_robotaxi_count", "fleet_gap_quantity", "feasible_production_quantity", "production_gap_quantity", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
+    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "supply_production_profile_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
   },
   productionBatches: {
     title: "生产批次",
@@ -3044,17 +3044,23 @@ function App({ currentUser, onLogout }) {
       demandProfiles: data.demandProfiles || [],
       supplyProductionProfiles: data.supplyProductionProfiles || [],
       robotaxis: data.robotaxis || [],
+      opsCenters: data.opsCenters || [],
+      zones: data.zones || [],
+      existingRuns: data.longTermDemandForecastRuns || [],
+      existingResults: data.longTermDemandForecasts || [],
       context: {
         now,
         nextRunId: nextLongTermDemandForecastRunId,
         nextResultBaseId: nextLongTermDemandForecastResultBaseId,
       },
     });
-    setOperationalData((current) => ({
-      ...current,
-      longTermDemandForecastRuns: [result.run, ...(current.longTermDemandForecastRuns || [])],
-      longTermDemandForecasts: [...(result.results || []), ...(current.longTermDemandForecasts || [])],
-    }));
+    if (!result.reused) {
+      setOperationalData((current) => ({
+        ...current,
+        longTermDemandForecastRuns: [result.run, ...(current.longTermDemandForecastRuns || [])],
+        longTermDemandForecasts: [...(result.results || []), ...(current.longTermDemandForecasts || [])],
+      }));
+    }
     if (result.results?.length) {
       setActivePageAndMenu("longTermDemandForecasts");
       selectForPage("longTermDemandForecasts", "longTermDemandForecast", result.results[0].forecast_result_id);
@@ -3192,11 +3198,13 @@ function App({ currentUser, onLogout }) {
       existingSupplyPlans: data.supplyPlans || [],
       context: { now, nextRunId: nextSupplyDecisionRunId, nextSupplyPlanId },
     });
-    setOperationalData((current) => ({
-      ...current,
-      supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
-      supplyPlans: result.succeeded ? [result.supplyPlan, ...(current.supplyPlans || [])] : current.supplyPlans,
-    }));
+    if (!result.reused) {
+      setOperationalData((current) => ({
+        ...current,
+        supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
+        supplyPlans: result.succeeded ? [result.supplyPlan, ...(current.supplyPlans || [])] : current.supplyPlans,
+      }));
+    }
     if (result.succeeded) {
       setActivePageAndMenu("supplyPlans");
       selectForPage("supplyPlans", "supplyPlan", result.supplyPlan.supply_plan_id);
@@ -3213,24 +3221,17 @@ function App({ currentUser, onLogout }) {
       existingSupplyPlans: data.supplyPlans || [],
       context: { now, nextRunId: nextSupplyDecisionRunId, nextSupplyPlanId },
     });
-    if (!result.succeeded) {
-      appendRecordOperationEvent("longTermDemandForecasts", {
-        business_object_type: "longTermDemandForecast",
-        business_object_id: row.forecast_result_id,
-        action_type: "SUPPLY_PLAN_CREATE",
-        result_type: result.reason || "FAILED",
-        event_type: "SUPPLY_PLAN_CREATE",
-        event_result: taskTypes.TaskEventResult.FAILED,
-        message: getDisplayValue(result.reason),
-      });
-      return;
+    if (!result.succeeded) return result;
+    if (!result.reused) {
+      setOperationalData((current) => ({
+        ...current,
+        supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
+        supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
+      }));
     }
-    setOperationalData((current) => ({
-      ...current,
-      supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
-      supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
-    }));
+    setActivePageAndMenu("supplyPlans");
     selectForPage("supplyPlans", "supplyPlan", result.supplyPlan.supply_plan_id);
+    return result;
   }
 
   function completeSupplyManagementLoopFromForecast(row) {
@@ -6774,6 +6775,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
             selectedId={selected?.type === objectType ? selected.id : null}
             onSelect={(row) => onSelect(objectType, row[idField])}
             onCreateSupplyPlan={actions.createSupplyPlanFromForecast}
+            supplyPlans={actions.data?.supplyPlans || []}
           />
         </AnalysisContentViewport>
       )}
@@ -7039,9 +7041,6 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           </RowActionGroup>
         )),
       };
-    }
-    if (isSupplyDecisionStrategyPage) {
-      return { key: "actions", title: "操作", fixed: "right", width: 120, render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runSupplyDecisionStrategy(row)}>执行</RowActionButton>) };
     }
     if (isShortTermDemandForecastStrategyPage) {
       return { key: "actions", title: "操作", fixed: "right", width: 120, render: (_, row) => renderActionCell(row, <RowActionButton onClick={() => actions.runShortTermDemandForecastStrategy(row)}>执行</RowActionButton>) };
@@ -8644,8 +8643,9 @@ function formatDecisionMetric(metric = {}) {
   return value === null || value === undefined ? "数据待更新" : `${formatPlanningValue(value)}${unit && !["count", "currency"].includes(unit) ? ` ${getDisplayValue(unit)}` : ""}`;
 }
 
-function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreateSupplyPlan }) {
+function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreateSupplyPlan, supplyPlans = [] }) {
   const [trendTimeUnit, setTrendTimeUnit] = useState("MONTH");
+  const [actionFeedback, setActionFeedback] = useState(null);
   const selected = rows.find((row) => row.forecast_result_id === selectedId) || rows[0] || null;
   if (!selected) return <Empty description="执行需求预测后将在这里展示经营规划结论" />;
   const forecastDays = Math.max(0, (Date.parse(`${selected.forecast_end_date}T00:00:00Z`) - Date.parse(`${selected.forecast_start_date}T00:00:00Z`)) / 86400000);
@@ -8656,14 +8656,26 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
   const normalizedSupplyTrendRows = normalizeForecastChartRows(supplyTrendRows, "DAY");
   const metrics = ["market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "robotaxi_gap_quantity", "planned_production_quantity", "uncovered_robotaxi_gap", "forecast_cumulative_market_orders", "forecast_cumulative_planned_orders"];
   const bottlenecks = ["daily_required_robotaxi", "peak_required_robotaxi", "daily_capacity_gap", "peak_capacity_gap"];
+  const existingSupplyPlan = supplyPlans.find((item) => item.forecast_result_id === selected.forecast_result_id && item.plan_status !== "CANCELLED");
+  const handleSupplyDecision = () => {
+    const result = onCreateSupplyPlan?.(selected);
+    if (result?.succeeded === false) setActionFeedback(getDisplayValue(result.reason));
+  };
   return (
     <div className="forecast-analysis">
       <div className="forecast-analysis-toolbar">
         <div className="forecast-result-switcher">
-          {rows.map((row) => <Button key={row.forecast_result_id} size="small" type={row.forecast_result_id === selected.forecast_result_id ? "primary" : "default"} onClick={() => onSelect(row)}>{formatForecastResultLabel(row)}</Button>)}
+          <Select
+            size="small"
+            value={selected.forecast_result_id}
+            onChange={(value) => onSelect(rows.find((row) => row.forecast_result_id === value))}
+            options={rows.map((row) => ({ value: row.forecast_result_id, label: formatForecastResultLabel(row) }))}
+            getPopupContainer={() => document.body}
+          />
         </div>
         <div className="forecast-analysis-actions">
-          <Button size="small" type="primary" onClick={() => onCreateSupplyPlan?.(selected)}>执行供应决策</Button>
+          {actionFeedback && <span className="forecast-action-feedback">{actionFeedback}</span>}
+          <Button size="small" type="primary" onClick={handleSupplyDecision}>{existingSupplyPlan ? "查看生产计划" : "执行供应决策"}</Button>
         </div>
       </div>
       <div className="forecast-context-strip">
@@ -8729,7 +8741,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
         <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>建议生产数量</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>生产准备完成</span><strong>{selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>预测期可形成供给</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>全部供给完成</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
       </div>
       <details className="forecast-calculation-details">
-        <summary><span>{getFieldLabel("calculation_steps")}</span><small>按需展开查看输入、模型、公式、来源与结果</small></summary>
+        <summary><span>{getFieldLabel("calculation_steps")}</span><span className="forecast-calculation-toggle">›</span></summary>
         {groupForecastCalculationSteps(selected.calculation_steps).map((group) => (
           <section className="forecast-calculation-group" key={group.name}>
             <h4>{group.name}</h4>
@@ -10480,18 +10492,18 @@ async function bootstrap() {
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
-		    import("./services/businessPlanningService.js?v=20260717-v047-0-3"),
+        import("./services/businessPlanningService.js?v=20260717-v047-1-0"),
 		    import("./services/operatingPlanningService.js?v=20260716-v046-0-6"),
 		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
 		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
-		    import("./data/spatialBusinessProfileInitialization.js?v=20260713-v043-0-0"),
+        import("./data/spatialBusinessProfileInitialization.js?v=20260717-v047-1-0"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
-		    import("./ui/dataChartService.js?v=20260717-v047-0-2"),
+        import("./ui/dataChartService.js?v=20260717-v047-1-0"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),
 		    import("./ui/navigationRegistry.js?v=20260717-v047-0-0"),
 		    import("./ui/pageArchitectureRegistry.js?v=20260717-v047-0-0"),
