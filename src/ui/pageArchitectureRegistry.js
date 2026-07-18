@@ -23,6 +23,14 @@ register(["operatingModel", "decisionCenter"], {
   eventPanel: null,
 });
 
+register(["supplyPositionTracking"], {
+  mode: "analysis",
+  resourceKind: "projection",
+  detailMode: "none",
+  actionMode: "none",
+  eventPanel: null,
+});
+
 register(["longTermDemandForecasts"], {
   mode: "analysis",
   resourceKind: "result",

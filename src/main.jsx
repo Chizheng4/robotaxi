@@ -57,6 +57,7 @@ let robotaxiTaskPlanningService;
 let businessPlanningService;
 let operatingPlanningService;
 let supplyDemandBalanceService;
+let supplyPositionService;
 let publicDemoBootstrapService;
 let platformExperience;
 let releaseFreshnessService;
@@ -316,6 +317,11 @@ const tableConfig = {
     title: "生产计划",
     description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
     columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "supply_production_profile_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
+  },
+  supplyPositionTracking: {
+    title: "供给跟踪",
+    description: "统一跟踪当前可用供给、区域资产与未来供给管道，并按业务来源追溯每个阶段。",
+    columns: ["target_zone_name", "supply_stage", "supply_quantity", "source_object_type", "source_object_id", "supply_plan_id", "production_batch_id", "delivery_order_id", "target_ops_center_id", "robotaxi_ids", "expected_available_date", "source_updated_at"],
   },
   productionBatches: {
     title: "生产批次",
@@ -691,6 +697,7 @@ const pageObjectType = {
   supplyDecisionStrategies: "supplyDecisionStrategy",
   supplyDecisionRuns: "supplyDecisionRun",
   supplyPlans: "supplyPlan",
+  supplyPositionTracking: "supplyPositionRecord",
   productionBatches: "productionBatch",
   fleetAllocationStrategies: "fleetAllocationStrategy",
   fleetAllocationRuns: "fleetAllocationRun",
@@ -793,6 +800,7 @@ const idFieldByType = {
   readinessTask: "task_id",
   longTermDemandForecast: "forecast_result_id",
   supplyPlan: "supply_plan_id",
+  supplyPositionRecord: "supply_tracking_record_id",
   productionBatch: "production_batch_id",
   fleetAllocationStrategy: "fleet_allocation_strategy_id",
   fleetAllocationRun: "fleet_allocation_run_id",
@@ -1672,6 +1680,16 @@ function App({ currentUser, onLogout }) {
     metricRows: operatingDataPool.pages.decisionCenter,
     comparisons: operatingDataPool.comparisons,
   }), [data, demandSimulationRuns, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, operatingDataPool.comparisons, operatingDataPool.pages.decisionCenter, operationalData, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routePlanningRuns, serviceOrders]);
+  const supplyPositionView = useMemo(() => supplyPositionService.createSupplyPositionView({
+    supplyPlans: operationalData.supplyPlans,
+    productionBatches: operationalData.productionBatches,
+    robotaxis: operationalData.robotaxis,
+    fleetAllocationResults: operationalData.fleetAllocationResults,
+    robotaxiDeliveryOrders: operationalData.robotaxiDeliveryOrders,
+    readinessTasks,
+    zones: operationalData.zones,
+    opsCenters: operationalData.opsCenters,
+  }), [operationalData.fleetAllocationResults, operationalData.opsCenters, operationalData.productionBatches, operationalData.robotaxiDeliveryOrders, operationalData.robotaxis, operationalData.supplyPlans, operationalData.zones, readinessTasks]);
   const autoFinanceCalculationRunIdsRef = useRef(new Set());
   const autoMetricCalculationRunIdsRef = useRef(new Set());
   const publicDemoBootstrapRef = useRef({
@@ -1852,6 +1870,7 @@ function App({ currentUser, onLogout }) {
     supplyDecisionStrategies: data.supplyDecisionStrategies || [],
     supplyDecisionRuns: data.supplyDecisionRuns || [],
     supplyPlans: data.supplyPlans || [],
+    supplyPositionTracking: supplyPositionView.records,
     productionBatches: data.productionBatches || [],
     fleetAllocationStrategies: data.fleetAllocationStrategies || [],
     fleetAllocationRuns: data.fleetAllocationRuns || [],
@@ -1932,7 +1951,7 @@ function App({ currentUser, onLogout }) {
     timedOperations,
     validations,
     };
-  }, [allFleetOperationTasks, chargingTasks, cleaningTasks, data, decisionControlView.capabilities, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
+  }, [allFleetOperationTasks, chargingTasks, cleaningTasks, data, decisionControlView.capabilities, demandSimulationRuns, deploymentTasks, failureHandlingTasks, fleetOperationDispatchDecisions, fleetOperationDispatchRuns, fleetOperationDispatchStrategies, fleetOperationPolicies, fleetOperationPolicyResults, fleetOperationPolicyRuns, maintenanceTasks, orderMatchingDecisions, orderMatchingRuns, pricingDecisions, pricingStrategyRuns, readinessTasks, retirementTasks, robotaxiTaskPlanningResults, robotaxiTaskPlanningRuns, robotaxiTaskPlanningStrategies, routeExecutions, routePlanningRuns, serviceOrders, supplyPositionView.records, taskDispatchResults, taskDispatchRuns, taskDispatchStrategies, taskEventLogs, trips, simulationPolicies, workflowTimingProfiles, taskPriorityConfigs, costModelProfiles, costCalculationRuns, costRecords, revenueCalculationRuns, revenueRecords, metricDisplayRows, metricDefinitions, metricCalculationRuns, metricPeriodType, simulationRuns, simulationEvents, timedOperations, validations]);
 
   const selectedObject = useMemo(() => {
     if (selected.type === "cell") {
@@ -3890,6 +3909,7 @@ function App({ currentUser, onLogout }) {
                   metricObservations,
                   operatingDataPool,
                   decisionControlView,
+                  supplyPositionView,
                   navigateToPage: activateWorkspacePage,
                   simulationRuns,
                   simulationEvents,
@@ -6582,6 +6602,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isLongTermDemandForecastPage = page === "longTermDemandForecasts";
   const isOperatingModelPage = page === "operatingModel";
   const isDecisionCenterPage = page === "decisionCenter";
+  const isSupplyPositionPage = page === "supplyPositionTracking";
   const isSupplyPlanPage = page === "supplyPlans";
   const isProductionBatchPage = page === "productionBatches";
   const isFleetAllocationStrategyPage = page === "fleetAllocationStrategies";
@@ -6673,7 +6694,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const tableScrollX = finalColumns.reduce((sum, column) => sum + Number(column.width || 128), 0);
   const eventTableScrollX = eventColumns.reduce((sum, key) => sum + getColumnWidth(key, visibleEventRows), 0);
   const isForecastAnalysisPage = isLongTermDemandForecastPage;
-  const showMainTable = isForecastAnalysisPage || isOperatingModelPage || isDecisionCenterPage ? false : (!isMetricAnalysisPage || metricTableVisible);
+  const showMainTable = isForecastAnalysisPage || isOperatingModelPage || isDecisionCenterPage || isSupplyPositionPage ? false : (!isMetricAnalysisPage || metricTableVisible);
 
   useEffect(() => {
     if (isMetricAnalysisPage) setMetricTableVisible(false);
@@ -6686,6 +6707,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
     isReadinessPage ? "readiness-page" : "",
     isOperatingModelPage ? "operating-model-page" : "",
     isDecisionCenterPage ? "decision-center-page" : "",
+    isSupplyPositionPage ? "supply-position-page" : "",
     isMetricAnalysisPage ? "metric-analysis-page" : "",
     isForecastAnalysisPage ? "forecast-analysis-page" : "",
   ].filter(Boolean).join(" ");
@@ -6867,6 +6889,11 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           <DecisionCenterPanel view={actions.decisionControlView} onNavigate={actions.navigateToPage} />
         </AnalysisContentViewport>
       )}
+      {isSupplyPositionPage && (
+        <AnalysisContentViewport>
+          <SupplyPositionPanel view={actions.supplyPositionView} />
+        </AnalysisContentViewport>
+      )}
       {isMetricAnalysisPage && (
         <AnalysisContentViewport>
           <MetricExperiencePanel
@@ -6931,7 +6958,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
           />
         </div>
       )}
-      {!isForecastAnalysisPage && !isOperatingModelPage && !isDecisionCenterPage && <ModuleFooter
+      {!isForecastAnalysisPage && !isOperatingModelPage && !isDecisionCenterPage && !isSupplyPositionPage && <ModuleFooter
         page={page}
         totalCount={rows.length}
         displayCount={displayRows.length}
@@ -8699,6 +8726,83 @@ function DecisionCenterPanel({ view, onNavigate }) {
           <div className="decision-section-heading"><div><span className="analysis-eyebrow">经营效果</span><h3>关联核心指标</h3></div><small>来自统一经营数据池</small></div>
           <div className="decision-effect-list">{dedupeDecisionEffectMetrics(capabilities).slice(0, 8).map((metric) => <div key={metric.metric_definition_id || metric.performance_indicator_id}><span>{metric.metric_name_cn || metric.performance_indicator_name}</span><strong>{formatDecisionMetric(metric)}</strong></div>)}</div>
         </div>
+      </section>
+    </div>
+  );
+}
+
+function SupplyPositionPanel({ view }) {
+  const [zoneId, setZoneId] = useState("ALL");
+  const [stage, setStage] = useState("ALL");
+  const summary = view?.summary || {};
+  const zones = view?.zones || [];
+  const records = view?.records || [];
+  const diagnostics = view?.diagnostics || [];
+  const filteredRecords = records.filter((record) => (
+    (zoneId === "ALL" || (record.target_zone_id || "UNASSIGNED") === zoneId)
+    && (stage === "ALL" || record.supply_stage === stage)
+  ));
+  const stageOptions = [...new Set(records.map((record) => record.supply_stage))];
+  const summaryItems = [
+    ["current_available_quantity", summary.current_available_quantity],
+    ["current_regional_asset_quantity", summary.current_regional_asset_quantity],
+    ["committed_inbound_quantity", summary.committed_inbound_quantity],
+    ["production_pipeline_quantity", summary.production_pipeline_quantity],
+    ["current_supply_gap_quantity", summary.current_supply_gap_quantity],
+    ["projected_supply_gap_quantity", summary.projected_supply_gap_quantity],
+  ];
+  const zoneColumns = [
+    "target_zone_name", "required_robotaxi_quantity", "current_available_quantity", "current_regional_asset_quantity",
+    "committed_inbound_quantity", "production_pipeline_quantity", "plan_pending_release_quantity",
+    "current_supply_gap_quantity", "committed_supply_gap_quantity", "projected_supply_gap_quantity",
+  ].map((key) => ({ title: getFieldLabel(key), dataIndex: key, key, width: key === "target_zone_name" ? 180 : 132, render: (value) => value ?? 0 }));
+  const recordColumns = [
+    "target_zone_name", "supply_stage", "supply_quantity", "source_object_type", "source_object_id",
+    "production_batch_id", "delivery_order_id", "target_ops_center_id", "robotaxi_ids", "expected_available_date", "source_updated_at",
+  ].map((key) => ({
+    title: getFieldLabel(key),
+    dataIndex: key,
+    key,
+    width: ["robotaxi_ids", "source_object_id"].includes(key) ? 220 : key === "target_zone_name" ? 170 : 145,
+    render: (value) => key === "robotaxi_ids"
+      ? (Array.isArray(value) && value.length ? value.join("、") : "无")
+      : getDisplayValue(value, key) ?? "无",
+  }));
+  return (
+    <div className="supply-position-panel">
+      <header className="supply-position-header">
+        <div>
+          <span className="analysis-eyebrow">供给资产控制</span>
+          <h2>区域供给与在途管道</h2>
+          <p>当前供给看可用能力，区域资产看已到达资源，未来管道看生产、质检和交付进度。</p>
+        </div>
+        <span className={diagnostics.length ? "supply-position-health is-warning" : "supply-position-health"}>
+          {diagnostics.length ? `${diagnostics.length} 项数据待核查` : "来源关系完整"}
+        </span>
+      </header>
+      <section className="analysis-summary-grid supply-position-summary" aria-label="供给跟踪摘要">
+        {summaryItems.map(([key, value]) => (
+          <div className="analysis-summary-card" key={key}>
+            <span>{getFieldLabel(key)}</span>
+            <strong>{formatPlanningValue(value)} 辆</strong>
+          </div>
+        ))}
+      </section>
+      <section className="supply-position-section">
+        <div className="supply-position-section-heading">
+          <div><h3>区域供给口径</h3><small>三种缺口逐级扣减已承诺供给与生产质检管道</small></div>
+        </div>
+        <Table size="small" rowKey={(row) => row.target_zone_id || "UNASSIGNED"} columns={zoneColumns} dataSource={zones} pagination={false} scroll={{ x: 1400 }} tableLayout="auto" />
+      </section>
+      <section className="supply-position-section">
+        <div className="supply-position-section-heading supply-position-filter-heading">
+          <div><h3>阶段跟踪记录</h3><small>每辆 Robotaxi 或生产批次只进入一个当前阶段，保留来源对象用于追溯</small></div>
+          <div className="supply-position-filters">
+            <Select size="small" value={zoneId} onChange={setZoneId} options={[{ value: "ALL", label: "全部区域" }, ...zones.map((item) => ({ value: item.target_zone_id || "UNASSIGNED", label: item.target_zone_name }))]} />
+            <Select size="small" value={stage} onChange={setStage} options={[{ value: "ALL", label: "全部阶段" }, ...stageOptions.map((value) => ({ value, label: getDisplayValue(value, "supply_stage") }))]} />
+          </div>
+        </div>
+        <Table size="small" rowKey="supply_tracking_record_id" columns={recordColumns} dataSource={filteredRecords} pagination={{ pageSize: 12, size: "small", showSizeChanger: false }} scroll={{ x: 1750 }} tableLayout="auto" />
       </section>
     </div>
   );
@@ -10584,6 +10688,7 @@ async function bootstrap() {
 		    businessPlanningServiceModule,
 		    operatingPlanningServiceModule,
 		    supplyDemandBalanceServiceModule,
+		    supplyPositionServiceModule,
 		    supplyManagementInitializationModule,
 		    spatialBusinessProfileInitializationModule,
 		    platformExperienceModule,
@@ -10660,6 +10765,7 @@ async function bootstrap() {
         import("./services/businessPlanningService.js?v=20260717-v047-1-0"),
 		    import("./services/operatingPlanningService.js?v=20260716-v046-0-6"),
 		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
+		    import("./services/supplyPositionService.js?v=20260718-v047-3-0"),
 		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
         import("./data/spatialBusinessProfileInitialization.js?v=20260717-v047-1-0"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
@@ -10736,6 +10842,7 @@ async function bootstrap() {
 		  businessPlanningService = businessPlanningServiceModule;
 		  operatingPlanningService = operatingPlanningServiceModule;
 		  supplyDemandBalanceService = supplyDemandBalanceServiceModule;
+		  supplyPositionService = supplyPositionServiceModule;
 		  publicDemoBootstrapService = publicDemoBootstrapServiceModule;
 		  initializeSupplyManagement = supplyManagementInitializationModule.initializeSupplyManagement;
 		  initializeSpatialBusinessProfiles = spatialBusinessProfileInitializationModule.initializeSpatialBusinessProfiles;

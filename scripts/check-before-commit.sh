@@ -188,6 +188,7 @@ node scripts/verify-v047-0-1-planning-chart-contract.mjs
 node scripts/verify-v047-1-planning-execution-contract.mjs
 node scripts/verify-v047-1-2-planning-supply-time-contract.mjs
 node scripts/verify-v047-2-planning-model-boundary.mjs
+node scripts/verify-v047-3-supply-position-tracking.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

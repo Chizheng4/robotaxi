@@ -8,7 +8,7 @@ const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), 
 const rulesSource = fs.readFileSync(new URL("../doc/rules/04-frontend-ux-rules.md", import.meta.url), "utf8");
 const leafKeys = flattenLeafKeys(navigationGroups);
 
-assert.equal(leafKeys.length, 85, "导航叶子页面数量发生变化时必须同步更新页面架构合同");
+assert.equal(leafKeys.length, 86, "导航叶子页面数量发生变化时必须同步更新页面架构合同");
 assert.equal(Object.keys(pageArchitectureRegistry).length, leafKeys.length, "每个页面必须且只能有一个架构合同");
 assert.deepEqual(validatePageArchitecture(leafKeys), { valid: true, errors: [] }, "页面架构注册表必须完整有效");
 
@@ -23,6 +23,11 @@ assert.equal(getPageArchitecture("shortTermDemandForecastResults").eventPanel, n
 assert.equal(getPageArchitecture("fleetAllocationResults").eventPanel.label, "最近操作事件", "可操作结果应使用操作事件语义");
 assert.equal(getPageArchitecture("serviceOrders").resourceKind, "document", "服务订单必须声明为业务单据");
 assert.equal(getPageArchitecture("metricObservations").resourceKind, "result", "指标观测必须声明为数据结果");
+assert.deepEqual(
+  pickFrameworkContract(getPageArchitecture("supplyPositionTracking")),
+  { mode: "analysis", resourceKind: "projection", detailMode: "none", actionMode: "none", hasEventPanel: false },
+  "供给跟踪必须是无详情、无事件区的派生分析页面",
+);
 
 const coreDocumentPages = [
   "readinessTasks", "routeExecutions", "serviceFulfillmentRecords", "deploymentTasks", "serviceOrders",

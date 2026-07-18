@@ -1303,6 +1303,20 @@
 |committed_outbound_quantity|已承诺调出数量|计算字段|规划期已确定调出数量|
 |planned_retirement_quantity|计划退役数量|计算字段|规划期计划退役数量|
 |effective_current_robotaxi|规划资产基数|计算字段|区域未退役 Robotaxi 加承诺调入，减承诺调出和计划退役|
+|supply_tracking_record_id|供给跟踪记录编号|派生字段|供给跟踪投影记录的稳定编号，不作为新的业务事实|
+|target_zone_name|目标区域名称|引用字段|目标运营区域的中文名称|
+|supply_stage|供给阶段|派生字段|生产计划、生产批次、Robotaxi、交付编排、交付单和准入状态映射出的互斥当前阶段|
+|supply_quantity|供给数量|派生字段|批次阶段使用批次数量，质检通过后使用具体 Robotaxi 数量|
+|current_available_quantity|当前可用供给|计算字段|当前可参与运营调度的 Robotaxi 数量|
+|current_regional_asset_quantity|当前区域资产|计算字段|已到达区域且未退役的 Robotaxi 数量，包含待准入与区域运营中的资产|
+|production_pipeline_quantity|生产质检管道|计算字段|规划中、生产中、待质检和质检中的批次数量|
+|plan_pending_release_quantity|计划待下达数量|计算字段|已确认生产计划尚未形成生产批次的数量，仅表示计划意向|
+|quality_failed_quantity|质检失败数量|计算字段|质量检验未通过的批次数量|
+|current_supply_gap_quantity|当前供给缺口|计算字段|最终所需 Robotaxi 减当前区域资产|
+|committed_supply_gap_quantity|承诺后供给缺口|计算字段|当前供给缺口减质检合格待编排、已编排待交付和交付在途数量|
+|projected_supply_gap_quantity|预计供给缺口|计算字段|承诺后供给缺口再减生产质检管道数量，不扣减尚未下达的计划意向|
+|expected_available_date|预计可供给日期|派生字段|来源计划或业务单据预计形成可供给资产的日期|
+|source_updated_at|来源更新时间|派生字段|供给跟踪记录所引用业务事实的最近更新时间|
 |daily_required_robotaxi|日常需求 Robotaxi|计算字段|按典型日订单需求计算的 Robotaxi 数量|
 |peak_required_robotaxi|峰值需求 Robotaxi|计算字段|按峰值小时并发需求计算的 Robotaxi 数量|
 |daily_capacity_gap|日常服务能力缺口|计算字段|日常订单需求超过区域日服务能力的数量|
@@ -2790,6 +2804,29 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |deploymentTask|运营投放任务|object_type / source_object_type / related_object_type|
 |routeExecution|运营行驶记录|object_type / source_object_type / related_object_type|
 |demandSimulationRun|需求模拟执行|related_object_type|
+|supplyPlan|生产计划|source_object_type|
+|productionBatch|生产批次|source_object_type|
+|fleetAllocationResult|交付编排结果|source_object_type|
+|robotaxiDeliveryOrder|区域交付|source_object_type|
+|robotaxi|Robotaxi|source_object_type|
+
+### 25.1 供给跟踪阶段
+
+| 枚举值 | 中文名 | 含义 |
+|---|---|---|
+|PLAN_PENDING_RELEASE|计划待下达|已确认计划尚未形成生产批次|
+|BATCH_PLANNED|批次规划中|生产批次已创建但尚未开始生产|
+|IN_PRODUCTION|生产中|批次处于生产过程|
+|AWAITING_QUALITY_INSPECTION|待质量检验|生产已完成，尚未开始质量检验|
+|IN_QUALITY_INSPECTION|质量检验中|批次正在质量检验|
+|QUALITY_FAILED|质检失败|批次质量检验未通过|
+|QUALIFIED_PENDING_ALLOCATION|质检合格待编排|具体 Robotaxi 已生成，尚未形成交付编排|
+|ALLOCATED_PENDING_DELIVERY|已编排待交付|具体 Robotaxi 已分配区域与运营中心，尚未开始交付|
+|IN_TRANSIT|交付在途|Robotaxi 正在交付到目标运营中心|
+|PENDING_ADMISSION|待运营准入|Robotaxi 已到达运营中心，尚未完成运营准入|
+|AVAILABLE|可运营|Robotaxi 当前可参与运营调度|
+|IN_FLEET_OPERATION|区域运营中|Robotaxi 已在区域内但当前不属于可用供给|
+|RETIRED|已退役|Robotaxi 生命周期已结束|
 
 ---
 
