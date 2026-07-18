@@ -531,12 +531,11 @@ export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyD
     const strategy = strategyById.get(plan.supply_decision_strategy_id || run.supply_decision_strategy_id) || {};
     const profile = profileById.get(plan.supply_production_profile_id || run.supply_production_profile_id || forecast.supply_production_profile_id) || {};
     const gap = Math.max(0, Number(plan.robotaxi_gap_quantity ?? plan.fleet_gap_quantity ?? forecast.robotaxi_gap_quantity ?? forecast.fleet_gap_quantity ?? 0));
-    const requiredSupply = Math.ceil(gap * Math.max(0, Number(strategy.demand_coverage_rate ?? 1)) * (1 + Math.max(0, Number(strategy.safety_capacity_ratio ?? 0))));
-    const periodCount = Math.max(1, Number(forecast.forecast_period_count || 1));
-    const productionCapacity = Math.max(0, Number(profile.production_capacity_per_period || requiredSupply)) * periodCount;
-    const deliveryCapacity = Math.max(0, Number(profile.delivery_capacity_per_period || requiredSupply)) * periodCount;
-    const feasibleManufacturing = Number(plan.feasible_manufacturing_quantity ?? plan.feasible_production_quantity ?? Math.min(requiredSupply, productionCapacity || requiredSupply));
-    const feasibleDelivery = Number(plan.feasible_delivery_quantity ?? Math.min(requiredSupply, deliveryCapacity || requiredSupply));
+    const coveredGap = Math.ceil(gap * Math.max(0, Number(strategy.demand_coverage_rate ?? 1)));
+    const safetyCapacity = Math.ceil(coveredGap * Math.max(0, Number(strategy.safety_capacity_ratio ?? 0)));
+    const requiredSupply = coveredGap + safetyCapacity;
+    const feasibleManufacturing = Number(plan.feasible_manufacturing_quantity ?? plan.feasible_production_quantity ?? forecast.feasible_manufacturing_quantity ?? requiredSupply);
+    const feasibleDelivery = Number(plan.feasible_delivery_quantity ?? forecast.feasible_delivery_quantity ?? requiredSupply);
     const plannedQuantity = Number(plan.planned_robotaxi_count ?? Math.min(feasibleManufacturing, feasibleDelivery));
     return {
       ...plan,
@@ -548,6 +547,8 @@ export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyD
       required_robotaxi_quantity: plan.required_robotaxi_quantity ?? forecast.required_robotaxi_quantity ?? null,
       effective_current_robotaxi: plan.effective_current_robotaxi ?? forecast.effective_current_robotaxi ?? null,
       robotaxi_gap_quantity: gap,
+      covered_gap_quantity: plan.covered_gap_quantity ?? coveredGap,
+      safety_capacity_quantity: plan.safety_capacity_quantity ?? safetyCapacity,
       required_supply_quantity: plan.required_supply_quantity ?? requiredSupply,
       feasible_manufacturing_quantity: plan.feasible_manufacturing_quantity ?? feasibleManufacturing,
       feasible_delivery_quantity: plan.feasible_delivery_quantity ?? feasibleDelivery,
@@ -578,7 +579,9 @@ export function createSupplyPlanFromForecast({
     || {};
   const coverageRate = Math.max(0, Number(supplyDecisionStrategy?.demand_coverage_rate ?? 1));
   const safetyRatio = Math.max(0, Number(supplyDecisionStrategy?.safety_capacity_ratio ?? 0));
-  const requiredSupply = Math.ceil(rawGap * coverageRate * (1 + safetyRatio));
+  const coveredGap = Math.ceil(rawGap * coverageRate);
+  const safetyCapacity = Math.ceil(coveredGap * safetyRatio);
+  const requiredSupply = coveredGap + safetyCapacity;
   const feasibleManufacturing = Math.max(0, Number(forecast.feasible_manufacturing_quantity ?? forecast.feasible_supply_quantity ?? rawGap));
   const feasibleDelivery = Math.max(0, Number(forecast.feasible_delivery_quantity ?? forecast.feasible_supply_quantity ?? rawGap));
   const feasibleQuantity = Math.max(0, Math.floor(Math.min(requiredSupply, feasibleManufacturing, feasibleDelivery)));
@@ -600,6 +603,8 @@ export function createSupplyPlanFromForecast({
     required_robotaxi_quantity: forecast.required_robotaxi_quantity ?? null,
     effective_current_robotaxi: forecast.effective_current_robotaxi ?? null,
     robotaxi_gap_quantity: rawGap,
+    covered_gap_quantity: coveredGap,
+    safety_capacity_quantity: safetyCapacity,
     required_supply_quantity: requiredSupply,
     feasible_manufacturing_quantity: Math.min(requiredSupply, feasibleManufacturing),
     feasible_delivery_quantity: Math.min(requiredSupply, feasibleDelivery),
@@ -667,6 +672,10 @@ export function executeSupplyDecisionStrategy({
       target_zone_id: result.supplyPlan.target_zone_id,
       run_status: SupplyDecisionRunStatus.SUCCEEDED,
       supply_plan_id: result.supplyPlan.supply_plan_id,
+      robotaxi_gap_quantity: result.supplyPlan.robotaxi_gap_quantity,
+      covered_gap_quantity: result.supplyPlan.covered_gap_quantity,
+      safety_capacity_quantity: result.supplyPlan.safety_capacity_quantity,
+      required_supply_quantity: result.supplyPlan.required_supply_quantity,
       planned_robotaxi_count: result.supplyPlan.planned_robotaxi_count,
       uncovered_robotaxi_gap: result.supplyPlan.uncovered_robotaxi_gap,
       failure_reason: null,

@@ -264,6 +264,10 @@ target_market_shortfall
 
 `market_forecast_daily_orders` 是预测事实，`target_end_daily_orders` 是管理意图，`planned_daily_orders` 是规划模式确定的计划承接量，三者不得混为一个字段。`target_order_fulfillment_rate` 是服务质量目标，不参与市场需求折减；`market_serviceable_daily_orders` 仅保留为历史结果兼容字段。
 
+预测周期同样属于执行快照合同，不允许页面或计算服务隐式固定为 12 个月。执行时必须从经营目标和预测策略的有效配置冻结 `forecast_start_date / forecast_period_unit / forecast_period_count`，再按日历单位计算结束边界：周按 7 个自然日，月按日历月，季度按 3 个日历月，年按日历年。结果区间采用包含起止日期的表达，因此结束日期为下一个周期边界的前一日。
+
+`planned_daily_orders` 仍属于预测结果，而不是供应决策结果。它表达经营目标与市场预测经过 `planning_mode` 比较后的规划结论，并作为后续供应决策的需求输入。预测结果必须同时保存并展示规划模式、两个输入值、选择公式、差异和来源快照，不能只展示一个缺少解释的计划数值。
+
 基础经济性输入：
 
 |英文字段|中文字段|
@@ -374,13 +378,15 @@ robotaxi_gap_quantity
 |`delivery_capacity_per_period`|每期交付能力|
 
 ```text
-production_ready_date
-= forecast_start_date
-+ production_lead_time_days
+first_production_completion_date
+= forecast_start_date + production_lead_time_days
+
+first_quality_inspection_completion_date
+= first_production_completion_date
 + quality_inspection_lead_time_days
 
 available_supply_days
-= max(0, forecast_end_date - production_ready_date)
+= max(0, forecast_end_date - first_quality_inspection_completion_date)
 
 available_production_periods
 = floor(available_supply_days / production_period_days)
@@ -404,7 +410,9 @@ uncovered_robotaxi_gap
 = max(0, robotaxi_gap_quantity - feasible_supply_quantity)
 ```
 
-`recommended_production_quantity` 表达完整覆盖缺口需要生产的数量；`feasible_supply_quantity` 表达预测期内受产能和交付约束可完成的数量。`production_capacity_per_period` 是生产能力唯一配置真值；年度能力等其他口径只允许作为展示派生字段。必须分别输出首批可交付日期、预测期剩余缺口和全部计划供给完成日期。
+`recommended_production_quantity` 表达完整覆盖缺口需要生产的数量；`feasible_supply_quantity` 表达预测期内受产能和交付约束可完成的数量。`production_capacity_per_period` 是生产能力唯一配置真值；年度能力等其他口径只允许作为展示派生字段。
+
+趋势必须区分生产完成与质量检验合格两个里程碑：生产完成量从生产提前期结束后出现，质检合格可供给量从质量检验周期结束后出现。累计生产完成量用于观察生产管道，累计质检合格量用于判断可供给结果，剩余 Robotaxi 缺口只能由累计质检合格量冲减。预测阶段尚未发生区域物流交付，因此不得把质检合格量命名为实际交付量。必须分别输出首批生产完成日期、首批质量检验完成日期、预测期剩余缺口和全部计划供给完成日期。
 
 ## 13. 预测策略、执行与结果
 

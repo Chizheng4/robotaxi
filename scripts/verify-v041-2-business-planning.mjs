@@ -36,7 +36,7 @@ const targetUpdate = updateBusinessTargetConfig({
 });
 assert.equal(targetUpdate.succeeded, true, "经营目标必须通过服务化能力保存配置");
 assert.equal(targetUpdate.businessTarget.target_minimum_robotaxi_quantity, 40, "经营目标配置必须更新最低 Robotaxi 数量");
-assert.equal(targetUpdate.businessTarget.forecast_end_date, "2027-07-04", "经营目标必须按自然周期计算预测结束日期");
+assert.equal(targetUpdate.businessTarget.forecast_end_date, "2027-07-08", "经营目标必须按自然月计算包含式预测结束日期");
 assert.equal(supplyProfiles.length, 1, "必须初始化默认生产画像");
 assert.equal(supplyProfiles[0].profile_status, "ACTIVE", "生产画像默认必须可用");
 assert.equal(strategies.length, 1, "必须初始化默认长期需求预测策略");

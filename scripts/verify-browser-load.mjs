@@ -383,12 +383,12 @@ try {
       });
       await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
       await delay(300);
-      await send("Runtime.evaluate", {
-        expression: `document.querySelector(".data-chart")?.scrollIntoView({ block: "center", inline: "nearest" })`,
-        returnByValue: true,
-      });
-      await delay(180);
     }
+    await send("Runtime.evaluate", {
+      expression: `document.querySelector(".data-chart")?.scrollIntoView({ block: "center", inline: "nearest" })`,
+      returnByValue: true,
+    });
+    await delay(180);
     const planningChartPointResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const chart = document.querySelector(".data-chart canvas");
@@ -406,11 +406,14 @@ try {
       await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     }
     await delay(250);
+    await send("Runtime.evaluate", {
+      expression: `[...document.querySelectorAll(".forecast-calculation-heading button")].find((node) => node.textContent.trim() === "查看计算过程")?.click()`,
+      returnByValue: true,
+    });
+    await delay(100);
     const planningResult = await send("Runtime.evaluate", {
       expression: `(() => {
         const analysis = document.querySelector(".forecast-analysis");
-        const calculationDetails = document.querySelector(".forecast-calculation-details");
-        if (calculationDetails) calculationDetails.open = true;
         const summary = [...document.querySelectorAll(".analysis-summary-card")].map((node) => ({ label: node.querySelector("span")?.textContent, value: node.querySelector("strong")?.textContent }));
         const production = summary.find((item) => item.label === "计划生产数量");
         return {
@@ -426,11 +429,10 @@ try {
           chartEngineCount: document.querySelectorAll(".data-chart canvas").length,
           chartPointCount: [...document.querySelectorAll(".data-chart-viewport")].reduce((total, node) => total + Number(node.dataset.pointCount || 0), 0),
           chartViewportOverflow: [...document.querySelectorAll(".data-chart-viewport")].some((node) => node.scrollWidth - node.clientWidth > 1),
-          chartTooltipText: document.querySelector(".data-chart-tooltip-content")?.textContent?.trim() || "",
+          chartTooltipText: document.querySelector(".data-chart-control-tooltip, .data-chart-tooltip-content")?.textContent?.trim() || "",
           chartTooltipVisible: (() => {
-            const node = document.querySelector(".data-chart-tooltip-content");
-            const root = node?.parentElement;
-            return Boolean(node && root && getComputedStyle(root).display !== "none" && root.getBoundingClientRect().width > 0);
+            const node = document.querySelector(".data-chart-control-tooltip, .data-chart-tooltip-content");
+            return Boolean(node && getComputedStyle(node).display !== "none" && node.getBoundingClientRect().width > 0);
           })(),
           calculationStepCount: document.querySelectorAll(".forecast-calculation-step").length,
           calculationTitles: [...document.querySelectorAll(".forecast-calculation-title b")].map((node) => node.textContent.trim()),

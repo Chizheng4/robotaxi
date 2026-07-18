@@ -310,12 +310,12 @@ const tableConfig = {
   supplyDecisionRuns: {
     title: "供应决策执行",
     description: "记录供应决策的输入、执行状态及其直接形成的生产计划。",
-    columns: ["supply_decision_run_id", "supply_decision_strategy_id", "forecast_result_id", "run_status", "supply_plan_id", "started_at", "completed_at", "failure_reason"],
+    columns: ["supply_decision_run_id", "supply_decision_strategy_id", "forecast_result_id", "run_status", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "planned_robotaxi_count", "supply_plan_id", "started_at", "completed_at", "failure_reason"],
   },
   supplyPlans: {
     title: "生产计划",
     description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
-    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "supply_production_profile_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
+    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "supply_production_profile_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
   },
   productionBatches: {
     title: "生产批次",
@@ -8727,7 +8727,9 @@ function formatDecisionMetric(metric = {}) {
 function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreateSupplyPlan, supplyPlans = [] }) {
   const [trendTimeUnit, setTrendTimeUnit] = useState("MONTH");
   const [actionFeedback, setActionFeedback] = useState(null);
+  const [calculationOpen, setCalculationOpen] = useState(false);
   const selected = rows.find((row) => row.forecast_result_id === selectedId) || rows[0] || null;
+  useEffect(() => setCalculationOpen(false), [selected?.forecast_result_id]);
   if (!selected) return <Empty description="执行需求预测后将在这里展示经营规划结论" />;
   const forecastDays = Math.max(0, (Date.parse(`${selected.forecast_end_date}T00:00:00Z`) - Date.parse(`${selected.forecast_start_date}T00:00:00Z`)) / 86400000);
   const availableTrendUnits = new Set([...(forecastDays <= 180 ? ["DAY"] : []), ...(forecastDays <= 730 ? ["WEEK"] : []), "MONTH"]);
@@ -8736,7 +8738,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
   const normalizedTrendRows = normalizeForecastChartRows(trendRows, trendTimeUnit);
   const normalizedSupplyTrendRows = normalizeForecastChartRows(supplyTrendRows, "DAY");
   const metrics = ["market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "robotaxi_gap_quantity", "planned_production_quantity", "uncovered_robotaxi_gap", "forecast_cumulative_market_orders", "forecast_cumulative_planned_orders"];
-  const bottlenecks = ["daily_required_robotaxi", "peak_required_robotaxi", "daily_capacity_gap", "peak_capacity_gap"];
+  const bottlenecks = ["planned_daily_orders", "effective_daily_capacity", "daily_capacity_gap", "planned_peak_hour_orders", "effective_peak_hour_capacity", "peak_capacity_gap"];
   const existingSupplyPlan = supplyPlans.find((item) => item.forecast_result_id === selected.forecast_result_id && item.plan_status !== "CANCELLED");
   const handleSupplyDecision = () => {
     const result = onCreateSupplyPlan?.(selected);
@@ -8765,6 +8767,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
       <div className="forecast-context-strip">
         <span>{selected.forecast_start_date || "无"} 至 {selected.forecast_end_date || "无"}</span>
         <span>{formatPlanningValue(selected.forecast_period_count)} {getDisplayValue(selected.forecast_period_unit)}</span>
+        <span>{getFieldLabel("planning_mode")}：{getDisplayValue(selected.planning_mode)}</span>
         <span>{getDisplayValue(selected.growth_model || "COMPOUND")}</span>
         <span>有效周期增长率 {formatPlanningPercent(selected.effective_period_growth_rate)}</span>
       </div>
@@ -8798,22 +8801,22 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
       </div>
       <div className="forecast-trend-section">
         <div className="forecast-trend-toolbar">
-          <div><strong>生产与交付规划</strong><small>按生产画像展示预计产出、交付和 Robotaxi 剩余缺口</small></div>
+          <div><strong>生产与质检规划</strong><small>按生产画像展示生产完成、质检合格、可形成供给和 Robotaxi 剩余缺口</small></div>
         </div>
         <div className="forecast-trend-grid">
           <DataSeriesChart
-            title="每期生产与交付"
-            description="每个生产能力周期预计形成和交付的 Robotaxi"
+            title="每期生产与质检"
+            description="生产提前期结束后形成产量，质量检验周期结束后形成质检合格量"
             rows={normalizedSupplyTrendRows}
-            series={[{ key: "period_production_quantity", label: "当期生产量", unit: "辆" }, { key: "period_delivery_quantity", label: "当期交付量", unit: "辆" }]}
-            emptyText="该历史结果尚未保存生产交付趋势"
+            series={["period_production_quantity", "period_quality_passed_quantity", "period_delivery_quantity"].map((key) => ({ key, label: getFieldLabel(key), unit: "辆" }))}
+            emptyText="该历史结果尚未保存生产与质检趋势"
             zeroBased
           />
           <DataSeriesChart
             title="累计供给与剩余缺口"
-            description="累计生产、累计交付与尚未覆盖的 Robotaxi 缺口"
+            description="累计生产用于观察管道，剩余缺口只按累计可供给量扣减"
             rows={normalizedSupplyTrendRows}
-            series={[{ key: "cumulative_production_quantity", label: "累计生产量", unit: "辆" }, { key: "cumulative_delivery_quantity", label: "累计交付量", unit: "辆" }, { key: "remaining_robotaxi_gap", label: "剩余缺口", unit: "辆" }]}
+            series={["cumulative_production_quantity", "cumulative_quality_passed_quantity", "cumulative_delivery_quantity", "remaining_robotaxi_gap"].map((key) => ({ key, label: getFieldLabel(key), unit: "辆" }))}
             emptyText="该历史结果尚未保存累计供给趋势"
             zeroBased
           />
@@ -8824,9 +8827,9 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
         <section><h3>Robotaxi 规模</h3><div className="forecast-analysis-row"><span>{getFieldLabel("effective_current_robotaxi")}</span><strong>{formatPlanningValue(selected.effective_current_robotaxi)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("requirement_driver")}</span><strong>{getDisplayValue(selected.requirement_driver)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("robotaxi_effective_daily_orders")}</span><strong>{formatPlanningValue(selected.robotaxi_effective_daily_orders)}</strong></div></section>
         <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>{getFieldLabel("recommended_production_quantity")}</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("first_production_completion_date")}</span><strong>{selected.first_production_completion_date || selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("first_quality_inspection_completion_date")}</span><strong>{selected.first_quality_inspection_completion_date || "无"}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("feasible_supply_quantity")}</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("full_supply_completion_date")}</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
       </div>
-      <details className="forecast-calculation-details">
-        <summary><span>{getFieldLabel("calculation_steps")}</span><span className="forecast-calculation-toggle">›</span></summary>
-        {groupForecastCalculationSteps(selected.calculation_steps).map((group) => (
+      <div className="forecast-calculation-details">
+        <div className="forecast-calculation-heading"><span>{getFieldLabel("calculation_steps")}</span><Button size="small" onClick={() => setCalculationOpen((open) => !open)}>{calculationOpen ? "收起计算过程" : "查看计算过程"}</Button></div>
+        {calculationOpen && groupForecastCalculationSteps(selected.calculation_steps).map((group) => (
           <section className="forecast-calculation-group" key={group.name}>
             <h4>{group.name}</h4>
             {group.steps.map((step) => (
@@ -8845,7 +8848,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
             ))}
           </section>
         ))}
-      </details>
+      </div>
     </div>
   );
 }
@@ -8893,7 +8896,14 @@ function formatPlanningCalculationValue(value, key) {
 }
 
 function formatPlanningCalculationExpression(expression = "") {
-  const operators = { max: "最大值", min: "最小值", ceil: "向上取整", Place: "地点" };
+  const operators = {
+    max: "最大值",
+    min: "最小值",
+    ceil: "向上取整",
+    Place: "地点",
+    add_calendar_period: "按日历周期增加",
+    day: "天",
+  };
   return String(expression || "无公式").replace(/[A-Za-z][A-Za-z0-9_]*/g, (token) => operators[token] || getFieldLabel(token));
 }
 
@@ -8919,6 +8929,7 @@ function DataSeriesChart({
 }) {
   const chartElementRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const [activePoint, setActivePoint] = useState(null);
   const seriesSignature = series.map((item) => item.key).join("|");
   const [visibleKeys, setVisibleKeys] = useState(() => series.map((item) => item.key));
   useEffect(() => {
@@ -8954,6 +8965,7 @@ function DataSeriesChart({
       chart.dispatchAction({ type: "showTip", seriesIndex: 0, dataIndex });
     };
     const handlePlotClick = (event) => showNearestTooltip(event.offsetX, event.offsetY);
+    const handlePlotMove = (event) => showNearestTooltip(event.offsetX, event.offsetY);
     const handleTouchEnd = (event) => {
       const touch = event.changedTouches?.[0];
       const rect = chartElementRef.current?.getBoundingClientRect();
@@ -8962,6 +8974,7 @@ function DataSeriesChart({
     };
     chart.on("click", handleClick);
     chart.getZr().on("click", handlePlotClick);
+    chart.getZr().on("mousemove", handlePlotMove);
     chartElementRef.current.addEventListener("touchend", handleTouchEnd, { passive: true, capture: true });
     const observer = new ResizeObserver(() => chart.resize({ animation: { duration: 0 } }));
     observer.observe(chartElementRef.current);
@@ -8969,6 +8982,7 @@ function DataSeriesChart({
       observer.disconnect();
       chart.off("click", handleClick);
       chart.getZr().off("click", handlePlotClick);
+      chart.getZr().off("mousemove", handlePlotMove);
       chartElementRef.current?.removeEventListener("touchend", handleTouchEnd, true);
       chart.dispose();
       chartInstanceRef.current = null;
@@ -8979,6 +8993,21 @@ function DataSeriesChart({
       ? (current.length > 1 ? current.filter((item) => item !== key) : current)
       : [...current, key]);
   };
+  const showChartPoint = (clientX, clientY) => {
+    const rect = chartElementRef.current?.getBoundingClientRect();
+    if (!rect || !rows.length) return;
+    const plotLeft = Math.min(52, rect.width * 0.12);
+    const plotRight = Math.max(plotLeft + 1, rect.width - 22);
+    const boundedX = Math.max(plotLeft, Math.min(plotRight, clientX - rect.left));
+    const ratio = (boundedX - plotLeft) / Math.max(1, plotRight - plotLeft);
+    const index = Math.max(0, Math.min(rows.length - 1, Math.round(ratio * (rows.length - 1))));
+    setActivePoint({
+      index,
+      left: boundedX,
+      top: Math.max(14, Math.min(rect.height - 18, clientY - rect.top)),
+    });
+  };
+  const activeRow = activePoint ? rows[activePoint.index] : null;
   return (
     <section className="data-chart" data-variant={variant.toLowerCase()}>
       <header className="data-chart-header">
@@ -8993,14 +9022,39 @@ function DataSeriesChart({
             </button>
           ))}
         </div>
-        <div
-          ref={chartElementRef}
-          className="data-chart-viewport"
-          data-point-count={rows.length}
-          role="img"
-          aria-label={`${title}，移动或点击数据点可查看具体数值`}
-          onWheelCapture={preserveDataChartPageScroll}
-        />
+        <div className="data-chart-plot">
+          <div
+            ref={chartElementRef}
+            className="data-chart-viewport"
+            data-point-count={rows.length}
+            role="img"
+            aria-label={`${title}，移动或点击数据点可查看具体数值`}
+            onWheelCapture={preserveDataChartPageScroll}
+            onMouseMove={(event) => showChartPoint(event.clientX, event.clientY)}
+            onMouseLeave={() => setActivePoint(null)}
+            onClick={(event) => showChartPoint(event.clientX, event.clientY)}
+            onTouchEnd={(event) => {
+              const touch = event.changedTouches?.[0];
+              if (touch) showChartPoint(touch.clientX, touch.clientY);
+            }}
+          />
+          {activeRow && <>
+            <i className="data-chart-active-line" style={{ left: activePoint.left }} />
+            <div
+              className={`data-chart-tooltip data-chart-control-tooltip${activePoint.left > (chartElementRef.current?.clientWidth || 0) * 0.66 ? " align-end" : ""}`}
+              style={{ left: activePoint.left, top: activePoint.top }}
+            >
+              <strong>{activeRow.tooltipLabel || activeRow.label}</strong>
+              {chartSeries.filter((item) => item.visible).map((item) => {
+                const value = activeRow.values?.[item.key];
+                const formatted = item.formatValue
+                  ? item.formatValue(value, activeRow.raw)
+                  : dataChartService.formatDataChartNumber(value);
+                return <span key={item.key}><i style={{ backgroundColor: item.color }} /><em>{item.label}</em><b>{formatted}{item.unit ? ` ${item.unit}` : ""}</b></span>;
+              })}
+            </div>
+          </>}
+        </div>
         {option.__sampled && <small className="data-chart-sample-note">数据量较大，图形已等距抽样，原始结果保持完整。</small>}
       </> : <div className="data-chart-empty">{emptyText}</div>}
     </section>

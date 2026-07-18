@@ -53,6 +53,26 @@ flowchart LR
 
 供应决策不得按预测周期数量再次乘算生产能力。`feasible_manufacturing_quantity` 与 `feasible_delivery_quantity` 是需求预测结果已经按生产提前期、质检周期、爬坡产能和交付能力冻结的可行性事实；供应决策只按覆盖率和安全容量计算所需供给，再受这两个事实约束。
 
+供应决策必须保存并展示数量分解，不能只显示最终数值：
+
+```text
+covered_gap_quantity
+= ceil(robotaxi_gap_quantity × demand_coverage_rate)
+
+safety_capacity_quantity
+= ceil(covered_gap_quantity × safety_capacity_ratio)
+
+required_supply_quantity
+= covered_gap_quantity + safety_capacity_quantity
+
+planned_robotaxi_count
+= min(required_supply_quantity,
+      feasible_manufacturing_quantity,
+      feasible_delivery_quantity)
+```
+
+例如基础缺口 43、覆盖率 100%、安全产能 5% 时，应明确显示覆盖缺口 43、安全容量 3、决策供给数量 46。安全容量属于供应决策，不得反写预测结果中的 `robotaxi_gap_quantity`。
+
 覆盖率和安全容量在配置界面以百分比输入和展示，领域策略统一保存为 `[0, 1]` 比例值。
 
 运行态加载旧生产计划时，可以从其关联的预测结果、供应决策执行和生产画像补齐上述追溯与计算字段，但不得改写已经发生的预测结果或人为配置。旧别名只允许作为迁移输入，页面和新单据统一保存正式字段。

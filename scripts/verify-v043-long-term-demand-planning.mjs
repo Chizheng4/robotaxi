@@ -32,7 +32,7 @@ const robotaxis = Array.from({ length: 20 }, (_, index) => ({
 const calculation = calculateLongTermDemandPlan({ strategy, businessTarget, zoneProfile, productionProfile, robotaxis });
 assert.equal(calculation.validation.valid, true);
 assert.equal(calculation.result.forecast_period_unit, "MONTH");
-assert.equal(calculation.result.forecast_period_count, 36);
+assert.equal(calculation.result.forecast_period_count, businessTarget.forecast_period_count);
 assert.ok(calculation.result.market_forecast_daily_orders > 600);
 assert.ok(calculation.result.required_robotaxi_quantity >= calculation.result.daily_required_robotaxi);
 assert.ok(calculation.result.required_robotaxi_quantity >= calculation.result.peak_required_robotaxi);
@@ -43,7 +43,7 @@ assert.ok(calculation.result.feasible_supply_quantity <= calculation.result.feas
 assert.ok(calculation.result.feasible_supply_quantity <= calculation.result.feasible_delivery_quantity);
 assert.ok(calculation.result.supply_trend_series.length > 1);
 assert.equal(calculation.result.supply_trend_series.at(-1).remaining_robotaxi_gap, 0);
-assert.equal(calculation.result.calculation_steps.length, 23);
+assert.equal(calculation.result.calculation_steps.length, 24);
 assert.equal(calculation.result.growth_model, "LINEAR");
 assert.ok(calculation.result.forecast_trend_series.DAY.length > calculation.result.forecast_trend_series.WEEK.length);
 assert.ok(calculation.result.forecast_trend_series.WEEK.length > calculation.result.forecast_trend_series.MONTH.length);
@@ -66,7 +66,7 @@ const linearCalculation = calculateLongTermDemandPlan({
   robotaxis,
 });
 assert.equal(linearCalculation.result.growth_model, "LINEAR");
-assert.equal(linearCalculation.result.growth_factor, 1.72);
+assert.equal(linearCalculation.result.growth_factor, Number((1 + linearCalculation.result.effective_period_growth_rate * businessTarget.forecast_period_count).toFixed(4)));
 
 const execution = executeLongTermDemandForecastStrategy({
   strategy,

@@ -1233,6 +1233,8 @@
 |average_variable_cost_per_order|单均变动成本|配置字段|基础经济性假设|
 |daily_fixed_operating_cost|日固定运营成本|配置字段|基础经济性假设|
 |minimum_contribution_margin_rate|最低经营贡献率|配置字段|经营贡献占实收收入的最低目标比例|
+|contribution_margin_per_order|单均贡献毛利|计算字段|单均收入扣除单均变动成本后的贡献毛利|
+|daily_contribution_margin|日经营贡献|计算字段|计划承接日订单贡献毛利扣除日固定运营成本后的经营贡献|
 |resident_trip_weight|居民出行权重|配置字段|居民对日出行暴露量的修正|
 |worker_trip_weight|工作人口出行权重|配置字段|工作人口对日出行暴露量的修正|
 |visitor_trip_weight|访客出行权重|配置字段|访客对日出行暴露量的修正|
@@ -1325,13 +1327,16 @@
 |within_forecast_period|是否在预测期内|嵌套字段|趋势点是否处于需求预测周期内|
 |period_production_quantity|当期生产量|计算字段|当前生产能力周期预计形成的 Robotaxi 数量|
 |cumulative_production_quantity|累计生产量|计算字段|截至当前周期累计形成的 Robotaxi 数量|
-|period_delivery_quantity|当期交付量|计算字段|当前周期预计完成交付的 Robotaxi 数量|
-|cumulative_delivery_quantity|累计交付量|计算字段|截至当前周期累计完成交付的 Robotaxi 数量|
-|remaining_robotaxi_gap|剩余 Robotaxi 缺口|计算字段|Robotaxi 缺口减累计交付数量|
+|period_quality_passed_quantity|当期质检合格量|计算字段|当前周期完成质量检验并合格的 Robotaxi 数量|
+|cumulative_quality_passed_quantity|累计质检合格量|计算字段|截至当前周期累计完成质量检验并合格的 Robotaxi 数量|
+|period_delivery_quantity|当期可供给量|兼容计算字段|当前周期在质检合格和交付能力约束下可形成供给的数量；不是已发生的区域交付事实|
+|cumulative_delivery_quantity|累计可供给量|兼容计算字段|截至当前周期累计可形成供给的数量；不是已发生的区域交付事实|
+|remaining_robotaxi_gap|剩余 Robotaxi 缺口|计算字段|Robotaxi 缺口减累计可供给数量|
 |planned_cumulative_production_quantity|计划累计生产量|计算字段|供应趋势结束时累计生产数量|
-|planned_cumulative_delivery_quantity|计划累计交付量|计算字段|供应趋势结束时累计交付数量|
-|first_delivery_date|首批交付日期|计算字段|首批 Robotaxi 可交付日期|
-|full_supply_completion_date|全部供给完成日期|计算字段|计划数量全部交付完成日期|
+|planned_cumulative_quality_passed_quantity|计划累计质检合格量|计算字段|供应趋势结束时累计质检合格数量|
+|planned_cumulative_delivery_quantity|计划累计可供给量|兼容计算字段|供应趋势结束时累计可形成供给的数量|
+|first_delivery_date|首批可供给日期|计算字段|首批 Robotaxi 完成生产和质量检验后可进入后续交付的日期|
+|full_supply_completion_date|全部可供给完成日期|计算字段|计划数量全部完成生产和质量检验、可进入后续交付的日期|
 |robotaxi_capacity_snapshot|Robotaxi 能力快照|持久化字段|预测执行冻结的单车能力参数|
 |robotaxi_inventory_snapshot|Robotaxi 资产快照|持久化字段|预测执行冻结的区域资产输入|
 |place_demand_profile_snapshot|地点需求画像快照|持久化字段|本次执行使用的 Place 画像|
@@ -1456,6 +1461,8 @@
 |target_zone_id|目标区域|持久化字段|计划覆盖的目标区域|
 |planned_robotaxi_count|计划 Robotaxi 数|配置字段|计划形成的 Robotaxi 数量|
 |required_supply_quantity|需补充供给数量|计算字段|车辆供给缺口按覆盖率和安全容量修正后的供给需求|
+|covered_gap_quantity|计划覆盖缺口|计算字段|Robotaxi 缺口按需求覆盖率计算后的计划覆盖数量|
+|safety_capacity_quantity|安全容量数量|计算字段|在计划覆盖缺口上按安全产能比例增加的数量|
 |planned_start_date|计划开始日期|配置字段|计划开始日期|
 |planned_end_date|计划结束日期|配置字段|计划结束日期|
 |confirmed_at|确认时间|运行态字段|生产计划确认时间|

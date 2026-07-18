@@ -3659,6 +3659,32 @@ body {
   touch-action: pan-y pinch-zoom;
 }
 
+.data-chart-plot {
+  position: relative;
+  min-width: 0;
+}
+
+.data-chart-active-line {
+  position: absolute;
+  z-index: 1;
+  top: 14px;
+  bottom: 30px;
+  width: 1px;
+  background: #7890a8;
+  pointer-events: none;
+}
+
+.data-chart-control-tooltip {
+  z-index: 4;
+}
+
+.data-chart-control-tooltip em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .data-chart-viewport canvas {
   touch-action: pan-y pinch-zoom !important;
 }
@@ -6015,11 +6041,7 @@ html[data-keyboard-open="true"] .platform-login-panel {
 .forecast-analysis-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line-soft); }
 .forecast-analysis-row strong { font-size: 12px; font-weight: 600; text-align: right; }
 .forecast-calculation-details { margin-top: 8px; background: var(--surface); border-top: 1px solid var(--line-soft); padding: 10px 0; }
-.forecast-calculation-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; font-size: 13px; font-weight: 600; list-style: none; }
-.forecast-calculation-details summary::-webkit-details-marker { display: none; }
-.forecast-calculation-toggle { color: var(--muted); font-size: 18px; font-weight: 400; transform: rotate(0deg); transition: transform 140ms ease; }
-.forecast-calculation-details[open] .forecast-calculation-toggle { transform: rotate(90deg); }
-.forecast-calculation-details summary small { color: var(--muted); font-size: var(--font-xs); font-weight: 400; }
+.forecast-calculation-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; }
 .forecast-calculation-step { display: grid; grid-template-columns: minmax(150px, 180px) minmax(0, 1fr) minmax(104px, auto); gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-soft); }
 .forecast-calculation-group h4 { margin: 10px 0 4px; color: var(--muted); font-size: var(--font-xs); font-weight: 600; }
 .forecast-calculation-step span { display: flex; gap: 7px; align-items: baseline; }

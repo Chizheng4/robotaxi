@@ -1,5 +1,5 @@
 const PERIOD_DAYS = { WEEK: 7, MONTH: 30, QUARTER: 91, YEAR: 365 };
-const TREND_STEP_DAYS = { DAY: 1, WEEK: 7, MONTH: 30 };
+const TREND_STEP_DAYS = { DAY: 1, WEEK: 7 };
 const MAX_SUPPLY_TREND_PERIODS = 240;
 
 const number = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -8,8 +8,27 @@ const ratio = (value, fallback = 0) => Math.min(1, Math.max(0, number(value, fal
 const round = (value, digits = 2) => Number(number(value).toFixed(digits));
 const addDays = (date, days) => {
   const next = new Date(`${date}T00:00:00.000Z`);
-  next.setUTCDate(next.getUTCDate() + Math.max(0, Math.floor(days)));
+  next.setUTCDate(next.getUTCDate() + Math.floor(days));
   return next.toISOString().slice(0, 10);
+};
+const daysBetween = (startDate, endDate) => Math.max(0, Math.round(
+  (Date.parse(`${endDate}T00:00:00.000Z`) - Date.parse(`${startDate}T00:00:00.000Z`)) / 86400000,
+));
+const addCalendarMonths = (date, months) => {
+  const current = new Date(`${date}T00:00:00.000Z`);
+  const day = current.getUTCDate();
+  current.setUTCDate(1);
+  current.setUTCMonth(current.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0)).getUTCDate();
+  current.setUTCDate(Math.min(day, lastDay));
+  return current.toISOString().slice(0, 10);
+};
+const addCalendarPeriods = (date, unit, count) => {
+  if (unit === "WEEK") return addDays(date, count * 7);
+  if (unit === "MONTH") return addCalendarMonths(date, count);
+  if (unit === "QUARTER") return addCalendarMonths(date, count * 3);
+  if (unit === "YEAR") return addCalendarMonths(date, count * 12);
+  throw new Error("FORECAST_PERIOD_UNIT_INVALID");
 };
 
 export function resolveForecastPeriod(target = {}, strategy = {}) {
@@ -18,7 +37,10 @@ export function resolveForecastPeriod(target = {}, strategy = {}) {
   const startDate = target.forecast_start_date || new Date().toISOString().slice(0, 10);
   const periodDays = PERIOD_DAYS[unit];
   if (!periodDays) throw new Error("FORECAST_PERIOD_UNIT_INVALID");
-  return { unit, count, periodDays, startDate, endDate: addDays(startDate, periodDays * count) };
+  const endExclusiveDate = addCalendarPeriods(startDate, unit, count);
+  const endDate = addDays(endExclusiveDate, -1);
+  const totalDays = daysBetween(startDate, endExclusiveDate);
+  return { unit, count, periodDays: totalDays / count, totalDays, startDate, endDate, endExclusiveDate };
 }
 
 export function validatePlanningInputs({ strategy, businessTarget, zoneProfile, productionProfile }) {
@@ -96,25 +118,16 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   );
   const productionCompletionDate = addDays(period.startDate, productionLeadDays);
   const qualityInspectionCompletionDate = addDays(productionCompletionDate, qualityInspectionLeadDays);
-  const availableDays = Math.max(0, (Date.parse(`${period.endDate}T00:00:00Z`) - Date.parse(`${qualityInspectionCompletionDate}T00:00:00Z`)) / 86400000);
-  const availablePeriods = qualityInspectionCompletionDate > period.endDate
-    ? 0
-    : 1 + Math.max(0, Math.floor(availableDays / productionPeriodDays));
   const capacityPerPeriod = positive(productionProfile.production_capacity_per_period ?? productionProfile.monthly_production_capacity ?? positive(productionProfile.annual_production_capacity) / 12);
   const deliveryPerPeriod = positive(productionProfile.delivery_capacity_per_period ?? productionProfile.delivery_capacity);
   const rampRatios = Array.isArray(productionProfile.ramp_up_capacity_ratios) ? productionProfile.ramp_up_capacity_ratios : [];
-  let manufacturing = 0;
-  for (let index = 0; index < availablePeriods; index += 1) manufacturing += capacityPerPeriod * ratio(rampRatios[index], 1);
-  const feasibleManufacturing = Math.floor(manufacturing);
-  const feasibleDelivery = Math.floor(deliveryPerPeriod * availablePeriods);
-  const feasibleSupply = Math.min(feasibleManufacturing, feasibleDelivery);
   const recommendedProduction = robotaxiGap;
   const plannedProduction = recommendedProduction;
-  const uncoveredGap = Math.max(0, robotaxiGap - feasibleSupply);
   const supplyTrendSeries = buildSupplyTrendSeries({
     startDate: period.startDate,
     forecastEndDate: period.endDate,
-    readyDate: qualityInspectionCompletionDate,
+    productionReadyDate: productionCompletionDate,
+    qualityInspectionLeadDays,
     productionPeriodDays,
     capacityPerPeriod,
     deliveryPerPeriod,
@@ -123,6 +136,13 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
     plannedProduction,
   });
   const finalSupplyPoint = supplyTrendSeries[supplyTrendSeries.length - 1] || {};
+  const forecastSupplyPoints = supplyTrendSeries.filter((point) => point.within_forecast_period);
+  const finalForecastSupplyPoint = forecastSupplyPoints[forecastSupplyPoints.length - 1] || {};
+  const availablePeriods = forecastSupplyPoints.filter((point) => point.period_production_quantity > 0).length;
+  const feasibleManufacturing = Math.floor(finalForecastSupplyPoint.cumulative_production_quantity || 0);
+  const feasibleDelivery = Math.floor(finalForecastSupplyPoint.cumulative_delivery_quantity || 0);
+  const feasibleSupply = feasibleDelivery;
+  const uncoveredGap = Math.max(0, robotaxiGap - feasibleSupply);
 
   const serviceDailyCapacity = positive(zoneProfile.effective_daily_capacity ?? zoneProfile.service_capacity);
   const servicePeakCapacity = positive(zoneProfile.effective_peak_hour_capacity ?? zoneProfile.turnover_capacity);
@@ -204,6 +224,7 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
     uncovered_robotaxi_gap: uncoveredGap,
     supply_trend_series: supplyTrendSeries,
     planned_cumulative_production_quantity: finalSupplyPoint.cumulative_production_quantity || 0,
+    planned_cumulative_quality_passed_quantity: finalSupplyPoint.cumulative_quality_passed_quantity || 0,
     planned_cumulative_delivery_quantity: finalSupplyPoint.cumulative_delivery_quantity || 0,
     first_delivery_date: supplyTrendSeries.find((point) => point.period_delivery_quantity > 0)?.trend_date || null,
     full_supply_completion_date: supplyTrendSeries.find((point) => point.remaining_robotaxi_gap <= 0)?.trend_date || null,
@@ -255,7 +276,8 @@ function resolveTopLevelZoneId(zoneId, zones = []) {
 function buildSupplyTrendSeries({
   startDate,
   forecastEndDate,
-  readyDate,
+  productionReadyDate,
+  qualityInspectionLeadDays,
   productionPeriodDays,
   capacityPerPeriod,
   deliveryPerPeriod,
@@ -269,36 +291,66 @@ function buildSupplyTrendSeries({
     within_forecast_period: true,
     period_production_quantity: 0,
     cumulative_production_quantity: 0,
+    period_quality_passed_quantity: 0,
+    cumulative_quality_passed_quantity: 0,
     period_delivery_quantity: 0,
     cumulative_delivery_quantity: 0,
     remaining_robotaxi_gap: robotaxiGap,
   }];
-  if (plannedProduction <= 0 || capacityPerPeriod <= 0 || deliveryPerPeriod <= 0) return points;
+  if (plannedProduction <= 0 || capacityPerPeriod <= 0) return points;
 
-  let cumulativeProduction = 0;
-  let cumulativeDelivery = 0;
-  for (let index = 0; index < MAX_SUPPLY_TREND_PERIODS && cumulativeDelivery < plannedProduction; index += 1) {
+  const events = new Map();
+  let scheduledProduction = 0;
+  for (let index = 0; index < MAX_SUPPLY_TREND_PERIODS && scheduledProduction < plannedProduction; index += 1) {
     const productionCapacity = Math.floor(capacityPerPeriod * ratio(rampRatios[index], 1));
     const periodProduction = Math.min(
-      Math.max(0, plannedProduction - cumulativeProduction),
+      Math.max(0, plannedProduction - scheduledProduction),
       productionCapacity,
     );
-    cumulativeProduction += periodProduction;
-    const deliverableInventory = Math.max(0, cumulativeProduction - cumulativeDelivery);
-    const periodDelivery = Math.min(deliverableInventory, Math.floor(deliveryPerPeriod));
+    if (periodProduction <= 0) break;
+    scheduledProduction += periodProduction;
+    const productionDate = addDays(productionReadyDate, productionPeriodDays * index);
+    const qualityDate = addDays(productionDate, qualityInspectionLeadDays);
+    const productionEvent = events.get(productionDate) || { production: 0, qualityPassed: 0, deliveryWindow: false };
+    productionEvent.production += periodProduction;
+    events.set(productionDate, productionEvent);
+    const qualityEvent = events.get(qualityDate) || { production: 0, qualityPassed: 0, deliveryWindow: true };
+    qualityEvent.qualityPassed += periodProduction;
+    qualityEvent.deliveryWindow = true;
+    events.set(qualityDate, qualityEvent);
+  }
+
+  let cumulativeProduction = 0;
+  let cumulativeQualityPassed = 0;
+  let cumulativeDelivery = 0;
+  let trendIndex = 0;
+  let pendingDates = [...events.keys()].sort();
+  while (pendingDates.length && trendIndex < MAX_SUPPLY_TREND_PERIODS) {
+    const pointDate = pendingDates.shift();
+    const event = events.get(pointDate) || { production: 0, qualityPassed: 0, deliveryWindow: false };
+    cumulativeProduction += event.production;
+    cumulativeQualityPassed += event.qualityPassed;
+    const deliverableInventory = Math.max(0, cumulativeQualityPassed - cumulativeDelivery);
+    const periodDelivery = event.deliveryWindow ? Math.min(deliverableInventory, Math.floor(deliveryPerPeriod)) : 0;
     cumulativeDelivery += periodDelivery;
-    const pointDate = addDays(readyDate, productionPeriodDays * index);
+    trendIndex += 1;
     points.push({
-      trend_index: index + 1,
+      trend_index: trendIndex,
       trend_date: pointDate,
       within_forecast_period: pointDate <= forecastEndDate,
-      period_production_quantity: periodProduction,
+      period_production_quantity: event.production,
       cumulative_production_quantity: cumulativeProduction,
+      period_quality_passed_quantity: event.qualityPassed,
+      cumulative_quality_passed_quantity: cumulativeQualityPassed,
       period_delivery_quantity: periodDelivery,
       cumulative_delivery_quantity: cumulativeDelivery,
       remaining_robotaxi_gap: Math.max(0, robotaxiGap - cumulativeDelivery),
     });
-    if (productionCapacity <= 0 && periodDelivery <= 0) break;
+    if (deliveryPerPeriod > 0 && !pendingDates.length && cumulativeDelivery < cumulativeQualityPassed) {
+      const nextDate = addDays(pointDate, productionPeriodDays);
+      events.set(nextDate, { production: 0, qualityPassed: 0, deliveryWindow: true });
+      pendingDates = [nextDate];
+    }
   }
   return points;
 }
@@ -309,12 +361,12 @@ function calculateGrowthFactor(model, rate, elapsedPeriods) {
 }
 
 function buildForecastTrendSeries({ period, growthModel, effectiveGrowth, baselineOrders, targetOrders, planningMode }) {
-  const totalDays = period.periodDays * period.count;
-  return Object.fromEntries(Object.entries(TREND_STEP_DAYS).map(([timeUnit, stepDays]) => [
+  const totalDays = period.totalDays;
+  return Object.fromEntries(["DAY", "WEEK", "MONTH"].map((timeUnit) => [
     timeUnit,
     buildForecastTrendPoints({
       timeUnit,
-      stepDays,
+      elapsedDays: buildTrendElapsedDays(period, timeUnit),
       totalDays,
       period,
       growthModel,
@@ -326,16 +378,33 @@ function buildForecastTrendSeries({ period, growthModel, effectiveGrowth, baseli
   ]));
 }
 
-function buildForecastTrendPoints({ timeUnit, stepDays, totalDays, period, growthModel, effectiveGrowth, baselineOrders, targetOrders, planningMode }) {
+function buildTrendElapsedDays(period, timeUnit) {
+  const totalDays = period.totalDays;
+  if (timeUnit === "MONTH") {
+    const elapsedDays = [0];
+    for (let index = 1; ; index += 1) {
+      const pointDate = addCalendarPeriods(period.startDate, "MONTH", index);
+      const elapsed = Math.min(totalDays, daysBetween(period.startDate, pointDate));
+      if (elapsed >= totalDays) break;
+      elapsedDays.push(elapsed);
+    }
+    elapsedDays.push(totalDays);
+    return elapsedDays;
+  }
+  const stepDays = TREND_STEP_DAYS[timeUnit] || 1;
   const elapsedDays = [0];
   for (let day = stepDays; day < totalDays; day += stepDays) elapsedDays.push(day);
   if (elapsedDays[elapsedDays.length - 1] !== totalDays) elapsedDays.push(totalDays);
+  return elapsedDays;
+}
+
+function buildForecastTrendPoints({ timeUnit, elapsedDays, totalDays, period, growthModel, effectiveGrowth, baselineOrders, targetOrders, planningMode }) {
   let cumulativeMarketOrders = 0;
   let cumulativePlannedOrders = 0;
   let previousMarketDailyOrders = baselineOrders;
   let previousPlannedDailyOrders = resolvePlannedDailyOrders(baselineOrders, targetOrders, planningMode);
   return elapsedDays.map((day, index) => {
-    const elapsedPeriods = day / period.periodDays;
+    const elapsedPeriods = totalDays > 0 ? day / totalDays * period.count : 0;
     const marketDailyOrders = baselineOrders * calculateGrowthFactor(growthModel, effectiveGrowth, elapsedPeriods);
     const plannedDailyOrders = resolvePlannedDailyOrders(marketDailyOrders, targetOrders, planningMode);
     const intervalDays = index === 0 ? 0 : day - elapsedDays[index - 1];
@@ -348,7 +417,7 @@ function buildForecastTrendPoints({ timeUnit, stepDays, totalDays, period, growt
     return {
       trend_time_unit: timeUnit,
       trend_index: index,
-      trend_date: addDays(period.startDate, day),
+      trend_date: day === totalDays ? period.endDate : addDays(period.startDate, day),
       elapsed_days: day,
       market_daily_orders: round(marketDailyOrders),
       planned_daily_orders: round(plannedDailyOrders),
@@ -381,7 +450,17 @@ function buildCalculationSteps(result) {
     output_unit: outputUnit,
     source_refs: sourceRefs,
   });
+  const planningFormula = result.planning_mode === "MARKET_LED"
+    ? "market_forecast_daily_orders"
+    : result.planning_mode === "TARGET_LED"
+      ? "target_end_daily_orders"
+      : "min(market_forecast_daily_orders, target_end_daily_orders)";
   return [
+    step("预测周期", "确定预测结束日期", "forecast_end_date", {
+      forecast_start_date: result.forecast_start_date,
+      forecast_period_unit: result.forecast_period_unit,
+      forecast_period_count: result.forecast_period_count,
+    }, "CALENDAR_PERIOD", "add_calendar_period(forecast_start_date, forecast_period_unit, forecast_period_count) - 1 day", "日期", ["business_target_snapshot", "strategy_snapshot"]),
     step("需求预测", "汇总区域需求", "baseline_addressable_daily_orders", {
       baseline_addressable_daily_orders: result.baseline_addressable_daily_orders,
     }, "ZONE_PLACE_AGGREGATION", "Σ Place.baseline_addressable_daily_orders", "日订单", ["zone_demand_snapshot", "place_demand_profile_snapshot"]),
@@ -404,7 +483,7 @@ function buildCalculationSteps(result) {
       market_forecast_daily_orders: result.market_forecast_daily_orders,
       target_end_daily_orders: result.target_end_daily_orders,
       planning_mode: result.planning_mode,
-    }, result.planning_mode, "planning_mode(market_forecast_daily_orders, target_end_daily_orders)", "日订单", ["business_target_snapshot", "strategy_snapshot"]),
+    }, result.planning_mode, planningFormula, "日订单", ["business_target_snapshot", "strategy_snapshot"]),
     step("Robotaxi 能力", "计算完整服务周期", "effective_service_cycle_min", {
       average_pickup_duration_min: result.average_pickup_duration_min,
       average_trip_duration_min: result.average_trip_duration_min,
@@ -493,12 +572,17 @@ export function normalizeLongTermDemandForecastResult(result = {}) {
     && item?.input_values
     && Object.keys(item.input_values).length > 0
   ));
-  if (hasCurrentCalculationContract) return result;
   const normalizedResult = {
     growth_model: "COMPOUND",
     planning_mode: "BALANCED",
     ...result,
+    supply_trend_series: (result.supply_trend_series || []).map((point) => ({
+      ...point,
+      period_quality_passed_quantity: point.period_quality_passed_quantity ?? point.period_delivery_quantity ?? 0,
+      cumulative_quality_passed_quantity: point.cumulative_quality_passed_quantity ?? point.cumulative_delivery_quantity ?? 0,
+    })),
   };
+  if (hasCurrentCalculationContract) return normalizedResult;
   return {
     ...normalizedResult,
     calculation_steps: buildCalculationSteps(normalizedResult),
