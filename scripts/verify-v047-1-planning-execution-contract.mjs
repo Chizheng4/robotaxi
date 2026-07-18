@@ -129,7 +129,7 @@ const chartOption = createEchartsOption({
   rows: Array.from({ length: 60 }, (_, index) => ({ label: String(index), values: { value: index } })),
   series: [{ key: "value", label: "数值", visible: true }],
 });
-assert.equal(chartOption.dataZoom[0].moveOnMouseWheel, false);
+assert.deepEqual(chartOption.dataZoom, [], "经营规划图表不得接管页面纵向滚动");
 const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 assert.match(mainSource, /reusableForecast \? "查看预测结果" : "执行预测"/);
 assert.match(mainSource, /showSearch/);

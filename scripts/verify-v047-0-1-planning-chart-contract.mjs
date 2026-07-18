@@ -50,6 +50,6 @@ const rows = Array.from({ length: 48 }, (_, index) => ({ label: `第 ${index + 1
 const option = createEchartsOption({ rows, series: [{ key: "value", label: "指标值", color: "#4b78c7" }] });
 assert.equal(option.grid.containLabel, true, "图表必须根据坐标标签自适应布局");
 assert.equal(option.tooltip.axisPointer.snap, true, "提示线必须准确吸附数据点");
-assert.equal(option.dataZoom[0].type, "inside", "长序列必须支持图内缩放移动");
+assert.deepEqual(option.dataZoom, [], "长序列必须通过统一抽样和标签承载，不得接管页面纵向滚动");
 
 console.log("v047.0.3 预测语义、历史迁移与响应式图表合同验证通过");

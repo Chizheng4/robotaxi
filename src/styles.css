@@ -3659,6 +3659,10 @@ body {
   touch-action: pan-y pinch-zoom;
 }
 
+.data-chart-viewport canvas {
+  touch-action: pan-y pinch-zoom !important;
+}
+
 .data-chart-tooltip-content {
   display: grid;
   min-width: 172px;

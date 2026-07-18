@@ -8903,6 +8903,10 @@ function formatPlanningSourceRefs(sourceRefs = []) {
 
 const DATA_CHART_COLORS = ["#4b78c7", "#3f9580", "#a86f42", "#8a6fb2"];
 
+function preserveDataChartPageScroll(event) {
+  event.stopPropagation();
+}
+
 function DataSeriesChart({
   title,
   description,
@@ -8989,7 +8993,14 @@ function DataSeriesChart({
             </button>
           ))}
         </div>
-        <div ref={chartElementRef} className="data-chart-viewport" data-point-count={rows.length} role="img" aria-label={`${title}，移动或点击数据点可查看具体数值`} />
+        <div
+          ref={chartElementRef}
+          className="data-chart-viewport"
+          data-point-count={rows.length}
+          role="img"
+          aria-label={`${title}，移动或点击数据点可查看具体数值`}
+          onWheelCapture={preserveDataChartPageScroll}
+        />
         {option.__sampled && <small className="data-chart-sample-note">数据量较大，图形已等距抽样，原始结果保持完整。</small>}
       </> : <div className="data-chart-empty">{emptyText}</div>}
     </section>

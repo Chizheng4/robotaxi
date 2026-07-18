@@ -48,14 +48,9 @@ export function createEchartsOption({ rows = [], series = [], variant = "LINE", 
       axisLabel: { color: "#6b7d90", fontSize: 10, formatter: formatDataChartAxisNumber },
       splitLine: { lineStyle: { color: "#e7edf3" } },
     },
-    dataZoom: hasLongSeries ? [{
-      type: "inside",
-      filterMode: "none",
-      zoomOnMouseWheel: "shift",
-      moveOnMouseMove: true,
-      moveOnMouseWheel: false,
-      preventDefaultMouseMove: false,
-    }] : [],
+    // Long sequences use sampling and adaptive labels. Inside dataZoom captures
+    // wheel/touch events and blocks the surrounding analysis canvas from scrolling.
+    dataZoom: [],
     series: activeSeries.map((item) => ({
       id: item.key,
       name: item.label,
