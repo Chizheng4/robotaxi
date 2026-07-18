@@ -24,7 +24,7 @@ assert.ok(place && serviceArea && zone, "必须初始化 Place、ServiceArea、Z
 assert.equal(initialized.demandProfiles.filter((profile) => profile.target_object_type === "ZONE").length, 1, "SubZone 不生成画像");
 assert.ok(initialized.demandProfiles.every((profile) => profile.target_object_id && profile.target_object_name), "画像必须关联目标对象");
 assert.ok(initialized.demandProfiles.every((profile) => Number.isFinite(Date.parse(profile.calculated_at))), "业务计算必须记录真实时间");
-assert.equal(place.trip_generation_rate, 0.08, "出行产生率不得预乘需求权重");
+assert.equal(place.trip_generation_rate, 0.6, "住宅地点必须使用独立的 60% 出行产生率，不得预乘需求权重");
 assert.ok(place.daily_population_exposure > 0 && place.potential_daily_trips > 0 && place.baseline_addressable_daily_orders > 0, "Place 必须形成完整需求基线");
 assert.equal(serviceArea.parent_place_id, "P-001", "ServiceArea 必须唯一归属 Place");
 assert.equal("service_area_demand" in serviceArea, false, "ServiceArea 不得生成或保留需求字段");

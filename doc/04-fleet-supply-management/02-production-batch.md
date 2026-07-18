@@ -2,14 +2,17 @@
 
 ## 1. 对象定位
 
-`ProductionBatch` 是生产计划的执行单据。批次完成时通过 Robotaxi 对象服务形成指定数量的车辆资产，但不提前赋予运营中心、当前位置或运营准入资格。
+`ProductionBatch` 是生产计划的执行单据。批次生产完成后必须经过质量检验，只有质量检验通过时才通过 Robotaxi 对象服务形成指定数量的车辆资产；资产不提前获得运营中心、当前位置或运营准入资格。
 
 ```mermaid
 flowchart LR
   A["已确认生产计划"] -->|创建批次| B["已计划"]
   B -->|开始生产| C["生产中"]
-  C -->|完成生产与质量确认| D["已完成"]
-  D -->|形成资产| E["待交付 Robotaxi"]
+  C -->|生产完成| D["待质量检验"]
+  D -->|开始质量检验| E["质量检验中"]
+  E -->|质量通过| F["已完成"]
+  E -->|质量失败| G["质检失败"]
+  F -->|形成资产| H["待交付 Robotaxi"]
 ```
 
 ## 2. 核心字段
@@ -21,11 +24,13 @@ flowchart LR
 |状态|中文|动作|下一状态|
 |---|---|---|---|
 |`PLANNED`|已计划|开始生产|`IN_PRODUCTION`|
-|`IN_PRODUCTION`|生产中|完成生产|`COMPLETED`|
+|`IN_PRODUCTION`|生产中|生产完成|`AWAITING_QUALITY_INSPECTION`|
+|`AWAITING_QUALITY_INSPECTION`|待质量检验|开始质量检验|`IN_QUALITY_INSPECTION`|
+|`IN_QUALITY_INSPECTION`|质量检验中|质量通过|`COMPLETED`|
+|`IN_QUALITY_INSPECTION`|质量检验中|质量失败|`QUALITY_FAILED`|
 |`COMPLETED`|已完成|查看生成资产|无|
+|`QUALITY_FAILED`|质检失败|查看失败信息|无|
 |`CANCELLED`|已取消|查看|无|
-
-当前版本将生产完成和工厂质量确认收敛为“完成生产”动作；质量检验耗时属于生产画像的供给可行性计算，不新增未实现的中间状态。
 
 ## 4. 资产形成合同
 

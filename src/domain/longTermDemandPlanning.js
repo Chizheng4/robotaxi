@@ -94,9 +94,12 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
     productionProfile.quality_inspection_lead_time_days
       ?? productionProfile.inspection_lead_time_days,
   );
-  const readyDate = addDays(period.startDate, productionLeadDays + qualityInspectionLeadDays);
-  const availableDays = Math.max(0, (Date.parse(`${period.endDate}T00:00:00Z`) - Date.parse(`${readyDate}T00:00:00Z`)) / 86400000);
-  const availablePeriods = Math.max(0, Math.floor(availableDays / productionPeriodDays));
+  const productionCompletionDate = addDays(period.startDate, productionLeadDays);
+  const qualityInspectionCompletionDate = addDays(productionCompletionDate, qualityInspectionLeadDays);
+  const availableDays = Math.max(0, (Date.parse(`${period.endDate}T00:00:00Z`) - Date.parse(`${qualityInspectionCompletionDate}T00:00:00Z`)) / 86400000);
+  const availablePeriods = qualityInspectionCompletionDate > period.endDate
+    ? 0
+    : 1 + Math.max(0, Math.floor(availableDays / productionPeriodDays));
   const capacityPerPeriod = positive(productionProfile.production_capacity_per_period ?? productionProfile.monthly_production_capacity ?? positive(productionProfile.annual_production_capacity) / 12);
   const deliveryPerPeriod = positive(productionProfile.delivery_capacity_per_period ?? productionProfile.delivery_capacity);
   const rampRatios = Array.isArray(productionProfile.ramp_up_capacity_ratios) ? productionProfile.ramp_up_capacity_ratios : [];
@@ -111,7 +114,7 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   const supplyTrendSeries = buildSupplyTrendSeries({
     startDate: period.startDate,
     forecastEndDate: period.endDate,
-    readyDate,
+    readyDate: qualityInspectionCompletionDate,
     productionPeriodDays,
     capacityPerPeriod,
     deliveryPerPeriod,
@@ -188,7 +191,9 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
     effective_peak_hour_capacity: round(servicePeakCapacity),
     daily_capacity_gap: round(Math.max(0, plannedOrders - serviceDailyCapacity)),
     peak_capacity_gap: round(Math.max(0, plannedPeakOrders - servicePeakCapacity)),
-    production_ready_date: readyDate,
+    first_production_completion_date: productionCompletionDate,
+    first_quality_inspection_completion_date: qualityInspectionCompletionDate,
+    production_ready_date: productionCompletionDate,
     quality_inspection_lead_time_days: qualityInspectionLeadDays,
     available_production_periods: availablePeriods,
     feasible_manufacturing_quantity: feasibleManufacturing,
@@ -282,7 +287,7 @@ function buildSupplyTrendSeries({
     const deliverableInventory = Math.max(0, cumulativeProduction - cumulativeDelivery);
     const periodDelivery = Math.min(deliverableInventory, Math.floor(deliveryPerPeriod));
     cumulativeDelivery += periodDelivery;
-    const pointDate = addDays(readyDate, productionPeriodDays * (index + 1));
+    const pointDate = addDays(readyDate, productionPeriodDays * index);
     points.push({
       trend_index: index + 1,
       trend_date: pointDate,

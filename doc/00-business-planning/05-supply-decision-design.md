@@ -51,6 +51,10 @@ flowchart LR
 
 生产计划必须保存并展示统一字段：`forecast_result_id`、`supply_decision_run_id`、`supply_decision_strategy_id`、`supply_production_profile_id`、`required_robotaxi_quantity`、`effective_current_robotaxi`、`robotaxi_gap_quantity`、`required_supply_quantity`、`feasible_manufacturing_quantity`、`feasible_delivery_quantity`、`planned_robotaxi_count` 与 `uncovered_robotaxi_gap`。页面不得再读取 `fleet_gap_quantity / feasible_production_quantity / production_gap_quantity` 等旧字段。
 
+供应决策不得按预测周期数量再次乘算生产能力。`feasible_manufacturing_quantity` 与 `feasible_delivery_quantity` 是需求预测结果已经按生产提前期、质检周期、爬坡产能和交付能力冻结的可行性事实；供应决策只按覆盖率和安全容量计算所需供给，再受这两个事实约束。
+
+覆盖率和安全容量在配置界面以百分比输入和展示，领域策略统一保存为 `[0, 1]` 比例值。
+
 运行态加载旧生产计划时，可以从其关联的预测结果、供应决策执行和生产画像补齐上述追溯与计算字段，但不得改写已经发生的预测结果或人为配置。旧别名只允许作为迁移输入，页面和新单据统一保存正式字段。
 
 执行成功后，调用端必须进入新生成或已存在的生产计划并选中记录；失败时保留在来源预测结果，显示可理解的中文失败原因。动作状态统一为“执行供应决策 / 执行中 / 查看生产计划 / 重新决策”，不能在输入未变化时持续显示可重复执行。

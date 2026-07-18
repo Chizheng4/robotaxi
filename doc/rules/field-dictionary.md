@@ -1301,6 +1301,10 @@
 |committed_outbound_quantity|已承诺调出数量|计算字段|规划期已确定调出数量|
 |planned_retirement_quantity|计划退役数量|计算字段|规划期计划退役数量|
 |effective_current_robotaxi|规划资产基数|计算字段|区域未退役 Robotaxi 加承诺调入，减承诺调出和计划退役|
+|daily_required_robotaxi|日常需求 Robotaxi|计算字段|按典型日订单需求计算的 Robotaxi 数量|
+|peak_required_robotaxi|峰值需求 Robotaxi|计算字段|按峰值小时并发需求计算的 Robotaxi 数量|
+|daily_capacity_gap|日常服务能力缺口|计算字段|日常订单需求超过区域日服务能力的数量|
+|peak_capacity_gap|峰值服务能力缺口|计算字段|峰值小时需求超过区域峰值服务能力的数量|
 |robotaxi_gap_quantity|Robotaxi 缺口|计算字段|最终所需减当前有效数量|
 |production_capacity_period_unit|生产能力周期单位|配置字段|周、月、季度或年|
 |production_capacity_per_period|每期生产能力|配置字段|生产能力唯一配置真值|
@@ -1308,7 +1312,9 @@
 |ramp_up_capacity_ratios|爬坡产能比例|配置字段|各爬坡周期相对稳定产能比例|
 |delivery_capacity_per_period|每期交付能力|配置字段|每个生产周期最大交付数量|
 |quality_inspection_lead_time_days|质量检验周期（天）|配置字段|生产完成后的工厂质量检验时间，不是运营准入周期|
-|production_ready_date|生产准备完成日期|计算字段|生产和检验完成后首批可供给日期|
+|first_production_completion_date|首批生产完成日期|计算字段|预测开始日期加生产提前期|
+|first_quality_inspection_completion_date|首批质量检验完成日期|计算字段|首批生产完成日期加质量检验周期|
+|production_ready_date|首批生产完成日期|兼容字段|旧前端兼容字段，新计算同时写入明确时间字段|
 |available_production_periods|可生产期数|计算字段|目标日前完整可生产周期数量|
 |feasible_manufacturing_quantity|可生产数量|计算字段|爬坡与稳定产能累计结果|
 |feasible_delivery_quantity|可交付数量|计算字段|交付能力累计结果|
@@ -1461,6 +1467,10 @@
 |produced_robotaxi_ids|已生产 Robotaxi 列表|运行态字段|生产批次完成后创建的 Robotaxi ID 列表|
 |production_started_at|生产开始时间|运行态字段|生产批次开始生产的真实时间|
 |production_completed_at|生产完成时间|运行态字段|生产批次完成并创建 Robotaxi 的真实时间|
+|quality_inspection_started_at|质量检验开始时间|运行态字段|生产批次开始工厂质量检验的真实时间|
+|quality_inspection_completed_at|质量检验完成时间|运行态字段|生产批次质量检验结束的真实时间|
+|quality_inspection_result|质量检验结果|运行态字段|通过或失败；只有通过才形成待交付 Robotaxi|
+|quality_inspection_failure_reason|质量检验失败原因|运行态字段|质量检验未通过的原因|
 |fleet_allocation_strategy_id|交付编排策略编号|持久化字段|交付编排策略唯一编号|
 |fleet_allocation_run_id|交付编排执行编号|持久化字段|一次交付编排执行唯一编号|
 |fleet_allocation_result_id|交付编排结果编号|持久化字段|交付编排结果唯一编号|
@@ -1579,6 +1589,9 @@
 |CANCELLED|已取消|计划、批次或交付单状态|
 |PLANNED|规划中|生产批次状态|
 |IN_PRODUCTION|生产中|生产批次状态|
+|AWAITING_QUALITY_INSPECTION|待质量检验|生产批次状态|
+|IN_QUALITY_INSPECTION|质量检验中|生产批次状态|
+|QUALITY_FAILED|质检失败|生产批次状态|
 |COMPLETED|已完成|生产批次状态|
 |SUCCEEDED|已成功|策略执行状态|
 |FAILED|已失败|策略执行状态|
@@ -1613,6 +1626,15 @@
 |PRODUCTION_BATCH_STARTED|生产已开始|状态时间线结果|
 |PRODUCTION_BATCH_COMPLETE|生产完成|状态时间线动作|
 |PRODUCTION_BATCH_COMPLETED|生产批次已完成|状态时间线结果|
+|PRODUCTION_QUALITY_INSPECTION_START|开始质量检验|状态时间线动作|
+|PRODUCTION_QUALITY_INSPECTION_STARTED|质量检验已开始|状态时间线结果|
+|PRODUCTION_QUALITY_INSPECTION_PASS|质量检验通过|状态时间线动作|
+|PRODUCTION_QUALITY_INSPECTION_PASSED|生产批次质量检验已通过|状态时间线结果|
+|PRODUCTION_QUALITY_INSPECTION_FAIL|质量检验失败|状态时间线动作|
+|PRODUCTION_QUALITY_INSPECTION_FAILED|生产批次质量检验未通过|状态时间线结果|
+|PRODUCTION_BATCH_NOT_AWAITING_QUALITY_INSPECTION|生产批次不是待质量检验状态|生产批次操作失败原因|
+|PRODUCTION_BATCH_NOT_IN_QUALITY_INSPECTION|生产批次不是质量检验中状态|生产批次操作失败原因|
+|QUALITY_INSPECTION_FAILED|质量检验未通过|生产批次操作失败原因|
 |DELIVERY_ORDER_CREATE|创建交付单|状态时间线动作|
 |DELIVERY_ORDER_CREATED|交付单已创建|状态时间线结果|
 |DELIVERY_ORDER_START|开始交付|状态时间线动作|

@@ -18,8 +18,10 @@ const strategy = initializeDefaultLongTermDemandForecastStrategies(now)[0];
 const businessTarget = initializeDefaultBusinessTargets(now)[0];
 const productionProfile = initializeDefaultSupplyProductionProfiles(now)[0];
 assert.equal(strategy.robotaxi_available_hours_per_day, 24);
-assert.equal(businessTarget.forecast_period_count, 36);
-assert.equal(businessTarget.target_name, "三年运营增长目标");
+assert.equal(businessTarget.forecast_period_count, 12);
+assert.equal(businessTarget.target_name, "基准经营目标");
+assert.equal(productionProfile.production_lead_time_days, 10);
+assert.equal(strategy.growth_adjustment_rate, 0.005);
 
 const place = { place_id: "P-001", place_name: "测试地点", place_type: "RESIDENTIAL", place_status: "ACTIVE" };
 const initializedProfiles = normalizeDemandProfiles({ places: [place], demandProfiles: [] });
@@ -27,6 +29,7 @@ const initializedPlaceProfile = initializedProfiles.find((item) => item.target_o
 assert.equal(initializedPlaceProfile.robotaxi_adoption_rate, 0.6);
 assert.equal(initializedPlaceProfile.service_acceptance_rate, 0.7);
 assert.equal(initializedPlaceProfile.competition_retention_rate, 0.4);
+assert.equal(initializedPlaceProfile.trip_generation_rate, 0.6);
 
 const migratedProfiles = normalizeDemandProfiles({
   places: [place],
@@ -36,7 +39,7 @@ const migratedPlaceProfile = migratedProfiles.find((item) => item.target_object_
 assert.equal(migratedPlaceProfile.robotaxi_adoption_rate, 0.6);
 assert.equal(migratedPlaceProfile.service_acceptance_rate, 0.7);
 assert.equal(migratedPlaceProfile.competition_retention_rate, 0.4);
-assert.equal(migratedPlaceProfile.profile_version, 2);
+assert.equal(migratedPlaceProfile.profile_version, 3);
 const preservedProfiles = normalizeDemandProfiles({
   places: [place],
   demandProfiles: [{ ...initializedPlaceProfile, profile_version: 2, robotaxi_adoption_rate: 0.52 }],

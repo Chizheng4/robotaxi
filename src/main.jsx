@@ -319,8 +319,8 @@ const tableConfig = {
   },
   productionBatches: {
     title: "生产批次",
-    description: "生产批次记录自有工厂生产 Robotaxi 的执行过程，完成后形成具体 Robotaxi 资产。",
-    columns: ["production_batch_id", "batch_name", "batch_status", "supply_plan_id", "target_zone_id", "planned_robotaxi_count", "produced_robotaxi_count", "produced_robotaxi_ids", "production_started_at", "production_completed_at", "created_at"],
+    description: "生产批次记录自有工厂的生产与质量检验过程，质检通过后形成具体 Robotaxi 资产。",
+    columns: ["production_batch_id", "batch_name", "batch_status", "supply_plan_id", "target_zone_id", "planned_robotaxi_count", "produced_robotaxi_count", "produced_robotaxi_ids", "production_started_at", "production_completed_at", "quality_inspection_started_at", "quality_inspection_completed_at", "quality_inspection_result", "created_at"],
   },
   fleetAllocationStrategies: {
     title: "交付编排策略",
@@ -1025,13 +1025,13 @@ function getDemandProfileConfigFields(profile) {
       { key: "resident_trip_weight", type: "number", min: 0, step: 0.01 },
       { key: "worker_trip_weight", type: "number", min: 0, step: 0.01 },
       { key: "visitor_trip_weight", type: "number", min: 0, step: 0.01 },
-      { key: "trip_generation_rate", type: "number", min: 0, step: 0.01 },
+      { key: "trip_generation_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
       { key: "demand_weight", type: "number", min: 0, step: 0.01 },
-      { key: "busiest_hour_share", type: "number", min: 0, max: 1, step: 0.01 },
-      { key: "robotaxi_adoption_rate", type: "number", min: 0, max: 1, step: 0.01 },
-      { key: "service_acceptance_rate", type: "number", min: 0, max: 1, step: 0.01 },
-      { key: "competition_retention_rate", type: "number", min: 0, max: 1, step: 0.01 },
-      { key: "place_period_growth_rate", type: "number", step: 0.01 },
+      { key: "busiest_hour_share", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
+      { key: "robotaxi_adoption_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
+      { key: "service_acceptance_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
+      { key: "competition_retention_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
+      { key: "place_period_growth_rate", type: "number", unit: "percent", percentStep: 0.01 },
       { key: "growth_rate_unit", type: "select", options: ["WEEK", "MONTH", "QUARTER", "YEAR"] },
       { key: "growth_rate_source", type: "select", options: ["MANUAL_ASSUMPTION", "SIMULATION_CONFIG", "HISTORICAL_CALCULATION", "EXTERNAL_INPUT"] },
     ];
@@ -1045,8 +1045,8 @@ function getDemandProfileConfigFields(profile) {
       { key: "dropoff_position_capacity", type: "number", min: 1, step: 1 },
       { key: "average_service_time_min", type: "number", min: 1, step: 1 },
       { key: "operating_hours_per_day", type: "number", min: 1, max: 24, step: 1 },
-      { key: "accessibility_factor", type: "number", min: 0, step: 0.01 },
-      { key: "capacity_availability_rate", type: "number", min: 0, max: 1, step: 0.01 },
+      { key: "accessibility_factor", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
+      { key: "capacity_availability_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
     ];
   }
   if (profile.target_object_type === "ZONE") {
@@ -1058,14 +1058,14 @@ function getDemandProfileConfigFields(profile) {
 function createDemandProfileConfigDraft(profile) {
   return Object.fromEntries(getDemandProfileConfigFields(profile).map((field) => [
     field.key,
-    profile?.[field.key] ?? "",
+    toPlanningConfigValue(field, profile?.[field.key]),
   ]));
 }
 
 function normalizeDemandProfileDraft(profile, draft) {
   return Object.fromEntries(getDemandProfileConfigFields(profile).map((field) => {
     const value = draft[field.key];
-    if (field.type === "number") return [field.key, Number(value || 0)];
+    if (field.type === "number") return [field.key, fromPlanningConfigValue(field, value)];
     return [field.key, value];
   }));
 }
@@ -1076,7 +1076,7 @@ function getDemandProfileConfigHelp(profile, fieldKey) {
     ? explanation
     : explanation?.meaning || explanation?.calculation_logic || explanation?.source;
   const growthHint = fieldKey === "place_period_growth_rate"
-    ? "输入比例，例如 0.008 表示 0.8%。"
+    ? "按百分比输入，例如 0.80 表示每周期增长 0.80%。"
     : "";
   return [content, growthHint].filter(Boolean).join(" ")
     || "该字段参与画像配置；保存后将整体重算地点、服务区域和区域画像。";
@@ -1088,7 +1088,7 @@ const supplyProductionProfileConfigFields = [
   { key: "production_capacity_period_unit", type: "select", options: ["WEEK", "MONTH", "QUARTER", "YEAR"] },
   { key: "production_capacity_per_period", type: "number", min: 0, step: 1 },
   { key: "ramp_up_periods", type: "number", min: 0, step: 1 },
-  { key: "ramp_up_capacity_ratios", type: "text" },
+  { key: "ramp_up_capacity_ratios", type: "percentList" },
   { key: "delivery_capacity_per_period", type: "number", min: 0, step: 1 },
   { key: "quality_inspection_lead_time_days", type: "number", min: 0, step: 1 },
   { key: "effective_from", type: "text" },
@@ -1102,47 +1102,91 @@ const businessTargetConfigFields = [
   { key: "forecast_period_count", type: "number", min: 1, step: 1 },
   { key: "target_end_daily_orders", type: "number", min: 0, step: 1 },
   { key: "target_minimum_robotaxi_quantity", type: "number", min: 0, step: 1 },
-  { key: "target_task_utilization_rate", type: "number", min: 0, max: 1, step: 0.01 },
-  { key: "target_order_fulfillment_rate", type: "number", min: 0, max: 1, step: 0.01 },
+  { key: "target_task_utilization_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
+  { key: "target_order_fulfillment_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
   { key: "planning_mode", type: "select", options: ["MARKET_LED", "TARGET_LED", "BALANCED"] },
   { key: "average_revenue_per_order", type: "number", min: 0, step: 1 },
   { key: "average_variable_cost_per_order", type: "number", min: 0, step: 1 },
   { key: "daily_fixed_operating_cost", type: "number", min: 0, step: 100 },
-  { key: "minimum_contribution_margin_rate", type: "number", min: 0, max: 1, step: 0.01 },
+  { key: "minimum_contribution_margin_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
 ];
 
 const longTermDemandForecastStrategyConfigFields = [
   { key: "strategy_name", type: "text" },
   { key: "growth_scenario", type: "select", options: ["CONSERVATIVE", "BASELINE", "AGGRESSIVE"] },
   { key: "growth_model", type: "select", options: ["LINEAR", "COMPOUND"] },
-  { key: "growth_adjustment_rate", type: "number", step: 0.001 },
-  { key: "demand_buffer_ratio", type: "number", min: 0, max: 1, step: 0.01 },
-  { key: "operational_availability_rate", type: "number", min: 0, max: 1, step: 0.01 },
+  { key: "growth_adjustment_rate", type: "number", unit: "percent", percentStep: 0.01 },
+  { key: "demand_buffer_ratio", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
+  { key: "operational_availability_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
   { key: "robotaxi_available_hours_per_day", type: "number", min: 0.1, max: 24, step: 0.1 },
   { key: "average_pickup_duration_min", type: "number", min: 0, step: 1 },
   { key: "average_trip_duration_min", type: "number", min: 0, step: 1 },
   { key: "average_turnaround_duration_min", type: "number", min: 0, step: 1 },
 ];
 
+const planningPercentageFieldKeys = new Set([
+  "trip_generation_rate", "busiest_hour_share", "robotaxi_adoption_rate", "service_acceptance_rate",
+  "competition_retention_rate", "place_period_growth_rate", "zone_period_growth_rate",
+  "accessibility_factor", "capacity_availability_rate", "target_task_utilization_rate",
+  "target_order_fulfillment_rate", "minimum_contribution_margin_rate", "growth_adjustment_rate",
+  "demand_buffer_ratio", "operational_availability_rate", "demand_coverage_rate", "safety_capacity_ratio",
+]);
+
+const planningPercentageListFieldKeys = new Set(["ramp_up_capacity_ratios"]);
+
 function createPlanningConfigDraft(fields, object) {
-  return Object.fromEntries(fields.map((field) => [field.key, object?.[field.key] ?? ""]));
+  return Object.fromEntries(fields.map((field) => [field.key, toPlanningConfigValue(field, object?.[field.key])]));
 }
 
 function normalizePlanningConfigDraft(fields, draft) {
-  return Object.fromEntries(fields.map((field) => [field.key, field.type === "number" ? Number(draft[field.key] || 0) : draft[field.key]]));
+  return Object.fromEntries(fields.map((field) => [field.key, field.type === "number" ? fromPlanningConfigValue(field, draft[field.key]) : draft[field.key]]));
+}
+
+function toPlanningConfigValue(field, value) {
+  if (value == null || value === "") return "";
+  if (field.type === "percentList") {
+    const values = Array.isArray(value) ? value : String(value).split(",");
+    return values.map((item) => Number(item) * 100).join(", ");
+  }
+  if (field.unit === "percent") return Number((Number(value) * 100).toFixed(2));
+  return value;
+}
+
+function fromPlanningConfigValue(field, value) {
+  const numericValue = Number(value || 0);
+  return field.unit === "percent" ? numericValue / 100 : numericValue;
+}
+
+function renderPlanningConfigControl({ field, value, onChange }) {
+  if (field.type === "select") {
+    return <Select size="small" value={value} onChange={onChange} options={field.options.map((option) => ({ value: option, label: getDisplayValue(option, field.key) }))} />;
+  }
+  const isPercent = field.unit === "percent";
+  return (
+    <Input
+      size="small"
+      type={field.type === "number" ? "number" : "text"}
+      min={field.min == null ? undefined : (isPercent ? field.min * 100 : field.min)}
+      max={field.max == null ? undefined : (isPercent ? field.max * 100 : field.max)}
+      step={isPercent ? (field.percentStep ?? 0.01) : (field.step ?? undefined)}
+      addonAfter={isPercent || field.type === "percentList" ? "%" : undefined}
+      value={value ?? ""}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
 }
 
 function createBusinessTargetDraft(businessTarget) {
   return Object.fromEntries(businessTargetConfigFields.map((field) => [
     field.key,
-    businessTarget?.[field.key] ?? "",
+    toPlanningConfigValue(field, businessTarget?.[field.key]),
   ]));
 }
 
 function normalizeBusinessTargetDraft(draft) {
   return Object.fromEntries(businessTargetConfigFields.map((field) => {
     const value = draft[field.key];
-    if (field.type === "number") return [field.key, Number(value || 0)];
+    if (field.type === "number") return [field.key, fromPlanningConfigValue(field, value)];
     return [field.key, value || null];
   }));
 }
@@ -1150,16 +1194,16 @@ function normalizeBusinessTargetDraft(draft) {
 function createSupplyProductionProfileDraft(profile) {
   return Object.fromEntries(supplyProductionProfileConfigFields.map((field) => [
     field.key,
-    profile?.[field.key] ?? "",
+    toPlanningConfigValue(field, profile?.[field.key]),
   ]));
 }
 
 function normalizeSupplyProductionProfileDraft(draft) {
   return Object.fromEntries(supplyProductionProfileConfigFields.map((field) => {
     const value = draft[field.key];
-    if (field.type === "number") return [field.key, Number(value || 0)];
+    if (field.type === "number") return [field.key, fromPlanningConfigValue(field, value)];
     if (field.key === "ramp_up_capacity_ratios") {
-      const ratios = Array.isArray(value) ? value : String(value || "").split(",").map((item) => Number(item.trim())).filter(Number.isFinite);
+      const ratios = Array.isArray(value) ? value : String(value || "").split(",").map((item) => Number(item.trim()) / 100).filter(Number.isFinite);
       return [field.key, ratios];
     }
     return [field.key, value || null];
@@ -3369,9 +3413,7 @@ function App({ currentUser, onLogout }) {
     if (!businessPlanningService?.completeProductionBatch || !row) return;
     const result = businessPlanningService.completeProductionBatch({
       productionBatch: row,
-      existingRobotaxis: data.robotaxis || [],
-      opsCenters: data.opsCenters || [],
-      context: { now, nextRobotaxiId: nextProducedRobotaxiId },
+      context: { now },
     });
     if (!result.succeeded) {
       appendRecordOperationEvent("productionBatches", {
@@ -3388,7 +3430,38 @@ function App({ currentUser, onLogout }) {
     setOperationalData((current) => ({
       ...current,
       productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
+    }));
+  }
+
+  function startProductionQualityInspection(row) {
+    const result = businessPlanningService?.startProductionQualityInspection?.({ productionBatch: row, context: { now } });
+    if (!result?.succeeded) return;
+    setOperationalData((current) => ({
+      ...current,
+      productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
+    }));
+  }
+
+  function passProductionQualityInspection(row) {
+    const result = businessPlanningService?.passProductionQualityInspection?.({
+      productionBatch: row,
+      existingRobotaxis: data.robotaxis || [],
+      context: { now, nextRobotaxiId: nextProducedRobotaxiId },
+    });
+    if (!result?.succeeded) return;
+    setOperationalData((current) => ({
+      ...current,
+      productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
       robotaxis: [...(result.robotaxis || []), ...(current.robotaxis || [])],
+    }));
+  }
+
+  function failProductionQualityInspection(row) {
+    const result = businessPlanningService?.failProductionQualityInspection?.({ productionBatch: row, context: { now } });
+    if (!result?.succeeded) return;
+    setOperationalData((current) => ({
+      ...current,
+      productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
     }));
   }
 
@@ -3733,6 +3806,9 @@ function App({ currentUser, onLogout }) {
                   createProductionBatchFromSupplyPlan,
                   startProductionBatch,
                   completeProductionBatch,
+                  startProductionQualityInspection,
+                  passProductionQualityInspection,
+                  failProductionQualityInspection,
                   runFleetAllocationStrategy,
                   createDeliveryOrderFromAllocationResult,
                   createRegionDeliveryOrder,
@@ -3972,25 +4048,11 @@ function App({ currentUser, onLogout }) {
           {getDemandProfileConfigFields(pendingDemandProfile).map((field) => (
             <label key={field.key}>
               <span>{getFieldLabel(field.key)}</span>
-              {field.type === "select" ? (
-                <Select
-                  size="small"
-                  value={demandProfileDraft[field.key]}
-                  onChange={(value) => setDemandProfileDraft((draft) => ({ ...draft, [field.key]: value }))}
-                  options={field.options.map((value) => ({ value, label: getDisplayValue(value, field.key) }))}
-                  getPopupContainer={() => document.body}
-                />
-              ) : (
-                <Input
-                  size="small"
-                  type={field.type === "number" ? "number" : "text"}
-                  min={field.min ?? undefined}
-                  max={field.max ?? undefined}
-                  step={field.step ?? undefined}
-                  value={demandProfileDraft[field.key] ?? ""}
-                  onChange={(event) => setDemandProfileDraft((draft) => ({ ...draft, [field.key]: event.target.value }))}
-                />
-              )}
+              {renderPlanningConfigControl({
+                field,
+                value: demandProfileDraft[field.key],
+                onChange: (value) => setDemandProfileDraft((draft) => ({ ...draft, [field.key]: value })),
+              })}
               <small className="planning-config-help">{getDemandProfileConfigHelp(pendingDemandProfile, field.key)}</small>
             </label>
           ))}
@@ -4019,11 +4081,11 @@ function App({ currentUser, onLogout }) {
           {businessTargetConfigFields.map((field) => (
             <label key={field.key}>
               <span>{getFieldLabel(field.key)}</span>
-              {field.type === "select" ? (
-                <Select size="small" value={businessTargetDraft[field.key]} onChange={(value) => setBusinessTargetDraft((draft) => ({ ...draft, [field.key]: value }))} options={field.options.map((value) => ({ value, label: getDisplayValue(value, field.key) }))} />
-              ) : (
-                <Input size="small" type={field.type === "number" ? "number" : "text"} min={field.min ?? undefined} max={field.max ?? undefined} step={field.step ?? undefined} value={businessTargetDraft[field.key] ?? ""} onChange={(event) => setBusinessTargetDraft((draft) => ({ ...draft, [field.key]: event.target.value }))} />
-              )}
+              {renderPlanningConfigControl({
+                field,
+                value: businessTargetDraft[field.key],
+                onChange: (value) => setBusinessTargetDraft((draft) => ({ ...draft, [field.key]: value })),
+              })}
               <small className="planning-config-help">{getPlanningFieldExplanation("businessTarget", field.key)}</small>
             </label>
           ))}
@@ -4049,11 +4111,11 @@ function App({ currentUser, onLogout }) {
           {supplyProductionProfileConfigFields.map((field) => (
             <label key={field.key}>
               <span>{getFieldLabel(field.key)}</span>
-              {field.type === "select" ? (
-                <Select size="small" value={supplyProductionProfileDraft[field.key]} onChange={(value) => setSupplyProductionProfileDraft((draft) => ({ ...draft, [field.key]: value }))} options={field.options.map((value) => ({ value, label: getDisplayValue(value, field.key) }))} />
-              ) : (
-                <Input size="small" type={field.type === "number" ? "number" : "text"} min={field.min ?? undefined} step={field.step ?? undefined} value={Array.isArray(supplyProductionProfileDraft[field.key]) ? supplyProductionProfileDraft[field.key].join(", ") : (supplyProductionProfileDraft[field.key] ?? "")} onChange={(event) => setSupplyProductionProfileDraft((draft) => ({ ...draft, [field.key]: event.target.value }))} />
-              )}
+              {renderPlanningConfigControl({
+                field,
+                value: supplyProductionProfileDraft[field.key],
+                onChange: (value) => setSupplyProductionProfileDraft((draft) => ({ ...draft, [field.key]: value })),
+              })}
               <small className="planning-config-help">{getPlanningFieldExplanation("supplyProductionProfile", field.key)}</small>
             </label>
           ))}
@@ -4073,11 +4135,11 @@ function App({ currentUser, onLogout }) {
           {longTermDemandForecastStrategyConfigFields.map((field) => (
             <label key={field.key}>
               <span>{getFieldLabel(field.key)}</span>
-              {field.type === "select" ? (
-                <Select size="small" value={longTermDemandForecastStrategyDraft[field.key]} onChange={(value) => setLongTermDemandForecastStrategyDraft((draft) => ({ ...draft, [field.key]: value }))} options={field.options.map((value) => ({ value, label: getDisplayValue(value, field.key) }))} />
-              ) : (
-                <Input size="small" type={field.type === "number" ? "number" : "text"} min={field.min ?? undefined} max={field.max ?? undefined} step={field.step ?? undefined} value={longTermDemandForecastStrategyDraft[field.key] ?? ""} onChange={(event) => setLongTermDemandForecastStrategyDraft((draft) => ({ ...draft, [field.key]: event.target.value }))} />
-              )}
+              {renderPlanningConfigControl({
+                field,
+                value: longTermDemandForecastStrategyDraft[field.key],
+                onChange: (value) => setLongTermDemandForecastStrategyDraft((draft) => ({ ...draft, [field.key]: value })),
+              })}
               <small className="planning-config-help">{getPlanningFieldExplanation("longTermDemandForecastStrategy", field.key)}</small>
             </label>
           ))}
@@ -8760,7 +8822,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
       <div className="forecast-analysis-grid">
         <section><h3>能力与瓶颈</h3>{bottlenecks.map((key) => <div className="forecast-analysis-row" key={key}><span>{getFieldLabel(key)}</span><strong>{formatPlanningValue(selected[key])}</strong></div>)}</section>
         <section><h3>Robotaxi 规模</h3><div className="forecast-analysis-row"><span>{getFieldLabel("effective_current_robotaxi")}</span><strong>{formatPlanningValue(selected.effective_current_robotaxi)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("requirement_driver")}</span><strong>{getDisplayValue(selected.requirement_driver)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("robotaxi_effective_daily_orders")}</span><strong>{formatPlanningValue(selected.robotaxi_effective_daily_orders)}</strong></div></section>
-        <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>建议生产数量</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>生产准备完成</span><strong>{selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>预测期可形成供给</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>全部供给完成</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
+        <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>{getFieldLabel("recommended_production_quantity")}</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("first_production_completion_date")}</span><strong>{selected.first_production_completion_date || selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("first_quality_inspection_completion_date")}</span><strong>{selected.first_quality_inspection_completion_date || "无"}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("feasible_supply_quantity")}</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("full_supply_completion_date")}</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
       </div>
       <details className="forecast-calculation-details">
         <summary><span>{getFieldLabel("calculation_steps")}</span><span className="forecast-calculation-toggle">›</span></summary>
@@ -9374,6 +9436,17 @@ function renderProductionBatchActions(row, actions) {
   }
   if (row.batch_status === "IN_PRODUCTION") {
     return <RowActionButton onClick={() => actions.completeProductionBatch(row)}>生产完成</RowActionButton>;
+  }
+  if (row.batch_status === "AWAITING_QUALITY_INSPECTION") {
+    return <RowActionButton onClick={() => actions.startProductionQualityInspection(row)}>开始质检</RowActionButton>;
+  }
+  if (row.batch_status === "IN_QUALITY_INSPECTION") {
+    return (
+      <RowActionGroup>
+        <RowActionButton onClick={() => actions.passProductionQualityInspection(row)}>质检通过</RowActionButton>
+        <RowActionButton danger onClick={() => actions.failProductionQualityInspection(row)}>质检失败</RowActionButton>
+      </RowActionGroup>
+    );
   }
   return renderViewDetailAction(row, actions);
 }
@@ -10162,7 +10235,11 @@ function getFieldDisplayValue(key, value, row = null) {
   if (key === "direction" && value === "UNKNOWN") return "未知方向";
   if (key === "check_result" && value === "FAILED") return "检查不通过";
   if (key === "event_result" && value === "FAILED") return "失败";
-  if (["place_period_growth_rate", "zone_period_growth_rate"].includes(key)) return formatDemandProfileGrowthRate(value);
+  if (planningPercentageFieldKeys.has(key)) return formatPlanningPercent(value);
+  if (planningPercentageListFieldKeys.has(key)) return (Array.isArray(value) ? value : String(value || "").split(","))
+    .filter((item) => item !== "")
+    .map((item) => formatPlanningPercent(item))
+    .join(" / ");
   if (isStatusField(key)) return getStatusDisplayValue(key, value, row);
   return getDisplayValue(value, key);
 }
@@ -12386,6 +12463,15 @@ function removeRuntimeResetParam() {
 
 function normalizeOperationalRouteStrategies(operationalData) {
   const demandProfiles = normalizeDemandProfiles ? normalizeDemandProfiles(operationalData) : (operationalData.demandProfiles || []);
+  const normalizedPlanningDefaults = businessPlanningService?.normalizeBusinessPlanningDefaults?.({
+    businessTargets: operationalData.businessTargets || [],
+    supplyProductionProfiles: operationalData.supplyProductionProfiles || [],
+    longTermDemandForecastStrategies: operationalData.longTermDemandForecastStrategies || [],
+  }) || {
+    businessTargets: operationalData.businessTargets || [],
+    supplyProductionProfiles: operationalData.supplyProductionProfiles || [],
+    longTermDemandForecastStrategies: operationalData.longTermDemandForecastStrategies || [],
+  };
   const longTermDemandForecasts = businessPlanningService?.normalizeLongTermDemandForecastResults
     ? businessPlanningService.normalizeLongTermDemandForecastResults(operationalData.longTermDemandForecasts)
     : (operationalData.longTermDemandForecasts || []);
@@ -12395,7 +12481,7 @@ function normalizeOperationalRouteStrategies(operationalData) {
       forecasts: longTermDemandForecasts,
       supplyDecisionRuns: operationalData.supplyDecisionRuns || [],
       supplyDecisionStrategies: operationalData.supplyDecisionStrategies || [],
-      supplyProductionProfiles: operationalData.supplyProductionProfiles || [],
+      supplyProductionProfiles: normalizedPlanningDefaults.supplyProductionProfiles,
     })
     : (operationalData.supplyPlans || []);
   const planningDefaults = operatingPlanningService?.initializeOperatingPlanningData?.() || {};
@@ -12407,6 +12493,9 @@ function normalizeOperationalRouteStrategies(operationalData) {
   return {
     ...operationalData,
     routes: normalizeRouteStrategyReferences(operationalData.routes || []),
+    businessTargets: normalizedPlanningDefaults.businessTargets,
+    supplyProductionProfiles: normalizedPlanningDefaults.supplyProductionProfiles,
+    longTermDemandForecastStrategies: normalizedPlanningDefaults.longTermDemandForecastStrategies,
     longTermDemandForecasts,
     supplyPlans,
     shortTermDemandForecastStrategies: mergeDefaultConfiguredRecords(

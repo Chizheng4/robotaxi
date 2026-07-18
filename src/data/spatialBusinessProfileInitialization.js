@@ -136,7 +136,7 @@ function createPlaceDemandProfile(place, { calculatedAt = currentRealCalculation
   const residentPopulation = place.place_type === "RESIDENTIAL" ? 1200 : 0;
   const workingPopulation = place.place_type === "OFFICE" ? 1800 : 0;
   const dailyVisitors = Math.round(500 * demandWeight);
-  const tripGenerationRate = 0.08;
+  const tripGenerationRate = place.place_type === "RESIDENTIAL" ? 0.6 : 0.9;
   const robotaxiAdoptionRate = 0.6;
   const serviceAcceptanceRate = 0.7;
   const competitionRetentionRate = 0.4;
@@ -240,14 +240,16 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
     const baseProfile = createPlaceDemandProfile(place);
     const existingProfile = placeProfileById.get(place.place_id) || {};
     const migrateLegacyDefaults = usesLegacyPlaceDemandDefaults(existingProfile);
-    const nextCalculatedAt = calculatedAt || (migrateLegacyDefaults ? baseProfile.calculated_at : existingProfile.calculated_at) || baseProfile.calculated_at;
+    const migrateLegacyTripGeneration = Number(existingProfile.profile_version || 1) <= 2
+      && Number(existingProfile.trip_generation_rate) === 0.08;
+    const nextCalculatedAt = calculatedAt || (migrateLegacyDefaults || migrateLegacyTripGeneration ? baseProfile.calculated_at : existingProfile.calculated_at) || baseProfile.calculated_at;
     const residentPopulation = Number(existingProfile.resident_population ?? baseProfile.resident_population);
     const workingPopulation = Number(existingProfile.working_population ?? baseProfile.working_population);
     const dailyVisitors = Number(existingProfile.daily_visitors ?? baseProfile.daily_visitors);
     const residentTripWeight = Number(existingProfile.resident_trip_weight ?? baseProfile.resident_trip_weight ?? 1);
     const workerTripWeight = Number(existingProfile.worker_trip_weight ?? baseProfile.worker_trip_weight ?? 1);
     const visitorTripWeight = Number(existingProfile.visitor_trip_weight ?? baseProfile.visitor_trip_weight ?? 1);
-    const tripGenerationRate = Number(existingProfile.trip_generation_rate ?? baseProfile.trip_generation_rate);
+    const tripGenerationRate = Number(migrateLegacyTripGeneration ? baseProfile.trip_generation_rate : existingProfile.trip_generation_rate ?? baseProfile.trip_generation_rate);
     const demandWeight = Number(existingProfile.demand_weight ?? baseProfile.demand_weight);
     const robotaxiAdoptionRate = Number(migrateLegacyDefaults ? baseProfile.robotaxi_adoption_rate : existingProfile.robotaxi_adoption_rate ?? baseProfile.robotaxi_adoption_rate);
     const serviceAcceptanceRate = Number(migrateLegacyDefaults ? baseProfile.service_acceptance_rate : existingProfile.service_acceptance_rate ?? baseProfile.service_acceptance_rate);
@@ -261,7 +263,7 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
       ...baseProfile,
       profile_id: existingProfile.profile_id || baseProfile.profile_id,
       profile_name: existingProfile.profile_name || baseProfile.profile_name,
-      profile_version: migrateLegacyDefaults ? 2 : Number(existingProfile.profile_version || baseProfile.profile_version),
+      profile_version: migrateLegacyDefaults || migrateLegacyTripGeneration ? 3 : Number(existingProfile.profile_version || baseProfile.profile_version),
       profile_status: existingProfile.profile_status || baseProfile.profile_status,
       effective_from: existingProfile.effective_from || baseProfile.effective_from,
       effective_to: existingProfile.effective_to ?? baseProfile.effective_to,

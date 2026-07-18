@@ -97,7 +97,48 @@ export const businessPlanningObjectSchemas = {
       average_turnaround_duration_min: "一次服务结束到下一次可接单之间的平均周转时间，单位为分钟。",
     },
   },
+  supplyDecisionStrategy: {
+    tabs: [
+      { key: "basic", label: "策略信息", fields: ["supply_decision_strategy_id", "strategy_name", "strategy_status", "strategy_version", "target_zone_ids"] },
+      { key: "decision", label: "决策规则", fields: ["decision_algorithm", "demand_coverage_rate", "safety_capacity_ratio", "capacity_constraint_mode"] },
+      { key: "time", label: "更新时间", fields: ["created_at", "updated_at"] },
+    ],
+    explanations: {
+      decision_algorithm: "产能约束供应决策以预测结果冻结的 Robotaxi 缺口、可生产数量和可交付数量作为唯一输入，不在决策阶段重复计算产能。",
+      demand_coverage_rate: "本次决策计划覆盖的 Robotaxi 缺口比例。",
+      safety_capacity_ratio: "在缺口覆盖量上增加的安全容量比例，用于应对预测偏差和供给损耗。",
+      capacity_constraint_mode: "生产与交付双约束表示计划数量同时不能超过预测期可生产数量和可交付数量。",
+    },
+  },
 };
+
+export function normalizeBusinessPlanningDefaults({ businessTargets = [], supplyProductionProfiles = [], longTermDemandForecastStrategies = [] } = {}) {
+  return {
+    businessTargets: businessTargets.map((target) => {
+      const isLegacyDefault = target.business_target_id === "BT-001"
+        && ["三年运营增长目标", "一年运营增长目标"].includes(target.target_name)
+        && [12, 36].includes(Number(target.forecast_period_count))
+        && (target.forecast_period_unit || "MONTH") === "MONTH";
+      if (!isLegacyDefault) return target;
+      const period = resolveForecastPeriod({ ...target, forecast_period_unit: "MONTH", forecast_period_count: 12 });
+      return { ...target, target_name: "基准经营目标", forecast_period_count: 12, forecast_end_date: period.endDate };
+    }),
+    supplyProductionProfiles: supplyProductionProfiles.map((profile) => (
+      profile.profile_id === "SPP-001"
+        && Number(profile.production_lead_time_days) === 180
+        && profile.created_at === profile.updated_at
+        ? { ...profile, production_lead_time_days: 10 }
+        : profile
+    )),
+    longTermDemandForecastStrategies: longTermDemandForecastStrategies.map((strategy) => (
+      strategy.forecast_strategy_id === "LDF-STR-001"
+        && Number(strategy.growth_adjustment_rate || 0) === 0
+        && strategy.created_at === strategy.updated_at
+        ? { ...strategy, growth_adjustment_rate: 0.005 }
+        : strategy
+    )),
+  };
+}
 
 export const SupplyPlanStatus = {
   DRAFT: "DRAFT",
@@ -119,6 +160,9 @@ export const SupplyDecisionRunStatus = {
 export const ProductionBatchStatus = {
   PLANNED: "PLANNED",
   IN_PRODUCTION: "IN_PRODUCTION",
+  AWAITING_QUALITY_INSPECTION: "AWAITING_QUALITY_INSPECTION",
+  IN_QUALITY_INSPECTION: "IN_QUALITY_INSPECTION",
+  QUALITY_FAILED: "QUALITY_FAILED",
   COMPLETED: "COMPLETED",
   CANCELLED: "CANCELLED",
 };
@@ -132,11 +176,11 @@ export const FleetAllocationStrategyStatus = {
 export function initializeDefaultBusinessTargets(now = defaultNow()) {
   const forecastStartDate = now.slice(0, 10);
   const forecastPeriodUnit = "MONTH";
-  const forecastPeriodCount = 36;
+  const forecastPeriodCount = 12;
   const forecastPeriod = resolveForecastPeriod({ forecast_start_date: forecastStartDate, forecast_period_unit: forecastPeriodUnit, forecast_period_count: forecastPeriodCount });
   return [{
     business_target_id: "BT-001",
-    target_name: "三年运营增长目标",
+    target_name: "基准经营目标",
     target_status: BusinessTargetStatus.ACTIVE,
     target_version: "1.0.0",
     forecast_start_date: forecastStartDate,
@@ -236,7 +280,7 @@ export function initializeDefaultSupplyProductionProfiles(now = defaultNow()) {
     profile_id: "SPP-001",
     profile_name: "自有生产能力画像",
     profile_status: SupplyProductionProfileStatus.ACTIVE,
-    production_lead_time_days: 180,
+    production_lead_time_days: 10,
     production_capacity_period_unit: "MONTH",
     production_capacity_per_period: 10,
     ramp_up_periods: 3,
@@ -289,7 +333,7 @@ export function initializeDefaultLongTermDemandForecastStrategies(now = defaultN
     target_zone_ids: ["Z-001", "Z-002"],
     growth_scenario: "BASELINE",
     growth_model: "LINEAR",
-    growth_adjustment_rate: 0,
+    growth_adjustment_rate: 0.005,
     demand_buffer_ratio: 0.15,
     operational_availability_rate: 0.9,
     robotaxi_available_hours_per_day: 24,
@@ -532,13 +576,12 @@ export function createSupplyPlanFromForecast({
     || supplyProductionProfiles.find((item) => item.profile_status === SupplyProductionProfileStatus.ACTIVE)
     || supplyProductionProfiles[0]
     || {};
-  const periodCount = Math.max(1, Number(forecast.forecast_period_count || 1));
   const coverageRate = Math.max(0, Number(supplyDecisionStrategy?.demand_coverage_rate ?? 1));
   const safetyRatio = Math.max(0, Number(supplyDecisionStrategy?.safety_capacity_ratio ?? 0));
   const requiredSupply = Math.ceil(rawGap * coverageRate * (1 + safetyRatio));
-  const productionCapacity = Math.max(0, Number(productionProfile.production_capacity_per_period || requiredSupply)) * periodCount;
-  const deliveryCapacity = Math.max(0, Number(productionProfile.delivery_capacity_per_period || requiredSupply)) * periodCount;
-  const feasibleQuantity = Math.max(0, Math.floor(Math.min(requiredSupply, productionCapacity || requiredSupply, deliveryCapacity || requiredSupply)));
+  const feasibleManufacturing = Math.max(0, Number(forecast.feasible_manufacturing_quantity ?? forecast.feasible_supply_quantity ?? rawGap));
+  const feasibleDelivery = Math.max(0, Number(forecast.feasible_delivery_quantity ?? forecast.feasible_supply_quantity ?? rawGap));
+  const feasibleQuantity = Math.max(0, Math.floor(Math.min(requiredSupply, feasibleManufacturing, feasibleDelivery)));
   const plannedRobotaxiCount = feasibleQuantity;
   if (plannedRobotaxiCount <= 0) return { succeeded: false, reason: "NO_FEASIBLE_SUPPLY_CAPACITY", supplyPlan: null };
   const supplyPlan = withLifecycleStatus({
@@ -558,8 +601,8 @@ export function createSupplyPlanFromForecast({
     effective_current_robotaxi: forecast.effective_current_robotaxi ?? null,
     robotaxi_gap_quantity: rawGap,
     required_supply_quantity: requiredSupply,
-    feasible_manufacturing_quantity: Math.min(requiredSupply, productionCapacity || requiredSupply),
-    feasible_delivery_quantity: Math.min(requiredSupply, deliveryCapacity || requiredSupply),
+    feasible_manufacturing_quantity: Math.min(requiredSupply, feasibleManufacturing),
+    feasible_delivery_quantity: Math.min(requiredSupply, feasibleDelivery),
     uncovered_robotaxi_gap: Math.max(0, requiredSupply - plannedRobotaxiCount),
     production_lead_time_days: productionProfile.production_lead_time_days ?? null,
     planned_start_date: forecast.forecast_start_date || occurredAt.slice(0, 10),
@@ -743,30 +786,14 @@ export function startProductionBatch({ productionBatch, context = {} } = {}) {
 
 export function completeProductionBatch({
   productionBatch,
-  existingRobotaxis = [],
-  opsCenters = [],
   context = {},
 } = {}) {
   if (!productionBatch?.production_batch_id) return { succeeded: false, reason: "PRODUCTION_BATCH_REQUIRED", productionBatch: null, robotaxis: [] };
   if (productionBatch.batch_status !== ProductionBatchStatus.IN_PRODUCTION) return { succeeded: false, reason: "PRODUCTION_BATCH_NOT_IN_PRODUCTION", productionBatch, robotaxis: [] };
   const occurredAt = resolveNow(context);
-  const plannedQuantity = Math.max(0, Number(productionBatch.planned_robotaxi_count || 0));
-  const existingIds = new Set((existingRobotaxis || []).map((item) => item.robotaxi_id));
-  const robotaxis = Array.from({ length: plannedQuantity }, (_, index) => {
-    const robotaxiId = resolveRobotaxiId(context, existingIds, index);
-    existingIds.add(robotaxiId);
-    return createProducedRobotaxi({
-      robotaxiId,
-      productionBatch,
-      occurredAt,
-      index,
-    });
-  });
   const completedBatch = withLifecycleStatus({
     ...productionBatch,
-    batch_status: ProductionBatchStatus.COMPLETED,
-    produced_robotaxi_count: robotaxis.length,
-    produced_robotaxi_ids: robotaxis.map((item) => item.robotaxi_id),
+    batch_status: ProductionBatchStatus.AWAITING_QUALITY_INSPECTION,
     production_completed_at: occurredAt,
     updated_at: occurredAt,
   }, {
@@ -774,12 +801,98 @@ export function completeProductionBatch({
     idField: "production_batch_id",
     statusField: "batch_status",
     fromStatus: productionBatch.batch_status,
-    toStatus: ProductionBatchStatus.COMPLETED,
+    toStatus: ProductionBatchStatus.AWAITING_QUALITY_INSPECTION,
     actionType: "PRODUCTION_BATCH_COMPLETE",
     resultType: "PRODUCTION_BATCH_COMPLETED",
     occurredAt,
   });
-  return { succeeded: true, productionBatch: completedBatch, robotaxis };
+  return { succeeded: true, productionBatch: completedBatch, robotaxis: [] };
+}
+
+export function startProductionQualityInspection({ productionBatch, context = {} } = {}) {
+  if (!productionBatch?.production_batch_id) return { succeeded: false, reason: "PRODUCTION_BATCH_REQUIRED", productionBatch: null };
+  if (productionBatch.batch_status !== ProductionBatchStatus.AWAITING_QUALITY_INSPECTION) return { succeeded: false, reason: "PRODUCTION_BATCH_NOT_AWAITING_QUALITY_INSPECTION", productionBatch };
+  const occurredAt = resolveNow(context);
+  return {
+    succeeded: true,
+    productionBatch: withLifecycleStatus({
+      ...productionBatch,
+      batch_status: ProductionBatchStatus.IN_QUALITY_INSPECTION,
+      quality_inspection_started_at: occurredAt,
+      updated_at: occurredAt,
+    }, {
+      objectType: "productionBatch",
+      idField: "production_batch_id",
+      statusField: "batch_status",
+      fromStatus: productionBatch.batch_status,
+      toStatus: ProductionBatchStatus.IN_QUALITY_INSPECTION,
+      actionType: "PRODUCTION_QUALITY_INSPECTION_START",
+      resultType: "PRODUCTION_QUALITY_INSPECTION_STARTED",
+      occurredAt,
+    }),
+  };
+}
+
+export function passProductionQualityInspection({ productionBatch, existingRobotaxis = [], context = {} } = {}) {
+  if (!productionBatch?.production_batch_id) return { succeeded: false, reason: "PRODUCTION_BATCH_REQUIRED", productionBatch: null, robotaxis: [] };
+  if (productionBatch.batch_status !== ProductionBatchStatus.IN_QUALITY_INSPECTION) return { succeeded: false, reason: "PRODUCTION_BATCH_NOT_IN_QUALITY_INSPECTION", productionBatch, robotaxis: [] };
+  const occurredAt = resolveNow(context);
+  const plannedQuantity = Math.max(0, Number(productionBatch.planned_robotaxi_count || 0));
+  const existingIds = new Set((existingRobotaxis || []).map((item) => item.robotaxi_id));
+  const robotaxis = Array.from({ length: plannedQuantity }, (_, index) => {
+    const robotaxiId = resolveRobotaxiId(context, existingIds, index);
+    existingIds.add(robotaxiId);
+    return createProducedRobotaxi({ robotaxiId, productionBatch, occurredAt, index });
+  });
+  return {
+    succeeded: true,
+    robotaxis,
+    productionBatch: withLifecycleStatus({
+      ...productionBatch,
+      batch_status: ProductionBatchStatus.COMPLETED,
+      quality_inspection_result: "PASSED",
+      quality_inspection_completed_at: occurredAt,
+      produced_robotaxi_count: robotaxis.length,
+      produced_robotaxi_ids: robotaxis.map((item) => item.robotaxi_id),
+      updated_at: occurredAt,
+    }, {
+      objectType: "productionBatch",
+      idField: "production_batch_id",
+      statusField: "batch_status",
+      fromStatus: productionBatch.batch_status,
+      toStatus: ProductionBatchStatus.COMPLETED,
+      actionType: "PRODUCTION_QUALITY_INSPECTION_PASS",
+      resultType: "PRODUCTION_QUALITY_INSPECTION_PASSED",
+      occurredAt,
+    }),
+  };
+}
+
+export function failProductionQualityInspection({ productionBatch, failureReason = "QUALITY_INSPECTION_FAILED", context = {} } = {}) {
+  if (!productionBatch?.production_batch_id) return { succeeded: false, reason: "PRODUCTION_BATCH_REQUIRED", productionBatch: null, robotaxis: [] };
+  if (productionBatch.batch_status !== ProductionBatchStatus.IN_QUALITY_INSPECTION) return { succeeded: false, reason: "PRODUCTION_BATCH_NOT_IN_QUALITY_INSPECTION", productionBatch, robotaxis: [] };
+  const occurredAt = resolveNow(context);
+  return {
+    succeeded: true,
+    robotaxis: [],
+    productionBatch: withLifecycleStatus({
+      ...productionBatch,
+      batch_status: ProductionBatchStatus.QUALITY_FAILED,
+      quality_inspection_result: "FAILED",
+      quality_inspection_failure_reason: failureReason,
+      quality_inspection_completed_at: occurredAt,
+      updated_at: occurredAt,
+    }, {
+      objectType: "productionBatch",
+      idField: "production_batch_id",
+      statusField: "batch_status",
+      fromStatus: productionBatch.batch_status,
+      toStatus: ProductionBatchStatus.QUALITY_FAILED,
+      actionType: "PRODUCTION_QUALITY_INSPECTION_FAIL",
+      resultType: "PRODUCTION_QUALITY_INSPECTION_FAILED",
+      occurredAt,
+    }),
+  };
 }
 
 export function executeFleetAllocationStrategy({
@@ -1028,8 +1141,6 @@ export function completeSupplyManagementLoopFromForecast({
 
   const completedBatchResult = completeProductionBatch({
     productionBatch: startedBatchResult.productionBatch,
-    existingRobotaxis,
-    opsCenters,
     context,
   });
   if (!completedBatchResult.succeeded) {
@@ -1042,17 +1153,46 @@ export function completeSupplyManagementLoopFromForecast({
     };
   }
 
+  const startedInspectionResult = startProductionQualityInspection({
+    productionBatch: completedBatchResult.productionBatch,
+    context,
+  });
+  if (!startedInspectionResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: startedInspectionResult.reason,
+      step: "START_PRODUCTION_QUALITY_INSPECTION",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+      productionBatch: completedBatchResult.productionBatch,
+    };
+  }
+
+  const passedInspectionResult = passProductionQualityInspection({
+    productionBatch: startedInspectionResult.productionBatch,
+    existingRobotaxis,
+    context,
+  });
+  if (!passedInspectionResult.succeeded) {
+    return {
+      succeeded: false,
+      reason: passedInspectionResult.reason,
+      step: "PASS_PRODUCTION_QUALITY_INSPECTION",
+      supplyPlan: confirmedPlanResult.supplyPlan,
+      productionBatch: startedInspectionResult.productionBatch,
+    };
+  }
+
   const strategy = (fleetAllocationStrategies || []).find((item) => item.strategy_status === FleetAllocationStrategyStatus.ACTIVE)
     || (fleetAllocationStrategies || [])[0];
   const allRobotaxisAfterProduction = [
-    ...(completedBatchResult.robotaxis || []),
+    ...(passedInspectionResult.robotaxis || []),
     ...(existingRobotaxis || []),
   ];
   const allocation = executeFleetAllocationStrategy({
     strategy,
     robotaxis: allRobotaxisAfterProduction,
     supplyPlans: [confirmedPlanResult.supplyPlan, ...(existingSupplyPlans || [])],
-    productionBatches: [completedBatchResult.productionBatch],
+    productionBatches: [passedInspectionResult.productionBatch],
     opsCenters,
     context,
   });
@@ -1062,7 +1202,7 @@ export function completeSupplyManagementLoopFromForecast({
       reason: allocation.run?.failure_reason || "NO_ELIGIBLE_ROBOTAXI",
       step: "EXECUTE_FLEET_ALLOCATION",
       supplyPlan: confirmedPlanResult.supplyPlan,
-      productionBatch: completedBatchResult.productionBatch,
+      productionBatch: passedInspectionResult.productionBatch,
       robotaxis: allRobotaxisAfterProduction,
       fleetAllocationRun: allocation.run,
       fleetAllocationResults: [],
@@ -1079,7 +1219,7 @@ export function completeSupplyManagementLoopFromForecast({
       reason: deliveryCreateResult.reason,
       step: "CREATE_DELIVERY_ORDER",
       supplyPlan: confirmedPlanResult.supplyPlan,
-      productionBatch: completedBatchResult.productionBatch,
+      productionBatch: passedInspectionResult.productionBatch,
       robotaxis: allRobotaxisAfterProduction,
       fleetAllocationRun: allocation.run,
       fleetAllocationResults: allocation.results,
@@ -1097,7 +1237,7 @@ export function completeSupplyManagementLoopFromForecast({
       reason: deliveryStartedResult.reason,
       step: "START_DELIVERY_ORDER",
       supplyPlan: confirmedPlanResult.supplyPlan,
-      productionBatch: completedBatchResult.productionBatch,
+      productionBatch: passedInspectionResult.productionBatch,
       robotaxis: allRobotaxisAfterProduction,
       fleetAllocationRun: allocation.run,
       fleetAllocationResults: allocation.results,
@@ -1118,7 +1258,7 @@ export function completeSupplyManagementLoopFromForecast({
       reason: deliveryCompletedResult.reason,
       step: "COMPLETE_DELIVERY_ORDER",
       supplyPlan: confirmedPlanResult.supplyPlan,
-      productionBatch: completedBatchResult.productionBatch,
+      productionBatch: passedInspectionResult.productionBatch,
       robotaxis: deliveryStartedResult.robotaxis,
       fleetAllocationRun: allocation.run,
       fleetAllocationResults: allocation.results,
@@ -1133,13 +1273,13 @@ export function completeSupplyManagementLoopFromForecast({
     succeeded: true,
     supplyDecisionRun: supplyDecisionResult.run,
     supplyPlan: confirmedPlanResult.supplyPlan,
-    productionBatch: completedBatchResult.productionBatch,
+    productionBatch: passedInspectionResult.productionBatch,
     robotaxis: deliveryCompletedResult.robotaxis,
     fleetAllocationRun: allocation.run,
     fleetAllocationResults: usedAllocationResults,
     deliveryOrder: deliveryCompletedResult.deliveryOrder,
     readinessTasks: deliveryCompletedResult.readinessTasks,
-    producedRobotaxiIds: completedBatchResult.productionBatch.produced_robotaxi_ids || [],
+    producedRobotaxiIds: passedInspectionResult.productionBatch.produced_robotaxi_ids || [],
     readinessTaskIds: deliveryCompletedResult.deliveryOrder.readiness_task_ids || [],
   };
 }

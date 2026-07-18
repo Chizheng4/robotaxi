@@ -14,8 +14,10 @@ import {
   initializeDefaultFleetAllocationStrategies,
   initializeDefaultLongTermDemandForecastStrategies,
   initializeDefaultSupplyProductionProfiles,
+  passProductionQualityInspection,
   startDeliveryOrder,
   startProductionBatch,
+  startProductionQualityInspection,
   updateBusinessTargetConfig,
   updateSupplyProductionProfileConfig,
 } from "../src/services/businessPlanningService.js";
@@ -129,7 +131,9 @@ assert.equal(
   Math.max(0, execution.results[0].robotaxi_gap_quantity - execution.results[0].feasible_supply_quantity),
   "预测期剩余缺口必须由预测期可形成供给计算",
 );
-assert.equal(execution.results[0].production_ready_date, "2027-01-08", "预测结果必须按生产和检验提前期计算准备日期");
+assert.equal(execution.results[0].first_production_completion_date, "2026-07-19", "预测结果必须按生产提前期计算首批生产完成日期");
+assert.equal(execution.results[0].first_quality_inspection_completion_date, "2026-07-22", "预测结果必须在生产完成后叠加质量检验周期");
+assert.equal(execution.results[0].production_ready_date, "2026-07-19", "旧兼容字段只能映射首批生产完成日期");
 assert.equal(execution.results[0].supply_production_profile_id, "SPP-001", "预测结果必须关联生产画像");
 assert.equal(lowerFulfillmentExecution.results[0].market_forecast_daily_orders, execution.results[0].market_forecast_daily_orders, "服务质量目标不得折减市场预测");
 assert.equal(lowerFulfillmentExecution.results[0].planned_daily_orders, execution.results[0].planned_daily_orders, "服务质量目标不得改变计划承接量");
@@ -185,29 +189,41 @@ const startedBatch = startProductionBatch({
 }).productionBatch;
 const completedBatchResult = completeProductionBatch({
   productionBatch: startedBatch,
+  context: { now: () => "2026-07-09T04:00:00.000Z" },
+});
+assert.equal(completedBatchResult.succeeded, true, "生产中批次必须能完成生产");
+assert.equal(completedBatchResult.productionBatch.batch_status, "AWAITING_QUALITY_INSPECTION", "生产完成后必须等待质量检验");
+assert.equal(completedBatchResult.robotaxis.length, 0, "生产完成但质检前不得创建 Robotaxi");
+
+const inspectionBatchResult = startProductionQualityInspection({
+  productionBatch: completedBatchResult.productionBatch,
+  context: { now: () => "2026-07-09T04:10:00.000Z" },
+});
+const passedInspectionResult = passProductionQualityInspection({
+  productionBatch: inspectionBatchResult.productionBatch,
   existingRobotaxis: [
     { robotaxi_id: "RTX-001" },
     { robotaxi_id: "RTX-002" },
   ],
   opsCenters: [{ ops_center_id: "OC-001", cell_ids: ["C-34-32", "C-34-33"] }],
   context: {
-    now: () => "2026-07-09T04:00:00.000Z",
+    now: () => "2026-07-09T04:20:00.000Z",
     nextRobotaxiId: () => `RTX-${String(++producedSeq).padStart(3, "0")}`,
   },
 });
-assert.equal(completedBatchResult.succeeded, true, "生产中批次必须能完成");
-assert.equal(completedBatchResult.productionBatch.batch_status, "COMPLETED", "生产批次完成后必须进入已完成");
-assert.equal(completedBatchResult.robotaxis.length, confirmedPlan.planned_robotaxi_count, "生产批次必须按计划数量创建 Robotaxi");
-assert.equal(completedBatchResult.robotaxis[0].availability_status, "PENDING_DELIVERY", "新 Robotaxi 必须待交付");
-assert.equal(completedBatchResult.robotaxis[0].current_cell_id, null, "生产完成不得提前写入运营中心位置");
-assert.equal(completedBatchResult.robotaxis[0].target_ops_center_id, null, "生产完成不得提前绑定运营中心");
-assert.ok(completedBatchResult.productionBatch.produced_robotaxi_ids.includes(completedBatchResult.robotaxis[0].robotaxi_id), "生产批次必须记录创建的 Robotaxi ID");
+assert.equal(passedInspectionResult.succeeded, true, "质量检验中批次必须能通过质检");
+assert.equal(passedInspectionResult.productionBatch.batch_status, "COMPLETED", "质量检验通过后生产批次才进入已完成");
+assert.equal(passedInspectionResult.robotaxis.length, confirmedPlan.planned_robotaxi_count, "质量检验通过后必须按计划数量创建 Robotaxi");
+assert.equal(passedInspectionResult.robotaxis[0].availability_status, "PENDING_DELIVERY", "新 Robotaxi 必须待交付");
+assert.equal(passedInspectionResult.robotaxis[0].current_cell_id, null, "生产完成不得提前写入运营中心位置");
+assert.equal(passedInspectionResult.robotaxis[0].target_ops_center_id, null, "生产完成不得提前绑定运营中心");
+assert.ok(passedInspectionResult.productionBatch.produced_robotaxi_ids.includes(passedInspectionResult.robotaxis[0].robotaxi_id), "生产批次必须记录质检通过后创建的 Robotaxi ID");
 
 const allocation = executeFleetAllocationStrategy({
   strategy: allocationStrategies[0],
-  robotaxis: completedBatchResult.robotaxis,
+  robotaxis: passedInspectionResult.robotaxis,
   supplyPlans: [confirmedPlan],
-  productionBatches: [completedBatchResult.productionBatch],
+  productionBatches: [passedInspectionResult.productionBatch],
   opsCenters: [{ ops_center_id: "OC-001" }],
   context: {
     now: () => "2026-07-09T05:00:00.000Z",
@@ -233,7 +249,7 @@ assert.equal(deliveryCreate.deliveryOrder.robotaxi_count, allocation.results[0].
 
 const deliveryStarted = startDeliveryOrder({
   deliveryOrder: deliveryCreate.deliveryOrder,
-  robotaxis: completedBatchResult.robotaxis,
+  robotaxis: passedInspectionResult.robotaxis,
   context: { now: () => "2026-07-09T06:10:00.000Z" },
 });
 assert.equal(deliveryStarted.deliveryOrder.delivery_status, "IN_DELIVERY", "交付开始后必须进入交付中");

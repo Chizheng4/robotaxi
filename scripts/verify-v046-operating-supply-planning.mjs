@@ -10,6 +10,8 @@ import {
   createProductionBatchFromSupplyPlan,
   executeLongTermDemandForecastStrategy,
   executeSupplyDecisionStrategy,
+  passProductionQualityInspection,
+  startProductionQualityInspection,
   startProductionBatch,
 } from "../src/services/businessPlanningService.js";
 import {
@@ -61,12 +63,21 @@ const startedBatch = startProductionBatch({ productionBatch: createdBatch.produc
 assert.equal(startedBatch.succeeded, true);
 const completedBatch = completeProductionBatch({
   productionBatch: startedBatch.productionBatch,
+  context: { now },
+});
+assert.equal(completedBatch.succeeded, true);
+assert.equal(completedBatch.productionBatch.batch_status, "AWAITING_QUALITY_INSPECTION");
+assert.equal(completedBatch.robotaxis.length, 0);
+const inspectionStarted = startProductionQualityInspection({ productionBatch: completedBatch.productionBatch, context: { now } });
+assert.equal(inspectionStarted.productionBatch.batch_status, "IN_QUALITY_INSPECTION");
+const inspectionPassed = passProductionQualityInspection({
+  productionBatch: inspectionStarted.productionBatch,
   existingRobotaxis: operations.robotaxis,
   context: { now, nextRobotaxiId: (index) => `RTX-NEW-${String(index + 1).padStart(3, "0")}` },
 });
-assert.equal(completedBatch.succeeded, true);
-assert.equal(completedBatch.robotaxis.length, supplyDecision.supplyPlan.planned_robotaxi_count);
-assert.ok(completedBatch.robotaxis.every((item) => item.availability_status === "PENDING_DELIVERY"));
+assert.equal(inspectionPassed.succeeded, true);
+assert.equal(inspectionPassed.robotaxis.length, supplyDecision.supplyPlan.planned_robotaxi_count);
+assert.ok(inspectionPassed.robotaxis.every((item) => item.availability_status === "PENDING_DELIVERY"));
 
 const shortForecast = executeShortTermDemandForecast({
   strategy: supply.shortTermDemandForecastStrategies[0],
@@ -156,7 +167,8 @@ assert.ok(leafKeys.includes("shortTermDemandForecastResults"));
 assert.ok(leafKeys.includes("deploymentPlans"));
 assert.ok(!leafKeys.includes("supplyDemandBalanceStrategies"));
 assert.equal(validatePageArchitecture(leafKeys).valid, true);
-assert.equal(getPageArchitecture("supplyDecisionStrategies").actionMode, "row");
+assert.equal(getPageArchitecture("supplyDecisionStrategies").actionMode, "none");
+assert.equal(getPageArchitecture("supplyDecisionStrategies").eventPanel?.label, "最近供应决策执行");
 assert.equal(getPageArchitecture("shortTermDemandForecastStrategies").actionMode, "row");
 assert.equal(getPageArchitecture("deploymentDecisionStrategies").actionMode, "row");
 
@@ -165,7 +177,7 @@ assert.match(mainSource, /businessActionService\.createDeploymentTasksFromPlan/)
 assert.match(mainSource, /operatingPlanningService\.executeShortTermDemandForecast/);
 assert.match(mainSource, /hiddenWorkspacePages = new Set\(\[[\s\S]*"supplyDemandBalanceStrategies"/);
 
-console.log(`v046 经营与供应规划闭环验证通过：长期结果 ${longForecast.results.length}，生产资产 ${completedBatch.robotaxis.length}，短期结果 ${shortForecast.results.length}，投放计划 ${deploymentDecision.plans.length}，投放任务 ${batchResult.data.taskIds.length}`);
+console.log(`v046 经营与供应规划闭环验证通过：长期结果 ${longForecast.results.length}，生产资产 ${inspectionPassed.robotaxis.length}，短期结果 ${shortForecast.results.length}，投放计划 ${deploymentDecision.plans.length}，投放任务 ${batchResult.data.taskIds.length}`);
 
 function createRuntime() {
   let sequence = 0;
