@@ -74,6 +74,7 @@ let navigationRegistry;
 let pageArchitectureRegistry;
 let operatingModelService;
 let decisionControlService;
+let decisionExplanationContract;
 let releaseHistory = [];
 let projectReadmeService;
 let taskSequence = 0;
@@ -8987,25 +8988,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
       </div>
       <div className="forecast-calculation-details">
         <div className="forecast-calculation-heading"><span>{getFieldLabel("calculation_steps")}</span><Button size="small" onClick={() => setCalculationOpen((open) => !open)}>{calculationOpen ? "收起计算过程" : "查看计算过程"}</Button></div>
-        {calculationOpen && groupForecastCalculationSteps(selected.calculation_steps).map((group) => (
-          <section className="forecast-calculation-group" key={group.name}>
-            <h4>{group.name}</h4>
-            {group.steps.map((step) => (
-              <div className="forecast-calculation-step" key={step.step_order || step.output_field}>
-                <span className="forecast-calculation-title">
-                  <em>{step.step_order}</em>
-                  <span><b>{getFieldLabel(step.output_field)}</b><i>{step.step_action}</i></span>
-                </span>
-                <div className="forecast-calculation-explanation">
-                  <small><b>{getFieldLabel("input_values")}：</b>{formatPlanningCalculationInputs(step.input_values)}</small>
-                  <small><b>{getFieldLabel("calculation_model")}：</b>{getDisplayValue(step.calculation_model)}<span className="forecast-calculation-source"><b>{getFieldLabel("source_refs")}：</b>{formatPlanningSourceRefs(step.source_refs)}</span></small>
-                  <small className="forecast-calculation-formula"><b>{getFieldLabel("formula_expression")}：</b>{formatPlanningCalculationExpression(step.formula_expression)}</small>
-                </div>
-                <strong>{formatCalculationResult(step.output_value, step.output_unit, step.output_field)}</strong>
-              </div>
-            ))}
-          </section>
-        ))}
+        {calculationOpen && <CalculationProcessView steps={selected.calculation_steps} mode="analysis" />}
       </div>
     </div>
   );
@@ -10113,8 +10096,8 @@ function renderDetailValue(key, value, row = null) {
   if (key === "simulation_time_world_summary") {
     return <SimulationTimeWorldSummary row={row} />;
   }
-  if (key === "profile_calculation_steps") {
-    return <DemandProfileCalculationSteps steps={value} />;
+  if (decisionExplanationContract?.calculationStepFieldAliases?.includes(key)) {
+    return <CalculationProcessView steps={value} />;
   }
   if (key === "profile_field_explanations") {
     return <DemandProfileFieldExplanations explanations={value} />;
@@ -10128,37 +10111,55 @@ function renderDetailValue(key, value, row = null) {
   return <Text className="detail-value">{formatDetailValue(value, key, row) || "无"}</Text>;
 }
 
-function DemandProfileCalculationSteps({ steps }) {
-  if (!Array.isArray(steps) || steps.length === 0) {
+function CalculationProcessView({ steps, mode = "detail" }) {
+  const normalizedSteps = decisionExplanationContract?.normalizeCalculationSteps?.(steps) || (Array.isArray(steps) ? steps : []);
+  if (!normalizedSteps.length) {
     return <Text className="detail-value">暂无计算过程</Text>;
+  }
+  if (mode === "analysis") {
+    return groupForecastCalculationSteps(normalizedSteps).map((group) => (
+      <section className="forecast-calculation-group" key={group.name}>
+        <h4>{getDisplayValue(group.name)}</h4>
+        {group.steps.map((step, index) => <CalculationProcessStep step={step} index={index} mode="analysis" key={`${step.output_field || "step"}-${index}`} />)}
+      </section>
+    ));
   }
   return (
     <div className="structured-detail-groups">
-      {steps.map((step, index) => (
-        <details className="structured-detail-group" key={`${step.step_name || "step"}-${index}`} open={index === 0}>
-          <summary>
-            <span>{step.step_name || `步骤 ${index + 1}`}</span>
-            <span>{formatDemandProfileCalculationOutput(step) || "无结果"}</span>
-          </summary>
-          <div className="structured-detail-group-body">
-            <dl className="structured-detail-fields">
-              <div className="structured-detail-field">
-                <dt>{getFieldLabel("formula")}</dt>
-                <dd>{formatFormulaExpression(step.formula)}</dd>
-              </div>
-              <div className="structured-detail-field">
-                <dt>{getFieldLabel("input_values")}</dt>
-                <dd><StructuredDetailNode value={step.input_values || {}} fieldKey="input_values" /></dd>
-              </div>
-              <div className="structured-detail-field">
-                <dt>{getFieldLabel("output_value")}</dt>
-                <dd>{formatDemandProfileCalculationOutput(step) || "无"}</dd>
-              </div>
-            </dl>
-          </div>
-        </details>
-      ))}
+      {normalizedSteps.map((step, index) => <CalculationProcessStep step={step} index={index} mode="detail" key={`${step.output_field || "step"}-${index}`} />)}
     </div>
+  );
+}
+
+function CalculationProcessStep({ step, index, mode }) {
+  const title = step.output_field ? getFieldLabel(step.output_field) : step.step_action || `步骤 ${index + 1}`;
+  const result = formatCalculationResult(step.output_value, step.output_unit, step.output_field) || "无结果";
+  if (mode === "analysis") {
+    return (
+      <div className="forecast-calculation-step">
+        <span className="forecast-calculation-title"><em>{step.step_order || index + 1}</em><span><b>{title}</b><i>{step.step_action}</i></span></span>
+        <div className="forecast-calculation-explanation">
+          <small><b>{getFieldLabel("input_values")}：</b>{formatPlanningCalculationInputs(step.input_values)}</small>
+          <small><b>{getFieldLabel("calculation_model")}：</b>{getDisplayValue(step.calculation_model)}{step.calculation_model_version ? ` ${step.calculation_model_version}` : ""}<span className="forecast-calculation-source"><b>{getFieldLabel("source_refs")}：</b>{formatPlanningSourceRefs(step.source_refs)}</span></small>
+          <small className="forecast-calculation-formula"><b>{getFieldLabel("formula_expression")}：</b>{formatPlanningCalculationExpression(step.formula_expression)}</small>
+        </div>
+        <strong>{result}</strong>
+      </div>
+    );
+  }
+  return (
+    <details className="structured-detail-group" open={index === 0}>
+      <summary><span>{title}</span><span>{result}</span></summary>
+      <div className="structured-detail-group-body">
+        <dl className="structured-detail-fields">
+          <div className="structured-detail-field"><dt>{getFieldLabel("input_values")}</dt><dd>{formatPlanningCalculationInputs(step.input_values)}</dd></div>
+          <div className="structured-detail-field"><dt>{getFieldLabel("calculation_model")}</dt><dd>{getDisplayValue(step.calculation_model)}{step.calculation_model_version ? ` ${step.calculation_model_version}` : ""}</dd></div>
+          <div className="structured-detail-field"><dt>{getFieldLabel("formula_expression")}</dt><dd>{formatPlanningCalculationExpression(step.formula_expression)}</dd></div>
+          <div className="structured-detail-field"><dt>{getFieldLabel("source_refs")}</dt><dd>{formatPlanningSourceRefs(step.source_refs)}</dd></div>
+          <div className="structured-detail-field"><dt>{getFieldLabel("output_value")}</dt><dd>{result}</dd></div>
+        </dl>
+      </div>
+    </details>
   );
 }
 
@@ -10754,6 +10755,7 @@ async function bootstrap() {
 		    pageArchitectureRegistryModule,
 		    operatingModelServiceModule,
 		    decisionControlServiceModule,
+		    decisionExplanationContractModule,
 		    releaseHistoryModule,
 		    projectReadmeModule,
 		    publicDemoBootstrapServiceModule,
@@ -10830,7 +10832,8 @@ async function bootstrap() {
 		    import("./ui/navigationRegistry.js?v=20260717-v047-0-0"),
 		    import("./ui/pageArchitectureRegistry.js?v=20260717-v047-0-0"),
 		    import("./services/operatingModelService.js?v=20260717-v047-0-0"),
-		    import("./services/decisionControlService.js?v=20260717-v046-0-7"),
+		    import("./services/decisionControlService.js?v=20260719-v047-5-0"),
+		    import("./domain/decisionExplanationContract.js?v=20260719-v047-5-0"),
 		    import("./ui/releaseHistory.js?v=20260714-v043-0-1"),
 		    import("./ui/projectReadme.js?v=20260714-v043-0-1"),
 		    import("./services/publicDemoBootstrapService.js?v=20260715-v043-0-7"),
@@ -10914,12 +10917,15 @@ async function bootstrap() {
 		  pageArchitectureRegistry = pageArchitectureRegistryModule;
 		  operatingModelService = operatingModelServiceModule;
 		  decisionControlService = decisionControlServiceModule;
+		  decisionExplanationContract = decisionExplanationContractModule;
 		  pageGroups = navigationRegistry.navigationGroups;
 		  menuGroupIcons = navigationRegistry.navigationIcons;
 		  const navigationValidation = navigationRegistry.validateNavigationRegistry(Object.keys(tableConfig));
 		  if (!navigationValidation.valid) throw new Error(`导航注册表校验失败：${navigationValidation.errors.join("；")}`);
 		  const architectureValidation = pageArchitectureRegistry.validatePageArchitecture(navigationValidation.leafKeys);
 		  if (!architectureValidation.valid) throw new Error(`页面架构校验失败：${architectureValidation.errors.join("；")}`);
+		  const decisionArchitectureValidation = decisionControlService.validateDecisionPageArchitecture(pageArchitectureRegistry.pageArchitectureRegistry);
+		  if (!decisionArchitectureValidation.valid) throw new Error(`决策页面架构校验失败：${decisionArchitectureValidation.errors.join("；")}`);
   releaseHistory = releaseHistoryModule.releaseHistory;
   projectReadmeService = projectReadmeModule;
   releaseFreshnessService = releaseFreshnessServiceModule;

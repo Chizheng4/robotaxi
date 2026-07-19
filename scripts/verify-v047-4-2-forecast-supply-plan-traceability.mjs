@@ -53,7 +53,7 @@ assert.equal(first.supplyPlan.supply_decision_run_id, first.run.supply_decision_
 assert.equal(first.supplyPlan.business_target_id, "BT-001");
 assert.equal(first.supplyPlan.forecast_start_date, "2026-07-19");
 assert.equal(first.run.forecast_end_date, "2027-07-18");
-assert.equal(first.run.decision_calculation_steps.length, 4);
+assert.equal(first.run.calculation_steps.length, 4);
 
 const second = executeSupplyDecisionStrategy({ strategy, forecast: forecast("LDF-RES-0002"), supplyProductionProfiles: productionProfiles, existingSupplyPlans: [first.supplyPlan], context });
 assert.equal(second.succeeded, true);
@@ -90,7 +90,7 @@ assert.equal(cancellation.reason, "SUPPLY_PLAN_HAS_PRODUCTION_BATCH");
 
 assert.ok(businessPlanningObjectSchemas.supplyDecisionRun.tabs.some((item) => item.key === "calculation"));
 assert.ok(businessPlanningObjectSchemas.supplyPlan.tabs.some((item) => item.key === "source"));
-assert.equal(getFieldLabel("decision_calculation_steps"), "决策计算过程");
+assert.equal(getFieldLabel("calculation_steps"), "完整计算过程");
 assert.equal(getFieldLabel("conflicting_supply_plan_id"), "冲突生产计划编号");
 assert.equal(getDisplayValue("OVERLAPPING_CONFIRMED_SUPPLY_PLAN_EXISTS"), "该区域当前周期已有已确认生产计划");
 

@@ -103,6 +103,9 @@ node --check scripts/verify-v047-2-planning-model-boundary.mjs
 node --check scripts/verify-v047-4-field-semantic-contract.mjs
 node --check scripts/verify-v047-4-1-spatial-time-semantic-contract.mjs
 node --check scripts/verify-v047-4-4-row-action-and-plan-confirmation.mjs
+node --check scripts/verify-v047-5-decision-explanation-architecture.mjs
+node --check src/domain/decisionExplanationContract.js
+node --check src/domain/calculationModelRegistry.js
 node --check src/services/spatialCatalogService.js
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
@@ -197,6 +200,7 @@ node scripts/verify-v047-4-1-spatial-time-semantic-contract.mjs
 node scripts/verify-v047-4-2-forecast-supply-plan-traceability.mjs
 node scripts/verify-v047-4-3-formula-semantic-display.mjs
 node scripts/verify-v047-4-4-row-action-and-plan-confirmation.mjs
+node scripts/verify-v047-5-decision-explanation-architecture.mjs
 node scripts/verify-v047-3-supply-position-tracking.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs

@@ -1,5 +1,6 @@
 import { createRobotaxi } from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
 import { getFieldSemanticDefinition } from "../domain/fieldSemanticRegistry.js?v=20260719-v047-4-1";
+import { createRegisteredCalculationStep } from "../domain/calculationModelRegistry.js?v=20260719-v047-5-0";
 import {
   calculateLongTermDemandPlan,
   normalizeLongTermDemandForecastResult,
@@ -116,7 +117,7 @@ export const businessPlanningObjectSchemas = {
       { key: "basic", label: "执行信息", fields: ["supply_decision_run_id", "supply_decision_strategy_id", "run_status", "started_at", "completed_at", "failure_reason"] },
       { key: "source", label: "预测来源", fields: ["forecast_result_id", "forecast_run_id", "business_target_id", "target_zone_id", "forecast_start_date", "forecast_end_date", "forecast_period_unit", "forecast_period_count"] },
       { key: "result", label: "决策结果", fields: ["robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "supply_plan_id", "conflicting_supply_plan_id"] },
-      { key: "calculation", label: "计算过程", fields: ["decision_calculation_steps", "strategy_snapshot", "forecast_snapshot", "production_profile_snapshot"] },
+      { key: "calculation", label: "计算过程", fields: ["calculation_steps", "strategy_snapshot", "forecast_snapshot", "production_profile_snapshot"] },
     ],
     explanations: {
       forecast_result_id: "本次供应决策唯一使用的预测结果，供应决策不得脱离该结果重新计算需求。",
@@ -127,7 +128,7 @@ export const businessPlanningObjectSchemas = {
       safety_capacity_quantity: "在计划覆盖数量上增加的安全容量。",
       planned_robotaxi_count: "同时受到所需供应、可生产数量和可交付数量约束的最终计划数量。",
       conflicting_supply_plan_id: "阻止本次决策生成生产计划的已确认计划。",
-      decision_calculation_steps: "本次决策冻结的输入、公式和结果，用于复核生产计划如何形成。",
+      calculation_steps: "本次决策冻结的输入、模型、公式、来源和结果，用于复核生产计划如何形成。",
     },
   },
   supplyPlan: {
@@ -136,7 +137,7 @@ export const businessPlanningObjectSchemas = {
       { key: "source", label: "来源追溯", fields: ["forecast_result_id", "forecast_run_id", "supply_decision_run_id", "supply_decision_strategy_id", "business_target_id", "supply_production_profile_id"] },
       { key: "period", label: "区域周期", fields: ["target_zone_id", "target_zone_name", "forecast_start_date", "forecast_end_date", "forecast_period_unit", "forecast_period_count", "planned_start_date", "planned_end_date"] },
       { key: "quantity", label: "数量依据", fields: ["required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "uncovered_robotaxi_gap"] },
-      { key: "calculation", label: "计算过程", fields: ["decision_calculation_steps"] },
+      { key: "calculation", label: "计算过程", fields: ["calculation_steps"] },
     ],
     explanations: {
       forecast_result_id: "生产计划所依据的唯一预测结果编号。",
@@ -145,7 +146,7 @@ export const businessPlanningObjectSchemas = {
       forecast_start_date: "生产计划覆盖的预测周期起点，继承自预测结果快照。",
       forecast_end_date: "生产计划覆盖的预测周期终点，继承自预测结果快照。",
       planned_robotaxi_count: "供应决策在需求覆盖、安全容量、生产与交付约束下确定的计划数量。",
-      decision_calculation_steps: "从 Robotaxi 缺口到计划生产数量的完整决策计算快照。",
+      calculation_steps: "引用生成本计划的供应决策执行计算快照，用于追溯而不重复计算。",
     },
   },
 };
@@ -616,7 +617,7 @@ export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyD
       feasible_delivery_quantity: plan.feasible_delivery_quantity ?? feasibleDelivery,
       planned_robotaxi_count: plannedQuantity,
       uncovered_robotaxi_gap: plan.uncovered_robotaxi_gap ?? Math.max(0, requiredSupply - plannedQuantity),
-      decision_calculation_steps: plan.decision_calculation_steps || run.decision_calculation_steps || [],
+      calculation_steps: plan.calculation_steps || plan.decision_calculation_steps || run.calculation_steps || run.decision_calculation_steps || [],
     };
   });
 }
@@ -666,10 +667,10 @@ export function resolveForecastSupplyDecisionEligibility({ forecast, supplyPlans
 
 function createSupplyDecisionCalculationSteps({ rawGap, coverageRate, coveredGap, safetyRatio, safetyCapacity, requiredSupply, feasibleManufacturing, feasibleDelivery, plannedRobotaxiCount } = {}) {
   return [
-    { step_name: "缺口覆盖数量", formula: "Robotaxi 缺口 × 需求覆盖率，结果向上取整", input_values: { robotaxi_gap_quantity: rawGap, demand_coverage_rate: coverageRate }, output_field: "covered_gap_quantity", output_value: coveredGap },
-    { step_name: "安全容量数量", formula: "缺口覆盖数量 × 安全容量比例，结果向上取整", input_values: { covered_gap_quantity: coveredGap, safety_capacity_ratio: safetyRatio }, output_field: "safety_capacity_quantity", output_value: safetyCapacity },
-    { step_name: "所需供应数量", formula: "缺口覆盖数量 + 安全容量数量", input_values: { covered_gap_quantity: coveredGap, safety_capacity_quantity: safetyCapacity }, output_field: "required_supply_quantity", output_value: requiredSupply },
-    { step_name: "计划生产数量", formula: "所需供应数量、可生产数量、可交付数量三者的最小值", input_values: { required_supply_quantity: requiredSupply, feasible_manufacturing_quantity: feasibleManufacturing, feasible_delivery_quantity: feasibleDelivery }, output_field: "planned_robotaxi_count", output_value: plannedRobotaxiCount },
+    createRegisteredCalculationStep({ modelId: "SUPPLY_GAP_COVERAGE", inputValues: { robotaxi_gap_quantity: rawGap, demand_coverage_rate: coverageRate }, result: { covered_gap_quantity: coveredGap }, sourceRefs: ["forecast_result_id", "supply_decision_strategy_id"] }),
+    createRegisteredCalculationStep({ modelId: "SUPPLY_SAFETY_CAPACITY", inputValues: { covered_gap_quantity: coveredGap, safety_capacity_ratio: safetyRatio }, result: { safety_capacity_quantity: safetyCapacity }, sourceRefs: ["supply_decision_strategy_id"] }),
+    createRegisteredCalculationStep({ modelId: "SUPPLY_REQUIRED_QUANTITY", inputValues: { covered_gap_quantity: coveredGap, safety_capacity_quantity: safetyCapacity }, result: { required_supply_quantity: requiredSupply }, sourceRefs: ["supply_decision_run_id"] }),
+    createRegisteredCalculationStep({ modelId: "SUPPLY_PLAN_QUANTITY", inputValues: { required_supply_quantity: requiredSupply, feasible_manufacturing_quantity: feasibleManufacturing, feasible_delivery_quantity: feasibleDelivery }, result: { planned_robotaxi_count: plannedRobotaxiCount }, sourceRefs: ["forecast_result_id", "supply_production_profile_id"] }),
   ];
 }
 
@@ -730,7 +731,7 @@ export function createSupplyPlanFromForecast({
     feasible_manufacturing_quantity: Math.min(requiredSupply, feasibleManufacturing),
     feasible_delivery_quantity: Math.min(requiredSupply, feasibleDelivery),
     uncovered_robotaxi_gap: Math.max(0, requiredSupply - plannedRobotaxiCount),
-    decision_calculation_steps: decisionCalculationSteps,
+    calculation_steps: decisionCalculationSteps,
     production_lead_time_days: productionProfile.production_lead_time_days ?? null,
     planned_start_date: forecast.forecast_start_date || occurredAt.slice(0, 10),
     planned_end_date: forecast.full_supply_completion_date || forecast.first_delivery_date || addDaysIsoDate(occurredAt, Number(productionProfile.production_lead_time_days || 180)),
@@ -818,7 +819,7 @@ export function executeSupplyDecisionStrategy({
       required_supply_quantity: result.supplyPlan.required_supply_quantity,
       planned_robotaxi_count: result.supplyPlan.planned_robotaxi_count,
       uncovered_robotaxi_gap: result.supplyPlan.uncovered_robotaxi_gap,
-      decision_calculation_steps: result.supplyPlan.decision_calculation_steps,
+      calculation_steps: result.supplyPlan.calculation_steps,
       failure_reason: null,
       strategy_snapshot: { ...strategy },
       forecast_snapshot: { ...forecast },

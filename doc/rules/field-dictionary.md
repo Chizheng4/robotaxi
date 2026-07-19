@@ -1371,7 +1371,10 @@
 |missing_input_fields|缺失输入字段|计算字段|缺少的必要字段列表|
 |assumption_fields|默认假设字段|计算字段|使用默认值的字段列表|
 |calculation_steps|完整计算过程|持久化字段|公式、输入、单位、中间结果和来源|
-|decision_calculation_steps|决策计算过程|持久化字段|供应决策执行时冻结的输入、公式、中间结果和最终计划数量|
+|decision_calculation_steps|决策计算过程|历史兼容字段|历史供应决策快照读取别名；新数据统一写入 calculation_steps|
+|result_artifact_kind|结果性质|代码合同字段|区分分析结果、决策记录、计划单据、运营对象和模拟结果|
+|calculation_trace_owner|计算过程责任方|代码合同字段|声明完整计算过程由策略执行记录持有|
+|downstream_page_keys|下游业务对象|代码合同字段|声明决策结果继续驱动的页面或业务对象|
 |step_action|步骤动作|持久化字段|当前计算步骤执行的业务动作|
 |calculation_model|计算模型|持久化字段|当前步骤采用的模型标识|
 |formula_expression|公式表达|持久化字段|使用统一字段键记录的计算表达式|
@@ -1379,6 +1382,7 @@
 |source_refs|来源引用|持久化字段|当前步骤引用的业务对象或快照编号|
 |step_group|计算分组|嵌套字段|完整计算过程中步骤所属的业务计算分组|
 |output_unit|结果单位|嵌套字段|计算步骤输出结果使用的业务单位|
+|diagnostics|计算诊断|嵌套字段|本次计算步骤产生的校验、警告或异常信息|
 
 `output_unit` 统一枚举：
 
@@ -3006,3 +3010,37 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ROUTE_DATA_MISSING|缺少路径数据|
 |DEPENDENCY_MISSING|缺少时间依赖|
 |CALCULATION_FAILED|计算失败|
+|ANALYSIS_RESULT|分析结果|
+|DECISION_RECORD|决策记录|
+|PLAN_DOCUMENT|计划单据|
+|OPERATIONAL_OBJECT|运营对象|
+|SIMULATION_RESULT|模拟结果|
+|EXECUTION|策略执行|
+
+### 28.4 计算模型中文
+
+计算过程只保存稳定模型编号；前端统一从字段字典解析模型中文名，禁止直接显示模型编号。
+
+|模型编号|中文名|
+|---|---|
+|CALENDAR_PERIOD|日历周期校准|
+|ORDER_FULFILLMENT_EXECUTION_DURATION|订单履约执行时长|
+|VEHICLE_SERVICE_CYCLE_DURATION|车辆服务周期时长|
+|SUPPLY_GAP_COVERAGE|供应缺口覆盖|
+|SUPPLY_SAFETY_CAPACITY|供应安全容量|
+|SUPPLY_REQUIRED_QUANTITY|所需供应数量|
+|SUPPLY_PLAN_QUANTITY|计划生产数量|
+|PLACE_POPULATION_EXPOSURE|地点有效人群|
+|PLACE_POTENTIAL_TRIPS|地点潜在出行量|
+|PLACE_ADDRESSABLE_ORDERS|地点可争取订单|
+|PLACE_PEAK_ORDERS|地点峰值订单|
+|SERVICE_AREA_POSITION_THROUGHPUT|服务位置周转能力|
+|SERVICE_AREA_PICKUP_CAPACITY|服务区域上车承载|
+|SERVICE_AREA_DROPOFF_CAPACITY|服务区域下车承载|
+|SERVICE_AREA_DAILY_PICKUP_CAPACITY|服务区域日上车承载|
+|SERVICE_AREA_DAILY_DROPOFF_CAPACITY|服务区域日下车承载|
+|ZONE_BASELINE_DEMAND|区域基础需求|
+|ZONE_PEAK_DEMAND|区域峰值需求|
+|ZONE_PERIOD_GROWTH_RATE|区域周期增长率|
+|ZONE_DAILY_SERVICE_CAPACITY|区域日服务承载|
+|ZONE_PEAK_SERVICE_CAPACITY|区域峰值服务承载|

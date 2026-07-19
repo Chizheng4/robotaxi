@@ -47,7 +47,7 @@ assert.deepEqual(registeredFormulaErrors, [], `计算模型公式存在未登记
   assert(!formatFormulaExpression(formula).includes("未登记字段"), `成本公式中文展示失败：${formula}`);
 });
 
-assert(source.includes("formatFormulaExpression(step.formula)"), "画像计算过程必须调用统一公式语义服务");
+assert(source.includes("formatPlanningCalculationExpression(step.formula_expression)"), "统一计算过程控件必须调用公式语义服务");
 assert(source.includes("formatFormulaExpression(record.calculation_formula)"), "成本明细必须调用统一公式语义服务");
 assert(source.includes("return formatFormulaExpression(expression);"), "预测计算过程必须复用统一公式语义服务");
 assert(source.includes("formatCalculationResult(step.output_value, step.output_unit, step.output_field)"), "预测和画像计算结果必须复用统一单位语义服务");

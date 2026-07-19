@@ -89,13 +89,21 @@ register([
 });
 
 register([
-  "fleetAllocationResults", "shortTermDemandForecastResults", "routes", "demandSimulationResults",
+  "fleetAllocationResults", "shortTermDemandForecastResults", "demandSimulationResults",
   "pricingDecisions", "orderMatchingDecisions", "fleetOperationPolicyResults",
   "fleetOperationDispatchDecisions", "robotaxiTaskPlanningResults", "metricObservations",
   "revenueRecords", "costRecords",
 ], {
   mode: "record",
   resourceKind: "result",
+  detailMode: "semantic",
+  actionMode: "none",
+  eventPanel: null,
+});
+
+register(["routes"], {
+  mode: "record",
+  resourceKind: "object",
   detailMode: "semantic",
   actionMode: "none",
   eventPanel: null,
