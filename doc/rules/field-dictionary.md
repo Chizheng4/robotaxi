@@ -37,10 +37,12 @@
 |description|配置说明|持久化字段|配置适用场景说明|
 |currency_code|币种|持久化字段|成本金额币种，默认 CNY|
 |distance_cost_per_km|每公里距离成本|持久化字段|行驶距离对应的可变成本单价|
+|distance_km|行驶距离（公里）|计算输入字段|成本公式使用的本次行驶距离|
 |electricity_price_per_kwh|每千瓦时电价|持久化字段|能源成本电价|
 |energy_consumption_kwh_per_km|每公里耗电量|持久化字段|Robotaxi 行驶能耗估算参数|
 |worker_cost_per_hour|作业人员每小时成本|持久化字段|Worker 人力成本小时单价|
 |worker_cost_per_minute|作业人员每分钟成本|持久化字段|Worker 人力成本分钟单价，可由小时成本换算|
+|operation_hours|作业时长（小时）|计算输入字段|人工任务成本公式使用的作业小时数|
 |robotaxi_purchase_cost|Robotaxi 购置成本|持久化字段|车辆购置成本|
 |robotaxi_residual_value|Robotaxi 残值|持久化字段|车辆折旧残值|
 |expected_lifetime_km|预计寿命里程|持久化字段|按公里折旧时使用的寿命里程|
@@ -1377,6 +1379,23 @@
 |source_refs|来源引用|持久化字段|当前步骤引用的业务对象或快照编号|
 |step_group|计算分组|嵌套字段|完整计算过程中步骤所属的业务计算分组|
 |output_unit|结果单位|嵌套字段|计算步骤输出结果使用的业务单位|
+
+`output_unit` 统一枚举：
+
+|内部值|中文展示|结果格式|
+|---|---|---|
+|DATE|日期|仅显示日期值|
+|ORDER_PER_DAY|单/日|数值 + 单/日|
+|ORDER_PER_HOUR|单/小时|数值 + 单/小时|
+|ORDER_PER_ROBOTAXI_DAY|单/Robotaxi·日|数值 + 单/Robotaxi·日|
+|RATIO|比例|按百分比显示|
+|PERCENT|百分比|按百分比显示|
+|MULTIPLE|倍数|数值 + 倍|
+|MINUTE|分钟|数值 + 分钟|
+|ROBOTAXI|辆|数值 + 辆|
+|CNY_PER_DAY|元/日|数值 + 元/日|
+|PERSON_PER_DAY|人/日|数值 + 人/日|
+|TRIP_PER_DAY|次/日|数值 + 次/日|
 
 ### 12.2 SupplyManagement：供应管理兼容字段
 

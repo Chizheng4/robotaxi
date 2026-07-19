@@ -33,6 +33,8 @@ let createCellContext;
 let getDetailTitle;
 let getDisplayValue;
 let getFieldLabel;
+let formatFormulaExpression;
+let formatCalculationResult;
 let validateReadinessCheckTasks;
 let validateDeploymentTasks;
 let taskTypes;
@@ -8004,7 +8006,7 @@ function CostDetail({ selectedObject }) {
                   <span>{getFieldLabel("quantity")}: {renderDetailValue("quantity", record.quantity, record)} {renderDetailValue("quantity_unit", record.quantity_unit, record)}</span>
                   <span>{getFieldLabel("unit_cost")}: {renderDetailValue("unit_cost", record.unit_cost, record)}</span>
                 </div>
-                {record.calculation_formula && <Text type="secondary">{record.calculation_formula}</Text>}
+                {record.calculation_formula && <Text type="secondary">{formatFormulaExpression(record.calculation_formula)}</Text>}
               </div>
             ))}
           </section>
@@ -8994,7 +8996,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
                   <small><b>{getFieldLabel("calculation_model")}：</b>{getDisplayValue(step.calculation_model)}<span className="forecast-calculation-source"><b>{getFieldLabel("source_refs")}：</b>{formatPlanningSourceRefs(step.source_refs)}</span></small>
                   <small className="forecast-calculation-formula"><b>{getFieldLabel("formula_expression")}：</b>{formatPlanningCalculationExpression(step.formula_expression)}</small>
                 </div>
-                <strong>{formatPlanningValue(step.output_value)}{step.output_unit ? ` ${step.output_unit}` : ""}</strong>
+                <strong>{formatCalculationResult(step.output_value, step.output_unit, step.output_field)}</strong>
               </div>
             ))}
           </section>
@@ -9047,15 +9049,7 @@ function formatPlanningCalculationValue(value, key) {
 }
 
 function formatPlanningCalculationExpression(expression = "") {
-  const operators = {
-    max: "最大值",
-    min: "最小值",
-    ceil: "向上取整",
-    Place: "地点",
-    add_calendar_period: "按日历周期增加",
-    day: "天",
-  };
-  return String(expression || "无公式").replace(/[A-Za-z][A-Za-z0-9_]*/g, (token) => operators[token] || getFieldLabel(token));
+  return formatFormulaExpression(expression);
 }
 
 function formatPlanningSourceRefs(sourceRefs = []) {
@@ -10120,6 +10114,9 @@ function renderDetailValue(key, value, row = null) {
   if (key === "profile_field_explanations") {
     return <DemandProfileFieldExplanations explanations={value} />;
   }
+  if (["formula", "formula_expression", "calculation_formula"].includes(key)) {
+    return <Text className="detail-value">{formatFormulaExpression(value)}</Text>;
+  }
   if ((Array.isArray(value) || (value && typeof value === "object"))) {
     return <StructuredDetailValue value={value} fieldKey={key} />;
   }
@@ -10142,7 +10139,7 @@ function DemandProfileCalculationSteps({ steps }) {
             <dl className="structured-detail-fields">
               <div className="structured-detail-field">
                 <dt>{getFieldLabel("formula")}</dt>
-                <dd>{step.formula || "无"}</dd>
+                <dd>{formatFormulaExpression(step.formula)}</dd>
               </div>
               <div className="structured-detail-field">
                 <dt>{getFieldLabel("input_values")}</dt>
@@ -10407,6 +10404,7 @@ function getStructuredItemTitle(item, index) {
 function formatStructuredScalar(value, key = null, row = null) {
   if (value === null || value === undefined || value === "") return "无";
   if (typeof value === "boolean") return value ? "是" : "否";
+  if (["formula", "formula_expression", "calculation_formula"].includes(key)) return formatFormulaExpression(value);
   return String(getFieldDisplayValue(key, value, row));
 }
 
@@ -10453,6 +10451,7 @@ function getFieldDisplayValue(key, value, row = null) {
   if (key === "direction" && value === "UNKNOWN") return "未知方向";
   if (key === "check_result" && value === "FAILED") return "检查不通过";
   if (key === "event_result" && value === "FAILED") return "失败";
+  if (["formula", "formula_expression", "calculation_formula"].includes(key)) return formatFormulaExpression(value);
   if (planningPercentageFieldKeys.has(key)) return formatPlanningPercent(value);
   if (planningPercentageListFieldKeys.has(key)) return (Array.isArray(value) ? value : String(value || "").split(","))
     .filter((item) => item !== "")
@@ -10470,9 +10469,7 @@ function formatDemandProfileGrowthRate(value) {
 }
 
 function formatDemandProfileCalculationOutput(step = {}) {
-  return String(step.step_name || "").includes("增长率")
-    ? formatDemandProfileGrowthRate(step.output_value)
-    : formatDetailValue(step.output_value, "output_value");
+  return formatCalculationResult(step.output_value, step.output_unit, step.output_field);
 }
 
 function summarizeRouteDetail(routeDetail) {
@@ -10779,7 +10776,7 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260624-v028-1-5"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-	    import("./domain/fieldDisplayService.js?v=20260719-v047-4-1"),
+	    import("./domain/fieldDisplayService.js?v=20260719-v047-4-3"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
@@ -10860,6 +10857,8 @@ async function bootstrap() {
   getDetailTitle = fieldDictionary.getDetailTitle;
   getDisplayValue = fieldDictionary.getDisplayValue;
   getFieldLabel = fieldDictionary.getFieldLabel;
+  formatFormulaExpression = fieldDictionary.formatFormulaExpression;
+  formatCalculationResult = fieldDictionary.formatCalculationResult;
   validateReadinessCheckTasks = readinessTaskValidation.validateReadinessCheckTasks;
   validateDeploymentTasks = deploymentTaskValidation.validateDeploymentTasks;
   taskTypes = taskTypeModule;

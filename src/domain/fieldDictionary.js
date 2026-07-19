@@ -1308,10 +1308,12 @@ export const fieldDictionary = {
   cost_model_profile_version: "成本模型配置版本",
   currency_code: "币种",
   distance_cost_per_km: "每公里距离成本",
+  distance_km: "行驶距离（公里）",
   electricity_price_per_kwh: "每千瓦时电价",
   energy_consumption_kwh_per_km: "每公里耗电量",
   worker_cost_per_hour: "作业人员每小时成本",
   worker_cost_per_minute: "作业人员每分钟成本",
+  operation_hours: "作业时长（小时）",
   robotaxi_purchase_cost: "Robotaxi 购置成本",
   robotaxi_residual_value: "Robotaxi 残值",
   expected_lifetime_km: "预计寿命里程",
@@ -2604,6 +2606,20 @@ export const valueDictionary = {
 
 export const fieldValueDictionary = {
   ...canonicalFieldValues,
+  output_unit: {
+    DATE: "日期",
+    ORDER_PER_DAY: "单/日",
+    ORDER_PER_HOUR: "单/小时",
+    ORDER_PER_ROBOTAXI_DAY: "单/Robotaxi·日",
+    RATIO: "比例",
+    PERCENT: "百分比",
+    MULTIPLE: "倍数",
+    MINUTE: "分钟",
+    ROBOTAXI: "辆",
+    CNY_PER_DAY: "元/日",
+    PERSON_PER_DAY: "人/日",
+    TRIP_PER_DAY: "次/日",
+  },
   plan_status: {
     DRAFT: "草稿",
     CONFIRMED: "已确认",

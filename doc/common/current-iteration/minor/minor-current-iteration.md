@@ -1,5 +1,6 @@
 # 当前小版本
 
-- 状态：暂无执行中的小版本
-- 最近完成：`v047.4.2 预测与生产计划追溯`
-- 历史计划：`doc/common/iteration-history/minor/v047.4.2-forecast-supply-plan-traceability-plan.md`
+- 状态：已完成
+- 当前版本：v047.4.3
+- 执行计划：`doc/common/iteration-history/minor/v047.4.3-formula-semantic-display-plan.md`
+- 当前步骤：公式、结果单位、页面展示与验证已闭环
