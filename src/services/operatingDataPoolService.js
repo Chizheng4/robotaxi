@@ -1,4 +1,5 @@
 import * as metricCalculator from "../data/metricCalculator.js?v=20260717-v047-0-0";
+import { getMetricConcept } from "../domain/fieldSemanticRegistry.js?v=20260719-v047-4-0";
 
 export const OPERATING_ANALYSIS_PAGE_METRICS = Object.freeze({
   operatingMetricsOverview: ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "STATE-ASSET-002", "OUTCOME-FIN-005", "OUTCOME-FIN-010"],
@@ -138,12 +139,14 @@ export function createPlanningComparisons({ planningBaseline = {}, metricRows = 
   const actualDailyOrders = createdOrders == null ? null : createdOrders / operatingDays;
   const fulfilledOrders = numberValue(metricById.get("OUTCOME-SERVICE-002")?.metric_value);
   const fulfillmentRate = numberValue(metricById.get("OUTCOME-SERVICE-003")?.metric_value);
+  const orderServiceTimeUtilization = numberValue(metricById.get("PROCESS-ASSET-002")?.metric_value);
   const collectedRevenue = numberValue(metricById.get("OUTCOME-FIN-002")?.metric_value);
   const contributionMarginRate = numberValue(metricById.get("OUTCOME-FIN-006")?.metric_value);
   const averageRevenue = fulfilledOrders > 0 && collectedRevenue != null ? collectedRevenue / fulfilledOrders : null;
   return [
     comparison("PERFORMANCE-DEMAND-001", "日均订单规模", "需求", actualDailyOrders, forecastDailyOrders, target.target_end_daily_orders, "单/日", [...planningBaseline.forecastSourceRefs, ...planningBaseline.targetSourceRefs], sourceRefs(metricById.get("OUTCOME-SERVICE-001"))),
-    comparison("PERFORMANCE-SERVICE-001", "成熟订单履约率", "服务", fulfillmentRate, null, numberValue(target.target_order_fulfillment_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-SERVICE-003"))),
+    comparison("PERFORMANCE-SERVICE-001", getMetricConcept("ORDER_FULFILLMENT_RATE").label, "服务", fulfillmentRate, null, numberValue(target.target_order_fulfillment_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-SERVICE-003"))),
+    comparison("PERFORMANCE-ASSET-002", getMetricConcept("ORDER_SERVICE_TIME_UTILIZATION_RATE").label, "资产", orderServiceTimeUtilization, null, numberValue(target.target_order_service_time_utilization_rate ?? target.target_task_utilization_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("PROCESS-ASSET-002"))),
     comparison("PERFORMANCE-ASSET-001", "有效 Robotaxi 规模", "资产", effectiveRobotaxi, forecastRequiredRobotaxi, numberValue(target.target_minimum_robotaxi_quantity), "辆", [...planningBaseline.forecastSourceRefs, ...planningBaseline.targetSourceRefs], robotaxis.map((item) => ({ object_type: "Robotaxi", object_id: item.robotaxi_id }))),
     comparison("PERFORMANCE-SUPPLY-001", "计划供给覆盖", "供给", plannedRobotaxi, forecastRequiredRobotaxi, null, "辆", [...planningBaseline.forecastSourceRefs, ...planningBaseline.supplySourceRefs], planningBaseline.supplySourceRefs),
     comparison("PERFORMANCE-FINANCE-001", "单均实收收入", "财务", averageRevenue, null, numberValue(target.average_revenue_per_order), "金额", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-FIN-002"))),

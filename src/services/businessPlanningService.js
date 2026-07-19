@@ -1,4 +1,5 @@
 import { createRobotaxi } from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
+import { getFieldSemanticDefinition } from "../domain/fieldSemanticRegistry.js?v=20260719-v047-4-0";
 import {
   calculateLongTermDemandPlan,
   normalizeLongTermDemandForecastResult,
@@ -41,17 +42,17 @@ export const businessPlanningObjectSchemas = {
     tabs: [
       { key: "basic", label: "目标信息", fields: ["business_target_id", "target_name", "target_status", "target_version", "target_zone_ids"] },
       { key: "period", label: "规划周期", fields: ["forecast_start_date", "forecast_period_unit", "forecast_period_count", "forecast_end_date"] },
-      { key: "operation", label: "运营目标", fields: ["target_end_daily_orders", "target_order_fulfillment_rate", "target_task_utilization_rate", "target_minimum_robotaxi_quantity", "planning_mode"] },
+      { key: "operation", label: "运营目标", fields: ["target_end_daily_orders", "target_order_fulfillment_rate", "target_order_service_time_utilization_rate", "target_minimum_robotaxi_quantity", "planning_mode"] },
       { key: "economics", label: "经济假设", fields: ["average_revenue_per_order", "average_variable_cost_per_order", "daily_fixed_operating_cost", "minimum_contribution_margin_rate"] },
     ],
     explanations: {
       forecast_start_date: "经营规划开始生效的日期，也是需求与供给趋势的时间起点。",
       forecast_period_unit: "规划周期的基础单位，必须与区域画像增长率周期一致。",
       forecast_period_count: "从规划起点向后预测的周期数量。",
-      planning_mode: "决定市场预测与经营目标冲突时采用哪一种规划口径：市场导向按可服务需求、目标导向按经营目标、平衡规划取两者合理约束。",
+      planning_mode: getFieldSemanticDefinition("planning_mode").definition,
       target_end_daily_orders: "预测期末典型经营日希望完成的订单数量，不是预测期累计订单。",
-      target_order_fulfillment_rate: "规划期终态已完成服务订单占终态服务订单的目标比例，用于衡量服务质量，不用于折减市场需求。",
-      target_task_utilization_rate: "Robotaxi 可运营时间中用于执行任务的目标比例。",
+      target_order_fulfillment_rate: getFieldSemanticDefinition("target_order_fulfillment_rate").definition,
+      target_order_service_time_utilization_rate: getFieldSemanticDefinition("target_order_service_time_utilization_rate").definition,
       target_minimum_robotaxi_quantity: "即使需求模型计算值更低，经营规划仍需保有的最低 Robotaxi 规模。",
       average_revenue_per_order: "用于经营可行性判断的平均单笔服务收入假设。",
       average_variable_cost_per_order: "随订单数量变化的平均单笔成本假设。",
@@ -112,16 +113,27 @@ export const businessPlanningObjectSchemas = {
   },
 };
 
+export function normalizeBusinessTargetFields(target = {}) {
+  const { target_task_utilization_rate: legacyUtilizationRate, ...currentTarget } = target;
+  return {
+    ...currentTarget,
+    target_order_service_time_utilization_rate: currentTarget.target_order_service_time_utilization_rate
+      ?? legacyUtilizationRate
+      ?? null,
+  };
+}
+
 export function normalizeBusinessPlanningDefaults({ businessTargets = [], supplyProductionProfiles = [], longTermDemandForecastStrategies = [] } = {}) {
   return {
     businessTargets: businessTargets.map((target) => {
-      const isLegacyDefault = target.business_target_id === "BT-001"
-        && ["三年运营增长目标", "一年运营增长目标"].includes(target.target_name)
-        && [12, 36].includes(Number(target.forecast_period_count))
-        && (target.forecast_period_unit || "MONTH") === "MONTH";
-      if (!isLegacyDefault) return target;
-      const period = resolveForecastPeriod({ ...target, forecast_period_unit: "MONTH", forecast_period_count: 12 });
-      return { ...target, target_name: "基准经营目标", forecast_period_count: 12, forecast_end_date: period.endDate };
+      const normalizedTarget = normalizeBusinessTargetFields(target);
+      const isLegacyDefault = normalizedTarget.business_target_id === "BT-001"
+        && ["三年运营增长目标", "一年运营增长目标"].includes(normalizedTarget.target_name)
+        && [12, 36].includes(Number(normalizedTarget.forecast_period_count))
+        && (normalizedTarget.forecast_period_unit || "MONTH") === "MONTH";
+      if (!isLegacyDefault) return normalizedTarget;
+      const period = resolveForecastPeriod({ ...normalizedTarget, forecast_period_unit: "MONTH", forecast_period_count: 12 });
+      return { ...normalizedTarget, target_name: "基准经营目标", forecast_period_count: 12, forecast_end_date: period.endDate };
     }),
     supplyProductionProfiles: supplyProductionProfiles.map((profile) => (
       profile.profile_id === "SPP-001"
@@ -190,7 +202,7 @@ export function initializeDefaultBusinessTargets(now = defaultNow()) {
     target_zone_ids: ["Z-001", "Z-002"],
     target_end_daily_orders: 500,
     target_minimum_robotaxi_quantity: 35,
-    target_task_utilization_rate: 0.72,
+    target_order_service_time_utilization_rate: 0.72,
     target_order_fulfillment_rate: 0.85,
     planning_mode: "BALANCED",
     average_revenue_per_order: 48,
@@ -226,11 +238,12 @@ export function updateBusinessTargetConfig({
 } = {}) {
   if (!businessTarget?.business_target_id) return { succeeded: false, reason: "BUSINESS_TARGET_REQUIRED", businessTarget: null };
   const occurredAt = resolveNow(context);
+  const currentBusinessTarget = normalizeBusinessTargetFields(businessTarget);
   const numericFields = [
     "forecast_period_count",
     "target_end_daily_orders",
     "target_minimum_robotaxi_quantity",
-    "target_task_utilization_rate",
+    "target_order_service_time_utilization_rate",
     "target_order_fulfillment_rate",
     "average_revenue_per_order",
     "average_variable_cost_per_order",
@@ -241,12 +254,12 @@ export function updateBusinessTargetConfig({
   numericFields.forEach((field) => {
     if (field in normalizedPatch) normalizedPatch[field] = Math.max(0, Number(normalizedPatch[field] || 0));
   });
-  const forecastStartDate = normalizedPatch.forecast_start_date || businessTarget.forecast_start_date || occurredAt.slice(0, 10);
-  const forecastPeriod = resolveForecastPeriod({ ...businessTarget, ...normalizedPatch, forecast_start_date: forecastStartDate });
+  const forecastStartDate = normalizedPatch.forecast_start_date || currentBusinessTarget.forecast_start_date || occurredAt.slice(0, 10);
+  const forecastPeriod = resolveForecastPeriod({ ...currentBusinessTarget, ...normalizedPatch, forecast_start_date: forecastStartDate });
   return {
     succeeded: true,
     businessTarget: {
-      ...businessTarget,
+      ...currentBusinessTarget,
       ...normalizedPatch,
       forecast_start_date: forecastStartDate,
       forecast_period_unit: forecastPeriod.unit,

@@ -44,15 +44,15 @@
 |英文字段|中文字段|性质|说明|
 |---|---|---|---|
 |`target_end_daily_orders`|目标期末日订单|配置|期末典型日希望完成的服务订单|
-|`target_order_fulfillment_rate`|目标成熟订单履约率|配置|规划期终态订单中已完成订单的目标比例|
-|`target_task_utilization_rate`|目标任务利用率|配置|Robotaxi 可运营时间用于任务的比例|
+|`target_order_fulfillment_rate`|目标订单履约率|配置|规划期终态订单中已完成订单的目标比例|
+|`target_order_service_time_utilization_rate`|目标订单服务时间利用率|配置|Robotaxi 可运营时间用于接驾和载客履约的目标比例|
 |`target_minimum_robotaxi_quantity`|目标最低 Robotaxi 数量|配置|管理层要求的最低资产规模|
 |`planning_mode`|规划模式|配置|市场驱动、目标驱动或平衡规划|
 
 `planning_mode`：
 
-- `MARKET_LED`：按市场预测规划；
-- `TARGET_LED`：按经营目标规划，同时提示市场支撑风险；
+- `MARKET_LED`：市场导向，按市场预测规划；
+- `TARGET_LED`：目标导向，按经营目标规划，同时提示市场支撑风险；
 - `BALANCED`：取市场预测与目标中的较小值，默认模式。
 
 ### 3.3 基础经济性
@@ -76,4 +76,4 @@
 
 ## 5. 兼容
 
-旧字段 `planning_horizon_years`、`target_service_order_count`、`target_fleet_size`、`target_asset_utilization_rate`、`target_revenue_amount` 只在旧快照加载边界转换，不再由新对象和新执行产生。
+旧字段 `planning_horizon_years`、`target_service_order_count`、`target_fleet_size`、`target_asset_utilization_rate`、`target_task_utilization_rate`、`target_revenue_amount` 只在旧快照加载边界转换，不再由新对象和新执行产生。其中 `target_task_utilization_rate` 迁移为 `target_order_service_time_utilization_rate`，避免把运维、投放和订单服务任务混为一个利用率。

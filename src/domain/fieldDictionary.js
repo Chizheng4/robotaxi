@@ -1,3 +1,11 @@
+import {
+  createCanonicalFieldLabelMap,
+  createCanonicalFieldValueMap,
+} from "./fieldSemanticRegistry.js?v=20260719-v047-4-0";
+
+const canonicalFieldLabels = createCanonicalFieldLabelMap();
+const canonicalFieldValues = createCanonicalFieldValueMap();
+
 export const objectDictionary = {
   map: { label: "地图", detailTitle: "地图详情" },
   cell: { label: "网格单元", detailTitle: "网格单元详情" },
@@ -258,13 +266,10 @@ export const fieldDictionary = {
   target_service_order_count: "目标服务订单数",
   target_fleet_size: "目标车队规模",
   target_asset_utilization_rate: "目标资产利用率",
-  target_order_fulfillment_rate: "目标成熟订单履约率",
   forecast_period_unit: "预测周期单位",
   forecast_period_count: "预测周期数量",
   target_end_daily_orders: "目标期末日订单",
-  target_task_utilization_rate: "目标任务利用率",
   target_minimum_robotaxi_quantity: "目标最低 Robotaxi 数量",
-  planning_mode: "规划模式",
   average_revenue_per_order: "单均收入",
   average_variable_cost_per_order: "单均变动成本",
   daily_fixed_operating_cost: "日固定运营成本",
@@ -1543,6 +1548,7 @@ export const fieldDictionary = {
   robotaxi_operating_end_time: "Robotaxi 运营结束时间",
   worker_work_start_time: "作业人员工作开始时间",
   worker_work_end_time: "作业人员工作结束时间",
+  ...canonicalFieldLabels,
 };
 
 export function getFieldLabel(field) {
@@ -2585,6 +2591,7 @@ export const valueDictionary = {
 };
 
 export const fieldValueDictionary = {
+  ...canonicalFieldValues,
   plan_status: {
     DRAFT: "草稿",
     CONFIRMED: "已确认",

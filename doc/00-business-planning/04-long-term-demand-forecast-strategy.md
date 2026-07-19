@@ -243,8 +243,8 @@ market_forecast_daily_orders
 |英文字段|中文字段|
 |---|---|
 |`target_end_daily_orders`|目标期末日订单|
-|`target_order_fulfillment_rate`|目标成熟订单履约率|
-|`target_task_utilization_rate`|目标任务利用率|
+|`target_order_fulfillment_rate`|目标订单履约率|
+|`target_order_service_time_utilization_rate`|目标订单服务时间利用率|
 |`target_minimum_robotaxi_quantity`|目标最低 Robotaxi 数量|
 |`planning_mode`|规划模式|
 
@@ -318,7 +318,7 @@ robotaxi_theoretical_daily_orders
 
 robotaxi_effective_daily_orders
 = robotaxi_theoretical_daily_orders
-× target_task_utilization_rate
+× target_order_service_time_utilization_rate
 × operational_availability_rate
 
 daily_required_robotaxi

@@ -1226,9 +1226,10 @@
 |forecast_period_unit|预测周期单位|配置字段|WEEK、MONTH、QUARTER、YEAR|
 |forecast_period_count|预测周期数量|配置字段|预测覆盖的自然周期数量|
 |target_end_daily_orders|目标期末日订单|配置字段|目标期末典型日完成订单量|
-|target_task_utilization_rate|目标任务利用率|配置字段|Robotaxi 可运营时间用于任务的比例|
+|target_order_service_time_utilization_rate|目标订单服务时间利用率|配置字段|Robotaxi 可运营时间用于接驾和载客履约的目标比例|
+|target_task_utilization_rate|目标任务利用率（兼容）|兼容字段|旧快照加载时迁移为 target_order_service_time_utilization_rate，新对象不再写入|
 |target_minimum_robotaxi_quantity|目标最低 Robotaxi 数量|配置字段|管理层要求的最低资产规模|
-|planning_mode|规划模式|配置字段|MARKET_LED、TARGET_LED、BALANCED|
+|planning_mode|规划模式|配置字段|MARKET_LED 市场导向、TARGET_LED 目标导向、BALANCED 平衡规划|
 |average_revenue_per_order|单均收入|配置字段|基础经济性假设|
 |average_variable_cost_per_order|单均变动成本|配置字段|基础经济性假设|
 |daily_fixed_operating_cost|日固定运营成本|配置字段|基础经济性假设|
@@ -1427,7 +1428,7 @@
 |target_service_order_count|目标服务订单数|配置字段|规划期服务订单目标|
 |target_fleet_size|目标车队规模|配置字段|规划期目标 Robotaxi 规模|
 |target_asset_utilization_rate|目标资产利用率|配置字段|规划期 Robotaxi 资产利用率目标|
-|target_order_fulfillment_rate|目标成熟订单履约率|配置字段|规划期终态订单中已完成订单的目标比例|
+|target_order_fulfillment_rate|目标订单履约率|配置字段|规划期终态订单中已完成订单的目标比例|
 |forecast_id|预测编号|持久化字段|长期需求预测唯一编号|
 |forecast_name|预测名称|持久化字段|长期需求预测名称|
 |forecast_status|预测状态|持久化字段|预测是否可用|

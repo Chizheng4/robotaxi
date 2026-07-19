@@ -84,7 +84,15 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   const turnaroundMin = positive(strategy.average_turnaround_duration_min, 7);
   const cycleMin = Math.max(1, pickupMin + tripMin + turnaroundMin);
   const availableHours = Math.min(24, Math.max(0.1, number(strategy.robotaxi_available_hours_per_day ?? strategy.vehicle_available_hours_per_day, 12)));
-  const utilization = ratio(businessTarget.target_task_utilization_rate ?? businessTarget.target_asset_utilization_rate ?? strategy.target_task_utilization_rate ?? strategy.fleet_utilization_target, 0.72);
+  const utilization = ratio(
+    businessTarget.target_order_service_time_utilization_rate
+      ?? businessTarget.target_task_utilization_rate
+      ?? businessTarget.target_asset_utilization_rate
+      ?? strategy.target_order_service_time_utilization_rate
+      ?? strategy.target_task_utilization_rate
+      ?? strategy.fleet_utilization_target,
+    0.72,
+  );
   const availability = ratio(strategy.operational_availability_rate, 0.9);
   const buffer = ratio(strategy.demand_buffer_ratio, 0.15);
   const theoreticalDaily = availableHours * 60 / cycleMin;
@@ -186,7 +194,7 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
     average_trip_duration_min: round(tripMin),
     average_turnaround_duration_min: round(turnaroundMin),
     robotaxi_available_hours_per_day: round(availableHours),
-    target_task_utilization_rate: round(utilization, 4),
+    target_order_service_time_utilization_rate: round(utilization, 4),
     operational_availability_rate: round(availability, 4),
     demand_buffer_ratio: round(buffer, 4),
     robotaxi_theoretical_daily_orders: round(theoreticalDaily),
@@ -495,9 +503,9 @@ function buildCalculationSteps(result) {
     }, "THEORETICAL_DAILY_CAPACITY", "robotaxi_available_hours_per_day × 60 / effective_service_cycle_min", "订单 / Robotaxi·日", ["strategy_snapshot"]),
     step("Robotaxi 能力", "计算单车有效日产能", "robotaxi_effective_daily_orders", {
       robotaxi_theoretical_daily_orders: result.robotaxi_theoretical_daily_orders,
-      target_task_utilization_rate: result.target_task_utilization_rate,
+      target_order_service_time_utilization_rate: result.target_order_service_time_utilization_rate,
       operational_availability_rate: result.operational_availability_rate,
-    }, "EFFECTIVE_DAILY_CAPACITY", "robotaxi_theoretical_daily_orders × target_task_utilization_rate × operational_availability_rate", "订单 / Robotaxi·日", ["business_target_snapshot", "strategy_snapshot"]),
+    }, "EFFECTIVE_DAILY_CAPACITY", "robotaxi_theoretical_daily_orders × target_order_service_time_utilization_rate × operational_availability_rate", "订单 / Robotaxi·日", ["business_target_snapshot", "strategy_snapshot"]),
     step("Robotaxi 能力", "加入需求缓冲", "buffered_daily_orders", {
       planned_daily_orders: result.planned_daily_orders,
       demand_buffer_ratio: result.demand_buffer_ratio,
@@ -576,6 +584,9 @@ export function normalizeLongTermDemandForecastResult(result = {}) {
     growth_model: "COMPOUND",
     planning_mode: "BALANCED",
     ...result,
+    target_order_service_time_utilization_rate: result.target_order_service_time_utilization_rate
+      ?? result.target_task_utilization_rate
+      ?? null,
     supply_trend_series: (result.supply_trend_series || []).map((point) => ({
       ...point,
       period_quality_passed_quantity: point.period_quality_passed_quantity ?? point.period_delivery_quantity ?? 0,

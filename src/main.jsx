@@ -221,7 +221,7 @@ const tableConfig = {
   businessTargets: {
     title: "经营目标",
     description: "经营目标定义预测周期、期末订单目标、Robotaxi 规模约束和基础经济假设。",
-    columns: ["business_target_id", "target_name", "target_status", "forecast_start_date", "forecast_end_date", "forecast_period_unit", "forecast_period_count", "target_zone_ids", "target_end_daily_orders", "target_minimum_robotaxi_quantity", "target_task_utilization_rate", "target_order_fulfillment_rate", "planning_mode", "updated_at"],
+    columns: ["business_target_id", "target_name", "target_status", "forecast_start_date", "forecast_end_date", "forecast_period_unit", "forecast_period_count", "target_zone_ids", "target_end_daily_orders", "target_minimum_robotaxi_quantity", "target_order_service_time_utilization_rate", "target_order_fulfillment_rate", "planning_mode", "updated_at"],
   },
   supplyProductionProfiles: {
     title: "生产画像",
@@ -1110,7 +1110,7 @@ const businessTargetConfigFields = [
   { key: "forecast_period_count", type: "number", min: 1, step: 1 },
   { key: "target_end_daily_orders", type: "number", min: 0, step: 1 },
   { key: "target_minimum_robotaxi_quantity", type: "number", min: 0, step: 1 },
-  { key: "target_task_utilization_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
+  { key: "target_order_service_time_utilization_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
   { key: "target_order_fulfillment_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
   { key: "planning_mode", type: "select", options: ["MARKET_LED", "TARGET_LED", "BALANCED"] },
   { key: "average_revenue_per_order", type: "number", min: 0, step: 1 },
@@ -1135,7 +1135,7 @@ const longTermDemandForecastStrategyConfigFields = [
 const planningPercentageFieldKeys = new Set([
   "trip_generation_rate", "busiest_hour_share", "robotaxi_adoption_rate", "service_acceptance_rate",
   "competition_retention_rate", "place_period_growth_rate", "zone_period_growth_rate",
-  "accessibility_factor", "capacity_availability_rate", "target_task_utilization_rate",
+  "accessibility_factor", "capacity_availability_rate", "target_order_service_time_utilization_rate",
   "target_order_fulfillment_rate", "minimum_contribution_margin_rate", "growth_adjustment_rate",
   "demand_buffer_ratio", "operational_availability_rate", "demand_coverage_rate", "safety_capacity_ratio",
 ]);
@@ -8871,7 +8871,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
       <div className="forecast-context-strip">
         <span>{selected.forecast_start_date || "无"} 至 {selected.forecast_end_date || "无"}</span>
         <span>{formatPlanningValue(selected.forecast_period_count)} {getDisplayValue(selected.forecast_period_unit)}</span>
-        <span>{getFieldLabel("planning_mode")}：{getDisplayValue(selected.planning_mode)}</span>
+        <span>{getFieldLabel("planning_mode")}：{getDisplayValue(selected.planning_mode, "planning_mode")}</span>
         <span>{getDisplayValue(selected.growth_model || "COMPOUND")}</span>
         <span>有效周期增长率 {formatPlanningPercent(selected.effective_period_growth_rate)}</span>
       </div>
@@ -10730,7 +10730,7 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260624-v028-1-5"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-	    import("./domain/fieldDisplayService.js?v=20260717-v046-0-7"),
+	    import("./domain/fieldDisplayService.js?v=20260719-v047-4-0"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
@@ -10748,8 +10748,8 @@ async function bootstrap() {
 		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"),
 		    import("./data/costModelCalculator.js?v=20260625-v029-1"),
 		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
-		    import("./data/metricCalculator.js?v=20260717-v047-0-0"),
-		    import("./services/operatingDataPoolService.js?v=20260717-v047-0-0"),
+		    import("./data/metricCalculator.js?v=20260719-v047-4-0"),
+		    import("./services/operatingDataPoolService.js?v=20260719-v047-4-0"),
 		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
 		    import("./services/routePlanningService.js?v=20260712-v042-0-0"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
@@ -10762,7 +10762,7 @@ async function bootstrap() {
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
-        import("./services/businessPlanningService.js?v=20260717-v047-1-0"),
+        import("./services/businessPlanningService.js?v=20260719-v047-4-0"),
 		    import("./services/operatingPlanningService.js?v=20260716-v046-0-6"),
 		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
 		    import("./services/supplyPositionService.js?v=20260718-v047-3-0"),

@@ -21,7 +21,7 @@ definitions.filter((item) => item.metric_status === "ACTIVE").forEach((item) => 
   assert.ok(item.metric_role && item.measurement_type, `${item.metric_definition_id} 必须声明指标角色和度量类型`);
   assert.ok(item.fact_filter, `${item.metric_definition_id} 必须声明事实过滤条件`);
 });
-assert.equal(definitions.find((item) => item.metric_definition_id === "PROCESS-ASSET-002").metric_status, "RESERVED", "缺少状态区间事实时不得伪造资产时间利用率");
+assert.equal(definitions.find((item) => item.metric_definition_id === "PROCESS-ASSET-002").metric_status, "RESERVED", "缺少状态区间事实时不得伪造订单服务时间利用率");
 assert.equal(definitions.find((item) => item.metric_definition_id === "DEMAND-TREND-002").metric_status, "DISABLED", "旧时段趋势定义必须停止生成重复观测");
 
 const simulationRun = {
@@ -81,7 +81,7 @@ const result = createPeriodMetricCalculation({
   periodType: "ALL",
 });
 const metrics = latestById(result.metricObservations);
-assert.equal(metrics.get("OUTCOME-SERVICE-003").metric_value, 0.6667, "成熟订单履约率不得把在途订单放入分母");
+assert.equal(metrics.get("OUTCOME-SERVICE-003").metric_value, 0.6667, "订单履约率不得把在途订单放入分母");
 assert.equal(metrics.get("PROCESS-TRIP-001").metric_value, 0.5, "履约行驶完成率不得把在途行驶放入分母");
 assert.equal(metrics.get("OUTCOME-FIN-007").metric_value, 30, "变动运营成本必须只包含距离、能源和人力成本");
 assert.equal(metrics.get("OUTCOME-FIN-005").metric_value, 70, "经营贡献必须扣除变动运营成本");

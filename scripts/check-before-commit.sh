@@ -78,6 +78,7 @@ node scripts/verify-v045-1-page-presentation.mjs
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js
+node --check src/domain/fieldSemanticRegistry.js
 node --check src/domain/fieldDisplayService.js
 node --check src/domain/taskTypes.js
 node --check src/domain/statusRegistry.js
@@ -99,6 +100,7 @@ node --check src/services/operatingPlanningService.js
 node --check scripts/verify-v046-operating-supply-planning.mjs
 node --check scripts/verify-v047-operating-analytics-model.mjs
 node --check scripts/verify-v047-2-planning-model-boundary.mjs
+node --check scripts/verify-v047-4-field-semantic-contract.mjs
 node --check src/services/spatialCatalogService.js
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
@@ -188,6 +190,7 @@ node scripts/verify-v047-0-1-planning-chart-contract.mjs
 node scripts/verify-v047-1-planning-execution-contract.mjs
 node scripts/verify-v047-1-2-planning-supply-time-contract.mjs
 node scripts/verify-v047-2-planning-model-boundary.mjs
+node scripts/verify-v047-4-field-semantic-contract.mjs
 node scripts/verify-v047-3-supply-position-tracking.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs

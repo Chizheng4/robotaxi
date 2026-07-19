@@ -23,7 +23,7 @@ const comparisons = createPlanningComparisons({
   robotaxis: Array.from({ length: 10 }, (_, index) => ({ robotaxi_id: `RTX-${index + 1}`, availability_status: "AVAILABLE" })),
   calculationRun: { window_start_seconds: 0, window_end_seconds: 86400 },
 });
-assert.equal(comparisons.length, 6, "统一数据池必须输出需求、供给、服务、资产和财务比较");
+assert.equal(comparisons.length, 7, "统一数据池必须输出需求、供给、服务、资产效率和财务比较");
 assert.equal(comparisons.find((item) => item.performance_indicator_id === "PERFORMANCE-DEMAND-001").actual_value, 80, "实际日均订单必须按经营周期天数计算");
 assert.equal(comparisons.find((item) => item.performance_indicator_id === "PERFORMANCE-SERVICE-001").performance_status, "WATCH", "表现状态必须由统一比较规则生成");
 
@@ -38,7 +38,7 @@ const pool = createOperatingDataPool({
   robotaxis: Array.from({ length: 10 }, (_, index) => ({ robotaxi_id: `RTX-${index + 1}`, availability_status: "AVAILABLE" })),
 });
 assert.equal(pool.poolVersion, "MCR-1", "所有经营分析页必须共享同一数据池版本");
-assert.equal(pool.comparisons.length, 6, "统一数据池必须包含规划与事实比较");
+assert.equal(pool.comparisons.length, 7, "统一数据池必须包含规划与事实比较");
 
 const mapData = {
   places: [{ place_id: "P-1", place_name: "办公区", place_type: "OFFICE" }],
