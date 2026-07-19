@@ -53,7 +53,7 @@ assert.equal(first.supplyPlan.supply_decision_run_id, first.run.supply_decision_
 assert.equal(first.supplyPlan.business_target_id, "BT-001");
 assert.equal(first.supplyPlan.forecast_start_date, "2026-07-19");
 assert.equal(first.run.forecast_end_date, "2027-07-18");
-assert.equal(first.run.calculation_steps.length, 4);
+assert.equal(first.run.calculation_steps.length, 6, "供应决策计算过程必须包含周期供应能力和预计供应成本");
 
 const second = executeSupplyDecisionStrategy({ strategy, forecast: forecast("LDF-RES-0002"), supplyProductionProfiles: productionProfiles, existingSupplyPlans: [first.supplyPlan], context });
 assert.equal(second.succeeded, true);

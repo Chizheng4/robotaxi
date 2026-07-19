@@ -1,5 +1,5 @@
 const { useEffect, useMemo, useRef, useState } = React;
-const { Button, Descriptions, Dropdown, Empty, Input, Layout, Menu, Modal, Popover, Select, Space, Table, Tabs, Tag, Typography } = antd;
+const { Button, Descriptions, Dropdown, Empty, Input, InputNumber, Layout, Menu, Modal, Popover, Select, Space, Table, Tabs, Tag, Typography } = antd;
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 
@@ -319,12 +319,12 @@ const tableConfig = {
   supplyDecisionRuns: {
     title: "供应决策执行",
     description: "记录供应决策的输入、执行状态及其直接形成的生产计划。",
-    columns: ["supply_decision_run_id", "supply_decision_strategy_id", "forecast_result_id", "business_target_id", "target_zone_id", "forecast_start_date", "forecast_end_date", "run_status", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "planned_robotaxi_count", "supply_plan_id", "conflicting_supply_plan_id", "started_at", "completed_at", "failure_reason"],
+    columns: ["supply_decision_run_id", "supply_decision_strategy_id", "forecast_result_id", "business_target_id", "target_zone_id", "forecast_start_date", "forecast_end_date", "run_status", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "estimated_supply_cost_amount", "supply_plan_id", "conflicting_supply_plan_id", "started_at", "completed_at", "failure_reason"],
   },
   supplyPlans: {
     title: "生产计划",
     description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
-    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "business_target_id", "forecast_start_date", "forecast_end_date", "supply_production_profile_id", "production_factory_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "released_robotaxi_count", "completed_robotaxi_count", "uncovered_robotaxi_gap", "standard_production_cost_per_robotaxi_snapshot", "planned_production_cost_amount", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
+    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "business_target_id", "forecast_start_date", "forecast_end_date", "supply_production_profile_id", "production_factory_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "released_robotaxi_count", "completed_robotaxi_count", "pending_replacement_robotaxi_count", "uncovered_robotaxi_gap", "standard_production_cost_per_robotaxi_snapshot", "estimated_supply_cost_amount", "planned_production_cost_amount", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
   },
   supplyPositionTracking: {
     title: "供应跟踪",
@@ -3287,6 +3287,7 @@ function App({ currentUser, onLogout }) {
       strategy,
       forecast,
       supplyProductionProfiles: data.supplyProductionProfiles || [],
+      costModelProfile: costModelProfiles.find((item) => item.profile_status === "ACTIVE") || costModelProfiles[0] || null,
       existingSupplyPlans: data.supplyPlans || [],
       context: { now, nextRunId: nextSupplyDecisionRunId, nextSupplyPlanId },
     });
@@ -3312,6 +3313,7 @@ function App({ currentUser, onLogout }) {
       strategy,
       forecast: row,
       supplyProductionProfiles: data.supplyProductionProfiles || [],
+      costModelProfile: costModelProfiles.find((item) => item.profile_status === "ACTIVE") || costModelProfiles[0] || null,
       existingSupplyPlans: data.supplyPlans || [],
       context: { now, nextRunId: nextSupplyDecisionRunId, nextSupplyPlanId },
     });
@@ -3346,6 +3348,8 @@ function App({ currentUser, onLogout }) {
       fleetAllocationStrategies: data.fleetAllocationStrategies || [],
       existingRobotaxis: data.robotaxis || [],
       existingSupplyPlans: data.supplyPlans || [],
+      costModelProfile: costModelProfiles.find((item) => item.profile_status === "ACTIVE") || costModelProfiles[0] || null,
+      existingCostRecords: costRecords,
       opsCenters: data.opsCenters || [],
       readinessTasks,
       context: {
@@ -3383,6 +3387,12 @@ function App({ currentUser, onLogout }) {
       robotaxiDeliveryOrders: [result.deliveryOrder, ...(current.robotaxiDeliveryOrders || [])],
     }));
     setReadinessTasks(result.readinessTasks || readinessTasks);
+    if (result.costRecords) setCostRecords(result.costRecords);
+    if (result.costCalculationRun) {
+      setCostCalculationRuns((current) => current.some((item) => item.cost_calculation_run_id === result.costCalculationRun.cost_calculation_run_id)
+        ? current
+        : [result.costCalculationRun, ...current]);
+    }
     selectForPage("readinessTasks", "readinessTask", result.readinessTaskIds?.[0] || null);
   }
 
@@ -3491,8 +3501,25 @@ function App({ currentUser, onLogout }) {
 
   function completeProductionBatch(row) {
     if (!businessPlanningService?.completeProductionBatch || !row) return;
+    let actualCompletedQuantity = Math.max(0, Number(row.planned_robotaxi_count || 0));
+    Modal.confirm({
+      title: "确认实际生产数量",
+      content: (
+        <div className="operation-number-input">
+          <Typography.Text>实际生产数量（辆）</Typography.Text>
+          <InputNumber min={0} precision={0} defaultValue={actualCompletedQuantity} onChange={(value) => { actualCompletedQuantity = Number(value); }} />
+        </div>
+      ),
+      okText: "确认完成",
+      cancelText: "取消",
+      onOk: () => submitProductionBatchCompletion(row, actualCompletedQuantity),
+    });
+  }
+
+  function submitProductionBatchCompletion(row, actualCompletedQuantity) {
     const result = businessPlanningService.completeProductionBatch({
       productionBatch: row,
+      actualCompletedQuantity,
       costModelProfile: costModelProfiles.find((item) => item.profile_status === "ACTIVE") || costModelProfiles[0] || null,
       existingCostRecords: costRecords,
       costCalculationRunId: `CCR-PROD-${row.production_batch_id}`,
@@ -3520,6 +3547,7 @@ function App({ currentUser, onLogout }) {
         ? current
         : [result.costCalculationRun, ...current]);
     }
+    antd.message.success("实际生产数量已确认，生产成本已记录");
   }
 
   function startProductionQualityInspection(row) {
@@ -3532,8 +3560,26 @@ function App({ currentUser, onLogout }) {
   }
 
   function passProductionQualityInspection(row) {
-    const result = businessPlanningService?.passProductionQualityInspection?.({
+    let qualifiedRobotaxiCount = Math.max(0, Number(row.production_completed_quantity || 0));
+    Modal.confirm({
+      title: "完成质量检验",
+      content: (
+        <div className="operation-number-input">
+          <Typography.Text>质量合格数量（辆）</Typography.Text>
+          <Typography.Text type="secondary">实际生产 {row.production_completed_quantity || 0} 辆</Typography.Text>
+          <InputNumber min={0} max={Math.max(0, Number(row.production_completed_quantity || 0))} precision={0} defaultValue={qualifiedRobotaxiCount} onChange={(value) => { qualifiedRobotaxiCount = Number(value); }} />
+        </div>
+      ),
+      okText: "确认质检结果",
+      cancelText: "取消",
+      onOk: () => submitProductionQualityInspection(row, qualifiedRobotaxiCount),
+    });
+  }
+
+  function submitProductionQualityInspection(row, qualifiedRobotaxiCount) {
+    const result = businessPlanningService?.completeProductionQualityInspection?.({
       productionBatch: row,
+      qualifiedRobotaxiCount,
       existingRobotaxis: data.robotaxis || [],
       existingCostRecords: costRecords,
       supplyPlan: (data.supplyPlans || []).find((item) => item.supply_plan_id === row.supply_plan_id) || null,
@@ -3548,20 +3594,7 @@ function App({ currentUser, onLogout }) {
       robotaxis: [...(result.robotaxis || []), ...(current.robotaxis || [])],
     }));
     setCostRecords(result.costRecords || costRecords);
-  }
-
-  function failProductionQualityInspection(row) {
-    const result = businessPlanningService?.failProductionQualityInspection?.({
-      productionBatch: row,
-      existingCostRecords: costRecords,
-      context: { now },
-    });
-    if (!result?.succeeded) return;
-    setOperationalData((current) => ({
-      ...current,
-      productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
-    }));
-    setCostRecords(result.costRecords || costRecords);
+    antd.message.success(qualifiedRobotaxiCount > 0 ? "质量检验完成，合格车辆已形成资产" : "质量检验完成，补产排期已更新");
   }
 
   function runFleetAllocationStrategy(row) {
@@ -3908,7 +3941,6 @@ function App({ currentUser, onLogout }) {
                   completeProductionBatch,
                   startProductionQualityInspection,
                   passProductionQualityInspection,
-                  failProductionQualityInspection,
                   runFleetAllocationStrategy,
                   createDeliveryOrderFromAllocationResult,
                   createRegionDeliveryOrder,
@@ -8598,7 +8630,7 @@ function renderCellValue(key, row) {
   if (isStatusField(key)) {
     return <StatusValue value={row[key]} label={getFieldDisplayValue(key, row[key] ?? "", row)} />;
   }
-  if (Array.isArray(row[key])) return row[key].map((item) => formatDetailValue(item, key, row)).join(" / ");
+  if (Array.isArray(row[key])) return <CompactArrayValue values={row[key]} fieldKey={key} row={row} />;
   if (typeof row[key] === "boolean") return row[key] ? "是" : "否";
   if (typeof row[key] === "object" && row[key] !== null) return summarizeObject(row[key]);
   return getFieldDisplayValue(key, row[key] ?? "", row);
@@ -8612,12 +8644,30 @@ function StatusValue({ value, label }) {
   );
 }
 
+function CompactArrayValue({ values = [], fieldKey = "", row = null, visibleCount = 3 }) {
+  if (!values.length) return <Text className="compact-array-empty">无</Text>;
+  const formattedValues = values.map((item) => formatDetailValue(item, fieldKey, row)).filter(Boolean);
+  const visibleValues = formattedValues.slice(0, visibleCount);
+  const remainingCount = Math.max(0, formattedValues.length - visibleValues.length);
+  const summary = `${visibleValues.join(" / ")}${remainingCount ? ` / 等 ${formattedValues.length} 项` : ""}`;
+  return (
+    <Popover
+      title={getFieldLabel(fieldKey)}
+      content={<div className="compact-array-popover">{formattedValues.map((item) => <span key={item}>{item}</span>)}</div>}
+      placement="bottomLeft"
+      trigger={["hover", "click"]}
+    >
+      <Text className="compact-array-summary">{summary}</Text>
+    </Popover>
+  );
+}
+
 function getStatusTone(value) {
   const normalized = String(value || "").toUpperCase();
   if (["ACTIVE", "AVAILABLE", "COMPLETED", "PAID", "PASSED", "PASS", "SUCCESS", "IDLE", "ARRIVED", "NORMAL_ARRIVAL"].includes(normalized)) return "success";
   if (["FAILED", "FAIL", "BLOCKED", "UNAVAILABLE", "CANCELLED"].some((token) => normalized.includes(token)) || normalized.includes("ABNORMAL")) return "danger";
   if (["WAITING", "PENDING", "PAUSED", "DRAFT", "RESTRICTED", "STOPPED"].some((token) => normalized.includes(token))) return "warning";
-  if (normalized === "PARTIALLY_SUCCEEDED") return "warning";
+  if (["PARTIALLY_SUCCEEDED", "PARTIALLY_PASSED"].includes(normalized)) return "warning";
   if (["RUNNING", "DRAINING", "MOVING", "CHECKING", "INSPECTION", "ASSIGNED", "PROCESSING", "ON_THE_WAY", "CALCULATING", "SETTLING", "BUSY"].some((token) => normalized.includes(token))) return "info";
   return "neutral";
 }
@@ -9684,12 +9734,7 @@ function renderProductionBatchActions(row, actions) {
     return <RowActionButton onClick={() => actions.startProductionQualityInspection(row)}>开始质检</RowActionButton>;
   }
   if (row.batch_status === "IN_QUALITY_INSPECTION") {
-    return (
-      <RowActionGroup>
-        <RowActionButton onClick={() => actions.passProductionQualityInspection(row)}>质检通过</RowActionButton>
-        <RowActionButton danger onClick={() => actions.failProductionQualityInspection(row)}>质检失败</RowActionButton>
-      </RowActionGroup>
-    );
+    return <RowActionButton onClick={() => actions.passProductionQualityInspection(row)}>完成质检</RowActionButton>;
   }
   return renderViewDetailAction(row, actions);
 }
@@ -10123,6 +10168,9 @@ function renderDetailValue(key, value, row = null) {
   }
   if (key === "source_fields" && Array.isArray(value)) {
     return <Text className="detail-value">{value.map(getFieldLabel).join(" / ") || "无"}</Text>;
+  }
+  if (Array.isArray(value) && (key.endsWith("_ids") || key.endsWith("_list"))) {
+    return <CompactArrayValue values={value} fieldKey={key} row={row} visibleCount={5} />;
   }
   if (isStatusField(key)) {
     return <StatusValue value={value} label={getFieldDisplayValue(key, value ?? "", row)} />;

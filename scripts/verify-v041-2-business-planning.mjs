@@ -302,10 +302,11 @@ const supplyLoop = completeSupplyManagementLoopFromForecast({
   },
 });
 assert.equal(supplyLoop.succeeded, true, "供应管理闭环编排必须成功");
-assert.equal(supplyLoop.supplyPlan.plan_status, "CONFIRMED", "闭环编排必须确认生产计划");
+assert.equal(supplyLoop.supplyPlan.plan_status, "IN_EXECUTION", "闭环编排下达生产批次后生产计划必须进入执行中");
 assert.equal(supplyLoop.productionBatch.batch_status, "COMPLETED", "闭环编排必须完成生产批次");
 assert.equal(supplyLoop.deliveryOrder.delivery_status, "DELIVERED", "闭环编排必须完成区域交付");
-assert.equal(supplyLoop.producedRobotaxiIds.length, supplyLoop.supplyPlan.planned_robotaxi_count, "闭环编排必须按生产计划形成 Robotaxi 资产");
+assert.equal(supplyLoop.producedRobotaxiIds.length, supplyLoop.productionBatch.qualified_robotaxi_count, "闭环编排必须按当前到期批次的质量合格数量形成 Robotaxi 资产");
+assert.ok(supplyLoop.producedRobotaxiIds.length < supplyLoop.supplyPlan.planned_robotaxi_count, "跨周期生产计划不得一次性形成全部 Robotaxi 资产");
 assert.equal(supplyLoop.readinessTasks.length, supplyLoop.deliveryOrder.robotaxi_count, "闭环编排必须逐车触发运营准入任务");
 assert.equal(supplyLoop.readinessTasks[0].task_status, "WAITING_ASSIGNMENT", "闭环编排生成的准入任务必须待分配");
 const producedAsset = supplyLoop.robotaxis.find((robotaxi) => robotaxi.robotaxi_id === supplyLoop.producedRobotaxiIds[0]);

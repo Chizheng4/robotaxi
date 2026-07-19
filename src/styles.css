@@ -2783,6 +2783,38 @@ body {
   word-break: normal;
 }
 
+.compact-array-summary {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.compact-array-popover {
+  display: grid;
+  gap: 4px;
+  max-width: min(420px, 72vw);
+  max-height: 280px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.compact-array-empty {
+  color: var(--text-secondary);
+}
+
+.operation-number-input {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.operation-number-input .ant-input-number {
+  width: 100%;
+}
+
 .structured-detail-groups {
   display: grid;
 }

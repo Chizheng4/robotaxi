@@ -10,8 +10,8 @@ flowchart LR
   B -->|开始生产| C["生产中"]
   C -->|生产完成| D["待质量检验"]
   D -->|开始质量检验| E["质量检验中"]
-  E -->|质量通过| F["已完成"]
-  E -->|质量失败| G["质检失败"]
+  E -->|填写合格数量| F["已完成或部分合格"]
+  E -->|合格数量为零| G["质检失败"]
   F -->|形成资产| H["待交付 Robotaxi"]
 ```
 
@@ -26,8 +26,7 @@ flowchart LR
 |`PLANNED`|已计划|开始生产|`IN_PRODUCTION`|
 |`IN_PRODUCTION`|生产中|生产完成|`AWAITING_QUALITY_INSPECTION`|
 |`AWAITING_QUALITY_INSPECTION`|待质量检验|开始质量检验|`IN_QUALITY_INSPECTION`|
-|`IN_QUALITY_INSPECTION`|质量检验中|质量通过|`COMPLETED`|
-|`IN_QUALITY_INSPECTION`|质量检验中|质量失败|`QUALITY_FAILED`|
+|`IN_QUALITY_INSPECTION`|质量检验中|完成质检并填写合格数量|`COMPLETED` / `QUALITY_FAILED`|
 |`COMPLETED`|已完成|查看生成资产|无|
 |`QUALITY_FAILED`|质检失败|查看失败信息|无|
 |`CANCELLED`|已取消|查看|无|
@@ -45,7 +44,7 @@ production_batch_id = 当前批次
 planned_target_zone_id = 计划目标区域
 ```
 
-生产批次承接生产计划中的一个排程期次。生产完成时生成统一生产成本记录；质量检验通过后形成资产，并把合格单车生产成本写入 Robotaxi。供应决策和生产计划已经确定目标区域；交付编排只选择具体 Robotaxi、运营中心和物流批次，交付完成后才写入当前位置并进入 `PENDING_ADMISSION`。
+生产批次承接生产计划中的一个排程期次。生产完成时填写实际完成数量并生成统一生产成本记录；质量检验填写合格数量，失败数量由实际完成数量减去合格数量得到。合格资产写入 Robotaxi，失败数量形成质量损失并触发生产计划补产排程。供应决策和生产计划已经确定目标区域；交付编排只选择具体 Robotaxi、运营中心和物流批次，交付完成后才写入当前位置并进入 `PENDING_ADMISSION`。
 
 生产成本记录以批次为唯一来源：生产完成生成一次，质量检验只补充合格数量、质量损失和合格单车成本，不重复增加成本总额。
 

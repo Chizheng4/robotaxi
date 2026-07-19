@@ -1478,9 +1478,12 @@
 |release_status|下达状态|运行态字段|生产期次处于待下达或已下达状态|
 |released_robotaxi_count|已下达生产数量|计算字段|生产计划已经形成批次的 Robotaxi 数量|
 |completed_robotaxi_count|已完成生产数量|计算字段|生产计划下已完成质量检验的 Robotaxi 数量|
+|pending_replacement_robotaxi_count|待补产数量|计算字段|实际生产或质检差异后仍需通过未下达排期补充的数量|
+|schedule_adjustment_reason|排期调整原因|运行态字段|未下达排期因生产或质检差异而调整的原因|
 |standard_production_cost_per_robotaxi|Robotaxi 标准生产成本（元/辆）|成本配置字段|生产规划使用的单车标准成本基准|
 |standard_production_cost_per_robotaxi_snapshot|单车标准生产成本快照（元/辆）|快照字段|生产计划确认和批次下达时冻结的单车成本基准|
 |planned_production_cost_amount|计划生产成本（元）|计算字段|计划数量乘以单车标准生产成本快照|
+|estimated_supply_cost_amount|预计供应成本（元）|决策计算字段|供应决策计划生产数量乘以决策时单车标准生产成本快照，不形成实际成本记录|
 |production_completed_quantity|生产完成数量|业务事实字段|生产阶段完成时实际形成的数量|
 |actual_production_cost_amount|实际生产成本（元）|成本事实字段|生产批次完成时由成本服务生成的成本总额|
 |qualified_robotaxi_count|质检合格数量|业务事实字段|质量检验通过并形成 Robotaxi 资产的数量|
@@ -1674,6 +1677,7 @@
 |AWAITING_QUALITY_INSPECTION|待质量检验|生产批次状态|
 |IN_QUALITY_INSPECTION|质量检验中|生产批次状态|
 |QUALITY_FAILED|质检失败|生产批次状态|
+|PARTIALLY_PASSED|部分合格|生产批次质量检验结果|
 |COMPLETED|已完成|生产批次状态|
 |SUCCEEDED|已成功|策略执行状态|
 |FAILED|已失败|策略执行状态|
@@ -1717,6 +1721,10 @@
 |PRODUCTION_QUALITY_INSPECTION_PASSED|生产批次质量检验已通过|状态时间线结果|
 |PRODUCTION_QUALITY_INSPECTION_FAIL|质量检验失败|状态时间线动作|
 |PRODUCTION_QUALITY_INSPECTION_FAILED|生产批次质量检验未通过|状态时间线结果|
+|PRODUCTION_QUALITY_INSPECTION_COMPLETE|完成质量检验|状态时间线动作|
+|PRODUCTION_QUALITY_INSPECTION_PARTIALLY_PASSED|生产批次质量检验部分合格|状态时间线结果|
+|INVALID_PRODUCTION_COMPLETED_QUANTITY|实际生产数量无效|生产批次操作失败原因|
+|INVALID_QUALIFIED_ROBOTAXI_COUNT|质检合格数量无效|生产批次操作失败原因|
 |PRODUCTION_BATCH_NOT_AWAITING_QUALITY_INSPECTION|生产批次不是待质量检验状态|生产批次操作失败原因|
 |PRODUCTION_BATCH_NOT_IN_QUALITY_INSPECTION|生产批次不是质量检验中状态|生产批次操作失败原因|
 |QUALITY_INSPECTION_FAILED|质量检验未通过|生产批次操作失败原因|
@@ -3054,7 +3062,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |SUPPLY_GAP_COVERAGE|供应缺口覆盖|
 |SUPPLY_SAFETY_CAPACITY|供应安全容量|
 |SUPPLY_REQUIRED_QUANTITY|所需供应数量|
+|SUPPLY_PERIOD_CAPACITY|预测周期供应能力|
 |SUPPLY_PLAN_QUANTITY|计划生产数量|
+|SUPPLY_ESTIMATED_COST|预计供应成本|
 |PLACE_POPULATION_EXPOSURE|地点有效人群|
 |PLACE_POTENTIAL_TRIPS|地点潜在出行量|
 |PLACE_ADDRESSABLE_ORDERS|地点可争取订单|

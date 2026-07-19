@@ -104,6 +104,7 @@ node --check scripts/verify-v047-4-field-semantic-contract.mjs
 node --check scripts/verify-v047-4-1-spatial-time-semantic-contract.mjs
 node --check scripts/verify-v047-4-4-row-action-and-plan-confirmation.mjs
 node --check scripts/verify-v047-5-decision-explanation-architecture.mjs
+node --check scripts/verify-v047-7-production-exception-closure.mjs
 node --check src/domain/decisionExplanationContract.js
 node --check src/domain/calculationModelRegistry.js
 node --check src/services/spatialCatalogService.js
@@ -203,6 +204,7 @@ node scripts/verify-v047-4-4-row-action-and-plan-confirmation.mjs
 node scripts/verify-v047-5-decision-explanation-architecture.mjs
 node scripts/verify-v047-3-supply-position-tracking.mjs
 node scripts/verify-v047-6-production-supply-cost-loop.mjs
+node scripts/verify-v047-7-production-exception-closure.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
