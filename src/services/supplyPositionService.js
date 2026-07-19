@@ -100,7 +100,7 @@ export function createSupplyPositionView({
     }));
   });
 
-  (supplyPlans || []).filter((plan) => plan.plan_status === "CONFIRMED").forEach((plan) => {
+  (supplyPlans || []).filter((plan) => ["CONFIRMED", "IN_EXECUTION"].includes(plan.plan_status)).forEach((plan) => {
     const releasedQuantity = (productionBatches || [])
       .filter((batch) => batch.supply_plan_id === plan.supply_plan_id && !["CANCELLED", "QUALITY_FAILED"].includes(batch.batch_status))
       .reduce((total, batch) => total + Math.max(0, Number(batch.planned_robotaxi_count || 0)), 0);

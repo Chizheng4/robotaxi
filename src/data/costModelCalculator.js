@@ -4,6 +4,7 @@ export const CostType = {
   LABOR_COST: "LABOR_COST",
   ASSET_DEPRECIATION_COST: "ASSET_DEPRECIATION_COST",
   FIXED_OPERATING_COST: "FIXED_OPERATING_COST",
+  PRODUCTION_COST: "PRODUCTION_COST",
 };
 
 export const CostCalculationStatus = {
@@ -36,6 +37,7 @@ function createBaseCostModelProfile() {
     worker_cost_per_hour: 45,
     worker_cost_per_minute: 0.75,
     robotaxi_purchase_cost: 280000,
+    standard_production_cost_per_robotaxi: 230000,
     robotaxi_residual_value: 60000,
     expected_lifetime_km: 450000,
     depreciation_method: "PER_KM",
@@ -62,6 +64,7 @@ export function normalizeCostModelProfile(profile) {
     worker_cost_per_hour: workerCostPerHour,
     worker_cost_per_minute: nonNegative(profile.worker_cost_per_minute, roundMoney(workerCostPerHour / 60)),
     robotaxi_purchase_cost: nonNegative(profile.robotaxi_purchase_cost, fallback.robotaxi_purchase_cost),
+    standard_production_cost_per_robotaxi: nonNegative(profile.standard_production_cost_per_robotaxi, fallback.standard_production_cost_per_robotaxi),
     robotaxi_residual_value: nonNegative(profile.robotaxi_residual_value, fallback.robotaxi_residual_value),
     expected_lifetime_km: positive(profile.expected_lifetime_km, fallback.expected_lifetime_km),
     depreciation_method: profile.depreciation_method || fallback.depreciation_method,
@@ -232,6 +235,99 @@ export function createIncrementalCostRecords({
       started_at: startedAt,
       completed_at: new Date().toISOString(),
     },
+  };
+}
+
+export function createProductionBatchCostFact({ productionBatch, profile, calculationRunId, occurredAt = null } = {}) {
+  const normalizedProfile = normalizeCostModelProfile(profile);
+  const quantity = Math.max(0, Number(productionBatch?.production_completed_quantity ?? productionBatch?.planned_robotaxi_count ?? 0));
+  const unitCost = Number(productionBatch?.standard_production_cost_per_robotaxi_snapshot ?? normalizedProfile.standard_production_cost_per_robotaxi ?? 0);
+  const createdAt = occurredAt || new Date().toISOString();
+  const record = {
+    cost_record_id: `${calculationRunId}-CR-00001`,
+    simulation_run_id: null,
+    cost_calculation_run_id: calculationRunId,
+    cost_model_profile_id: normalizedProfile.cost_model_profile_id,
+    source_object_type: "productionBatch",
+    source_object_id: productionBatch?.production_batch_id || null,
+    related_order_id: null,
+    related_trip_id: null,
+    related_route_execution_id: null,
+    robotaxi_id: null,
+    worker_id: null,
+    cost_type: CostType.PRODUCTION_COST,
+    quantity,
+    quantity_unit: "VEHICLE",
+    unit_cost: roundMoney(unitCost),
+    cost_amount: roundMoney(quantity * unitCost),
+    currency_code: normalizedProfile.currency_code,
+    calculation_formula: "production_completed_quantity * standard_production_cost_per_robotaxi",
+    calculation_basis: {
+      production_factory_id: productionBatch?.production_factory_id || null,
+      supply_plan_id: productionBatch?.supply_plan_id || null,
+      cost_basis: productionBatch?.production_cost_basis_snapshot || "INDUSTRY_PLANNING_BENCHMARK",
+    },
+    qualified_robotaxi_count: 0,
+    failed_robotaxi_count: 0,
+    quality_loss_cost_amount: 0,
+    qualified_unit_production_cost: null,
+    simulation_cost_occurred_at: null,
+    actual_cost_occurred_at: createdAt,
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+  const calculationRun = {
+    cost_calculation_run_id: calculationRunId,
+    simulation_run_id: null,
+    simulation_timeline_id: null,
+    cost_model_profile_id: normalizedProfile.cost_model_profile_id,
+    cost_model_profile_version: normalizedProfile.profile_version,
+    cost_model_profile_snapshot: clone(normalizedProfile),
+    calculation_status: CostCalculationStatus.SUCCEEDED,
+    calculation_progress_percent: 100,
+    processed_object_count: 1,
+    generated_cost_record_count: 1,
+    total_cost_amount: record.cost_amount,
+    error_count: 0,
+    calculation_errors: [],
+    algorithm_version: "production-cost-v1.0.0",
+    started_at: createdAt,
+    completed_at: createdAt,
+  };
+  return {
+    costRecord: record,
+    calculationRun,
+    productionBatch: { ...productionBatch, production_cost_record_id: record.cost_record_id, actual_production_cost_amount: record.cost_amount },
+  };
+}
+
+export function finalizeProductionBatchCostAllocation({ productionBatch, costRecords = [], qualifiedRobotaxiCount = 0, occurredAt = null } = {}) {
+  const qualified = Math.max(0, Number(qualifiedRobotaxiCount || 0));
+  const updatedAt = occurredAt || new Date().toISOString();
+  let qualifiedUnitCost = null;
+  let qualityLossCostAmount = 0;
+  let failedRobotaxiCount = 0;
+  const updatedCostRecords = (costRecords || []).map((record) => {
+    if (record.source_object_type !== "productionBatch" || record.source_object_id !== productionBatch?.production_batch_id || record.cost_type !== CostType.PRODUCTION_COST) return record;
+    const produced = Math.max(0, Number(record.quantity || 0));
+    const failed = Math.max(0, produced - qualified);
+    failedRobotaxiCount = failed;
+    qualityLossCostAmount = roundMoney(failed * Number(record.unit_cost || 0));
+    qualifiedUnitCost = qualified > 0 ? roundMoney(Number(record.cost_amount || 0) / qualified) : null;
+    return {
+      ...record,
+      qualified_robotaxi_count: qualified,
+      failed_robotaxi_count: failed,
+      quality_loss_cost_amount: qualityLossCostAmount,
+      qualified_unit_production_cost: qualifiedUnitCost,
+      updated_at: updatedAt,
+    };
+  });
+  return {
+    costRecords: updatedCostRecords,
+    qualifiedUnitProductionCost: qualifiedUnitCost,
+    qualityLossCostAmount,
+    failedRobotaxiCount,
   };
 }
 
@@ -539,6 +635,7 @@ function createDefaultCostParameterRules(profile) {
     ["CPR-007", "expected_lifetime_km", "预计寿命里程", "ASSET_DEPRECIATION_COST", "KM", true],
     ["CPR-008", "depreciation_method", "折旧方式", "ASSET_DEPRECIATION_COST", "ENUM", true],
     ["CPR-009", "fixed_operating_cost_per_day", "每日固定运营成本", "FIXED_OPERATING_COST", "CURRENCY_PER_DAY", false],
+    ["CPR-010", "standard_production_cost_per_robotaxi", "Robotaxi 标准生产成本", "PRODUCTION_COST", "CURRENCY_PER_VEHICLE", true],
   ];
   return definitions.map(([id, key, name, group, unit, enabled], index) => ({
     cost_parameter_rule_id: id,

@@ -34,6 +34,7 @@ export const navigationGroups = Object.freeze([
   group("customer", "客户管理", [page("customers", "客户列表")]),
   group("supplyManagement", "供应管理", [
     page("supplyPositionTracking", "供应跟踪"),
+    page("productionFactories", "生产工厂"),
     page("supplyPlans", "生产计划"),
     page("productionBatches", "生产批次"),
     group("regionDeliveryManagement", "区域交付", [

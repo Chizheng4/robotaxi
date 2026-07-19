@@ -1412,6 +1412,7 @@
 |operatingModel|经营模型|统一定义需求、供给、服务、资产、财务和经营反馈之间的关系|
 |businessTarget|经营目标|规划周期内收入、订单、车队规模、资产利用率和履约目标|
 |supplyProductionProfile|生产画像|描述自有生产形成 Robotaxi 供给能力的配置对象|
+|productionFactory|生产工厂|承载生产画像、生产计划和生产批次的生产资源对象|
 |longTermDemandForecastStrategy|需求预测策略|长期需求预测策略配置|
 |longTermDemandForecastRun|需求预测执行|一次长期需求预测策略执行记录|
 |longTermDemandForecast|需求预测结果|长期需求预测执行生成的区域车队需求结果|
@@ -1462,7 +1463,31 @@
 |forecast_period|预测周期|配置字段|预测覆盖周期|
 |confidence_level|置信水平|计算字段|预测置信水平|
 |profile_id|画像编号|持久化字段|生产画像唯一编号|
-|production_lead_time_days|生产提前期（天）|配置字段|从生产需求确认到 Robotaxi 完成交付的时间|
+|production_lead_time_days|生产提前期（天）|配置字段|从生产批次下达到该批次完成生产所需时间；不包含质量检验和物流交付|
+|production_factory_id|生产工厂编号|持久化字段|生产画像、生产计划和生产批次共同引用的生产资源编号|
+|production_factory_name|生产工厂名称|持久化字段|生产工厂中文名称|
+|factory_status|工厂状态|运行态字段|生产工厂是否可用于生产计划|
+|production_line_count|生产线数量|配置字段|工厂当前可用的 Robotaxi 生产线数量|
+|factory_location|工厂位置|配置字段|生产工厂所在位置的业务描述|
+|production_schedule_lines|生产排期|快照字段|生产计划按生产画像能力拆分的周期排期|
+|production_schedule_line_id|生产排期编号|嵌套字段|生产计划内单个生产期次的唯一编号|
+|schedule_sequence|生产期次|嵌套字段|生产批次在计划内的顺序号|
+|planned_release_date|计划下达日期|计算字段|该期生产批次允许下达的日期|
+|planned_production_completion_date|计划生产完成日期|计算字段|按生产提前期计算的计划生产完成日期|
+|planned_quality_completion_date|计划质检完成日期|计算字段|按质量检验周期计算的计划质检完成日期|
+|release_status|下达状态|运行态字段|生产期次处于待下达或已下达状态|
+|released_robotaxi_count|已下达生产数量|计算字段|生产计划已经形成批次的 Robotaxi 数量|
+|completed_robotaxi_count|已完成生产数量|计算字段|生产计划下已完成质量检验的 Robotaxi 数量|
+|standard_production_cost_per_robotaxi|Robotaxi 标准生产成本（元/辆）|成本配置字段|生产规划使用的单车标准成本基准|
+|standard_production_cost_per_robotaxi_snapshot|单车标准生产成本快照（元/辆）|快照字段|生产计划确认和批次下达时冻结的单车成本基准|
+|planned_production_cost_amount|计划生产成本（元）|计算字段|计划数量乘以单车标准生产成本快照|
+|production_completed_quantity|生产完成数量|业务事实字段|生产阶段完成时实际形成的数量|
+|actual_production_cost_amount|实际生产成本（元）|成本事实字段|生产批次完成时由成本服务生成的成本总额|
+|qualified_robotaxi_count|质检合格数量|业务事实字段|质量检验通过并形成 Robotaxi 资产的数量|
+|failed_robotaxi_count|质检未通过数量|业务事实字段|生产完成但未通过质量检验的数量|
+|quality_loss_cost_amount|质量损失成本（元）|计算字段|未通过质检数量对应的生产成本|
+|qualified_unit_production_cost|质检合格单车成本（元/辆）|计算字段|生产总成本除以质检合格数量|
+|asset_acquisition_cost|资产取得成本（元）|资产事实字段|Robotaxi 形成资产时继承的质检合格单车成本|
 |annual_production_capacity|年生产能力|配置字段|自有生产体系年度可形成 Robotaxi 数量|
 |monthly_production_capacity|月生产能力|配置字段|自有生产体系月度可形成 Robotaxi 数量|
 |ramp_up_months|产能爬坡周期（月）|配置字段|生产能力从启动到稳定产能所需月份|

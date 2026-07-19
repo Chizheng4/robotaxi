@@ -48,7 +48,7 @@ register(["operatingMetricsOverview", "serviceMetrics", "supplyAssetMetrics", "f
 });
 
 register([
-  "businessTargets", "demandProfiles", "supplyProductionProfiles", "customers", "ownerSupplies",
+  "businessTargets", "demandProfiles", "supplyProductionProfiles", "productionFactories", "customers", "ownerSupplies",
   "robotaxis", "opsCenters", "workers", "maps", "cells", "roads", "roadNodes", "roadSegments",
   "places", "serviceAreas", "zones",
 ], {

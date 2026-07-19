@@ -3,6 +3,7 @@ import {
   initializeDefaultFleetAllocationStrategies,
   initializeDefaultLongTermDemandForecastStrategies,
   initializeDefaultSupplyDecisionStrategies,
+  initializeDefaultProductionFactories,
   initializeDefaultSupplyProductionProfiles,
 } from "../services/businessPlanningService.js";
 import { initializeDefaultSupplyDemandBalanceStrategies } from "../services/supplyDemandBalanceService.js";
@@ -12,6 +13,7 @@ export function initializeSupplyManagement() {
   const operatingPlanning = initializeOperatingPlanningData();
   return {
     businessTargets: initializeDefaultBusinessTargets(),
+    productionFactories: initializeDefaultProductionFactories(),
     supplyProductionProfiles: initializeDefaultSupplyProductionProfiles(),
     longTermDemandForecastStrategies: initializeDefaultLongTermDemandForecastStrategies(),
     longTermDemandForecastRuns: [],

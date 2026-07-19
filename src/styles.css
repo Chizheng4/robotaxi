@@ -4155,6 +4155,18 @@ body {
   gap: 2px;
 }
 
+.row-action-disabled-hint {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.row-action-disabled-hint > .row-action-button.ant-btn {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .row-action-split > .row-action-button.ant-btn {
   min-width: 0;
   overflow: hidden;

@@ -229,7 +229,12 @@ const tableConfig = {
   supplyProductionProfiles: {
     title: "生产画像",
     description: "生产画像描述企业自有生产形成 Robotaxi 供应能力的约束、产能和节奏。",
-    columns: ["profile_id", "profile_name", "profile_status", "production_lead_time_days", "production_capacity_period_unit", "production_capacity_per_period", "ramp_up_periods", "ramp_up_capacity_ratios", "quality_inspection_lead_time_days", "delivery_capacity_per_period", "effective_from", "effective_to"],
+    columns: ["profile_id", "profile_name", "profile_status", "production_factory_id", "production_lead_time_days", "production_capacity_period_unit", "production_capacity_per_period", "ramp_up_periods", "ramp_up_capacity_ratios", "quality_inspection_lead_time_days", "delivery_capacity_per_period", "effective_from", "effective_to"],
+  },
+  productionFactories: {
+    title: "生产工厂",
+    description: "生产工厂是承载 Robotaxi 生产能力、生产计划和生产批次的资源对象。",
+    columns: ["production_factory_id", "production_factory_name", "factory_status", "production_line_count", "factory_location", "updated_at"],
   },
   placeDemandProfiles: {
     title: "地点需求画像",
@@ -319,7 +324,7 @@ const tableConfig = {
   supplyPlans: {
     title: "生产计划",
     description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
-    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "business_target_id", "forecast_start_date", "forecast_end_date", "supply_production_profile_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
+    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "business_target_id", "forecast_start_date", "forecast_end_date", "supply_production_profile_id", "production_factory_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "released_robotaxi_count", "completed_robotaxi_count", "uncovered_robotaxi_gap", "standard_production_cost_per_robotaxi_snapshot", "planned_production_cost_amount", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
   },
   supplyPositionTracking: {
     title: "供应跟踪",
@@ -329,7 +334,7 @@ const tableConfig = {
   productionBatches: {
     title: "生产批次",
     description: "生产批次记录自有工厂的生产与质量检验过程，质检通过后形成具体 Robotaxi 资产。",
-    columns: ["production_batch_id", "batch_name", "batch_status", "supply_plan_id", "target_zone_id", "planned_robotaxi_count", "produced_robotaxi_count", "produced_robotaxi_ids", "production_started_at", "production_completed_at", "quality_inspection_started_at", "quality_inspection_completed_at", "quality_inspection_result", "created_at"],
+    columns: ["production_batch_id", "batch_name", "batch_status", "supply_plan_id", "production_schedule_line_id", "schedule_sequence", "production_factory_id", "target_zone_id", "planned_robotaxi_count", "production_completed_quantity", "produced_robotaxi_count", "actual_production_cost_amount", "qualified_unit_production_cost", "quality_loss_cost_amount", "produced_robotaxi_ids", "planned_release_date", "planned_production_completion_date", "planned_quality_completion_date", "production_started_at", "production_completed_at", "quality_inspection_started_at", "quality_inspection_completed_at", "quality_inspection_result", "created_at"],
   },
   fleetAllocationStrategies: {
     title: "交付编排策略",
@@ -682,6 +687,7 @@ const pageObjectType = {
   demandProfiles: "demandProfile",
   businessTargets: "businessTarget",
   supplyProductionProfiles: "supplyProductionProfile",
+  productionFactories: "productionFactory",
   placeDemandProfiles: "placeDemandProfile",
   serviceAreaDemandProfiles: "serviceAreaDemandProfile",
   zoneDemandProfiles: "zoneDemandProfile",
@@ -788,6 +794,7 @@ const idFieldByType = {
   serviceAreaDemandProfile: "profile_id",
   zoneDemandProfile: "profile_id",
   supplyProductionProfile: "profile_id",
+  productionFactory: "production_factory_id",
   longTermDemandForecastStrategy: "forecast_strategy_id",
   longTermDemandForecastRun: "forecast_run_id",
   supplyDecisionStrategy: "supply_decision_strategy_id",
@@ -880,6 +887,7 @@ const statusFieldByPage = {
   demandProfiles: "profile_status",
   businessTargets: "target_status",
   supplyProductionProfiles: "profile_status",
+  productionFactories: "factory_status",
   placeDemandProfiles: "profile_status",
   serviceAreaDemandProfiles: "profile_status",
   zoneDemandProfiles: "profile_status",
@@ -1741,6 +1749,7 @@ function App({ currentUser, onLogout }) {
         ...(snapshot.operationalData || {}),
         businessTargets: snapshot.operationalData?.businessTargets || initialData.businessTargets || [],
         supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || [],
+        productionFactories: snapshot.operationalData?.productionFactories || initialData.productionFactories || [],
         longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || [],
         longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || [],
         longTermDemandForecasts: snapshot.operationalData?.longTermDemandForecasts || initialData.longTermDemandForecasts || [],
@@ -1867,6 +1876,7 @@ function App({ currentUser, onLogout }) {
     workers: data.workers.map((worker) => enrichWorkerForDisplay(worker, readinessTasks, deploymentTasks)),
     readinessTasks: readinessTasks.map((task) => attachCostRecords(task, "readinessTask", costRecords)),
     supplyProductionProfiles: data.supplyProductionProfiles || [],
+    productionFactories: data.productionFactories || [],
     longTermDemandForecastStrategies: data.longTermDemandForecastStrategies || [],
     longTermDemandForecastRuns: data.longTermDemandForecastRuns || [],
     longTermDemandForecasts: data.longTermDemandForecasts || [],
@@ -1874,7 +1884,7 @@ function App({ currentUser, onLogout }) {
     supplyDecisionRuns: data.supplyDecisionRuns || [],
     supplyPlans: data.supplyPlans || [],
     supplyPositionTracking: supplyPositionView.records,
-    productionBatches: data.productionBatches || [],
+    productionBatches: (data.productionBatches || []).map((batch) => attachCostRecords(batch, "productionBatch", costRecords)),
     fleetAllocationStrategies: data.fleetAllocationStrategies || [],
     fleetAllocationRuns: data.fleetAllocationRuns || [],
     fleetAllocationResults: data.fleetAllocationResults || [],
@@ -2029,6 +2039,7 @@ function App({ currentUser, onLogout }) {
       readinessTask: rowsByPage.readinessTasks,
       businessTarget: rowsByPage.businessTargets,
       supplyProductionProfile: rowsByPage.supplyProductionProfiles,
+      productionFactory: rowsByPage.productionFactories,
       longTermDemandForecastStrategy: rowsByPage.longTermDemandForecastStrategies,
       longTermDemandForecastRun: rowsByPage.longTermDemandForecastRuns,
       longTermDemandForecast: rowsByPage.longTermDemandForecasts,
@@ -3377,7 +3388,13 @@ function App({ currentUser, onLogout }) {
 
   function confirmSupplyPlan(row) {
     if (!businessPlanningService?.confirmSupplyPlan || !row) return;
-    const result = businessPlanningService.confirmSupplyPlan({ supplyPlan: row, existingSupplyPlans: data.supplyPlans || [], context: { now } });
+    const result = businessPlanningService.confirmSupplyPlan({
+      supplyPlan: row,
+      existingSupplyPlans: data.supplyPlans || [],
+      supplyProductionProfiles: data.supplyProductionProfiles || [],
+      costModelProfile: costModelProfiles.find((item) => item.profile_status === "ACTIVE") || costModelProfiles[0] || null,
+      context: { now },
+    });
     if (!result.succeeded) {
       appendRecordOperationEvent("supplyPlans", {
         business_object_type: "supplyPlan",
@@ -3442,13 +3459,15 @@ function App({ currentUser, onLogout }) {
     setOperationalData((current) => ({
       ...current,
       productionBatches: [result.productionBatch, ...(current.productionBatches || [])],
+      supplyPlans: replaceCollectionItem(current.supplyPlans || [], "supply_plan_id", result.supplyPlan),
     }));
     selectForPage("productionBatches", "productionBatch", result.productionBatch.production_batch_id);
   }
 
   function startProductionBatch(row) {
     if (!businessPlanningService?.startProductionBatch || !row) return;
-    const result = businessPlanningService.startProductionBatch({ productionBatch: row, context: { now } });
+    const relatedSupplyPlan = (data.supplyPlans || []).find((item) => item.supply_plan_id === row.supply_plan_id) || null;
+    const result = businessPlanningService.startProductionBatch({ productionBatch: row, supplyPlan: relatedSupplyPlan, context: { now } });
     if (!result.succeeded) {
       appendRecordOperationEvent("productionBatches", {
         business_object_type: "productionBatch",
@@ -3464,6 +3483,9 @@ function App({ currentUser, onLogout }) {
     setOperationalData((current) => ({
       ...current,
       productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
+      supplyPlans: result.supplyPlan
+        ? replaceCollectionItem(current.supplyPlans || [], "supply_plan_id", result.supplyPlan)
+        : current.supplyPlans,
     }));
   }
 
@@ -3471,6 +3493,9 @@ function App({ currentUser, onLogout }) {
     if (!businessPlanningService?.completeProductionBatch || !row) return;
     const result = businessPlanningService.completeProductionBatch({
       productionBatch: row,
+      costModelProfile: costModelProfiles.find((item) => item.profile_status === "ACTIVE") || costModelProfiles[0] || null,
+      existingCostRecords: costRecords,
+      costCalculationRunId: `CCR-PROD-${row.production_batch_id}`,
       context: { now },
     });
     if (!result.succeeded) {
@@ -3489,6 +3514,12 @@ function App({ currentUser, onLogout }) {
       ...current,
       productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
     }));
+    setCostRecords(result.costRecords || costRecords);
+    if (result.costCalculationRun) {
+      setCostCalculationRuns((current) => current.some((item) => item.cost_calculation_run_id === result.costCalculationRun.cost_calculation_run_id)
+        ? current
+        : [result.costCalculationRun, ...current]);
+    }
   }
 
   function startProductionQualityInspection(row) {
@@ -3504,23 +3535,33 @@ function App({ currentUser, onLogout }) {
     const result = businessPlanningService?.passProductionQualityInspection?.({
       productionBatch: row,
       existingRobotaxis: data.robotaxis || [],
+      existingCostRecords: costRecords,
+      supplyPlan: (data.supplyPlans || []).find((item) => item.supply_plan_id === row.supply_plan_id) || null,
+      existingProductionBatches: data.productionBatches || [],
       context: { now, nextRobotaxiId: nextProducedRobotaxiId },
     });
     if (!result?.succeeded) return;
     setOperationalData((current) => ({
       ...current,
       productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
+      supplyPlans: result.supplyPlan ? replaceCollectionItem(current.supplyPlans || [], "supply_plan_id", result.supplyPlan) : current.supplyPlans,
       robotaxis: [...(result.robotaxis || []), ...(current.robotaxis || [])],
     }));
+    setCostRecords(result.costRecords || costRecords);
   }
 
   function failProductionQualityInspection(row) {
-    const result = businessPlanningService?.failProductionQualityInspection?.({ productionBatch: row, context: { now } });
+    const result = businessPlanningService?.failProductionQualityInspection?.({
+      productionBatch: row,
+      existingCostRecords: costRecords,
+      context: { now },
+    });
     if (!result?.succeeded) return;
     setOperationalData((current) => ({
       ...current,
       productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
     }));
+    setCostRecords(result.costRecords || costRecords);
   }
 
   function runFleetAllocationStrategy(row) {
@@ -3950,6 +3991,7 @@ function App({ currentUser, onLogout }) {
                   operatingDataPool,
                   decisionControlView,
                   supplyPositionView,
+                  now,
                   navigateToPage: activateWorkspacePage,
                   simulationRuns,
                   simulationEvents,
@@ -8580,14 +8622,14 @@ function getStatusTone(value) {
   return "neutral";
 }
 
-function RowActionButton({ children, onClick, type = "primary", danger = false, disabled = false }) {
-  return (
+function RowActionButton({ children, onClick, type = "primary", danger = false, disabled = false, title = null }) {
+  const button = (
     <Button
       size="small"
       type={type}
       danger={danger}
       disabled={disabled}
-      title={typeof children === "string" ? children : undefined}
+      title={title || (typeof children === "string" ? children : undefined)}
       className="row-action-button"
       onClick={(event) => {
         event.stopPropagation();
@@ -8597,6 +8639,8 @@ function RowActionButton({ children, onClick, type = "primary", danger = false, 
       {children}
     </Button>
   );
+  if (disabled && title) return <span className="row-action-disabled-hint" title={title}>{button}</span>;
+  return button;
 }
 
 function RowActionGroup({ children }) {
@@ -9619,13 +9663,12 @@ function renderViewDetailAction(row, actions) {
 }
 
 function renderSupplyPlanActions(row, actions) {
-  const productionBatch = (actions.data?.productionBatches || []).find((item) => item.supply_plan_id === row.supply_plan_id);
   if (row.plan_status === "DRAFT") {
     return <RowActionGroup><RowActionButton onClick={() => actions.confirmSupplyPlan(row)}>确认计划</RowActionButton><RowActionButton type="default" onClick={() => actions.cancelSupplyPlan(row)}>取消</RowActionButton></RowActionGroup>;
   }
-  if (row.plan_status === "CONFIRMED") {
-    if (productionBatch) return renderViewDetailAction(row, actions);
-    return <RowActionGroup><RowActionButton onClick={() => actions.createProductionBatchFromSupplyPlan(row)}>生成生产批次</RowActionButton><RowActionButton type="default" onClick={() => actions.cancelSupplyPlan(row)}>取消</RowActionButton></RowActionGroup>;
+  if (["CONFIRMED", "IN_EXECUTION"].includes(row.plan_status)) {
+    const releaseState = businessPlanningService?.resolveProductionBatchReleaseState?.({ supplyPlan: row, existingProductionBatches: actions.data?.productionBatches || [], now: actions.now?.() || new Date().toISOString() }) || { enabled: true, message: "生成下一期生产批次" };
+    return <RowActionGroup><RowActionButton disabled={!releaseState.enabled} title={releaseState.message} onClick={() => actions.createProductionBatchFromSupplyPlan(row)}>生成下一期批次</RowActionButton>{row.plan_status === "CONFIRMED" && <RowActionButton type="default" onClick={() => actions.cancelSupplyPlan(row)}>取消</RowActionButton>}</RowActionGroup>;
   }
   return renderViewDetailAction(row, actions);
 }
@@ -11444,6 +11487,8 @@ function attachCostRecords(item, objectType, costRecords = [], routeExecutions =
     records = costRecords.filter((record) => record.source_object_type === "trip" && record.source_object_id === item.trip_id);
   } else if (objectType === "routeExecution") {
     records = costRecords.filter((record) => record.source_object_type === "routeExecution" && record.source_object_id === item.route_execution_id);
+  } else if (objectType === "productionBatch") {
+    records = costRecords.filter((record) => record.source_object_type === "productionBatch" && record.source_object_id === item.production_batch_id);
   } else if (objectType === "readinessTask") {
     records = costRecords.filter((record) => record.source_object_type === "readinessTask" && record.source_object_id === item.task_id);
   } else if (objectType === "deploymentTask") {
@@ -11474,6 +11519,7 @@ function summarizeCostRecords(records = []) {
     energy_cost_amount: 0,
     labor_cost_amount: 0,
     asset_depreciation_cost_amount: 0,
+    production_cost_amount: 0,
   };
   records.forEach((record) => {
     const amount = Number(record.cost_amount || 0);
@@ -11482,6 +11528,7 @@ function summarizeCostRecords(records = []) {
     if (record.cost_type === "ENERGY_COST") summary.energy_cost_amount += amount;
     if (record.cost_type === "LABOR_COST") summary.labor_cost_amount += amount;
     if (record.cost_type === "ASSET_DEPRECIATION_COST") summary.asset_depreciation_cost_amount += amount;
+    if (record.cost_type === "PRODUCTION_COST") summary.production_cost_amount += amount;
   });
   Object.keys(summary).forEach((key) => {
     summary[key] = Number(summary[key].toFixed(2));
@@ -12537,6 +12584,7 @@ function loadRuntimeSnapshot(initialData) {
       ...(snapshot.operationalData || {}),
       businessTargets: snapshot.operationalData?.businessTargets || initialData.businessTargets || [],
       supplyProductionProfiles: snapshot.operationalData?.supplyProductionProfiles || initialData.supplyProductionProfiles || [],
+      productionFactories: snapshot.operationalData?.productionFactories || initialData.productionFactories || [],
       longTermDemandForecastStrategies: snapshot.operationalData?.longTermDemandForecastStrategies || initialData.longTermDemandForecastStrategies || [],
       longTermDemandForecastRuns: snapshot.operationalData?.longTermDemandForecastRuns || initialData.longTermDemandForecastRuns || [],
       longTermDemandForecasts: snapshot.operationalData?.longTermDemandForecasts || initialData.longTermDemandForecasts || [],
@@ -12726,6 +12774,9 @@ function normalizeOperationalRouteStrategies(operationalData) {
     routes: normalizeRouteStrategyReferences(operationalData.routes || []),
     businessTargets: normalizedPlanningDefaults.businessTargets,
     supplyProductionProfiles: normalizedPlanningDefaults.supplyProductionProfiles,
+    productionFactories: operationalData.productionFactories?.length
+      ? operationalData.productionFactories
+      : (businessPlanningService?.initializeDefaultProductionFactories?.() || []),
     longTermDemandForecastStrategies: normalizedPlanningDefaults.longTermDemandForecastStrategies,
     longTermDemandForecasts,
     supplyPlans,

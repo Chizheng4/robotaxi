@@ -53,6 +53,22 @@ export const metricConceptRegistry = Object.freeze({
 });
 
 export const fieldSemanticRegistry = Object.freeze({
+  production_completed_quantity: defineField("production_completed_quantity", {
+    label: "生产完成数量",
+    owner_object: "ProductionBatch",
+    field_nature: "BUSINESS_FACT",
+    data_type: "number",
+    unit: "ROBOTAXI",
+    definition: "生产批次完成生产阶段时实际形成并进入质量检验的 Robotaxi 数量。",
+  }),
+  standard_production_cost_per_robotaxi: defineField("standard_production_cost_per_robotaxi", {
+    label: "Robotaxi 标准生产成本（元/辆）",
+    owner_object: "CostModelProfile",
+    field_nature: "CONFIGURATION",
+    data_type: "number",
+    unit: "CNY_PER_ROBOTAXI",
+    definition: "生产规划和生产批次成本计算使用的单车标准成本基准，生产计划和批次分别冻结快照。",
+  }),
   target_order_fulfillment_rate: defineField("target_order_fulfillment_rate", {
     label: "目标订单履约率",
     owner_object: "BusinessTarget",

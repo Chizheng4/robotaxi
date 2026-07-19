@@ -108,6 +108,11 @@ export const defaultMetricDefinitions = [
   definition("PROCESS-SUPPLY-001", "生产计划达成率", "Production Plan Attainment", MetricDomain.SUPPLY, "Produced Robotaxi / Planned Robotaxi", ["SupplyPlan", "ProductionBatch"], ["planned_robotaxi_count", "produced_robotaxi_count"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL", "ZONE"], semantics("已完成生产批次形成的 Robotaxi 数量占有效生产计划数量的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "有效生产计划与已完成生产批次", "计划生产数量")),
   definition("PROCESS-SUPPLY-002", "区域交付达成率", "Regional Delivery Attainment", MetricDomain.SUPPLY, "Delivered Robotaxi / Delivery Order Robotaxi", ["RobotaxiDeliveryOrder"], ["robotaxi_ids", "delivery_status"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL", "ZONE"], semantics("已完成交付的 Robotaxi 数量占进入终态交付单 Robotaxi 数量的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "已完成、失败或取消的区域交付单", "终态交付 Robotaxi 数量")),
   definition("PROCESS-SUPPLY-003", "运营准入通过率", "Operating Admission Pass Rate", MetricDomain.SUPPLY, "Passed Readiness Tasks / Terminal Readiness Tasks", ["ReadinessTask"], ["task_status", "admission_result"], MetricUnit.PERCENT, true, MetricLayer.PROCESS, ["GLOBAL", "ZONE"], semantics("已结束运营准入任务中通过准入的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "已完成、失败或取消的运营准入任务", "终态运营准入任务量")),
+  definition("OUTCOME-SUPPLY-COST-001", "实际生产成本", "Actual Production Cost", MetricDomain.SUPPLY, "sum(PRODUCTION_COST.cost_amount)", ["CostRecord"], ["cost_type", "cost_amount"], MetricUnit.CURRENCY, false, MetricLayer.OUTCOME, ["GLOBAL"], semantics("已完成生产阶段的生产批次实际形成的生产成本总额。", MetricRole.RESULT, MetricMeasurementType.AMOUNT, "成本类型为生产成本")),
+  definition("OUTCOME-SUPPLY-COST-002", "计划生产成本", "Planned Production Cost", MetricDomain.SUPPLY, "sum(active SupplyPlan.planned_production_cost_amount)", ["SupplyPlan"], ["plan_status", "planned_production_cost_amount"], MetricUnit.CURRENCY, false, MetricLayer.OUTCOME, ["GLOBAL", "ZONE"], semantics("未取消生产计划冻结的计划生产成本总额。", MetricRole.DRIVER, MetricMeasurementType.AMOUNT, "未取消生产计划")),
+  definition("PROCESS-SUPPLY-COST-001", "质检合格单车生产成本", "Qualified Unit Production Cost", MetricDomain.SUPPLY, "sum(PRODUCTION_COST.cost_amount) / sum(qualified_robotaxi_count)", ["CostRecord"], ["cost_type", "cost_amount", "qualified_robotaxi_count"], MetricUnit.CURRENCY, false, MetricLayer.PROCESS, ["GLOBAL"], semantics("生产总成本分摊到质检合格 Robotaxi 后的平均单车生产成本。", MetricRole.DRIVER, MetricMeasurementType.AVERAGE, "已完成质量检验且有合格车辆的生产成本记录", "质检合格 Robotaxi 数量")),
+  definition("QUALITY-SUPPLY-COST-001", "生产质量损失成本", "Production Quality Loss Cost", MetricDomain.SUPPLY, "sum(PRODUCTION_COST.quality_loss_cost_amount)", ["CostRecord"], ["cost_type", "quality_loss_cost_amount"], MetricUnit.CURRENCY, false, MetricLayer.QUALITY, ["GLOBAL"], semantics("生产完成但未通过质量检验的 Robotaxi 对应生产成本。", MetricRole.GUARDRAIL, MetricMeasurementType.AMOUNT, "已完成质量检验的生产成本记录")),
+  definition("STATE-SUPPLY-COST-001", "供应管道资产价值", "Supply Pipeline Asset Value", MetricDomain.SUPPLY, "sum(pipeline Robotaxi.asset_acquisition_cost) + sum(pre-asset production cost)", ["Robotaxi", "ProductionBatch", "CostRecord"], ["availability_status", "asset_acquisition_cost", "batch_status", "cost_amount"], MetricUnit.CURRENCY, false, MetricLayer.STATE, ["GLOBAL", "ZONE"], semantics("已投入生产且尚未完成运营准入的 Robotaxi 资产价值；车辆资产形成后不再重复累计对应生产批次成本。", MetricRole.DRIVER, MetricMeasurementType.SNAPSHOT, "生产中至待准入的供应管道")),
   definition("QUALITY-DATA-001", "关键数据完整率", "Critical Data Completeness Rate", MetricDomain.QUALITY, "complete critical inputs / required critical inputs", ["SimulationRun", "RevenueRecord", "CostRecord", "ServiceOrder"], ["cost_calculation_status", "revenue_calculation_status", "simulation_created_at"], MetricUnit.PERCENT, true, MetricLayer.QUALITY, ["GLOBAL"], semantics("本次经营分析依赖的关键来源和字段通过完整性检查的比例。", MetricRole.GUARDRAIL, MetricMeasurementType.RATE, "关键来源和必要字段", "关键数据检查项")),
   definition("PROCESS-DECISION-001", "决策过程量", "Decision Process Count", MetricDomain.DECISION, "count(DecisionProcess)", ["DecisionProcess"], ["decision_process_id"], MetricUnit.COUNT, true, MetricLayer.DECISION, ["GLOBAL", "DECISION_DOMAIN"], semantics("按业务对象聚合后的决策过程数量，不等同于原始策略尝试次数。", MetricRole.DRIVER, MetricMeasurementType.FLOW, "统一决策监控过程")),
   definition("PROCESS-DECISION-002", "决策最终成功率", "Final Decision Success Rate", MetricDomain.DECISION, "successful terminal DecisionProcess / terminal DecisionProcess", ["DecisionProcess"], ["process_status"], MetricUnit.PERCENT, true, MetricLayer.DECISION, ["GLOBAL", "DECISION_DOMAIN"], semantics("已结束决策过程中最终成功或等待后成功的比例。", MetricRole.RESULT, MetricMeasurementType.RATE, "已结束决策过程", "已结束决策过程量")),
@@ -477,6 +482,11 @@ function calculateObservations(metricDefinition, context, nextSequence) {
     "PROCESS-SUPPLY-001": () => calculateProductionPlanAttainment(context),
     "PROCESS-SUPPLY-002": () => calculateDeliveryAttainment(context),
     "PROCESS-SUPPLY-003": () => calculateReadinessPassRate(context),
+    "OUTCOME-SUPPLY-COST-001": () => sumCostByTypes(context.costRecords, ["PRODUCTION_COST"]),
+    "OUTCOME-SUPPLY-COST-002": () => roundMoney((context.scope?.supplyPlans || []).filter((item) => item.plan_status !== "CANCELLED").reduce((sum, item) => sum + Number(item.planned_production_cost_amount || 0), 0)),
+    "PROCESS-SUPPLY-COST-001": () => calculateQualifiedUnitProductionCost(context),
+    "QUALITY-SUPPLY-COST-001": () => roundMoney((context.costRecords || []).filter((item) => item.cost_type === "PRODUCTION_COST").reduce((sum, item) => sum + Number(item.quality_loss_cost_amount || 0), 0)),
+    "STATE-SUPPLY-COST-001": () => calculateSupplyPipelineAssetValue(context),
     "QUALITY-DATA-001": () => calculateCriticalDataCompleteness(context),
     "PROCESS-DECISION-001": () => decisionProcesses(context).length,
     "PROCESS-DECISION-002": () => decisionExecutionSuccessRate(context),
@@ -892,6 +902,30 @@ function calculateReadinessPassRate(context) {
   const terminal = tasks.filter((item) => ["COMPLETED", "FAILED", "CANCELLED", "ADMISSION_FAILED"].includes(item.task_status));
   const passed = terminal.filter((item) => item.task_status === "COMPLETED" && !["FAILED", "REJECTED"].includes(item.admission_result || item.inspection_result)).length;
   return ratio(passed, terminal.length);
+}
+
+function calculateQualifiedUnitProductionCost(context) {
+  const records = (context.costRecords || []).filter((item) => item.cost_type === "PRODUCTION_COST");
+  const totalCost = records.reduce((sum, item) => sum + Number(item.cost_amount || 0), 0);
+  const qualifiedQuantity = records.reduce((sum, item) => sum + Number(item.qualified_robotaxi_count || 0), 0);
+  return ratio(totalCost, qualifiedQuantity);
+}
+
+function calculateSupplyPipelineAssetValue(context) {
+  const pipelineStatuses = new Set([
+    "PENDING_DELIVERY", "ALLOCATED", "IN_DELIVERY", "PENDING_ADMISSION",
+    "PENDING_INSPECTION", "IN_INSPECTION",
+  ]);
+  const pipelineRobotaxis = (context.scope?.robotaxis || []).filter((item) => pipelineStatuses.has(item.availability_status));
+  const assetValue = pipelineRobotaxis.reduce((sum, item) => sum + Number(item.asset_acquisition_cost || 0), 0);
+  const assetBatchIds = new Set(pipelineRobotaxis.map((item) => item.production_batch_id).filter(Boolean));
+  const preAssetBatchIds = new Set((context.scope?.productionBatches || [])
+    .filter((item) => ["AWAITING_QUALITY_INSPECTION", "IN_QUALITY_INSPECTION"].includes(item.batch_status) && !assetBatchIds.has(item.production_batch_id))
+    .map((item) => item.production_batch_id));
+  const preAssetValue = (context.costRecords || [])
+    .filter((item) => item.cost_type === "PRODUCTION_COST" && preAssetBatchIds.has(item.source_object_id))
+    .reduce((sum, item) => sum + Number(item.cost_amount || 0), 0);
+  return roundMoney(assetValue + preAssetValue);
 }
 
 function normalizeIdList(value) {

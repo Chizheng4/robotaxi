@@ -1,6 +1,7 @@
 import { createRobotaxi } from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
 import { getFieldSemanticDefinition } from "../domain/fieldSemanticRegistry.js?v=20260719-v047-4-1";
 import { createRegisteredCalculationStep } from "../domain/calculationModelRegistry.js?v=20260719-v047-5-0";
+import { createProductionBatchCostFact, finalizeProductionBatchCostAllocation } from "../data/costModelCalculator.js?v=20260719-v047-6-0";
 import {
   calculateLongTermDemandPlan,
   normalizeLongTermDemandForecastResult,
@@ -14,6 +15,12 @@ export { normalizeLongTermDemandForecastResult, normalizeLongTermDemandForecastR
 export const SupplyProductionProfileStatus = {
   ACTIVE: "ACTIVE",
   ARCHIVED: "ARCHIVED",
+};
+
+export const ProductionFactoryStatus = { ACTIVE: "ACTIVE", INACTIVE: "FACTORY_INACTIVE" };
+export const ProductionScheduleReleaseStatus = {
+  PENDING: "PRODUCTION_SCHEDULE_PENDING",
+  RELEASED: "PRODUCTION_SCHEDULE_RELEASED",
 };
 
 export const BusinessTargetStatus = {
@@ -63,7 +70,7 @@ export const businessPlanningObjectSchemas = {
   },
   supplyProductionProfile: {
     tabs: [
-      { key: "basic", label: "画像信息", fields: ["profile_id", "profile_name", "profile_status", "profile_version"] },
+      { key: "basic", label: "画像信息", fields: ["profile_id", "profile_name", "profile_status", "profile_version", "production_factory_id"] },
       { key: "capacity", label: "生产能力", fields: ["production_lead_time_days", "production_capacity_period_unit", "production_capacity_per_period", "ramp_up_periods", "ramp_up_capacity_ratios"] },
       { key: "delivery", label: "质检与交付", fields: ["quality_inspection_lead_time_days", "delivery_capacity_per_period"] },
       { key: "validity", label: "版本有效期", fields: ["effective_from", "effective_to", "created_at", "updated_at"] },
@@ -78,6 +85,18 @@ export const businessPlanningObjectSchemas = {
       ramp_up_periods: "从启动生产到稳定产能所经历的能力周期数。",
       effective_from: "画像版本开始适用的日期；预测开始日期必须落在有效期内。",
       effective_to: "画像版本停止适用的日期；为空表示持续有效。",
+    },
+  },
+  productionFactory: {
+    tabs: [
+      { key: "basic", label: "工厂信息", fields: ["production_factory_id", "production_factory_name", "factory_status"] },
+      { key: "capacity", label: "生产资源", fields: ["production_line_count", "factory_location"] },
+      { key: "time", label: "更新时间", fields: ["created_at", "updated_at"] },
+    ],
+    explanations: {
+      production_factory_id: "生产画像、生产计划和生产批次共同引用的生产资源编号。",
+      production_line_count: "当前模拟范围内可用于 Robotaxi 生产的生产线数量。",
+      factory_location: "生产工厂所在位置的业务描述，后续可扩展为正式地图空间对象关联。",
     },
   },
   longTermDemandForecastStrategy: {
@@ -137,6 +156,8 @@ export const businessPlanningObjectSchemas = {
       { key: "source", label: "来源追溯", fields: ["forecast_result_id", "forecast_run_id", "supply_decision_run_id", "supply_decision_strategy_id", "business_target_id", "supply_production_profile_id"] },
       { key: "period", label: "区域周期", fields: ["target_zone_id", "target_zone_name", "forecast_start_date", "forecast_end_date", "forecast_period_unit", "forecast_period_count", "planned_start_date", "planned_end_date"] },
       { key: "quantity", label: "数量依据", fields: ["required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "uncovered_robotaxi_gap"] },
+      { key: "schedule", label: "生产排期", fields: ["production_factory_id", "production_schedule_lines", "released_robotaxi_count", "completed_robotaxi_count"] },
+      { key: "cost", label: "计划成本", fields: ["standard_production_cost_per_robotaxi_snapshot", "planned_production_cost_amount", "production_cost_currency_code", "production_cost_basis_snapshot"] },
       { key: "calculation", label: "计算过程", fields: ["calculation_steps"] },
     ],
     explanations: {
@@ -147,6 +168,24 @@ export const businessPlanningObjectSchemas = {
       forecast_end_date: "生产计划覆盖的预测周期终点，继承自预测结果快照。",
       planned_robotaxi_count: "供应决策在需求覆盖、安全容量、生产与交付约束下确定的计划数量。",
       calculation_steps: "引用生成本计划的供应决策执行计算快照，用于追溯而不重复计算。",
+      production_schedule_lines: "根据生产画像快照拆分的周期生产排期；只有当前批次生产完成且下一期到期后，才能继续下达。",
+      planned_production_cost_amount: "计划数量乘以确认计划时冻结的单车标准生产成本，仅作为规划基准，不替代生产批次实际成本。",
+    },
+  },
+  productionBatch: {
+    tabs: [
+      { key: "basic", label: "批次信息", fields: ["production_batch_id", "batch_name", "batch_status", "supply_plan_id", "production_schedule_line_id", "schedule_sequence"] },
+      { key: "production", label: "生产执行", fields: ["production_factory_id", "planned_robotaxi_count", "production_completed_quantity", "production_started_at", "production_completed_at"] },
+      { key: "quality", label: "质量检验", fields: ["qualified_robotaxi_count", "failed_robotaxi_count", "quality_inspection_started_at", "quality_inspection_completed_at"] },
+      { key: "cost", label: "生产成本", fields: ["standard_production_cost_per_robotaxi_snapshot", "actual_production_cost_amount", "quality_loss_cost_amount", "qualified_unit_production_cost", "production_cost_record_id"] },
+      { key: "assets", label: "形成资产", fields: ["produced_robotaxi_count", "produced_robotaxi_ids"] },
+      { key: "timeline", label: "状态时间线", fields: ["status_timeline"] },
+    ],
+    explanations: {
+      production_completed_quantity: "本批次生产阶段实际完成的 Robotaxi 数量；生产完成时形成生产成本事实。",
+      qualified_robotaxi_count: "通过工厂质量检验并形成 Robotaxi 资产的数量。",
+      qualified_unit_production_cost: "本批次生产总成本除以质量合格数量，用于形成 Robotaxi 资产成本。",
+      production_cost_record_id: "统一成本记录中的生产成本明细编号。",
     },
   },
 };
@@ -200,6 +239,8 @@ export function normalizeBusinessPlanningDefaults({ businessTargets = [], supply
 export const SupplyPlanStatus = {
   DRAFT: "DRAFT",
   CONFIRMED: "CONFIRMED",
+  IN_EXECUTION: "IN_EXECUTION",
+  COMPLETED: "COMPLETED",
   CANCELLED: "CANCELLED",
 };
 
@@ -338,6 +379,7 @@ export function initializeDefaultSupplyProductionProfiles(now = defaultNow()) {
     profile_id: "SPP-001",
     profile_name: "自有生产能力画像",
     profile_status: SupplyProductionProfileStatus.ACTIVE,
+    production_factory_id: "PF-001",
     production_lead_time_days: 10,
     production_capacity_period_unit: "MONTH",
     production_capacity_per_period: 10,
@@ -347,6 +389,18 @@ export function initializeDefaultSupplyProductionProfiles(now = defaultNow()) {
     quality_inspection_lead_time_days: 3,
     effective_from: "2026-01-01",
     effective_to: null,
+    created_at: now,
+    updated_at: now,
+  }];
+}
+
+export function initializeDefaultProductionFactories(now = defaultNow()) {
+  return [{
+    production_factory_id: "PF-001",
+    production_factory_name: "Robotaxi 生产工厂",
+    factory_status: ProductionFactoryStatus.ACTIVE,
+    production_line_count: 1,
+    factory_location: "自有生产基地",
     created_at: now,
     updated_at: now,
   }];
@@ -830,13 +884,16 @@ export function executeSupplyDecisionStrategy({
   };
 }
 
-export function confirmSupplyPlan({ supplyPlan, existingSupplyPlans = [], context = {} } = {}) {
+export function confirmSupplyPlan({ supplyPlan, existingSupplyPlans = [], supplyProductionProfiles = [], costModelProfile = null, context = {} } = {}) {
   if (!supplyPlan?.supply_plan_id) return { succeeded: false, reason: "SUPPLY_PLAN_REQUIRED", supplyPlan: null };
   if (supplyPlan.plan_status !== SupplyPlanStatus.DRAFT) return { succeeded: false, reason: "SUPPLY_PLAN_NOT_DRAFT", supplyPlan };
   const overlappingPlans = (existingSupplyPlans || []).filter((item) => item.supply_plan_id !== supplyPlan.supply_plan_id && item.plan_status !== SupplyPlanStatus.CANCELLED && isSameSupplyPlanningScope(supplyPlan, item));
-  const confirmedConflict = overlappingPlans.find((item) => item.plan_status === SupplyPlanStatus.CONFIRMED);
+  const confirmedConflict = overlappingPlans.find((item) => [SupplyPlanStatus.CONFIRMED, SupplyPlanStatus.IN_EXECUTION, SupplyPlanStatus.COMPLETED].includes(item.plan_status));
   if (confirmedConflict) return { succeeded: false, reason: "OVERLAPPING_CONFIRMED_SUPPLY_PLAN_EXISTS", supplyPlan, conflictingSupplyPlan: confirmedConflict };
   const occurredAt = resolveNow(context);
+  const productionProfile = supplyProductionProfiles.find((item) => item.profile_id === supplyPlan.supply_production_profile_id) || {};
+  const unitProductionCost = Math.max(0, Number(costModelProfile?.standard_production_cost_per_robotaxi ?? 230000));
+  const productionScheduleLines = createProductionScheduleLines({ supplyPlan, productionProfile, occurredAt });
   const cancelledSupplyPlans = overlappingPlans.filter((item) => item.plan_status === SupplyPlanStatus.DRAFT).map((item) => cancelSupplyPlan({ supplyPlan: item, context }).supplyPlan).filter(Boolean);
   return {
     succeeded: true,
@@ -844,6 +901,15 @@ export function confirmSupplyPlan({ supplyPlan, existingSupplyPlans = [], contex
     supplyPlan: withLifecycleStatus({
       ...supplyPlan,
       plan_status: SupplyPlanStatus.CONFIRMED,
+      production_factory_id: productionProfile.production_factory_id || "PF-001",
+      production_profile_snapshot: { ...productionProfile },
+      standard_production_cost_per_robotaxi_snapshot: unitProductionCost,
+      production_cost_currency_code: costModelProfile?.currency_code || "CNY",
+      production_cost_basis_snapshot: "INDUSTRY_PLANNING_BENCHMARK",
+      planned_production_cost_amount: roundCurrency(Number(supplyPlan.planned_robotaxi_count || 0) * unitProductionCost),
+      production_schedule_lines: productionScheduleLines,
+      released_robotaxi_count: 0,
+      completed_robotaxi_count: 0,
       confirmed_at: occurredAt,
       updated_at: occurredAt,
     }, {
@@ -887,19 +953,30 @@ export function cancelSupplyPlan({ supplyPlan, productionBatches = [], context =
 export function createProductionBatchFromSupplyPlan({ supplyPlan, existingProductionBatches = [], context = {} } = {}) {
   const occurredAt = resolveNow(context);
   if (!supplyPlan?.supply_plan_id) return { succeeded: false, reason: "SUPPLY_PLAN_REQUIRED", productionBatch: null };
-  if (supplyPlan.plan_status !== SupplyPlanStatus.CONFIRMED) return { succeeded: false, reason: "SUPPLY_PLAN_NOT_CONFIRMED", productionBatch: null };
-  const existingProductionBatch = (existingProductionBatches || []).find((item) => item.supply_plan_id === supplyPlan.supply_plan_id);
-  if (existingProductionBatch) return { succeeded: false, reason: "PRODUCTION_BATCH_ALREADY_EXISTS", productionBatch: existingProductionBatch };
-  const plannedQuantity = Math.max(0, Number(supplyPlan.planned_robotaxi_count || 0));
+  const scheduleLines = supplyPlan.production_schedule_lines || createProductionScheduleLines({ supplyPlan, productionProfile: supplyPlan.production_profile_snapshot || {}, occurredAt });
+  const releaseState = resolveProductionBatchReleaseState({ supplyPlan: { ...supplyPlan, production_schedule_lines: scheduleLines }, existingProductionBatches, now: occurredAt });
+  if (!releaseState.enabled) return { succeeded: false, reason: releaseState.reason, productionBatch: releaseState.currentBatch || null, supplyPlan, nextScheduleLine: releaseState.nextScheduleLine || null };
+  const nextLine = releaseState.nextScheduleLine;
+  const plannedQuantity = Math.max(0, Number(nextLine.planned_quantity || 0));
   if (plannedQuantity <= 0) return { succeeded: false, reason: "NO_PLANNED_ROBOTAXI_COUNT", productionBatch: null };
   const productionBatch = withLifecycleStatus({
     production_batch_id: resolveProductionBatchId(context),
-    batch_name: `${supplyPlan.plan_name || supplyPlan.supply_plan_id}生产批次`,
+    batch_name: `${supplyPlan.plan_name || supplyPlan.supply_plan_id}第${nextLine.schedule_sequence}期生产批次`,
     batch_status: ProductionBatchStatus.PLANNED,
     supply_plan_id: supplyPlan.supply_plan_id,
+    production_schedule_line_id: nextLine.production_schedule_line_id,
+    schedule_sequence: nextLine.schedule_sequence,
+    production_factory_id: supplyPlan.production_factory_id || "PF-001",
+    supply_production_profile_id: supplyPlan.supply_production_profile_id || null,
     target_zone_id: supplyPlan.target_zone_id,
     target_zone_name: supplyPlan.target_zone_name,
     planned_robotaxi_count: plannedQuantity,
+    planned_release_date: nextLine.planned_release_date,
+    planned_production_completion_date: nextLine.planned_production_completion_date,
+    planned_quality_completion_date: nextLine.planned_quality_completion_date,
+    standard_production_cost_per_robotaxi_snapshot: supplyPlan.standard_production_cost_per_robotaxi_snapshot ?? 230000,
+    production_cost_currency_code: supplyPlan.production_cost_currency_code || "CNY",
+    production_cost_basis_snapshot: supplyPlan.production_cost_basis_snapshot || "INDUSTRY_PLANNING_BENCHMARK",
     produced_robotaxi_count: 0,
     produced_robotaxi_ids: [],
     production_started_at: null,
@@ -916,13 +993,42 @@ export function createProductionBatchFromSupplyPlan({ supplyPlan, existingProduc
     resultType: "PRODUCTION_BATCH_CREATED",
     occurredAt,
   });
-  return { succeeded: true, productionBatch };
+  const updatedLines = scheduleLines.map((item) => item.production_schedule_line_id === nextLine.production_schedule_line_id
+    ? { ...item, release_status: ProductionScheduleReleaseStatus.RELEASED, production_batch_id: productionBatch.production_batch_id, released_at: occurredAt }
+    : item);
+  const updatedSupplyPlan = {
+    ...supplyPlan,
+    production_schedule_lines: updatedLines,
+    released_robotaxi_count: updatedLines.filter((item) => item.release_status === ProductionScheduleReleaseStatus.RELEASED).reduce((sum, item) => sum + Number(item.planned_quantity || 0), 0),
+    updated_at: occurredAt,
+  };
+  return { succeeded: true, productionBatch, supplyPlan: updatedSupplyPlan };
 }
 
-export function startProductionBatch({ productionBatch, context = {} } = {}) {
+export function resolveProductionBatchReleaseState({ supplyPlan, existingProductionBatches = [], now = defaultNow() } = {}) {
+  if (!supplyPlan?.supply_plan_id || ![SupplyPlanStatus.CONFIRMED, SupplyPlanStatus.IN_EXECUTION].includes(supplyPlan.plan_status)) {
+    return { enabled: false, reason: "SUPPLY_PLAN_NOT_CONFIRMED", message: "生产计划确认后才能生成生产批次。", nextScheduleLine: null, currentBatch: null };
+  }
+  const planBatches = (existingProductionBatches || []).filter((item) => item.supply_plan_id === supplyPlan.supply_plan_id && item.batch_status !== ProductionBatchStatus.CANCELLED);
+  const currentBatch = planBatches.find((item) => [ProductionBatchStatus.PLANNED, ProductionBatchStatus.IN_PRODUCTION].includes(item.batch_status));
+  if (currentBatch) return { enabled: false, reason: "CURRENT_PRODUCTION_BATCH_NOT_COMPLETED", message: `当前批次 ${currentBatch.production_batch_id} 仍在生产阶段，生产完成后可生成下一期批次。`, nextScheduleLine: null, currentBatch };
+  const nextScheduleLine = (supplyPlan.production_schedule_lines || []).find((item) => item.release_status === ProductionScheduleReleaseStatus.PENDING) || null;
+  if (!nextScheduleLine) return { enabled: false, reason: "PRODUCTION_SCHEDULE_FULLY_RELEASED", message: "计划生产数量已全部下达，无需生成新批次。", nextScheduleLine: null, currentBatch: null };
+  if (normalizePeriodDate(nextScheduleLine.planned_release_date) > normalizePeriodDate(now)) return { enabled: false, reason: "NEXT_PRODUCTION_BATCH_NOT_DUE", message: `下一期计划生产日期为 ${nextScheduleLine.planned_release_date}，尚未到下达时间。`, nextScheduleLine, currentBatch: null };
+  return { enabled: true, reason: null, message: "生成下一期生产批次", nextScheduleLine, currentBatch: null };
+}
+
+export function startProductionBatch({ productionBatch, supplyPlan = null, context = {} } = {}) {
   if (!productionBatch?.production_batch_id) return { succeeded: false, reason: "PRODUCTION_BATCH_REQUIRED", productionBatch: null };
   if (productionBatch.batch_status !== ProductionBatchStatus.PLANNED) return { succeeded: false, reason: "PRODUCTION_BATCH_NOT_PLANNED", productionBatch };
   const occurredAt = resolveNow(context);
+  const updatedSupplyPlan = supplyPlan?.supply_plan_id
+    ? withLifecycleStatus({ ...supplyPlan, plan_status: SupplyPlanStatus.IN_EXECUTION, updated_at: occurredAt }, {
+      objectType: "supplyPlan", idField: "supply_plan_id", statusField: "plan_status",
+      fromStatus: supplyPlan.plan_status, toStatus: SupplyPlanStatus.IN_EXECUTION,
+      actionType: "SUPPLY_PLAN_START", resultType: "SUPPLY_PLAN_STARTED", occurredAt,
+    })
+    : supplyPlan;
   return {
     succeeded: true,
     productionBatch: withLifecycleStatus({
@@ -940,11 +1046,15 @@ export function startProductionBatch({ productionBatch, context = {} } = {}) {
       resultType: "PRODUCTION_BATCH_STARTED",
       occurredAt,
     }),
+    supplyPlan: updatedSupplyPlan,
   };
 }
 
 export function completeProductionBatch({
   productionBatch,
+  costModelProfile = null,
+  existingCostRecords = [],
+  costCalculationRunId = null,
   context = {},
 } = {}) {
   if (!productionBatch?.production_batch_id) return { succeeded: false, reason: "PRODUCTION_BATCH_REQUIRED", productionBatch: null, robotaxis: [] };
@@ -954,6 +1064,7 @@ export function completeProductionBatch({
     ...productionBatch,
     batch_status: ProductionBatchStatus.AWAITING_QUALITY_INSPECTION,
     production_completed_at: occurredAt,
+    production_completed_quantity: Math.max(0, Number(productionBatch.planned_robotaxi_count || 0)),
     updated_at: occurredAt,
   }, {
     objectType: "productionBatch",
@@ -965,7 +1076,10 @@ export function completeProductionBatch({
     resultType: "PRODUCTION_BATCH_COMPLETED",
     occurredAt,
   });
-  return { succeeded: true, productionBatch: completedBatch, robotaxis: [] };
+  const existingCostRecord = (existingCostRecords || []).find((record) => record.source_object_type === "productionBatch" && record.source_object_id === completedBatch.production_batch_id && record.cost_type === "PRODUCTION_COST");
+  if (existingCostRecord) return { succeeded: true, productionBatch: { ...completedBatch, production_cost_record_id: existingCostRecord.cost_record_id, actual_production_cost_amount: existingCostRecord.cost_amount }, robotaxis: [], costRecords: existingCostRecords, costRecord: existingCostRecord, costCalculationRun: null };
+  const costFact = createProductionBatchCostFact({ productionBatch: completedBatch, profile: costModelProfile, calculationRunId: costCalculationRunId || `CCR-PROD-${completedBatch.production_batch_id}`, occurredAt });
+  return { succeeded: true, productionBatch: costFact.productionBatch, robotaxis: [], costRecords: [costFact.costRecord, ...(existingCostRecords || [])], costRecord: costFact.costRecord, costCalculationRun: costFact.calculationRun };
 }
 
 export function startProductionQualityInspection({ productionBatch, context = {} } = {}) {
@@ -992,16 +1106,17 @@ export function startProductionQualityInspection({ productionBatch, context = {}
   };
 }
 
-export function passProductionQualityInspection({ productionBatch, existingRobotaxis = [], context = {} } = {}) {
+export function passProductionQualityInspection({ productionBatch, existingRobotaxis = [], existingCostRecords = [], supplyPlan = null, existingProductionBatches = [], context = {} } = {}) {
   if (!productionBatch?.production_batch_id) return { succeeded: false, reason: "PRODUCTION_BATCH_REQUIRED", productionBatch: null, robotaxis: [] };
   if (productionBatch.batch_status !== ProductionBatchStatus.IN_QUALITY_INSPECTION) return { succeeded: false, reason: "PRODUCTION_BATCH_NOT_IN_QUALITY_INSPECTION", productionBatch, robotaxis: [] };
   const occurredAt = resolveNow(context);
   const plannedQuantity = Math.max(0, Number(productionBatch.planned_robotaxi_count || 0));
   const existingIds = new Set((existingRobotaxis || []).map((item) => item.robotaxi_id));
+  const allocation = finalizeProductionBatchCostAllocation({ productionBatch, costRecords: existingCostRecords, qualifiedRobotaxiCount: plannedQuantity, occurredAt });
   const robotaxis = Array.from({ length: plannedQuantity }, (_, index) => {
     const robotaxiId = resolveRobotaxiId(context, existingIds, index);
     existingIds.add(robotaxiId);
-    return createProducedRobotaxi({ robotaxiId, productionBatch, occurredAt, index });
+    return createProducedRobotaxi({ robotaxiId, productionBatch, occurredAt, index, qualifiedUnitProductionCost: allocation.qualifiedUnitProductionCost });
   });
   return {
     succeeded: true,
@@ -1013,6 +1128,9 @@ export function passProductionQualityInspection({ productionBatch, existingRobot
       quality_inspection_completed_at: occurredAt,
       produced_robotaxi_count: robotaxis.length,
       produced_robotaxi_ids: robotaxis.map((item) => item.robotaxi_id),
+      qualified_unit_production_cost: allocation.qualifiedUnitProductionCost,
+      failed_robotaxi_count: allocation.failedRobotaxiCount,
+      quality_loss_cost_amount: allocation.qualityLossCostAmount,
       updated_at: occurredAt,
     }, {
       objectType: "productionBatch",
@@ -1024,13 +1142,21 @@ export function passProductionQualityInspection({ productionBatch, existingRobot
       resultType: "PRODUCTION_QUALITY_INSPECTION_PASSED",
       occurredAt,
     }),
+    costRecords: allocation.costRecords,
+    supplyPlan: resolveCompletedSupplyPlan({ supplyPlan, productionBatch, existingProductionBatches, occurredAt }),
   };
 }
 
-export function failProductionQualityInspection({ productionBatch, failureReason = "QUALITY_INSPECTION_FAILED", context = {} } = {}) {
+export function failProductionQualityInspection({ productionBatch, failureReason = "QUALITY_INSPECTION_FAILED", existingCostRecords = [], context = {} } = {}) {
   if (!productionBatch?.production_batch_id) return { succeeded: false, reason: "PRODUCTION_BATCH_REQUIRED", productionBatch: null, robotaxis: [] };
   if (productionBatch.batch_status !== ProductionBatchStatus.IN_QUALITY_INSPECTION) return { succeeded: false, reason: "PRODUCTION_BATCH_NOT_IN_QUALITY_INSPECTION", productionBatch, robotaxis: [] };
   const occurredAt = resolveNow(context);
+  const allocation = finalizeProductionBatchCostAllocation({
+    productionBatch,
+    costRecords: existingCostRecords,
+    qualifiedRobotaxiCount: 0,
+    occurredAt,
+  });
   return {
     succeeded: true,
     robotaxis: [],
@@ -1040,6 +1166,8 @@ export function failProductionQualityInspection({ productionBatch, failureReason
       quality_inspection_result: "FAILED",
       quality_inspection_failure_reason: failureReason,
       quality_inspection_completed_at: occurredAt,
+      failed_robotaxi_count: allocation.failedRobotaxiCount,
+      quality_loss_cost_amount: allocation.qualityLossCostAmount,
       updated_at: occurredAt,
     }, {
       objectType: "productionBatch",
@@ -1051,6 +1179,7 @@ export function failProductionQualityInspection({ productionBatch, failureReason
       resultType: "PRODUCTION_QUALITY_INSPECTION_FAILED",
       occurredAt,
     }),
+    costRecords: allocation.costRecords,
   };
 }
 
@@ -1664,7 +1793,7 @@ function createFleetAllocationRun({ runId, strategy, runStatus, occurredAt, resu
   };
 }
 
-function createProducedRobotaxi({ robotaxiId, productionBatch, occurredAt }) {
+function createProducedRobotaxi({ robotaxiId, productionBatch, occurredAt, qualifiedUnitProductionCost = null }) {
   const batteryPercent = 100;
   return createRobotaxi({
     robotaxi_id: robotaxiId,
@@ -1686,6 +1815,9 @@ function createProducedRobotaxi({ robotaxiId, productionBatch, occurredAt }) {
     current_order_id: null,
     available_for_dispatch: false,
     production_batch_id: productionBatch.production_batch_id,
+    production_factory_id: productionBatch.production_factory_id || null,
+    asset_acquisition_cost: qualifiedUnitProductionCost,
+    asset_cost_currency_code: productionBatch.production_cost_currency_code || "CNY",
     planned_target_zone_id: productionBatch.target_zone_id || null,
     target_zone_id: null,
     target_ops_center_id: null,
@@ -1835,6 +1967,73 @@ function addDaysIsoDate(isoDateTime, days = 0) {
   const date = new Date(isoDateTime);
   date.setUTCDate(date.getUTCDate() + Math.max(0, Math.floor(Number(days || 0))));
   return date.toISOString().slice(0, 10);
+}
+
+function addCapacityPeriodIsoDate(isoDateTime, unit = "MONTH", count = 0) {
+  const date = new Date(String(isoDateTime).length === 10 ? `${isoDateTime}T00:00:00Z` : isoDateTime);
+  const amount = Math.max(0, Math.floor(Number(count || 0)));
+  if (unit === "DAY") date.setUTCDate(date.getUTCDate() + amount);
+  else if (unit === "WEEK") date.setUTCDate(date.getUTCDate() + amount * 7);
+  else if (unit === "QUARTER") date.setUTCMonth(date.getUTCMonth() + amount * 3);
+  else date.setUTCMonth(date.getUTCMonth() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function createProductionScheduleLines({ supplyPlan = {}, productionProfile = {}, occurredAt } = {}) {
+  const total = Math.max(0, Math.floor(Number(supplyPlan.planned_robotaxi_count || 0)));
+  const stableCapacity = Math.max(1, Math.floor(Number(productionProfile.production_capacity_per_period || total || 1)));
+  const ratios = Array.isArray(productionProfile.ramp_up_capacity_ratios) && productionProfile.ramp_up_capacity_ratios.length
+    ? productionProfile.ramp_up_capacity_ratios.map((value) => Math.max(0.01, Number(value || 0)))
+    : [1];
+  const periodUnit = productionProfile.production_capacity_period_unit || "MONTH";
+  const leadDays = Math.max(0, Number(productionProfile.production_lead_time_days || 0));
+  const qualityDays = Math.max(0, Number(productionProfile.quality_inspection_lead_time_days || 0));
+  const startDate = String(supplyPlan.planned_start_date || occurredAt || defaultNow()).slice(0, 10);
+  const lines = [];
+  let remaining = total;
+  let sequence = 1;
+  while (remaining > 0 && sequence <= 240) {
+    const capacity = Math.max(1, Math.floor(stableCapacity * (ratios[sequence - 1] ?? ratios[ratios.length - 1] ?? 1)));
+    const quantity = Math.min(remaining, capacity);
+    const plannedReleaseDate = addCapacityPeriodIsoDate(startDate, periodUnit, sequence - 1);
+    const productionCompletionDate = addDaysIsoDate(plannedReleaseDate, leadDays);
+    lines.push({
+      production_schedule_line_id: `${supplyPlan.supply_plan_id || "FPP"}-PSL-${String(sequence).padStart(3, "0")}`,
+      schedule_sequence: sequence,
+      planned_release_date: plannedReleaseDate,
+      planned_quantity: quantity,
+      planned_production_completion_date: productionCompletionDate,
+      planned_quality_completion_date: addDaysIsoDate(productionCompletionDate, qualityDays),
+      release_status: ProductionScheduleReleaseStatus.PENDING,
+      production_batch_id: null,
+      released_at: null,
+    });
+    remaining -= quantity;
+    sequence += 1;
+  }
+  return lines;
+}
+
+function resolveCompletedSupplyPlan({ supplyPlan, productionBatch, existingProductionBatches = [], occurredAt } = {}) {
+  if (!supplyPlan?.supply_plan_id) return supplyPlan;
+  const batches = (existingProductionBatches || []).filter((item) => item.supply_plan_id === supplyPlan.supply_plan_id).map((item) => (
+    item.production_batch_id === productionBatch.production_batch_id ? { ...item, batch_status: ProductionBatchStatus.COMPLETED } : item
+  ));
+  if (!batches.some((item) => item.production_batch_id === productionBatch.production_batch_id)) batches.push({ ...productionBatch, batch_status: ProductionBatchStatus.COMPLETED });
+  const allReleased = (supplyPlan.production_schedule_lines || []).length > 0 && (supplyPlan.production_schedule_lines || []).every((item) => item.release_status === ProductionScheduleReleaseStatus.RELEASED);
+  const allCompleted = batches.length > 0 && batches.every((item) => item.batch_status === ProductionBatchStatus.COMPLETED);
+  const completedQuantity = batches.filter((item) => item.batch_status === ProductionBatchStatus.COMPLETED).reduce((sum, item) => sum + Number(item.produced_robotaxi_count || item.planned_robotaxi_count || 0), 0);
+  return {
+    ...supplyPlan,
+    plan_status: allReleased && allCompleted ? SupplyPlanStatus.COMPLETED : SupplyPlanStatus.IN_EXECUTION,
+    completed_robotaxi_count: completedQuantity,
+    completed_at: allReleased && allCompleted ? occurredAt : null,
+    updated_at: occurredAt,
+  };
+}
+
+function roundCurrency(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
 }
 
 function createPlanningInputFingerprint({ strategy, businessTarget, productionProfile, zoneProfiles = [], robotaxis = [], opsCenters = [], zones = [] } = {}) {

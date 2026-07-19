@@ -202,6 +202,7 @@ node scripts/verify-v047-4-3-formula-semantic-display.mjs
 node scripts/verify-v047-4-4-row-action-and-plan-confirmation.mjs
 node scripts/verify-v047-5-decision-explanation-architecture.mjs
 node scripts/verify-v047-3-supply-position-tracking.mjs
+node scripts/verify-v047-6-production-supply-cost-loop.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'
