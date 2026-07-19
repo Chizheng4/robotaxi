@@ -458,6 +458,25 @@ try {
     assert.equal(planning.hasDetailPanel, false, "分析结果不得混入对象详情面板");
     assert(planning.productionQuantity > 0, "真实增长与缺口必须形成大于零的计划生产数量");
     assert.equal(planning.horizontalOverflow, 0, "预测分析画布不得产生整体横向溢出");
+
+    await send("Runtime.evaluate", {
+      expression: `document.querySelector(".forecast-analysis-actions button")?.scrollIntoView({ block: "center", inline: "nearest" })`,
+      returnByValue: true,
+    });
+    await delay(100);
+    await clickElementCenter(".forecast-analysis-actions button");
+    await delay(500);
+    const supplyPlanTraceResult = await send("Runtime.evaluate", {
+      expression: `JSON.stringify({
+        hasSupplyPlanPage: Boolean(document.querySelector('[data-page="supplyPlans"]')),
+        rowCount: document.querySelectorAll('[data-page="supplyPlans"] tbody tr').length,
+        bodyText: document.body?.innerText || ''
+      })`,
+      returnByValue: true,
+    });
+    const supplyPlanTrace = JSON.parse(supplyPlanTraceResult.result?.result?.value || "{}");
+    assert(supplyPlanTrace.hasSupplyPlanPage && supplyPlanTrace.rowCount > 0, `预测结果执行供应决策后必须进入生产计划：${JSON.stringify(supplyPlanTrace)}`);
+    assert(supplyPlanTrace.bodyText.includes("预测结果编号") && supplyPlanTrace.bodyText.includes("供应决策执行编号"), "生产计划必须展示预测结果和供应决策执行追溯字段");
   }
 
   await send("Runtime.evaluate", { expression: `document.querySelector(".platform-user-trigger")?.click()`, returnByValue: true });

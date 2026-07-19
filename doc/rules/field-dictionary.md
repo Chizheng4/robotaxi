@@ -1369,6 +1369,7 @@
 |missing_input_fields|缺失输入字段|计算字段|缺少的必要字段列表|
 |assumption_fields|默认假设字段|计算字段|使用默认值的字段列表|
 |calculation_steps|完整计算过程|持久化字段|公式、输入、单位、中间结果和来源|
+|decision_calculation_steps|决策计算过程|持久化字段|供应决策执行时冻结的输入、公式、中间结果和最终计划数量|
 |step_action|步骤动作|持久化字段|当前计算步骤执行的业务动作|
 |calculation_model|计算模型|持久化字段|当前步骤采用的模型标识|
 |formula_expression|公式表达|持久化字段|使用统一字段键记录的计算表达式|
@@ -1546,6 +1547,7 @@
 |deployment_demand_order_id|投放需求单编号|关联字段|未来供需平衡结果触发投放需求单后的编号，当前为空|
 |supply_decision_strategy_id|供应决策策略编号|持久化字段|将长期需求预测和生产画像转化为生产计划的策略编号|
 |supply_decision_run_id|供应决策执行编号|持久化字段|一次供应决策执行编号|
+|conflicting_supply_plan_id|冲突生产计划编号|关联字段|同一经营目标、区域且预测周期重叠时阻止生成新计划的已确认生产计划编号|
 |decision_algorithm|决策算法|配置字段|供应或投放决策使用的算法类型|
 |demand_coverage_rate|需求覆盖率|配置字段|供应决策计划覆盖预测缺口的目标比例|
 |safety_capacity_ratio|安全产能比例|配置字段|为预测波动保留的额外产能比例|
@@ -1638,6 +1640,9 @@
 |SHORT_TERM_FORECAST_RESULT_REQUIRED|缺少短期预测结果|投放决策执行失败原因|
 |SUPPLY_DECISION_STRATEGY_NOT_ACTIVE|供应决策策略未启用|供应决策执行失败原因|
 |SUPPLY_PLAN_ALREADY_EXISTS|当前预测结果已生成生产计划|供应决策重复执行结果|
+|OVERLAPPING_CONFIRMED_SUPPLY_PLAN_EXISTS|该区域当前周期已有已确认生产计划|供应决策与生产计划确认阻断原因|
+|SUPPLY_PLAN_HAS_PRODUCTION_BATCH|生产计划已进入生产，不能取消|生产计划取消阻断原因|
+|PRODUCTION_BATCH_ALREADY_EXISTS|当前生产计划已生成生产批次|生产批次重复创建阻断原因|
 |NO_FEASIBLE_SUPPLY_CAPACITY|预测期内没有可形成的生产交付能力|供应决策执行失败原因|
 |ZONE_SUPPLY_URGENCY_ALLOCATION|区域供给紧急度分配|区域分配算法|
 |ZONE_GAP_TO_OPS_CENTER|区域缺口分配到运营中心（兼容）|区域分配算法兼容值|

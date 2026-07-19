@@ -25,6 +25,17 @@ flowchart LR
 
 供应决策必须从一条明确的需求预测结果触发。策略列表不提供脱离预测上下文的通用“执行”动作，避免系统隐式选择第一条预测结果。相同预测结果、供应策略版本和生产画像版本已经形成未取消生产计划时，服务返回既有计划，不新增失败执行或重复计划；任一输入版本变化后才允许重新决策。
 
+每条预测结果拥有独立的供应决策资格，但生产执行必须受区域与周期约束：
+
+- 供应决策执行必须显式保存唯一 `forecast_result_id`、`business_target_id`、目标 Zone 和预测周期快照；
+- 生产计划必须继承上述追溯字段，同时保存 `supply_decision_run_id` 和供应决策策略编号；
+- 同一经营目标、同一目标 Zone、预测日期区间重叠的生产计划中，最多只能存在一条已确认计划；
+- 新预测结果执行供应决策时，系统自动取消该范围内尚未确认的旧草稿计划；
+- 已确认计划不会被系统静默取消。尚未形成生产批次时可由用户主动取消；已经形成生产批次后不得取消，后续变化应由计划调整能力承接；
+- 当前预测结果已有未取消计划时只允许查看该计划；其他预测结果若被重叠的已确认计划阻塞，应展示阻塞计划编号和原因，不得继续生成计划。
+
+日期区间重叠按闭区间判断：`new_start <= existing_end && existing_start <= new_end`。历史计划缺少预测周期时，只允许从其关联预测结果补齐，不能使用生产日期猜测预测周期。
+
 ## 业务闭环
 
 ```mermaid
@@ -49,7 +60,7 @@ flowchart LR
 - 交付编排只选择具体 Robotaxi、运营中心和批次；交付完成后资产进入待准入，再由运营准入任务决定是否可运营。
 - 策略、执行、计划、批次、资产和交付单均是独立对象，通过编号和服务动作关联，不共享状态机。
 
-生产计划必须保存并展示统一字段：`forecast_result_id`、`supply_decision_run_id`、`supply_decision_strategy_id`、`supply_production_profile_id`、`required_robotaxi_quantity`、`effective_current_robotaxi`、`robotaxi_gap_quantity`、`required_supply_quantity`、`feasible_manufacturing_quantity`、`feasible_delivery_quantity`、`planned_robotaxi_count` 与 `uncovered_robotaxi_gap`。页面不得再读取 `fleet_gap_quantity / feasible_production_quantity / production_gap_quantity` 等旧字段。
+生产计划必须保存并展示统一字段：`forecast_result_id`、`forecast_run_id`、`business_target_id`、`forecast_start_date`、`forecast_end_date`、`forecast_period_unit`、`forecast_period_count`、`supply_decision_run_id`、`supply_decision_strategy_id`、`supply_production_profile_id`、`required_robotaxi_quantity`、`effective_current_robotaxi`、`robotaxi_gap_quantity`、`required_supply_quantity`、`feasible_manufacturing_quantity`、`feasible_delivery_quantity`、`planned_robotaxi_count` 与 `uncovered_robotaxi_gap`。页面不得再读取 `fleet_gap_quantity / feasible_production_quantity / production_gap_quantity` 等旧字段。
 
 供应决策不得按预测周期数量再次乘算生产能力。`feasible_manufacturing_quantity` 与 `feasible_delivery_quantity` 是需求预测结果已经按生产提前期、质检周期、爬坡产能和交付能力冻结的可行性事实；供应决策只按覆盖率和安全容量计算所需供给，再受这两个事实约束。
 
@@ -78,6 +89,12 @@ planned_robotaxi_count
 运行态加载旧生产计划时，可以从其关联的预测结果、供应决策执行和生产画像补齐上述追溯与计算字段，但不得改写已经发生的预测结果或人为配置。旧别名只允许作为迁移输入，页面和新单据统一保存正式字段。
 
 执行成功后，调用端必须进入新生成或已存在的生产计划并选中记录；失败时保留在来源预测结果，显示可理解的中文失败原因。动作状态统一为“执行供应决策 / 执行中 / 查看生产计划 / 重新决策”，不能在输入未变化时持续显示可重复执行。
+
+预测结果页的动作与提示统一为：
+
+- 可执行：`执行供应决策`；
+- 当前预测已有计划：`查看生产计划`；
+- 重叠周期已有确认计划：`查看已确认计划`，并提示“该区域当前周期已有已确认生产计划，当前预测暂不能生成新计划。”
 
 ## 验证要求
 

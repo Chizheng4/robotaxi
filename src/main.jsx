@@ -311,12 +311,12 @@ const tableConfig = {
   supplyDecisionRuns: {
     title: "供应决策执行",
     description: "记录供应决策的输入、执行状态及其直接形成的生产计划。",
-    columns: ["supply_decision_run_id", "supply_decision_strategy_id", "forecast_result_id", "run_status", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "planned_robotaxi_count", "supply_plan_id", "started_at", "completed_at", "failure_reason"],
+    columns: ["supply_decision_run_id", "supply_decision_strategy_id", "forecast_result_id", "business_target_id", "target_zone_id", "forecast_start_date", "forecast_end_date", "run_status", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "planned_robotaxi_count", "supply_plan_id", "conflicting_supply_plan_id", "started_at", "completed_at", "failure_reason"],
   },
   supplyPlans: {
     title: "生产计划",
     description: "生产计划把需求预测结果转化为自有生产的 Robotaxi 数量和交付节奏。",
-    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "supply_production_profile_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
+    columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "business_target_id", "forecast_start_date", "forecast_end_date", "supply_production_profile_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
   },
   supplyPositionTracking: {
     title: "供应跟踪",
@@ -3279,8 +3279,10 @@ function App({ currentUser, onLogout }) {
     if (!result.reused) {
       setOperationalData((current) => ({
         ...current,
-        supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
-        supplyPlans: result.succeeded ? [result.supplyPlan, ...(current.supplyPlans || [])] : current.supplyPlans,
+        supplyDecisionRuns: result.run ? [result.run, ...(current.supplyDecisionRuns || [])] : current.supplyDecisionRuns,
+        supplyPlans: result.succeeded
+          ? [result.supplyPlan, ...(current.supplyPlans || []).map((item) => result.cancelledSupplyPlans?.find((cancelled) => cancelled.supply_plan_id === item.supply_plan_id) || item)]
+          : current.supplyPlans,
       }));
     }
     if (result.succeeded) {
@@ -3299,12 +3301,21 @@ function App({ currentUser, onLogout }) {
       existingSupplyPlans: data.supplyPlans || [],
       context: { now, nextRunId: nextSupplyDecisionRunId, nextSupplyPlanId },
     });
-    if (!result.succeeded) return result;
+    if (!result.succeeded) {
+      if (result.run) {
+        setOperationalData((current) => ({ ...current, supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])] }));
+      }
+      if (result.run?.conflicting_supply_plan_id) {
+        setActivePageAndMenu("supplyPlans");
+        selectForPage("supplyPlans", "supplyPlan", result.run.conflicting_supply_plan_id);
+      }
+      return result;
+    }
     if (!result.reused) {
       setOperationalData((current) => ({
         ...current,
         supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
-        supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
+        supplyPlans: [result.supplyPlan, ...(current.supplyPlans || []).map((item) => result.cancelledSupplyPlans?.find((cancelled) => cancelled.supply_plan_id === item.supply_plan_id) || item)],
       }));
     }
     setActivePageAndMenu("supplyPlans");
@@ -3363,7 +3374,7 @@ function App({ currentUser, onLogout }) {
 
   function confirmSupplyPlan(row) {
     if (!businessPlanningService?.confirmSupplyPlan || !row) return;
-    const result = businessPlanningService.confirmSupplyPlan({ supplyPlan: row, context: { now } });
+    const result = businessPlanningService.confirmSupplyPlan({ supplyPlan: row, existingSupplyPlans: data.supplyPlans || [], context: { now } });
     if (!result.succeeded) {
       appendRecordOperationEvent("supplyPlans", {
         business_object_type: "supplyPlan",
@@ -3371,6 +3382,30 @@ function App({ currentUser, onLogout }) {
         action_type: "SUPPLY_PLAN_CONFIRM",
         result_type: result.reason || "FAILED",
         event_type: "SUPPLY_PLAN_CONFIRM",
+        event_result: taskTypes.TaskEventResult.FAILED,
+        message: getDisplayValue(result.reason),
+      });
+      return;
+    }
+    setOperationalData((current) => ({
+      ...current,
+      supplyPlans: (current.supplyPlans || []).map((item) => {
+        if (item.supply_plan_id === result.supplyPlan.supply_plan_id) return result.supplyPlan;
+        return result.cancelledSupplyPlans?.find((cancelled) => cancelled.supply_plan_id === item.supply_plan_id) || item;
+      }),
+    }));
+  }
+
+  function cancelSupplyPlan(row) {
+    if (!businessPlanningService?.cancelSupplyPlan || !row) return;
+    const result = businessPlanningService.cancelSupplyPlan({ supplyPlan: row, productionBatches: data.productionBatches || [], context: { now } });
+    if (!result.succeeded) {
+      appendRecordOperationEvent("supplyPlans", {
+        business_object_type: "supplyPlan",
+        business_object_id: row.supply_plan_id,
+        action_type: "SUPPLY_PLAN_CANCEL",
+        result_type: result.reason || "FAILED",
+        event_type: "SUPPLY_PLAN_CANCEL",
         event_result: taskTypes.TaskEventResult.FAILED,
         message: getDisplayValue(result.reason),
       });
@@ -3386,6 +3421,7 @@ function App({ currentUser, onLogout }) {
     if (!businessPlanningService?.createProductionBatchFromSupplyPlan || !row) return;
     const result = businessPlanningService.createProductionBatchFromSupplyPlan({
       supplyPlan: row,
+      existingProductionBatches: data.productionBatches || [],
       context: { now, nextProductionBatchId },
     });
     if (!result.succeeded) {
@@ -3822,6 +3858,7 @@ function App({ currentUser, onLogout }) {
                   createSupplyPlanFromForecast,
                   completeSupplyManagementLoopFromForecast,
                   confirmSupplyPlan,
+                  cancelSupplyPlan,
                   createProductionBatchFromSupplyPlan,
                   startProductionBatch,
                   completeProductionBatch,
@@ -8833,7 +8870,10 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
   const [actionFeedback, setActionFeedback] = useState(null);
   const [calculationOpen, setCalculationOpen] = useState(false);
   const selected = rows.find((row) => row.forecast_result_id === selectedId) || rows[0] || null;
-  useEffect(() => setCalculationOpen(false), [selected?.forecast_result_id]);
+  useEffect(() => {
+    setCalculationOpen(false);
+    setActionFeedback(null);
+  }, [selected?.forecast_result_id]);
   if (!selected) return <Empty description="执行需求预测后将在这里展示经营规划结论" />;
   const forecastDays = Math.max(0, (Date.parse(`${selected.forecast_end_date}T00:00:00Z`) - Date.parse(`${selected.forecast_start_date}T00:00:00Z`)) / 86400000);
   const availableTrendUnits = new Set([...(forecastDays <= 180 ? ["DAY"] : []), ...(forecastDays <= 730 ? ["WEEK"] : []), "MONTH"]);
@@ -8843,11 +8883,18 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
   const normalizedSupplyTrendRows = normalizeForecastChartRows(supplyTrendRows, "DAY");
   const metrics = ["market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "robotaxi_gap_quantity", "planned_production_quantity", "uncovered_robotaxi_gap", "forecast_cumulative_market_orders", "forecast_cumulative_planned_orders"];
   const bottlenecks = ["planned_daily_orders", "effective_daily_capacity", "daily_capacity_gap", "planned_peak_hour_orders", "effective_peak_hour_capacity", "peak_capacity_gap"];
-  const existingSupplyPlan = supplyPlans.find((item) => item.forecast_result_id === selected.forecast_result_id && item.plan_status !== "CANCELLED");
+  const supplyDecisionEligibility = businessPlanningService?.resolveForecastSupplyDecisionEligibility?.({ forecast: selected, supplyPlans }) || { status: "ELIGIBLE", eligible: true };
+  const existingSupplyPlan = supplyDecisionEligibility.supplyPlan;
+  const conflictingSupplyPlan = supplyDecisionEligibility.conflictingSupplyPlan;
   const handleSupplyDecision = () => {
     const result = onCreateSupplyPlan?.(selected);
     if (result?.succeeded === false) setActionFeedback(getDisplayValue(result.reason));
   };
+  const supplyDecisionLabel = existingSupplyPlan
+    ? "查看生产计划"
+    : conflictingSupplyPlan
+      ? "查看已确认计划"
+      : "执行供应决策";
   return (
     <div className="forecast-analysis">
       <div className="forecast-analysis-toolbar">
@@ -8864,8 +8911,8 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
           />
         </div>
         <div className="forecast-analysis-actions">
-          {actionFeedback && <span className="forecast-action-feedback">{actionFeedback}</span>}
-          <Button size="small" type="primary" onClick={handleSupplyDecision}>{existingSupplyPlan ? "查看生产计划" : "执行供应决策"}</Button>
+          {(actionFeedback || conflictingSupplyPlan) && <span className="forecast-action-feedback">{actionFeedback || "该区域当前周期已有已确认生产计划，当前预测暂不能生成新计划。"}</span>}
+          <Button size="small" type="primary" onClick={handleSupplyDecision}>{supplyDecisionLabel}</Button>
         </div>
       </div>
       <div className="forecast-context-strip">
@@ -9590,11 +9637,13 @@ function renderViewDetailAction(row, actions) {
 }
 
 function renderSupplyPlanActions(row, actions) {
+  const productionBatch = (actions.data?.productionBatches || []).find((item) => item.supply_plan_id === row.supply_plan_id);
   if (row.plan_status === "DRAFT") {
-    return <RowActionButton onClick={() => actions.confirmSupplyPlan(row)}>确认计划</RowActionButton>;
+    return <RowActionGroup><RowActionButton onClick={() => actions.confirmSupplyPlan(row)}>确认计划</RowActionButton><RowActionButton type="default" onClick={() => actions.cancelSupplyPlan(row)}>取消</RowActionButton></RowActionGroup>;
   }
   if (row.plan_status === "CONFIRMED") {
-    return <RowActionButton onClick={() => actions.createProductionBatchFromSupplyPlan(row)}>生成生产批次</RowActionButton>;
+    if (productionBatch) return renderViewDetailAction(row, actions);
+    return <RowActionGroup><RowActionButton onClick={() => actions.createProductionBatchFromSupplyPlan(row)}>生成生产批次</RowActionButton><RowActionButton type="default" onClick={() => actions.cancelSupplyPlan(row)}>取消</RowActionButton></RowActionGroup>;
   }
   return renderViewDetailAction(row, actions);
 }

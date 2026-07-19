@@ -111,6 +111,43 @@ export const businessPlanningObjectSchemas = {
       capacity_constraint_mode: "生产与交付双约束表示计划数量同时不能超过预测期可生产数量和可交付数量。",
     },
   },
+  supplyDecisionRun: {
+    tabs: [
+      { key: "basic", label: "执行信息", fields: ["supply_decision_run_id", "supply_decision_strategy_id", "run_status", "started_at", "completed_at", "failure_reason"] },
+      { key: "source", label: "预测来源", fields: ["forecast_result_id", "forecast_run_id", "business_target_id", "target_zone_id", "forecast_start_date", "forecast_end_date", "forecast_period_unit", "forecast_period_count"] },
+      { key: "result", label: "决策结果", fields: ["robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "supply_plan_id", "conflicting_supply_plan_id"] },
+      { key: "calculation", label: "计算过程", fields: ["decision_calculation_steps", "strategy_snapshot", "forecast_snapshot", "production_profile_snapshot"] },
+    ],
+    explanations: {
+      forecast_result_id: "本次供应决策唯一使用的预测结果，供应决策不得脱离该结果重新计算需求。",
+      business_target_id: "预测结果所属经营目标，用于识别同一经营规划范围。",
+      forecast_start_date: "预测结果快照中的周期起点。",
+      forecast_end_date: "预测结果快照中的周期终点，用于生产计划周期冲突判断。",
+      covered_gap_quantity: "按供应决策策略的缺口覆盖率计算的计划覆盖数量。",
+      safety_capacity_quantity: "在计划覆盖数量上增加的安全容量。",
+      planned_robotaxi_count: "同时受到所需供应、可生产数量和可交付数量约束的最终计划数量。",
+      conflicting_supply_plan_id: "阻止本次决策生成生产计划的已确认计划。",
+      decision_calculation_steps: "本次决策冻结的输入、公式和结果，用于复核生产计划如何形成。",
+    },
+  },
+  supplyPlan: {
+    tabs: [
+      { key: "basic", label: "计划信息", fields: ["supply_plan_id", "plan_name", "plan_status", "planned_robotaxi_count", "created_at", "confirmed_at", "cancelled_at"] },
+      { key: "source", label: "来源追溯", fields: ["forecast_result_id", "forecast_run_id", "supply_decision_run_id", "supply_decision_strategy_id", "business_target_id", "supply_production_profile_id"] },
+      { key: "period", label: "区域周期", fields: ["target_zone_id", "target_zone_name", "forecast_start_date", "forecast_end_date", "forecast_period_unit", "forecast_period_count", "planned_start_date", "planned_end_date"] },
+      { key: "quantity", label: "数量依据", fields: ["required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "uncovered_robotaxi_gap"] },
+      { key: "calculation", label: "计算过程", fields: ["decision_calculation_steps"] },
+    ],
+    explanations: {
+      forecast_result_id: "生产计划所依据的唯一预测结果编号。",
+      supply_decision_run_id: "直接生成本生产计划的供应决策执行编号。",
+      business_target_id: "预测结果所属经营目标，用于识别计划冲突范围。",
+      forecast_start_date: "生产计划覆盖的预测周期起点，继承自预测结果快照。",
+      forecast_end_date: "生产计划覆盖的预测周期终点，继承自预测结果快照。",
+      planned_robotaxi_count: "供应决策在需求覆盖、安全容量、生产与交付约束下确定的计划数量。",
+      decision_calculation_steps: "从 Robotaxi 缺口到计划生产数量的完整决策计算快照。",
+    },
+  },
 };
 
 export function normalizeBusinessTargetFields(target = {}) {
@@ -561,6 +598,11 @@ export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyD
       ...plan,
       forecast_result_id: plan.forecast_result_id || plan.forecast_id || null,
       forecast_run_id: plan.forecast_run_id || forecast.forecast_run_id || null,
+      business_target_id: plan.business_target_id || run.business_target_id || forecast.business_target_id || null,
+      forecast_start_date: plan.forecast_start_date || run.forecast_start_date || forecast.forecast_start_date || null,
+      forecast_end_date: plan.forecast_end_date || run.forecast_end_date || forecast.forecast_end_date || null,
+      forecast_period_unit: plan.forecast_period_unit || run.forecast_period_unit || forecast.forecast_period_unit || null,
+      forecast_period_count: plan.forecast_period_count ?? run.forecast_period_count ?? forecast.forecast_period_count ?? null,
       supply_decision_strategy_id: plan.supply_decision_strategy_id || run.supply_decision_strategy_id || null,
       supply_decision_run_id: plan.supply_decision_run_id || run.supply_decision_run_id || null,
       supply_production_profile_id: plan.supply_production_profile_id || run.supply_production_profile_id || forecast.supply_production_profile_id || null,
@@ -574,8 +616,61 @@ export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyD
       feasible_delivery_quantity: plan.feasible_delivery_quantity ?? feasibleDelivery,
       planned_robotaxi_count: plannedQuantity,
       uncovered_robotaxi_gap: plan.uncovered_robotaxi_gap ?? Math.max(0, requiredSupply - plannedQuantity),
+      decision_calculation_steps: plan.decision_calculation_steps || run.decision_calculation_steps || [],
     };
   });
+}
+
+function normalizePeriodDate(value) {
+  if (!value) return null;
+  const timestamp = Date.parse(String(value).length === 10 ? `${value}T00:00:00Z` : value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function periodsOverlap(left = {}, right = {}) {
+  const leftStart = normalizePeriodDate(left.forecast_start_date);
+  const leftEnd = normalizePeriodDate(left.forecast_end_date);
+  const rightStart = normalizePeriodDate(right.forecast_start_date);
+  const rightEnd = normalizePeriodDate(right.forecast_end_date);
+  return [leftStart, leftEnd, rightStart, rightEnd].every(Number.isFinite)
+    && leftStart <= rightEnd
+    && rightStart <= leftEnd;
+}
+
+function isSameSupplyPlanningScope(forecast = {}, plan = {}) {
+  const forecastZoneId = forecast.zone_id || forecast.target_zone_id;
+  return Boolean(
+    forecast.business_target_id
+    && forecast.business_target_id === plan.business_target_id
+    && forecastZoneId
+    && forecastZoneId === plan.target_zone_id
+    && periodsOverlap(forecast, plan),
+  );
+}
+
+export function resolveForecastSupplyDecisionEligibility({ forecast, supplyPlans = [] } = {}) {
+  if (!forecast?.forecast_result_id) return { status: "FORECAST_REQUIRED", eligible: false, supplyPlan: null, conflictingSupplyPlan: null };
+  const activePlans = (supplyPlans || []).filter((item) => item.plan_status !== SupplyPlanStatus.CANCELLED);
+  const exactPlan = activePlans.find((item) => item.forecast_result_id === forecast.forecast_result_id) || null;
+  if (exactPlan) return { status: "EXACT_PLAN_EXISTS", eligible: false, supplyPlan: exactPlan, conflictingSupplyPlan: null };
+  const conflictingSupplyPlan = activePlans.find((item) => item.plan_status === SupplyPlanStatus.CONFIRMED && isSameSupplyPlanningScope(forecast, item)) || null;
+  if (conflictingSupplyPlan) return { status: "CONFIRMED_PERIOD_CONFLICT", eligible: false, supplyPlan: null, conflictingSupplyPlan };
+  return {
+    status: "ELIGIBLE",
+    eligible: true,
+    supplyPlan: null,
+    conflictingSupplyPlan: null,
+    overlappingDraftPlans: activePlans.filter((item) => item.plan_status === SupplyPlanStatus.DRAFT && isSameSupplyPlanningScope(forecast, item)),
+  };
+}
+
+function createSupplyDecisionCalculationSteps({ rawGap, coverageRate, coveredGap, safetyRatio, safetyCapacity, requiredSupply, feasibleManufacturing, feasibleDelivery, plannedRobotaxiCount } = {}) {
+  return [
+    { step_name: "缺口覆盖数量", formula: "Robotaxi 缺口 × 需求覆盖率，结果向上取整", input_values: { robotaxi_gap_quantity: rawGap, demand_coverage_rate: coverageRate }, output_field: "covered_gap_quantity", output_value: coveredGap },
+    { step_name: "安全容量数量", formula: "缺口覆盖数量 × 安全容量比例，结果向上取整", input_values: { covered_gap_quantity: coveredGap, safety_capacity_ratio: safetyRatio }, output_field: "safety_capacity_quantity", output_value: safetyCapacity },
+    { step_name: "所需供应数量", formula: "缺口覆盖数量 + 安全容量数量", input_values: { covered_gap_quantity: coveredGap, safety_capacity_quantity: safetyCapacity }, output_field: "required_supply_quantity", output_value: requiredSupply },
+    { step_name: "计划生产数量", formula: "所需供应数量、可生产数量、可交付数量三者的最小值", input_values: { required_supply_quantity: requiredSupply, feasible_manufacturing_quantity: feasibleManufacturing, feasible_delivery_quantity: feasibleDelivery }, output_field: "planned_robotaxi_count", output_value: plannedRobotaxiCount },
+  ];
 }
 
 export function createSupplyPlanFromForecast({
@@ -607,6 +702,7 @@ export function createSupplyPlanFromForecast({
   const feasibleQuantity = Math.max(0, Math.floor(Math.min(requiredSupply, feasibleManufacturing, feasibleDelivery)));
   const plannedRobotaxiCount = feasibleQuantity;
   if (plannedRobotaxiCount <= 0) return { succeeded: false, reason: "NO_FEASIBLE_SUPPLY_CAPACITY", supplyPlan: null };
+  const decisionCalculationSteps = createSupplyDecisionCalculationSteps({ rawGap, coverageRate, coveredGap, safetyRatio, safetyCapacity, requiredSupply, feasibleManufacturing, feasibleDelivery, plannedRobotaxiCount });
   const supplyPlan = withLifecycleStatus({
     supply_plan_id: resolveSupplyPlanId(context),
     plan_name: `${forecast.zone_name || forecast.zone_id || "区域"}生产计划`,
@@ -614,6 +710,11 @@ export function createSupplyPlanFromForecast({
     forecast_id: forecast.forecast_result_id,
     forecast_result_id: forecast.forecast_result_id,
     forecast_run_id: forecast.forecast_run_id,
+    business_target_id: forecast.business_target_id || null,
+    forecast_start_date: forecast.forecast_start_date || null,
+    forecast_end_date: forecast.forecast_end_date || null,
+    forecast_period_unit: forecast.forecast_period_unit || null,
+    forecast_period_count: forecast.forecast_period_count ?? null,
     supply_decision_strategy_id: supplyDecisionStrategy?.supply_decision_strategy_id || null,
     supply_decision_run_id: supplyDecisionRunId,
     target_zone_id: forecast.zone_id,
@@ -629,6 +730,7 @@ export function createSupplyPlanFromForecast({
     feasible_manufacturing_quantity: Math.min(requiredSupply, feasibleManufacturing),
     feasible_delivery_quantity: Math.min(requiredSupply, feasibleDelivery),
     uncovered_robotaxi_gap: Math.max(0, requiredSupply - plannedRobotaxiCount),
+    decision_calculation_steps: decisionCalculationSteps,
     production_lead_time_days: productionProfile.production_lead_time_days ?? null,
     planned_start_date: forecast.forecast_start_date || occurredAt.slice(0, 10),
     planned_end_date: forecast.full_supply_completion_date || forecast.first_delivery_date || addDaysIsoDate(occurredAt, Number(productionProfile.production_lead_time_days || 180)),
@@ -657,11 +759,18 @@ export function executeSupplyDecisionStrategy({
   const occurredAt = resolveNow(context);
   const runIdFactory = context.nextRunId || context.nextSupplyDecisionRunId;
   const runId = typeof runIdFactory === "function" ? runIdFactory() : context.supplyDecisionRunId || "SD-RUN-0001";
-  const failed = (reason) => ({
+  const failed = (reason, extra = {}) => ({
     run: {
       supply_decision_run_id: runId,
       supply_decision_strategy_id: strategy?.supply_decision_strategy_id || null,
       forecast_result_id: forecast?.forecast_result_id || null,
+      forecast_run_id: forecast?.forecast_run_id || null,
+      business_target_id: forecast?.business_target_id || null,
+      target_zone_id: forecast?.zone_id || forecast?.target_zone_id || null,
+      forecast_start_date: forecast?.forecast_start_date || null,
+      forecast_end_date: forecast?.forecast_end_date || null,
+      forecast_period_unit: forecast?.forecast_period_unit || null,
+      forecast_period_count: forecast?.forecast_period_count ?? null,
       run_status: SupplyDecisionRunStatus.FAILED,
       supply_plan_id: null,
       failure_reason: reason,
@@ -669,6 +778,7 @@ export function executeSupplyDecisionStrategy({
       forecast_snapshot: forecast ? { ...forecast } : null,
       started_at: occurredAt,
       completed_at: occurredAt,
+      ...extra,
     },
     supplyPlan: null,
     succeeded: false,
@@ -676,18 +786,29 @@ export function executeSupplyDecisionStrategy({
   });
   if (!strategy?.supply_decision_strategy_id || strategy.strategy_status !== SupplyDecisionStrategyStatus.ACTIVE) return failed("SUPPLY_DECISION_STRATEGY_NOT_ACTIVE");
   if (!forecast?.forecast_result_id) return failed("FORECAST_RESULT_REQUIRED");
-  const existingSupplyPlan = (existingSupplyPlans || []).find((item) => item.forecast_result_id === forecast.forecast_result_id && item.plan_status !== SupplyPlanStatus.CANCELLED);
-  if (existingSupplyPlan) return { succeeded: true, supplyPlan: existingSupplyPlan, run: null, reused: true };
+  const eligibility = resolveForecastSupplyDecisionEligibility({ forecast, supplyPlans: existingSupplyPlans });
+  if (eligibility.status === "EXACT_PLAN_EXISTS") return { succeeded: true, supplyPlan: eligibility.supplyPlan, run: null, reused: true, eligibility };
+  if (eligibility.status === "CONFIRMED_PERIOD_CONFLICT") {
+    return failed("OVERLAPPING_CONFIRMED_SUPPLY_PLAN_EXISTS", { conflicting_supply_plan_id: eligibility.conflictingSupplyPlan.supply_plan_id, supply_plan_id: eligibility.conflictingSupplyPlan.supply_plan_id });
+  }
+  const cancelledSupplyPlans = (eligibility.overlappingDraftPlans || []).map((plan) => cancelSupplyPlan({ supplyPlan: plan, context }).supplyPlan).filter(Boolean);
   const result = createSupplyPlanFromForecast({ forecast, supplyProductionProfiles, supplyDecisionStrategy: strategy, supplyDecisionRunId: runId, context });
   if (!result.succeeded) return failed(result.reason);
   return {
     succeeded: true,
     reused: false,
+    cancelledSupplyPlans,
     supplyPlan: result.supplyPlan,
     run: {
       supply_decision_run_id: runId,
       supply_decision_strategy_id: strategy.supply_decision_strategy_id,
       forecast_result_id: forecast.forecast_result_id,
+      forecast_run_id: forecast.forecast_run_id || null,
+      business_target_id: forecast.business_target_id || null,
+      forecast_start_date: forecast.forecast_start_date || null,
+      forecast_end_date: forecast.forecast_end_date || null,
+      forecast_period_unit: forecast.forecast_period_unit || null,
+      forecast_period_count: forecast.forecast_period_count ?? null,
       supply_production_profile_id: result.supplyPlan.supply_production_profile_id,
       target_zone_id: result.supplyPlan.target_zone_id,
       run_status: SupplyDecisionRunStatus.SUCCEEDED,
@@ -698,6 +819,7 @@ export function executeSupplyDecisionStrategy({
       required_supply_quantity: result.supplyPlan.required_supply_quantity,
       planned_robotaxi_count: result.supplyPlan.planned_robotaxi_count,
       uncovered_robotaxi_gap: result.supplyPlan.uncovered_robotaxi_gap,
+      decision_calculation_steps: result.supplyPlan.decision_calculation_steps,
       failure_reason: null,
       strategy_snapshot: { ...strategy },
       forecast_snapshot: { ...forecast },
@@ -708,12 +830,17 @@ export function executeSupplyDecisionStrategy({
   };
 }
 
-export function confirmSupplyPlan({ supplyPlan, context = {} } = {}) {
+export function confirmSupplyPlan({ supplyPlan, existingSupplyPlans = [], context = {} } = {}) {
   if (!supplyPlan?.supply_plan_id) return { succeeded: false, reason: "SUPPLY_PLAN_REQUIRED", supplyPlan: null };
   if (supplyPlan.plan_status !== SupplyPlanStatus.DRAFT) return { succeeded: false, reason: "SUPPLY_PLAN_NOT_DRAFT", supplyPlan };
+  const overlappingPlans = (existingSupplyPlans || []).filter((item) => item.supply_plan_id !== supplyPlan.supply_plan_id && item.plan_status !== SupplyPlanStatus.CANCELLED && isSameSupplyPlanningScope(supplyPlan, item));
+  const confirmedConflict = overlappingPlans.find((item) => item.plan_status === SupplyPlanStatus.CONFIRMED);
+  if (confirmedConflict) return { succeeded: false, reason: "OVERLAPPING_CONFIRMED_SUPPLY_PLAN_EXISTS", supplyPlan, conflictingSupplyPlan: confirmedConflict };
   const occurredAt = resolveNow(context);
+  const cancelledSupplyPlans = overlappingPlans.filter((item) => item.plan_status === SupplyPlanStatus.DRAFT).map((item) => cancelSupplyPlan({ supplyPlan: item, context }).supplyPlan).filter(Boolean);
   return {
     succeeded: true,
+    cancelledSupplyPlans,
     supplyPlan: withLifecycleStatus({
       ...supplyPlan,
       plan_status: SupplyPlanStatus.CONFIRMED,
@@ -732,9 +859,10 @@ export function confirmSupplyPlan({ supplyPlan, context = {} } = {}) {
   };
 }
 
-export function cancelSupplyPlan({ supplyPlan, context = {} } = {}) {
+export function cancelSupplyPlan({ supplyPlan, productionBatches = [], context = {} } = {}) {
   if (!supplyPlan?.supply_plan_id) return { succeeded: false, reason: "SUPPLY_PLAN_REQUIRED", supplyPlan: null };
   if ([SupplyPlanStatus.CANCELLED].includes(supplyPlan.plan_status)) return { succeeded: false, reason: "SUPPLY_PLAN_ALREADY_CANCELLED", supplyPlan };
+  if ((productionBatches || []).some((item) => item.supply_plan_id === supplyPlan.supply_plan_id)) return { succeeded: false, reason: "SUPPLY_PLAN_HAS_PRODUCTION_BATCH", supplyPlan };
   const occurredAt = resolveNow(context);
   return {
     succeeded: true,
@@ -756,10 +884,12 @@ export function cancelSupplyPlan({ supplyPlan, context = {} } = {}) {
   };
 }
 
-export function createProductionBatchFromSupplyPlan({ supplyPlan, context = {} } = {}) {
+export function createProductionBatchFromSupplyPlan({ supplyPlan, existingProductionBatches = [], context = {} } = {}) {
   const occurredAt = resolveNow(context);
   if (!supplyPlan?.supply_plan_id) return { succeeded: false, reason: "SUPPLY_PLAN_REQUIRED", productionBatch: null };
   if (supplyPlan.plan_status !== SupplyPlanStatus.CONFIRMED) return { succeeded: false, reason: "SUPPLY_PLAN_NOT_CONFIRMED", productionBatch: null };
+  const existingProductionBatch = (existingProductionBatches || []).find((item) => item.supply_plan_id === supplyPlan.supply_plan_id);
+  if (existingProductionBatch) return { succeeded: false, reason: "PRODUCTION_BATCH_ALREADY_EXISTS", productionBatch: existingProductionBatch };
   const plannedQuantity = Math.max(0, Number(supplyPlan.planned_robotaxi_count || 0));
   if (plannedQuantity <= 0) return { succeeded: false, reason: "NO_PLANNED_ROBOTAXI_COUNT", productionBatch: null };
   const productionBatch = withLifecycleStatus({
