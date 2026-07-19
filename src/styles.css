@@ -2792,6 +2792,13 @@ body {
   cursor: pointer;
 }
 
+.interactive-table-cell {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+}
+
 .compact-array-popover {
   display: grid;
   gap: 4px;
@@ -4107,6 +4114,7 @@ body {
   width: 100%;
   min-width: 0;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .row-action-cell > .row-action-button.ant-btn {

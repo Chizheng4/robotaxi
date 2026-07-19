@@ -3424,6 +3424,7 @@ function App({ currentUser, onLogout }) {
         return result.cancelledSupplyPlans?.find((cancelled) => cancelled.supply_plan_id === item.supply_plan_id) || item;
       }),
     }));
+    antd.message.success("生产计划已确认");
   }
 
   function cancelSupplyPlan(row) {
@@ -3445,6 +3446,7 @@ function App({ currentUser, onLogout }) {
       ...current,
       supplyPlans: replaceCollectionItem(current.supplyPlans || [], "supply_plan_id", result.supplyPlan),
     }));
+    antd.message.success("生产计划已取消");
   }
 
   function createProductionBatchFromSupplyPlan(row) {
@@ -3471,6 +3473,16 @@ function App({ currentUser, onLogout }) {
       productionBatches: [result.productionBatch, ...(current.productionBatches || [])],
       supplyPlans: replaceCollectionItem(current.supplyPlans || [], "supply_plan_id", result.supplyPlan),
     }));
+    appendRecordOperationEvent("supplyPlans", {
+      business_object_type: "supplyPlan",
+      business_object_id: row.supply_plan_id,
+      action_type: "PRODUCTION_BATCH_CREATE",
+      result_type: "PRODUCTION_BATCH_CREATED",
+      event_result: taskTypes.TaskEventResult.SUCCESS,
+      message: `已生成第 ${result.productionBatch.schedule_sequence || 1} 期生产批次 ${result.productionBatch.production_batch_id}`,
+    });
+    antd.message.success(`生产批次 ${result.productionBatch.production_batch_id} 已生成`);
+    setActivePageAndMenu("productionBatches");
     selectForPage("productionBatches", "productionBatch", result.productionBatch.production_batch_id);
   }
 
@@ -3497,6 +3509,7 @@ function App({ currentUser, onLogout }) {
         ? replaceCollectionItem(current.supplyPlans || [], "supply_plan_id", result.supplyPlan)
         : current.supplyPlans,
     }));
+    antd.message.success("生产批次已开始生产");
   }
 
   function completeProductionBatch(row) {
@@ -3552,11 +3565,23 @@ function App({ currentUser, onLogout }) {
 
   function startProductionQualityInspection(row) {
     const result = businessPlanningService?.startProductionQualityInspection?.({ productionBatch: row, context: { now } });
-    if (!result?.succeeded) return;
+    if (!result?.succeeded) {
+      appendRecordOperationEvent("productionBatches", {
+        business_object_type: "productionBatch",
+        business_object_id: row.production_batch_id,
+        action_type: "PRODUCTION_QUALITY_INSPECTION_START",
+        result_type: result?.reason || "FAILED",
+        event_type: "PRODUCTION_QUALITY_INSPECTION_START",
+        event_result: taskTypes.TaskEventResult.FAILED,
+        message: getDisplayValue(result?.reason || "操作条件不足"),
+      });
+      return;
+    }
     setOperationalData((current) => ({
       ...current,
       productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
     }));
+    antd.message.success("质量检验已开始");
   }
 
   function passProductionQualityInspection(row) {
@@ -3586,7 +3611,18 @@ function App({ currentUser, onLogout }) {
       existingProductionBatches: data.productionBatches || [],
       context: { now, nextRobotaxiId: nextProducedRobotaxiId },
     });
-    if (!result?.succeeded) return;
+    if (!result?.succeeded) {
+      appendRecordOperationEvent("productionBatches", {
+        business_object_type: "productionBatch",
+        business_object_id: row.production_batch_id,
+        action_type: "PRODUCTION_QUALITY_INSPECTION_COMPLETE",
+        result_type: result?.reason || "FAILED",
+        event_type: "PRODUCTION_QUALITY_INSPECTION_COMPLETE",
+        event_result: taskTypes.TaskEventResult.FAILED,
+        message: getDisplayValue(result?.reason || "操作条件不足"),
+      });
+      return;
+    }
     setOperationalData((current) => ({
       ...current,
       productionBatches: replaceCollectionItem(current.productionBatches || [], "production_batch_id", result.productionBatch),
@@ -3657,6 +3693,8 @@ function App({ currentUser, onLogout }) {
         result_status: "USED_FOR_DELIVERY",
       }),
     }));
+    antd.message.success(`交付单 ${result.deliveryOrder.delivery_order_id} 已生成`);
+    setActivePageAndMenu("robotaxiDeliveryOrders");
     selectForPage("robotaxiDeliveryOrders", "robotaxiDeliveryOrder", result.deliveryOrder.delivery_order_id);
   }
 
@@ -3730,6 +3768,8 @@ function App({ currentUser, onLogout }) {
       ],
       robotaxiDeliveryOrders: [delivery.deliveryOrder, ...(current.robotaxiDeliveryOrders || [])],
     }));
+    antd.message.success(`交付单 ${delivery.deliveryOrder.delivery_order_id} 已生成`);
+    setActivePageAndMenu("robotaxiDeliveryOrders");
     selectForPage("robotaxiDeliveryOrders", "robotaxiDeliveryOrder", delivery.deliveryOrder.delivery_order_id);
   }
 
@@ -3757,6 +3797,7 @@ function App({ currentUser, onLogout }) {
       robotaxiDeliveryOrders: replaceCollectionItem(current.robotaxiDeliveryOrders || [], "delivery_order_id", result.deliveryOrder),
       robotaxis: result.robotaxis,
     }));
+    antd.message.success("交付任务已开始");
   }
 
   function completeDeliveryOrder(row) {
@@ -3786,6 +3827,8 @@ function App({ currentUser, onLogout }) {
       robotaxis: result.robotaxis,
     }));
     setReadinessTasks(result.readinessTasks);
+    antd.message.success("交付已完成，Robotaxi 已进入待准入状态");
+    setActivePageAndMenu("readinessTasks");
     selectForPage("readinessTasks", "readinessTask", result.deliveryOrder.readiness_task_ids?.[0] || null);
   }
   return (
@@ -7286,8 +7329,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         key: "actions",
         title: "操作",
         fixed: "right",
-        width: 260,
-        render: (_, row) => renderActionCell(row, renderSupplyPlanActions(row, actions)),
+        width: 132,
+        render: (_, row) => renderActionCell(row, renderSupplyPlanActions(row, { ...actions, page, objectType, idField })),
       };
     }
     if (isProductionBatchPage) {
@@ -7295,8 +7338,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         key: "actions",
         title: "操作",
         fixed: "right",
-        width: 220,
-        render: (_, row) => renderActionCell(row, renderProductionBatchActions(row, actions)),
+        width: 132,
+        render: (_, row) => renderActionCell(row, renderProductionBatchActions(row, { ...actions, page, objectType, idField })),
       };
     }
     if (isFleetAllocationStrategyPage) {
@@ -7331,8 +7374,8 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
         key: "actions",
         title: "操作",
         fixed: "right",
-        width: 220,
-        render: (_, row) => renderActionCell(row, renderRobotaxiDeliveryOrderActions(row, actions)),
+        width: 132,
+        render: (_, row) => renderActionCell(row, renderRobotaxiDeliveryOrderActions(row, { ...actions, page, objectType, idField })),
       };
     }
     if (isRobotaxiPage) {
@@ -8618,9 +8661,11 @@ function renderCellValue(key, row) {
   if (key === "pending_task_queue" && Array.isArray(row[key])) {
     const summary = formatRobotaxiQueueSummary(row[key]);
     return (
-      <Popover title="待执行任务队列" content={<RobotaxiQueuePopover queueItems={row[key]} />} placement="bottomLeft" trigger="hover">
-        <Text className="table-queue-summary">{summary}</Text>
-      </Popover>
+      <span className="interactive-table-cell" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <Popover title="待执行任务队列" content={<RobotaxiQueuePopover queueItems={row[key]} />} placement="bottomLeft" trigger={["hover", "click"]}>
+          <Text className="table-queue-summary">{summary}</Text>
+        </Popover>
+      </span>
     );
   }
   if (key === "result") {
@@ -8651,14 +8696,16 @@ function CompactArrayValue({ values = [], fieldKey = "", row = null, visibleCoun
   const remainingCount = Math.max(0, formattedValues.length - visibleValues.length);
   const summary = `${visibleValues.join(" / ")}${remainingCount ? ` / 等 ${formattedValues.length} 项` : ""}`;
   return (
-    <Popover
-      title={getFieldLabel(fieldKey)}
-      content={<div className="compact-array-popover">{formattedValues.map((item) => <span key={item}>{item}</span>)}</div>}
-      placement="bottomLeft"
-      trigger={["hover", "click"]}
-    >
-      <Text className="compact-array-summary">{summary}</Text>
-    </Popover>
+    <span className="interactive-table-cell" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+      <Popover
+        title={getFieldLabel(fieldKey)}
+        content={<div className="compact-array-popover">{formattedValues.map((item) => <span key={item}>{item}</span>)}</div>}
+        placement="bottomLeft"
+        trigger={["hover", "click"]}
+      >
+        <Text className="compact-array-summary">{summary}</Text>
+      </Popover>
+    </span>
   );
 }
 

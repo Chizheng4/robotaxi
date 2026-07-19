@@ -54,7 +54,13 @@ const main = fs.readFileSync("src/main.jsx", "utf8");
 const styles = fs.readFileSync("src/styles.css", "utf8");
 assert.match(main, /className="row-action-split"/);
 assert.match(main, /aria-label="更多操作"/);
+assert.match(main, /renderSupplyPlanActions\(row, \{ \.\.\.actions, page, objectType, idField \}\)/, "生产计划详情动作必须携带统一页面上下文");
+assert.match(main, /renderProductionBatchActions\(row, \{ \.\.\.actions, page, objectType, idField \}\)/, "生产批次详情动作必须携带统一页面上下文");
+assert.match(main, /renderRobotaxiDeliveryOrderActions\(row, \{ \.\.\.actions, page, objectType, idField \}\)/, "交付单详情动作必须携带统一页面上下文");
+assert.match(main, /className="interactive-table-cell" onClick=\{\(event\) => event\.stopPropagation\(\)\}/, "交互型表格单元格必须隔离行选中事件");
+assert.match(main, /message: `已生成第 \$\{result\.productionBatch\.schedule_sequence \|\| 1\} 期生产批次/, "生产计划必须记录批次生成结果");
 assert.match(styles, /\.row-action-split\s*\{/);
 assert.match(styles, /\.row-action-menu-trigger\.ant-btn\s*\{/);
+assert.match(styles, /\.interactive-table-cell\s*\{/);
 
 console.log("v047.4.4 行操作与生产计划确认时点验证通过");
