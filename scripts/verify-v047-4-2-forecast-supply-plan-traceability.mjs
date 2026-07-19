@@ -57,13 +57,17 @@ assert.equal(first.run.decision_calculation_steps.length, 4);
 
 const second = executeSupplyDecisionStrategy({ strategy, forecast: forecast("LDF-RES-0002"), supplyProductionProfiles: productionProfiles, existingSupplyPlans: [first.supplyPlan], context });
 assert.equal(second.succeeded, true);
-assert.equal(second.cancelledSupplyPlans[0].plan_status, SupplyPlanStatus.CANCELLED, "新预测生成计划时只能自动取消重叠草稿");
-const plansAfterSecond = [second.supplyPlan, ...second.cancelledSupplyPlans];
+assert.equal(first.supplyPlan.plan_status, SupplyPlanStatus.DRAFT, "生成新计划时不得提前取消已有重叠草稿");
+assert.deepEqual(second.cancelledSupplyPlans, [], "供应决策执行只生成计划，不处理计划冲突");
+const plansAfterSecond = [second.supplyPlan, first.supplyPlan];
 const confirmed = confirmSupplyPlan({ supplyPlan: second.supplyPlan, existingSupplyPlans: plansAfterSecond, context });
 assert.equal(confirmed.succeeded, true);
+assert.equal(confirmed.cancelledSupplyPlans.length, 1, "确认计划时必须处理同范围重叠草稿");
+assert.equal(confirmed.cancelledSupplyPlans[0].supply_plan_id, first.supplyPlan.supply_plan_id);
+assert.equal(confirmed.cancelledSupplyPlans[0].plan_status, SupplyPlanStatus.CANCELLED);
 
 const thirdForecast = forecast("LDF-RES-0003");
-const eligibility = resolveForecastSupplyDecisionEligibility({ forecast: thirdForecast, supplyPlans: [confirmed.supplyPlan, ...second.cancelledSupplyPlans] });
+const eligibility = resolveForecastSupplyDecisionEligibility({ forecast: thirdForecast, supplyPlans: [confirmed.supplyPlan, ...confirmed.cancelledSupplyPlans] });
 assert.equal(eligibility.status, "CONFIRMED_PERIOD_CONFLICT");
 const blocked = executeSupplyDecisionStrategy({ strategy, forecast: thirdForecast, supplyProductionProfiles: productionProfiles, existingSupplyPlans: [confirmed.supplyPlan], context });
 assert.equal(blocked.succeeded, false);
@@ -94,5 +98,7 @@ const mainSource = fs.readFileSync("src/main.jsx", "utf8");
 assert.match(mainSource, /resolveForecastSupplyDecisionEligibility/, "预测结果页面必须消费统一供应决策资格服务");
 assert.match(mainSource, /查看已确认计划/, "预测结果必须提供冲突计划的明确查看入口");
 assert.match(mainSource, /actions\.cancelSupplyPlan\(row\)/, "生产计划必须提供服务化取消入口");
+assert.match(mainSource, /className="row-action-split"/, "多动作必须使用主动作与更多菜单统一分体控件");
+assert.match(mainSource, /aria-label="更多操作"/, "更多操作入口必须具备明确可访问名称");
 
 console.log("v047.4.2 预测、供应决策与生产计划追溯合同验证通过");

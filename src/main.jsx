@@ -3283,7 +3283,7 @@ function App({ currentUser, onLogout }) {
         ...current,
         supplyDecisionRuns: result.run ? [result.run, ...(current.supplyDecisionRuns || [])] : current.supplyDecisionRuns,
         supplyPlans: result.succeeded
-          ? [result.supplyPlan, ...(current.supplyPlans || []).map((item) => result.cancelledSupplyPlans?.find((cancelled) => cancelled.supply_plan_id === item.supply_plan_id) || item)]
+          ? [result.supplyPlan, ...(current.supplyPlans || [])]
           : current.supplyPlans,
       }));
     }
@@ -3317,7 +3317,7 @@ function App({ currentUser, onLogout }) {
       setOperationalData((current) => ({
         ...current,
         supplyDecisionRuns: [result.run, ...(current.supplyDecisionRuns || [])],
-        supplyPlans: [result.supplyPlan, ...(current.supplyPlans || []).map((item) => result.cancelledSupplyPlans?.find((cancelled) => cancelled.supply_plan_id === item.supply_plan_id) || item)],
+        supplyPlans: [result.supplyPlan, ...(current.supplyPlans || [])],
       }));
     }
     setActivePageAndMenu("supplyPlans");
@@ -8601,35 +8601,40 @@ function RowActionButton({ children, onClick, type = "primary", danger = false, 
 function RowActionGroup({ children }) {
   const actions = React.Children.toArray(children).filter(Boolean);
   if (actions.length <= 1) return actions[0] || null;
-  const items = actions.map((action, index) => ({
+  const primaryAction = actions[0];
+  const secondaryActions = actions.slice(1);
+  const items = secondaryActions.map((action, index) => ({
     key: String(index),
     label: action.props.children,
     danger: Boolean(action.props.danger),
     disabled: Boolean(action.props.disabled),
   }));
   return (
-    <Dropdown
-      trigger={["click"]}
-      placement="bottomRight"
-      menu={{
-        items,
-        onClick: ({ key, domEvent }) => {
-          domEvent?.stopPropagation?.();
-          actions[Number(key)]?.props?.onClick?.();
-        },
-      }}
-    >
-      <Button
-        size="small"
-        type="text"
-        className="row-action-menu-trigger"
-        title={typeof actions[0].props.children === "string" ? actions[0].props.children : undefined}
-        onClick={(event) => event.stopPropagation()}
+    <span className="row-action-split">
+      {primaryAction}
+      <Dropdown
+        trigger={["click"]}
+        placement="bottomRight"
+        menu={{
+          items,
+          onClick: ({ key, domEvent }) => {
+            domEvent?.stopPropagation?.();
+            secondaryActions[Number(key)]?.props?.onClick?.();
+          },
+        }}
       >
-        <span>{actions[0].props.children}</span>
-        <span aria-hidden="true">⌄</span>
-      </Button>
-    </Dropdown>
+        <Button
+          size="small"
+          type="text"
+          className="row-action-menu-trigger"
+          aria-label="更多操作"
+          title="更多操作"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <span aria-hidden="true">⋯</span>
+        </Button>
+      </Dropdown>
+    </span>
   );
 }
 

@@ -791,13 +791,12 @@ export function executeSupplyDecisionStrategy({
   if (eligibility.status === "CONFIRMED_PERIOD_CONFLICT") {
     return failed("OVERLAPPING_CONFIRMED_SUPPLY_PLAN_EXISTS", { conflicting_supply_plan_id: eligibility.conflictingSupplyPlan.supply_plan_id, supply_plan_id: eligibility.conflictingSupplyPlan.supply_plan_id });
   }
-  const cancelledSupplyPlans = (eligibility.overlappingDraftPlans || []).map((plan) => cancelSupplyPlan({ supplyPlan: plan, context }).supplyPlan).filter(Boolean);
   const result = createSupplyPlanFromForecast({ forecast, supplyProductionProfiles, supplyDecisionStrategy: strategy, supplyDecisionRunId: runId, context });
   if (!result.succeeded) return failed(result.reason);
   return {
     succeeded: true,
     reused: false,
-    cancelledSupplyPlans,
+    cancelledSupplyPlans: [],
     supplyPlan: result.supplyPlan,
     run: {
       supply_decision_run_id: runId,

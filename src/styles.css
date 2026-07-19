@@ -4137,6 +4137,7 @@ body {
   display: inline-flex;
   width: 100%;
   min-width: 0;
+  align-items: center;
 }
 
 .row-action-cell > .row-action-button.ant-btn {
@@ -4146,21 +4147,39 @@ body {
   white-space: nowrap;
 }
 
-.row-action-menu-trigger.ant-btn {
-  display: inline-grid;
-  grid-template-columns: minmax(0, 1fr) 14px;
+.row-action-split {
+  display: inline-flex;
   align-items: center;
-  width: 100%;
-  height: 24px;
-  padding: 0 6px 0 8px;
-  color: var(--accent);
-  font-size: var(--font-xs);
+  max-width: 100%;
+  min-width: 0;
+  gap: 2px;
 }
 
-.row-action-menu-trigger.ant-btn > span:first-child {
+.row-action-split > .row-action-button.ant-btn {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.row-action-menu-trigger.ant-btn {
+  display: inline-flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.row-action-menu-trigger.ant-btn:hover,
+.row-action-menu-trigger.ant-btn:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .module-footer {
