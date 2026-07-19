@@ -299,7 +299,7 @@ const tableConfig = {
   longTermDemandForecasts: {
     title: "需求预测结果",
     description: "需求预测结果记录长期需求预测策略执行后形成的区域 Robotaxi 需求和供应缺口。",
-    columns: ["forecast_result_id", "forecast_name", "forecast_status", "forecast_period_unit", "forecast_period_count", "zone_id", "market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "planned_production_quantity", "uncovered_robotaxi_gap", "requirement_driver", "data_quality_level", "created_at"],
+    columns: ["forecast_result_id", "forecast_name", "forecast_status", "forecast_period_unit", "forecast_period_count", "zone_id", "market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "recommended_production_quantity", "feasible_supply_quantity", "uncovered_robotaxi_gap", "requirement_driver", "data_quality_level", "created_at"],
   },
   longTermDemandForecastStrategies: {
     title: "需求预测策略",
@@ -8983,7 +8983,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
   const supplyTrendRows = selected.supply_trend_series || [];
   const normalizedTrendRows = normalizeForecastChartRows(trendRows, trendTimeUnit);
   const normalizedSupplyTrendRows = normalizeForecastChartRows(supplyTrendRows, "DAY");
-  const metrics = ["market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "robotaxi_gap_quantity", "planned_production_quantity", "uncovered_robotaxi_gap", "forecast_cumulative_market_orders", "forecast_cumulative_planned_orders"];
+  const metrics = ["market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "robotaxi_gap_quantity", "recommended_production_quantity", "feasible_supply_quantity", "uncovered_robotaxi_gap", "forecast_cumulative_market_orders", "forecast_cumulative_planned_orders"];
   const bottlenecks = ["planned_daily_orders", "effective_daily_capacity", "daily_capacity_gap", "planned_peak_hour_orders", "effective_peak_hour_capacity", "peak_capacity_gap"];
   const supplyDecisionEligibility = businessPlanningService?.resolveForecastSupplyDecisionEligibility?.({ forecast: selected, supplyPlans }) || { status: "ELIGIBLE", eligible: true };
   const existingSupplyPlan = supplyDecisionEligibility.supplyPlan;
@@ -9078,7 +9078,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
       <div className="forecast-analysis-grid">
         <section><h3>能力与瓶颈</h3>{bottlenecks.map((key) => <div className="forecast-analysis-row" key={key}><span>{getFieldLabel(key)}</span><strong>{formatPlanningValue(selected[key])}</strong></div>)}</section>
         <section><h3>Robotaxi 规模</h3><div className="forecast-analysis-row"><span>{getFieldLabel("effective_current_robotaxi")}</span><strong>{formatPlanningValue(selected.effective_current_robotaxi)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("requirement_driver")}</span><strong>{getDisplayValue(selected.requirement_driver)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("robotaxi_effective_daily_orders")}</span><strong>{formatPlanningValue(selected.robotaxi_effective_daily_orders)}</strong></div></section>
-        <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>{getFieldLabel("recommended_production_quantity")}</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("first_production_completion_date")}</span><strong>{selected.first_production_completion_date || selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("first_quality_inspection_completion_date")}</span><strong>{selected.first_quality_inspection_completion_date || "无"}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("feasible_supply_quantity")}</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("full_supply_completion_date")}</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
+        <section><h3>生产可行性</h3><div className="forecast-analysis-row"><span>{getFieldLabel("recommended_production_quantity")}</span><strong>{formatPlanningValue(selected.recommended_production_quantity)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("feasible_supply_quantity")}</span><strong>{formatPlanningValue(selected.feasible_supply_quantity)}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("first_production_completion_date")}</span><strong>{selected.first_production_completion_date || selected.production_ready_date || "无"}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("first_quality_inspection_completion_date")}</span><strong>{selected.first_quality_inspection_completion_date || "无"}</strong></div><div className="forecast-analysis-row"><span>{getFieldLabel("full_supply_completion_date")}</span><strong>{selected.full_supply_completion_date || "超出当前规划范围"}</strong></div></section>
       </div>
       <div className="forecast-calculation-details">
         <div className="forecast-calculation-heading"><span>{getFieldLabel("calculation_steps")}</span><Button size="small" onClick={() => setCalculationOpen((open) => !open)}>{calculationOpen ? "收起计算过程" : "查看计算过程"}</Button></div>
@@ -9139,6 +9139,19 @@ function formatPlanningSourceRefs(sourceRefs = []) {
 }
 
 const DATA_CHART_COLORS = ["#4b78c7", "#3f9580", "#a86f42", "#8a6fb2"];
+let activeDataChartInstance = null;
+
+function claimDataChartTooltip(chart) {
+  if (activeDataChartInstance && activeDataChartInstance !== chart && !activeDataChartInstance.isDisposed()) {
+    activeDataChartInstance.dispatchAction({ type: "hideTip" });
+  }
+  activeDataChartInstance = chart;
+}
+
+function releaseDataChartTooltip(chart) {
+  if (chart && !chart.isDisposed()) chart.dispatchAction({ type: "hideTip" });
+  if (activeDataChartInstance === chart) activeDataChartInstance = null;
+}
 
 function preserveDataChartPageScroll(event) {
   event.stopPropagation();
@@ -9155,8 +9168,6 @@ function DataSeriesChart({
   onSelect,
 }) {
   const chartElementRef = useRef(null);
-  const chartInstanceRef = useRef(null);
-  const [activePoint, setActivePoint] = useState(null);
   const seriesSignature = series.map((item) => item.key).join("|");
   const [visibleKeys, setVisibleKeys] = useState(() => series.map((item) => item.key));
   useEffect(() => {
@@ -9176,43 +9187,29 @@ function DataSeriesChart({
   useEffect(() => {
     if (!rows.length || !chartElementRef.current || !window.echarts) return undefined;
     const chart = window.echarts.init(chartElementRef.current, null, { renderer: "canvas" });
-    chartInstanceRef.current = chart;
     const { __sampledRows, __sampled, ...echartsOption } = option;
     chart.setOption(echartsOption, { notMerge: true, lazyUpdate: true });
     const handleClick = (event) => {
       if (event.componentType === "series") onSelect?.(__sampledRows?.[event.dataIndex]?.raw);
     };
-    const showNearestTooltip = (offsetX, offsetY) => {
-      const axisValue = chart.convertFromPixel({ xAxisIndex: 0 }, [offsetX, offsetY]);
-      const labelIndex = __sampledRows?.findIndex((row) => row.label === axisValue) ?? -1;
-      const dataIndex = labelIndex >= 0
-        ? labelIndex
-        : Math.max(0, Math.min((__sampledRows?.length || 1) - 1, Math.round(Number(axisValue))));
-      if (!Number.isFinite(dataIndex) || !__sampledRows?.[dataIndex]) return;
-      chart.dispatchAction({ type: "showTip", seriesIndex: 0, dataIndex });
-    };
-    const handlePlotClick = (event) => showNearestTooltip(event.offsetX, event.offsetY);
-    const handlePlotMove = (event) => showNearestTooltip(event.offsetX, event.offsetY);
-    const handleTouchEnd = (event) => {
-      const touch = event.changedTouches?.[0];
-      const rect = chartElementRef.current?.getBoundingClientRect();
-      if (!touch || !rect) return;
-      showNearestTooltip(touch.clientX - rect.left, touch.clientY - rect.top);
-    };
+    const handleTooltipClaim = () => claimDataChartTooltip(chart);
+    const handleTooltipRelease = () => releaseDataChartTooltip(chart);
     chart.on("click", handleClick);
-    chart.getZr().on("click", handlePlotClick);
-    chart.getZr().on("mousemove", handlePlotMove);
-    chartElementRef.current.addEventListener("touchend", handleTouchEnd, { passive: true, capture: true });
+    chart.getZr().on("mousemove", handleTooltipClaim);
+    chart.getZr().on("click", handleTooltipClaim);
+    chart.getZr().on("globalout", handleTooltipRelease);
+    chartElementRef.current.addEventListener("touchstart", handleTooltipClaim, { passive: true });
     const observer = new ResizeObserver(() => chart.resize({ animation: { duration: 0 } }));
     observer.observe(chartElementRef.current);
     return () => {
       observer.disconnect();
       chart.off("click", handleClick);
-      chart.getZr().off("click", handlePlotClick);
-      chart.getZr().off("mousemove", handlePlotMove);
-      chartElementRef.current?.removeEventListener("touchend", handleTouchEnd, true);
+      chart.getZr().off("mousemove", handleTooltipClaim);
+      chart.getZr().off("click", handleTooltipClaim);
+      chart.getZr().off("globalout", handleTooltipRelease);
+      chartElementRef.current?.removeEventListener("touchstart", handleTooltipClaim);
+      releaseDataChartTooltip(chart);
       chart.dispose();
-      chartInstanceRef.current = null;
     };
   }, [rows, option, onSelect]);
   const toggleSeries = (key) => {
@@ -9220,21 +9217,6 @@ function DataSeriesChart({
       ? (current.length > 1 ? current.filter((item) => item !== key) : current)
       : [...current, key]);
   };
-  const showChartPoint = (clientX, clientY) => {
-    const rect = chartElementRef.current?.getBoundingClientRect();
-    if (!rect || !rows.length) return;
-    const plotLeft = Math.min(52, rect.width * 0.12);
-    const plotRight = Math.max(plotLeft + 1, rect.width - 22);
-    const boundedX = Math.max(plotLeft, Math.min(plotRight, clientX - rect.left));
-    const ratio = (boundedX - plotLeft) / Math.max(1, plotRight - plotLeft);
-    const index = Math.max(0, Math.min(rows.length - 1, Math.round(ratio * (rows.length - 1))));
-    setActivePoint({
-      index,
-      left: boundedX,
-      top: Math.max(14, Math.min(rect.height - 18, clientY - rect.top)),
-    });
-  };
-  const activeRow = activePoint ? rows[activePoint.index] : null;
   return (
     <section className="data-chart" data-variant={variant.toLowerCase()}>
       <header className="data-chart-header">
@@ -9257,30 +9239,7 @@ function DataSeriesChart({
             role="img"
             aria-label={`${title}，移动或点击数据点可查看具体数值`}
             onWheelCapture={preserveDataChartPageScroll}
-            onMouseMove={(event) => showChartPoint(event.clientX, event.clientY)}
-            onMouseLeave={() => setActivePoint(null)}
-            onClick={(event) => showChartPoint(event.clientX, event.clientY)}
-            onTouchEnd={(event) => {
-              const touch = event.changedTouches?.[0];
-              if (touch) showChartPoint(touch.clientX, touch.clientY);
-            }}
           />
-          {activeRow && <>
-            <i className="data-chart-active-line" style={{ left: activePoint.left }} />
-            <div
-              className={`data-chart-tooltip data-chart-control-tooltip${activePoint.left > (chartElementRef.current?.clientWidth || 0) * 0.66 ? " align-end" : ""}`}
-              style={{ left: activePoint.left, top: activePoint.top }}
-            >
-              <strong>{activeRow.tooltipLabel || activeRow.label}</strong>
-              {chartSeries.filter((item) => item.visible).map((item) => {
-                const value = activeRow.values?.[item.key];
-                const formatted = item.formatValue
-                  ? item.formatValue(value, activeRow.raw)
-                  : dataChartService.formatDataChartNumber(value);
-                return <span key={item.key}><i style={{ backgroundColor: item.color }} /><em>{item.label}</em><b>{formatted}{item.unit ? ` ${item.unit}` : ""}</b></span>;
-              })}
-            </div>
-          </>}
         </div>
         {option.__sampled && <small className="data-chart-sample-note">数据量较大，图形已等距抽样，原始结果保持完整。</small>}
       </> : <div className="data-chart-empty">{emptyText}</div>}
@@ -12800,7 +12759,10 @@ function normalizeOperationalRouteStrategies(operationalData) {
     longTermDemandForecastStrategies: operationalData.longTermDemandForecastStrategies || [],
   };
   const longTermDemandForecasts = businessPlanningService?.normalizeLongTermDemandForecastResults
-    ? businessPlanningService.normalizeLongTermDemandForecastResults(operationalData.longTermDemandForecasts)
+    ? businessPlanningService.normalizeLongTermDemandForecastResults(
+      operationalData.longTermDemandForecasts,
+      normalizedPlanningDefaults.supplyProductionProfiles,
+    )
     : (operationalData.longTermDemandForecasts || []);
   const supplyPlans = businessPlanningService?.normalizeSupplyPlans
     ? businessPlanningService.normalizeSupplyPlans({

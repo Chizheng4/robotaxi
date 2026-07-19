@@ -1338,10 +1338,10 @@
 |first_quality_inspection_completion_date|首批质量检验完成日期|计算字段|首批生产完成日期加质量检验周期|
 |production_ready_date|首批生产完成日期|兼容字段|旧前端兼容字段，新计算同时写入明确时间字段|
 |available_production_periods|可生产期数|计算字段|目标日前完整可生产周期数量|
-|feasible_manufacturing_quantity|可生产数量|计算字段|爬坡与稳定产能累计结果|
-|feasible_delivery_quantity|可交付数量|计算字段|交付能力累计结果|
-|feasible_supply_quantity|预测期可供应数量|计算字段|预测期内同时满足生产完成、质量检验通过和交付能力约束的 Robotaxi 数量|
-|recommended_production_quantity|建议生产数量|计算字段|需要纳入生产计划的 Robotaxi 缺口数量|
+|feasible_manufacturing_quantity|可生产数量|计算字段|生产画像在预测期内按生产提前期、产能周期和爬坡比例计算的最大生产完成数量，不受当前需求缺口截断|
+|feasible_delivery_quantity|可交付数量|计算字段|生产画像在预测期内按质量检验周期和每期交付能力计算的最大可交付数量，不受当前需求缺口截断|
+|feasible_supply_quantity|预测期可供应数量|计算字段|预测期内同时满足生产完成、质量检验通过和交付能力约束的供应能力上限，不受建议生产数量截断|
+|recommended_production_quantity|建议生产数量|计算字段|需求预测得到的 Robotaxi 缺口数量；供应决策再结合安全容量和预测期供应能力确定计划数量|
 |uncovered_robotaxi_gap|未覆盖 Robotaxi 缺口|计算字段|预测期末仍未完成交付的 Robotaxi 数量|
 |supply_trend_series|生产交付趋势|持久化字段|按生产能力周期保存生产、交付和剩余缺口|
 |within_forecast_period|是否在预测期内|嵌套字段|趋势点是否处于需求预测周期内|

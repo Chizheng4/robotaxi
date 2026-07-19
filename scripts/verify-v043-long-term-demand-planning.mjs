@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { calculateLongTermDemandPlan } from "../src/domain/longTermDemandPlanning.js";
+import { calculateLongTermDemandPlan, normalizeLongTermDemandForecastResult } from "../src/domain/longTermDemandPlanning.js";
 import {
   executeLongTermDemandForecastStrategy,
   initializeDefaultBusinessTargets,
@@ -39,11 +39,13 @@ assert.ok(calculation.result.required_robotaxi_quantity >= calculation.result.pe
 assert.equal(calculation.result.effective_current_robotaxi, 20);
 assert.equal(calculation.result.recommended_production_quantity, calculation.result.robotaxi_gap_quantity);
 assert.equal(calculation.result.planned_production_quantity, calculation.result.recommended_production_quantity);
+assert.ok(calculation.result.feasible_manufacturing_quantity > calculation.result.recommended_production_quantity, "预测期可生产能力不得被需求缺口截断");
+assert.ok(calculation.result.feasible_supply_quantity > calculation.result.recommended_production_quantity, "预测期可供应能力不得被建议生产数量截断");
 assert.ok(calculation.result.feasible_supply_quantity <= calculation.result.feasible_manufacturing_quantity);
 assert.ok(calculation.result.feasible_supply_quantity <= calculation.result.feasible_delivery_quantity);
 assert.ok(calculation.result.supply_trend_series.length > 1);
 assert.equal(calculation.result.supply_trend_series.at(-1).remaining_robotaxi_gap, 0);
-assert.equal(calculation.result.calculation_steps.length, 24);
+assert.equal(calculation.result.calculation_steps.length, 25);
 assert.equal(calculation.result.growth_model, "LINEAR");
 assert.ok(calculation.result.forecast_trend_series.DAY.length > calculation.result.forecast_trend_series.WEEK.length);
 assert.ok(calculation.result.forecast_trend_series.WEEK.length > calculation.result.forecast_trend_series.MONTH.length);
@@ -57,6 +59,16 @@ assert.equal(
   calculation.result.forecast_cumulative_market_orders,
 );
 assert.ok(calculation.result.forecast_cumulative_market_orders > calculation.result.market_forecast_daily_orders);
+
+const correctedHistoricalResult = normalizeLongTermDemandForecastResult({
+  ...calculation.result,
+  supply_production_profile_id: productionProfile.profile_id,
+  feasible_manufacturing_quantity: calculation.result.recommended_production_quantity,
+  feasible_delivery_quantity: calculation.result.recommended_production_quantity,
+  feasible_supply_quantity: calculation.result.recommended_production_quantity,
+}, [productionProfile]);
+assert.equal(correctedHistoricalResult.feasible_manufacturing_quantity, calculation.result.feasible_manufacturing_quantity, "历史预测结果必须按统一生产画像修正可生产能力口径");
+assert.equal(correctedHistoricalResult.feasible_supply_quantity, calculation.result.feasible_supply_quantity, "历史预测结果必须按统一生产画像修正可供应能力口径");
 
 const linearCalculation = calculateLongTermDemandPlan({
   strategy: { ...strategy, growth_model: "LINEAR" },

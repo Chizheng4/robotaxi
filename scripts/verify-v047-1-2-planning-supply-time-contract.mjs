@@ -80,7 +80,9 @@ const decision = executeSupplyDecisionStrategy({
   context: { now, nextRunId: () => "SD-RUN-TIME", nextSupplyPlanId: () => "SP-TIME" },
 });
 assert.equal(decision.supplyPlan.required_supply_quantity, 105);
-assert.equal(decision.supplyPlan.planned_robotaxi_count, 25);
+assert.ok(decision.supplyPlan.feasible_manufacturing_quantity >= 105, "供应决策必须按生产画像重新计算能力，不能沿用预测结果中的旧截断值");
+assert.ok(decision.supplyPlan.feasible_delivery_quantity >= 105, "供应决策必须按交付能力重新计算可交付数量");
+assert.equal(decision.supplyPlan.planned_robotaxi_count, 105);
 
 const created = createProductionBatchFromSupplyPlan({
   supplyPlan: { ...decision.supplyPlan, plan_status: "CONFIRMED" },

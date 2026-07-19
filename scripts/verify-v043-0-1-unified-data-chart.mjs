@@ -27,6 +27,8 @@ assert.equal(findNearestDataChartIndex(model, model.series[0].points[8].x), 8, "
 assert(formatDataChartAxisNumber(1200).length > 0, "数值轴必须提供格式化结果");
 const echartsOption = createEchartsOption({ rows, series: [{ key: "orders", label: "订单量", color: "#4b78c7" }] });
 assert.equal(echartsOption.tooltip.trigger, "axis", "浮动提示和指示线必须由同一坐标轴驱动");
+assert.equal(echartsOption.tooltip.alwaysShowContent, false, "浮动提示不得在离开图表后持续保留");
+assert.equal(echartsOption.tooltip.hideDelay, 0, "浮动提示离开图表后必须立即释放");
 assert.equal(echartsOption.grid.containLabel, true, "图表必须根据标签自适应绘图区");
 assert.deepEqual(echartsOption.dataZoom, [], "短序列图表不得接管页面滚轮");
 
@@ -53,6 +55,10 @@ assert(source.includes("normalizeMetricChartRows"), "经营分析必须通过共
 assert.equal(source.includes("function ForecastTrendChart"), false, "不得保留预测页私有图表实现");
 assert.equal(source.includes("function MetricTrendChart"), false, "不得保留经营分析私有图表实现");
 assert(source.includes("window.echarts.init"), "共享图表必须接入本地成熟图表引擎");
+assert(source.includes("claimDataChartTooltip"), "共享图表必须统一管理跨图表提示层所有权");
+assert(source.includes('chart.getZr().on("globalout", handleTooltipRelease)'), "共享图表移出时必须释放提示层");
+assert.equal(source.includes("showNearestTooltip"), false, "不得用页面手工派发提示层覆盖图表引擎交互");
+assert.equal(source.includes("data-chart-control-tooltip"), false, "不得同时渲染第二套 React 提示层");
 assert(!source.slice(source.indexOf("function DataSeriesChart"), source.indexOf("function normalizeForecastChartRows")).includes("<svg"), "共享图表不得继续手写 SVG 坐标和提示层");
 assert(styles.includes(".data-chart-viewport"), "图表必须提供统一响应式视口");
 assert(styles.includes("touch-action: pan-y pinch-zoom"), "图表必须兼顾窄屏页面滚动和触摸查看");

@@ -15,6 +15,9 @@ export function createEchartsOption({ rows = [], series = [], variant = "LINE", 
       triggerOn: "mousemove|click",
       confine: true,
       appendToBody: false,
+      alwaysShowContent: false,
+      hideDelay: 0,
+      transitionDuration: 0,
       axisPointer: { type: "line", snap: true, lineStyle: { color: "#7890a8", width: 1 } },
       formatter: (params = []) => {
         const index = params[0]?.dataIndex ?? 0;

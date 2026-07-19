@@ -267,7 +267,7 @@ export const fieldSemanticRegistry = Object.freeze({
     field_nature: "CALCULATED",
     data_type: "number",
     unit: "ROBOTAXI",
-    definition: "预测期内同时满足生产完成、质量检验通过和交付能力约束的 Robotaxi 数量。",
+    definition: "生产画像在预测期内同时满足生产完成、质量检验通过和交付能力约束的供应能力上限，不受当前需求缺口或建议生产数量截断。",
   }),
   daily_contribution_margin: defineField("daily_contribution_margin", {
     label: "预计日运营利润",

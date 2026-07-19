@@ -46,7 +46,8 @@ migratedForecast.calculation_steps.forEach((step) => {
   assert(step.formula_expression, `迁移后的 ${step.output_field} 必须具有计算公式`);
   assert(Object.keys(step.input_values || {}).length, `迁移后的 ${step.output_field} 必须具有输入字段`);
 });
-assert(main.includes("normalizeLongTermDemandForecastResults(operationalData.longTermDemandForecasts)"), "运行态加载必须统一迁移历史预测结果");
+assert(main.includes("normalizeLongTermDemandForecastResults("), "运行态加载必须统一迁移历史预测结果");
+assert(main.includes("normalizedPlanningDefaults.supplyProductionProfiles"), "历史预测结果迁移必须使用统一生产画像修正供应能力口径");
 
 const rows = Array.from({ length: 48 }, (_, index) => ({ label: `第 ${index + 1} 期`, values: { value: index }, raw: { index } }));
 const option = createEchartsOption({ rows, series: [{ key: "value", label: "指标值", color: "#4b78c7" }] });

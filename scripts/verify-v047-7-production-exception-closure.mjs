@@ -7,6 +7,7 @@ import {
   executeSupplyDecisionStrategy,
   initializeDefaultSupplyDecisionStrategies,
   initializeDefaultSupplyProductionProfiles,
+  normalizeSupplyPlans,
   startProductionBatch,
   startProductionQualityInspection,
 } from "../src/services/businessPlanningService.js";
@@ -45,8 +46,20 @@ const decision = executeSupplyDecisionStrategy({
 assert.equal(decision.succeeded, true);
 assert.ok(decision.supplyPlan.feasible_manufacturing_quantity > 43, "供应能力应表达生产画像在预测期内的总能力，不得被缺口截断");
 assert.ok(decision.supplyPlan.feasible_delivery_quantity > 43, "可交付数量应表达预测期内的总交付能力");
+assert.equal(decision.supplyPlan.feasible_manufacturing_quantity, 111, "十二个月预测期应按生产画像累计完整生产能力");
+assert.equal(decision.supplyPlan.feasible_delivery_quantity, 111, "十二个月预测期应按质检和交付约束累计完整供应能力");
 assert.equal(decision.supplyPlan.planned_robotaxi_count, 43);
 assert.equal(decision.supplyPlan.estimated_supply_cost_amount, 43 * 230000);
+
+const correctedDraftPlan = normalizeSupplyPlans({
+  supplyPlans: [{ ...decision.supplyPlan, feasible_manufacturing_quantity: 43, feasible_delivery_quantity: 43 }],
+  forecasts: [forecast],
+  supplyDecisionStrategies: [{ ...decisionStrategy, demand_coverage_rate: 1, safety_capacity_ratio: 0 }],
+  supplyProductionProfiles: [productionProfile],
+})[0];
+assert.equal(correctedDraftPlan.feasible_manufacturing_quantity, 111, "草稿生产计划必须更新为生产画像计算的可生产能力");
+assert.equal(correctedDraftPlan.feasible_delivery_quantity, 111, "草稿生产计划必须更新为生产画像计算的可交付能力");
+assert.equal(correctedDraftPlan.planned_robotaxi_count, 43, "生产计划数量仍由需求和供应能力共同约束");
 
 const confirmed = confirmSupplyPlan({
   supplyPlan: decision.supplyPlan,

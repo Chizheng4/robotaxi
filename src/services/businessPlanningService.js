@@ -3,6 +3,7 @@ import { getFieldSemanticDefinition } from "../domain/fieldSemanticRegistry.js?v
 import { createRegisteredCalculationStep } from "../domain/calculationModelRegistry.js?v=20260719-v047-5-0";
 import { createProductionBatchCostFact, finalizeProductionBatchCostAllocation } from "../data/costModelCalculator.js?v=20260719-v047-6-0";
 import {
+  calculateForecastSupplyCapacity,
   calculateLongTermDemandPlan,
   normalizeLongTermDemandForecastResult,
   normalizeLongTermDemandForecastResults,
@@ -648,11 +649,23 @@ export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyD
     const coveredGap = Math.ceil(gap * Math.max(0, Number(strategy.demand_coverage_rate ?? 1)));
     const safetyCapacity = Math.ceil(coveredGap * Math.max(0, Number(strategy.safety_capacity_ratio ?? 0)));
     const requiredSupply = coveredGap + safetyCapacity;
-    const feasibleManufacturing = Number(plan.feasible_manufacturing_quantity ?? plan.feasible_production_quantity ?? forecast.feasible_manufacturing_quantity ?? requiredSupply);
-    const feasibleDelivery = Number(plan.feasible_delivery_quantity ?? forecast.feasible_delivery_quantity ?? requiredSupply);
-    const plannedQuantity = Number(plan.planned_robotaxi_count ?? Math.min(feasibleManufacturing, feasibleDelivery));
+    const currentCapacity = hasProductionCapacityConfig(profile)
+      ? calculateForecastSupplyCapacity({ forecast: { ...forecast, ...plan }, productionProfile: profile })
+      : null;
+    const refreshDraftCapacity = plan.plan_status === SupplyPlanStatus.DRAFT && currentCapacity;
+    const feasibleManufacturing = Number(refreshDraftCapacity
+      ? currentCapacity.feasible_manufacturing_quantity
+      : plan.feasible_manufacturing_quantity ?? plan.feasible_production_quantity ?? forecast.feasible_manufacturing_quantity ?? requiredSupply);
+    const feasibleDelivery = Number(refreshDraftCapacity
+      ? currentCapacity.feasible_delivery_quantity
+      : plan.feasible_delivery_quantity ?? forecast.feasible_delivery_quantity ?? requiredSupply);
+    const plannedQuantity = Number(refreshDraftCapacity
+      ? Math.min(requiredSupply, feasibleManufacturing, feasibleDelivery)
+      : plan.planned_robotaxi_count ?? Math.min(requiredSupply, feasibleManufacturing, feasibleDelivery));
     const unitProductionCost = Math.max(0, Number(plan.standard_production_cost_per_robotaxi_snapshot ?? 230000));
-    const estimatedSupplyCost = roundCurrency(plan.estimated_supply_cost_amount ?? (plannedQuantity * unitProductionCost));
+    const estimatedSupplyCost = roundCurrency(refreshDraftCapacity
+      ? plannedQuantity * unitProductionCost
+      : plan.estimated_supply_cost_amount ?? (plannedQuantity * unitProductionCost));
     const hasConfirmedCostBasis = Boolean(plan.confirmed_at || plan.production_schedule_lines?.length || [SupplyPlanStatus.CONFIRMED, SupplyPlanStatus.IN_EXECUTION, SupplyPlanStatus.COMPLETED].includes(plan.plan_status));
     return {
       ...plan,
@@ -672,10 +685,10 @@ export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyD
       covered_gap_quantity: plan.covered_gap_quantity ?? coveredGap,
       safety_capacity_quantity: plan.safety_capacity_quantity ?? safetyCapacity,
       required_supply_quantity: plan.required_supply_quantity ?? requiredSupply,
-      feasible_manufacturing_quantity: plan.feasible_manufacturing_quantity ?? feasibleManufacturing,
-      feasible_delivery_quantity: plan.feasible_delivery_quantity ?? feasibleDelivery,
+      feasible_manufacturing_quantity: refreshDraftCapacity ? feasibleManufacturing : plan.feasible_manufacturing_quantity ?? feasibleManufacturing,
+      feasible_delivery_quantity: refreshDraftCapacity ? feasibleDelivery : plan.feasible_delivery_quantity ?? feasibleDelivery,
       planned_robotaxi_count: plannedQuantity,
-      uncovered_robotaxi_gap: plan.uncovered_robotaxi_gap ?? Math.max(0, requiredSupply - plannedQuantity),
+      uncovered_robotaxi_gap: refreshDraftCapacity ? Math.max(0, requiredSupply - plannedQuantity) : plan.uncovered_robotaxi_gap ?? Math.max(0, requiredSupply - plannedQuantity),
       standard_production_cost_per_robotaxi_snapshot: unitProductionCost,
       estimated_supply_cost_amount: estimatedSupplyCost,
       planned_production_cost_amount: plan.planned_production_cost_amount ?? (hasConfirmedCostBasis ? estimatedSupplyCost : null),
@@ -684,6 +697,14 @@ export function normalizeSupplyPlans({ supplyPlans = [], forecasts = [], supplyD
       calculation_steps: plan.calculation_steps || plan.decision_calculation_steps || run.calculation_steps || run.decision_calculation_steps || [],
     };
   });
+}
+
+function hasProductionCapacityConfig(profile = {}) {
+  return [
+    profile.production_capacity_per_period,
+    profile.monthly_production_capacity,
+    profile.annual_production_capacity,
+  ].some((value) => Number(value) > 0);
 }
 
 function normalizePeriodDate(value) {
@@ -729,38 +750,6 @@ export function resolveForecastSupplyDecisionEligibility({ forecast, supplyPlans
   };
 }
 
-function calculateForecastPeriodSupplyCapacity({ forecast = {}, productionProfile = {} } = {}) {
-  const resolvedPeriod = resolveForecastPeriod({
-    forecast_start_date: forecast.forecast_start_date || defaultNow().slice(0, 10),
-    forecast_period_unit: forecast.forecast_period_unit || "MONTH",
-    forecast_period_count: forecast.forecast_period_count || 1,
-  });
-  const startDate = String(forecast.forecast_start_date || resolvedPeriod.startDate).slice(0, 10);
-  const endDate = String(forecast.forecast_end_date || resolvedPeriod.endDate).slice(0, 10);
-  const stableCapacity = Math.max(0, Math.floor(Number(productionProfile.production_capacity_per_period || 0)));
-  const deliveryCapacity = Math.max(0, Math.floor(Number(productionProfile.delivery_capacity_per_period || stableCapacity)));
-  const ratios = Array.isArray(productionProfile.ramp_up_capacity_ratios) && productionProfile.ramp_up_capacity_ratios.length
-    ? productionProfile.ramp_up_capacity_ratios.map((value) => Math.max(0, Number(value || 0)))
-    : [1];
-  const periodUnit = productionProfile.production_capacity_period_unit || "MONTH";
-  const leadDays = Math.max(0, Number(productionProfile.production_lead_time_days || 0));
-  const qualityDays = Math.max(0, Number(productionProfile.quality_inspection_lead_time_days || 0));
-  let feasibleManufacturing = 0;
-  let feasibleDelivery = 0;
-  let periodCount = 0;
-  for (let index = 0; index < 240; index += 1) {
-    const releaseDate = addCapacityPeriodIsoDate(startDate, periodUnit, index);
-    if (normalizePeriodDate(releaseDate) > normalizePeriodDate(endDate)) break;
-    const periodCapacity = Math.max(0, Math.floor(stableCapacity * (ratios[index] ?? ratios[ratios.length - 1] ?? 1)));
-    const productionCompletionDate = addDaysIsoDate(releaseDate, leadDays);
-    const qualityCompletionDate = addDaysIsoDate(productionCompletionDate, qualityDays);
-    if (normalizePeriodDate(productionCompletionDate) <= normalizePeriodDate(endDate)) feasibleManufacturing += periodCapacity;
-    if (normalizePeriodDate(qualityCompletionDate) <= normalizePeriodDate(endDate)) feasibleDelivery += Math.min(periodCapacity, deliveryCapacity);
-    periodCount += 1;
-  }
-  return { feasibleManufacturing, feasibleDelivery, periodCount };
-}
-
 function createSupplyDecisionCalculationSteps({ rawGap, coverageRate, coveredGap, safetyRatio, safetyCapacity, requiredSupply, feasibleManufacturing, feasibleDelivery, plannedRobotaxiCount, estimatedSupplyCostAmount, unitProductionCost, forecast, productionProfile } = {}) {
   return [
     createRegisteredCalculationStep({ modelId: "SUPPLY_GAP_COVERAGE", inputValues: { robotaxi_gap_quantity: rawGap, demand_coverage_rate: coverageRate }, result: { covered_gap_quantity: coveredGap }, sourceRefs: ["forecast_result_id", "supply_decision_strategy_id"] }),
@@ -797,15 +786,21 @@ export function createSupplyPlanFromForecast({
   const coveredGap = Math.ceil(rawGap * coverageRate);
   const safetyCapacity = Math.ceil(coveredGap * safetyRatio);
   const requiredSupply = coveredGap + safetyCapacity;
-  const capacity = calculateForecastPeriodSupplyCapacity({ forecast, productionProfile });
-  const hasForecastManufacturingCapacity = Number.isFinite(Number(forecast.feasible_manufacturing_quantity));
-  const hasForecastDeliveryCapacity = Number.isFinite(Number(forecast.feasible_delivery_quantity));
-  const feasibleManufacturing = Math.max(0, Math.floor(hasForecastManufacturingCapacity
-    ? Number(forecast.feasible_manufacturing_quantity)
-    : capacity.feasibleManufacturing));
-  const feasibleDelivery = Math.max(0, Math.floor(hasForecastDeliveryCapacity
-    ? Number(forecast.feasible_delivery_quantity)
-    : capacity.feasibleDelivery));
+  const capacity = hasProductionCapacityConfig(productionProfile)
+    ? calculateForecastSupplyCapacity({ forecast, productionProfile })
+    : null;
+  const feasibleManufacturing = Math.max(0, Math.floor(Number(
+    capacity?.feasible_manufacturing_quantity
+      ?? forecast.feasible_manufacturing_quantity
+      ?? forecast.feasible_production_quantity
+      ?? 0,
+  )));
+  const feasibleDelivery = Math.max(0, Math.floor(Number(
+    capacity?.feasible_delivery_quantity
+      ?? forecast.feasible_delivery_quantity
+      ?? forecast.feasible_supply_quantity
+      ?? feasibleManufacturing,
+  )));
   const feasibleQuantity = Math.max(0, Math.floor(Math.min(requiredSupply, feasibleManufacturing, feasibleDelivery)));
   const plannedRobotaxiCount = feasibleQuantity;
   if (plannedRobotaxiCount <= 0) return { succeeded: false, reason: "NO_FEASIBLE_SUPPLY_CAPACITY", supplyPlan: null };

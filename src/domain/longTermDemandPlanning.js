@@ -59,6 +59,40 @@ export function validatePlanningInputs({ strategy, businessTarget, zoneProfile, 
   return { valid: !missing.length && !errors.length, missing_input_fields: missing, errors };
 }
 
+export function calculateForecastSupplyCapacity({ forecast = {}, productionProfile = {} } = {}) {
+  const period = resolveForecastPeriod(forecast);
+  const productionUnit = productionProfile.production_capacity_period_unit || "MONTH";
+  const productionLeadDays = positive(productionProfile.production_lead_time_days);
+  const qualityInspectionLeadDays = positive(
+    productionProfile.quality_inspection_lead_time_days
+      ?? productionProfile.inspection_lead_time_days,
+  );
+  const productionReadyDate = addDays(period.startDate, productionLeadDays);
+  const capacityTrendSeries = buildSupplyTrendSeries({
+    startDate: period.startDate,
+    forecastEndDate: period.endDate,
+    productionReadyDate,
+    qualityInspectionLeadDays,
+    productionPeriodUnit: productionUnit,
+    capacityPerPeriod: positive(productionProfile.production_capacity_per_period ?? productionProfile.monthly_production_capacity ?? positive(productionProfile.annual_production_capacity) / 12),
+    deliveryPerPeriod: positive(productionProfile.delivery_capacity_per_period ?? productionProfile.delivery_capacity),
+    rampRatios: Array.isArray(productionProfile.ramp_up_capacity_ratios) ? productionProfile.ramp_up_capacity_ratios : [],
+    robotaxiGap: Number.POSITIVE_INFINITY,
+    plannedProduction: Number.POSITIVE_INFINITY,
+    productionScheduleEndDate: period.endDate,
+  });
+  const forecastPoints = capacityTrendSeries.filter((point) => point.within_forecast_period);
+  const finalPoint = forecastPoints[forecastPoints.length - 1] || {};
+  return {
+    forecast_period_start_date: period.startDate,
+    forecast_period_end_date: period.endDate,
+    available_production_periods: forecastPoints.filter((point) => point.period_production_quantity > 0).length,
+    feasible_manufacturing_quantity: Math.floor(finalPoint.cumulative_production_quantity || 0),
+    feasible_delivery_quantity: Math.floor(finalPoint.cumulative_delivery_quantity || 0),
+    feasible_supply_quantity: Math.floor(finalPoint.cumulative_delivery_quantity || 0),
+  };
+}
+
 export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProfile, productionProfile, robotaxis = [], opsCenters = [], zones = [] }) {
   const period = resolveForecastPeriod(businessTarget, strategy);
   const validation = validatePlanningInputs({ strategy, businessTarget, zoneProfile, productionProfile });
@@ -121,7 +155,6 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   const robotaxiGap = Math.max(0, required - currentEffective);
 
   const productionUnit = productionProfile.production_capacity_period_unit || "MONTH";
-  const productionPeriodDays = PERIOD_DAYS[productionUnit] || 30;
   const productionLeadDays = positive(productionProfile.production_lead_time_days);
   const qualityInspectionLeadDays = positive(
     productionProfile.quality_inspection_lead_time_days
@@ -134,12 +167,21 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   const rampRatios = Array.isArray(productionProfile.ramp_up_capacity_ratios) ? productionProfile.ramp_up_capacity_ratios : [];
   const recommendedProduction = robotaxiGap;
   const plannedProduction = recommendedProduction;
+  const supplyCapacity = calculateForecastSupplyCapacity({
+    forecast: {
+      forecast_start_date: period.startDate,
+      forecast_end_date: period.endDate,
+      forecast_period_unit: period.unit,
+      forecast_period_count: period.count,
+    },
+    productionProfile,
+  });
   const supplyTrendSeries = buildSupplyTrendSeries({
     startDate: period.startDate,
     forecastEndDate: period.endDate,
     productionReadyDate: productionCompletionDate,
     qualityInspectionLeadDays,
-    productionPeriodDays,
+    productionPeriodUnit: productionUnit,
     capacityPerPeriod,
     deliveryPerPeriod,
     rampRatios,
@@ -147,12 +189,10 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
     plannedProduction,
   });
   const finalSupplyPoint = supplyTrendSeries[supplyTrendSeries.length - 1] || {};
-  const forecastSupplyPoints = supplyTrendSeries.filter((point) => point.within_forecast_period);
-  const finalForecastSupplyPoint = forecastSupplyPoints[forecastSupplyPoints.length - 1] || {};
-  const availablePeriods = forecastSupplyPoints.filter((point) => point.period_production_quantity > 0).length;
-  const feasibleManufacturing = Math.floor(finalForecastSupplyPoint.cumulative_production_quantity || 0);
-  const feasibleDelivery = Math.floor(finalForecastSupplyPoint.cumulative_delivery_quantity || 0);
-  const feasibleSupply = feasibleDelivery;
+  const availablePeriods = supplyCapacity.available_production_periods;
+  const feasibleManufacturing = supplyCapacity.feasible_manufacturing_quantity;
+  const feasibleDelivery = supplyCapacity.feasible_delivery_quantity;
+  const feasibleSupply = supplyCapacity.feasible_supply_quantity;
   const uncoveredGap = Math.max(0, robotaxiGap - feasibleSupply);
 
   const serviceDailyCapacity = positive(zoneProfile.effective_daily_capacity ?? zoneProfile.service_capacity);
@@ -291,12 +331,13 @@ function buildSupplyTrendSeries({
   forecastEndDate,
   productionReadyDate,
   qualityInspectionLeadDays,
-  productionPeriodDays,
+  productionPeriodUnit,
   capacityPerPeriod,
   deliveryPerPeriod,
   rampRatios,
   robotaxiGap,
   plannedProduction,
+  productionScheduleEndDate = null,
 }) {
   const points = [{
     trend_index: 0,
@@ -315,6 +356,8 @@ function buildSupplyTrendSeries({
   const events = new Map();
   let scheduledProduction = 0;
   for (let index = 0; index < MAX_SUPPLY_TREND_PERIODS && scheduledProduction < plannedProduction; index += 1) {
+    const productionDate = addCalendarPeriods(productionReadyDate, productionPeriodUnit || "MONTH", index);
+    if (productionScheduleEndDate && productionDate > productionScheduleEndDate) break;
     const productionCapacity = Math.floor(capacityPerPeriod * ratio(rampRatios[index], 1));
     const periodProduction = Math.min(
       Math.max(0, plannedProduction - scheduledProduction),
@@ -322,7 +365,6 @@ function buildSupplyTrendSeries({
     );
     if (periodProduction <= 0) break;
     scheduledProduction += periodProduction;
-    const productionDate = addDays(productionReadyDate, productionPeriodDays * index);
     const qualityDate = addDays(productionDate, qualityInspectionLeadDays);
     const productionEvent = events.get(productionDate) || { production: 0, qualityPassed: 0, deliveryWindow: false };
     productionEvent.production += periodProduction;
@@ -360,7 +402,7 @@ function buildSupplyTrendSeries({
       remaining_robotaxi_gap: Math.max(0, robotaxiGap - cumulativeDelivery),
     });
     if (deliveryPerPeriod > 0 && !pendingDates.length && cumulativeDelivery < cumulativeQualityPassed) {
-      const nextDate = addDays(pointDate, productionPeriodDays);
+      const nextDate = addCalendarPeriods(pointDate, productionPeriodUnit || "MONTH", 1);
       events.set(nextDate, { production: 0, qualityPassed: 0, deliveryWindow: true });
       pendingDates = [nextDate];
     }
@@ -560,7 +602,7 @@ function buildCalculationSteps(result) {
   ].map((item, index) => ({ ...item, step_order: index + 1 }));
 }
 
-export function normalizeLongTermDemandForecastResult(result = {}) {
+export function normalizeLongTermDemandForecastResult(result = {}, productionProfiles = []) {
   const steps = Array.isArray(result.calculation_steps) ? result.calculation_steps : [];
   const hasCurrentCalculationContract = steps.length >= 25 && steps.every((item) => (
     item?.output_field
@@ -569,10 +611,25 @@ export function normalizeLongTermDemandForecastResult(result = {}) {
     && item?.input_values
     && Object.keys(item.input_values).length > 0
   ));
+  const productionProfile = (productionProfiles || []).find((item) => item.profile_id === result.supply_production_profile_id);
+  const hasCapacityConfig = productionProfile && [
+    productionProfile.production_capacity_per_period,
+    productionProfile.monthly_production_capacity,
+    productionProfile.annual_production_capacity,
+  ].some((value) => Number(value) > 0);
+  const correctedCapacity = hasCapacityConfig
+    ? calculateForecastSupplyCapacity({ forecast: result, productionProfile })
+    : null;
   const normalizedResult = {
     growth_model: "COMPOUND",
     planning_mode: "BALANCED",
     ...result,
+    feasible_manufacturing_quantity: correctedCapacity?.feasible_manufacturing_quantity
+      ?? result.feasible_manufacturing_quantity,
+    feasible_delivery_quantity: correctedCapacity?.feasible_delivery_quantity
+      ?? result.feasible_delivery_quantity,
+    feasible_supply_quantity: correctedCapacity?.feasible_supply_quantity
+      ?? result.feasible_supply_quantity,
     target_order_service_time_utilization_rate: result.target_order_service_time_utilization_rate
       ?? result.target_task_utilization_rate
       ?? null,
@@ -599,6 +656,6 @@ export function normalizeLongTermDemandForecastResult(result = {}) {
   };
 }
 
-export function normalizeLongTermDemandForecastResults(results = []) {
-  return (Array.isArray(results) ? results : []).map(normalizeLongTermDemandForecastResult);
+export function normalizeLongTermDemandForecastResults(results = [], productionProfiles = []) {
+  return (Array.isArray(results) ? results : []).map((result) => normalizeLongTermDemandForecastResult(result, productionProfiles));
 }
