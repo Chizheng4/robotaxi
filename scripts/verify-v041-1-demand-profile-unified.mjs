@@ -28,10 +28,13 @@ assert.equal(place.trip_generation_rate, 0.6, "住宅地点必须使用独立的
 assert.ok(place.daily_population_exposure > 0 && place.potential_daily_trips > 0 && place.baseline_addressable_daily_orders > 0, "Place 必须形成完整需求基线");
 assert.equal(serviceArea.parent_place_id, "P-001", "ServiceArea 必须唯一归属 Place");
 assert.equal("service_area_demand" in serviceArea, false, "ServiceArea 不得生成或保留需求字段");
-assert.ok(serviceArea.effective_daily_capacity > 0 && serviceArea.effective_peak_hour_capacity > 0, "ServiceArea 必须计算承载能力");
+assert.ok(serviceArea.effective_daily_pickup_capacity > 0 && serviceArea.effective_daily_dropoff_capacity > 0, "ServiceArea 必须分别计算日上车与下车承载能力");
+assert.ok(serviceArea.effective_pickup_capacity_per_hour > 0 && serviceArea.effective_dropoff_capacity_per_hour > 0, "ServiceArea 必须分别计算小时上车与下车承载能力");
+assert.equal("effective_daily_capacity" in serviceArea, false, "ServiceArea 不得提前合并总承载，瓶颈只在 Zone 汇总时判断");
 assert.equal(zone.baseline_addressable_daily_orders, place.baseline_addressable_daily_orders, "Zone 需求必须等于所属 Place 需求汇总");
 assert.equal("expected_robotaxi_demand" in zone, false, "Zone 新结果不得继续产生旧兼容需求字段");
-assert.equal(zone.effective_daily_capacity, serviceArea.effective_daily_capacity, "Zone 容量必须等于所属 ServiceArea 容量汇总");
+assert.equal(zone.effective_daily_capacity, Math.min(serviceArea.effective_daily_pickup_capacity, serviceArea.effective_daily_dropoff_capacity), "Zone 日承载必须取上下车汇总能力的瓶颈值");
+assert.equal(zone.effective_peak_hour_capacity, Math.min(serviceArea.effective_pickup_capacity_per_hour, serviceArea.effective_dropoff_capacity_per_hour), "Zone 峰值承载必须取上下车汇总能力的瓶颈值");
 
 const updated = updateDemandProfileConfig({
   ...context,

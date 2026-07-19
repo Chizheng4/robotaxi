@@ -1235,7 +1235,7 @@
 |daily_fixed_operating_cost|日固定运营成本|配置字段|基础经济性假设|
 |minimum_contribution_margin_rate|最低经营贡献率|配置字段|经营贡献占实收收入的最低目标比例|
 |contribution_margin_per_order|单均贡献毛利|计算字段|单均收入扣除单均变动成本后的贡献毛利|
-|daily_contribution_margin|日经营贡献|计算字段|计划承接日订单贡献毛利扣除日固定运营成本后的经营贡献|
+|daily_contribution_margin|预计日运营利润|计算字段|计划承接日订单贡献毛利扣除已建模日固定运营成本后的预计金额；不包含尚未进入模型的成本|
 |resident_trip_weight|居民出行权重|配置字段|居民对日出行暴露量的修正|
 |worker_trip_weight|工作人口出行权重|配置字段|工作人口对日出行暴露量的修正|
 |visitor_trip_weight|访客出行权重|配置字段|访客对日出行暴露量的修正|
@@ -1253,13 +1253,16 @@
 |waiting_robotaxi_capacity|等待 Robotaxi 容量|配置字段|可同时等待的 Robotaxi 数量|
 |pickup_position_capacity|上车位容量|配置字段|可同时进行上车服务的位置数量|
 |dropoff_position_capacity|下车位容量|配置字段|可同时进行下车服务的位置数量|
-|average_service_time_min|平均站点服务时间|配置字段|单次上下车占用位置的分钟数|
+|average_service_stop_duration_min|平均站点停靠时长（分钟）|配置字段|一辆 Robotaxi 完成一次上车或下车停靠平均占用的位置时间|
 |operating_hours_per_day|每日开放小时数|配置字段|服务区域每日开放时长|
 |capacity_availability_rate|容量可用率|配置字段|考虑拥堵、管制和故障后的可用比例|
 |position_throughput_per_hour|每位置小时吞吐量|计算字段|60 除以平均站点服务时间|
-|service_capacity_per_hour|每小时服务容量|计算字段|有效位置数量乘每位置吞吐量|
-|effective_peak_hour_capacity|有效峰值小时容量|计算字段|修正后的峰值小时承载量|
-|effective_daily_capacity|有效日服务容量|计算字段|小时容量乘每日开放时长|
+|effective_pickup_capacity_per_hour|有效上车承载（订单/小时）|计算字段|上车位容量乘单位置小时周转、可达性系数和容量可用率|
+|effective_dropoff_capacity_per_hour|有效下车承载（订单/小时）|计算字段|下车位容量乘单位置小时周转、可达性系数和容量可用率|
+|effective_daily_pickup_capacity|有效日上车承载（订单）|计算字段|有效上车承载乘每日开放小时数；Zone 为所属 ServiceArea 之和|
+|effective_daily_dropoff_capacity|有效日下车承载（订单）|计算字段|有效下车承载乘每日开放小时数；Zone 为所属 ServiceArea 之和|
+|effective_peak_hour_capacity|区域有效峰值承载（订单/小时）|计算字段|Zone 汇总后的上车与下车小时承载较小值|
+|effective_daily_capacity|区域有效日承载（订单）|计算字段|Zone 汇总后的日上车与日下车承载较小值|
 |zone_period_growth_rate|区域周期增长率|计算字段|Place 需求加权增长率|
 |growth_scenario|增长情景|配置字段|保守、基准或积极|
 |growth_model|增长模型|配置字段|复合增长或线性增长，决定预测周期内的增长路径|
@@ -1285,12 +1288,12 @@
 |planned_daily_orders|计划承接日订单|计算字段|规划模式在市场预测与经营目标之间确定的计划承接量|
 |buffered_daily_orders|缓冲后日订单|计算字段|计划承接日订单乘需求缓冲系数后的日订单|
 |planned_peak_hour_orders|计划峰值小时订单|计算字段|计划承接日订单乘最繁忙小时占比|
-|effective_service_cycle_min|完整服务周期|计算字段|接驾、载客和周转分钟数之和|
+|effective_service_cycle_min|车辆服务周期时长（兼容）|兼容字段|旧预测结果字段；加载时迁移至 vehicle_service_cycle_duration_min|
 |robotaxi_available_hours_per_day|Robotaxi 每日计划运营时长（小时）|配置字段|单台 Robotaxi 每日计划运营时长；运维影响由运营可用率统一折减|
-|average_pickup_duration_min|平均接驾时间（分钟）|配置字段|单次服务订单平均接驾分钟数|
-|average_turnaround_duration_min|平均周转时间（分钟）|配置字段|订单之间平均周转分钟数|
+|average_pickup_duration_min|平均接驾时长（分钟）|配置字段|Robotaxi 接受订单后，从开始接驾至乘客上车的平均时长|
+|average_turnaround_duration_min|平均周转时长（分钟）|配置字段|订单送达完成至 Robotaxi 可开始下一次接驾的平均准备时长|
 |operational_availability_rate|运营可用率|配置字段|Robotaxi 在规划周期内可投入运营的比例|
-|robotaxi_theoretical_daily_orders|单车理论日产能|计算字段|可运营时间除以完整服务周期|
+|robotaxi_theoretical_daily_orders|单车理论日产能|计算字段|每日计划运营时长除以车辆服务周期时长|
 |robotaxi_effective_daily_orders|单车有效日产能|计算字段|理论日产能乘利用率和可用率|
 |daily_required_robotaxi|日常需求 Robotaxi|计算字段|满足日订单能力所需数量|
 |peak_concurrent_robotaxi|峰值并发 Robotaxi|计算字段|峰值时段同时服务数量|
@@ -1335,7 +1338,7 @@
 |available_production_periods|可生产期数|计算字段|目标日前完整可生产周期数量|
 |feasible_manufacturing_quantity|可生产数量|计算字段|爬坡与稳定产能累计结果|
 |feasible_delivery_quantity|可交付数量|计算字段|交付能力累计结果|
-|feasible_supply_quantity|可形成供给数量|计算字段|可生产和可交付数量的较小值|
+|feasible_supply_quantity|预测期可供应数量|计算字段|预测期内同时满足生产完成、质量检验通过和交付能力约束的 Robotaxi 数量|
 |recommended_production_quantity|建议生产数量|计算字段|需要纳入生产计划的 Robotaxi 缺口数量|
 |uncovered_robotaxi_gap|未覆盖 Robotaxi 缺口|计算字段|预测期末仍未完成交付的 Robotaxi 数量|
 |supply_trend_series|生产交付趋势|持久化字段|按生产能力周期保存生产、交付和剩余缺口|
@@ -1344,14 +1347,14 @@
 |cumulative_production_quantity|累计生产量|计算字段|截至当前周期累计形成的 Robotaxi 数量|
 |period_quality_passed_quantity|当期质检合格量|计算字段|当前周期完成质量检验并合格的 Robotaxi 数量|
 |cumulative_quality_passed_quantity|累计质检合格量|计算字段|截至当前周期累计完成质量检验并合格的 Robotaxi 数量|
-|period_delivery_quantity|当期可供给量|兼容计算字段|当前周期在质检合格和交付能力约束下可形成供给的数量；不是已发生的区域交付事实|
-|cumulative_delivery_quantity|累计可供给量|兼容计算字段|截至当前周期累计可形成供给的数量；不是已发生的区域交付事实|
-|remaining_robotaxi_gap|剩余 Robotaxi 缺口|计算字段|Robotaxi 缺口减累计可供给数量|
+|period_delivery_quantity|当期可供应量|兼容计算字段|当前周期在质检合格和交付能力约束下可形成供应的数量；不是已发生的区域交付事实|
+|cumulative_delivery_quantity|累计可供应量|兼容计算字段|截至当前周期累计可形成供应的数量；不是已发生的区域交付事实|
+|remaining_robotaxi_gap|剩余 Robotaxi 缺口|计算字段|Robotaxi 缺口减累计可供应数量|
 |planned_cumulative_production_quantity|计划累计生产量|计算字段|供应趋势结束时累计生产数量|
 |planned_cumulative_quality_passed_quantity|计划累计质检合格量|计算字段|供应趋势结束时累计质检合格数量|
-|planned_cumulative_delivery_quantity|计划累计可供给量|兼容计算字段|供应趋势结束时累计可形成供给的数量|
-|first_delivery_date|首批可供给日期|计算字段|首批 Robotaxi 完成生产和质量检验后可进入后续交付的日期|
-|full_supply_completion_date|全部可供给完成日期|计算字段|计划数量全部完成生产和质量检验、可进入后续交付的日期|
+|planned_cumulative_delivery_quantity|计划累计可供应量|兼容计算字段|供应趋势结束时累计可形成供应的数量|
+|first_delivery_date|首批可供应日期|计算字段|首批 Robotaxi 完成生产和质量检验后可进入后续交付的日期|
+|full_supply_completion_date|全部可供应完成日期|计算字段|计划数量全部完成生产和质量检验、可进入后续交付的日期|
 |robotaxi_capacity_snapshot|Robotaxi 能力快照|持久化字段|预测执行冻结的单车能力参数|
 |robotaxi_inventory_snapshot|Robotaxi 资产快照|持久化字段|预测执行冻结的区域资产输入|
 |place_demand_profile_snapshot|地点需求画像快照|持久化字段|本次执行使用的 Place 画像|
@@ -1450,7 +1453,14 @@
 |demand_buffer_ratio|需求缓冲比例|配置字段|预测需求转换为车队规模时的安全缓冲比例|
 |fleet_utilization_target|车队利用率目标|配置字段|用于将预计需求换算为目标车队规模的利用率目标|
 |vehicle_available_hours_per_day|单车每日可运营小时|配置字段|长期预测中单台 Robotaxi 每日可用于履约的小时数|
-|average_trip_duration_min|平均履约时长（分钟）|配置字段|长期预测中单次服务订单平均履约耗时|
+|average_pickup_duration_min|平均接驾时长（分钟）|配置字段|Robotaxi 接受订单后，从开始接驾至乘客上车的平均时长|
+|average_passenger_trip_duration_min|平均载客行驶时长（分钟）|配置字段|乘客上车至 Robotaxi 到达下车点的平均行驶时长|
+|average_order_fulfillment_execution_duration_min|平均订单履约执行时长（分钟）|计算字段|Robotaxi 接受订单至送达完成的平均时长，等于平均接驾时长与平均载客行驶时长之和|
+|average_order_end_to_end_duration_min|平均订单全流程时长（分钟）|经营指标|订单创建至订单完成的平均时长，包含等待匹配；缺少完整事件时间戳时不得推算|
+|average_turnaround_duration_min|平均周转时长（分钟）|配置字段|订单送达完成至 Robotaxi 可开始下一次接驾的平均准备时长|
+|vehicle_service_cycle_duration_min|车辆服务周期时长（分钟）|计算字段|平均订单履约执行时长与平均周转时长之和，用于计算单车服务产能|
+|average_trip_duration_min|平均载客行驶时长（兼容）|兼容字段|旧预测策略字段；加载时迁移至 average_passenger_trip_duration_min|
+|effective_service_cycle_min|车辆服务周期时长（兼容）|兼容字段|旧预测结果字段；加载时迁移至 vehicle_service_cycle_duration_min|
 |result_count|结果数量|运行态字段|本次预测执行生成的结果数量|
 |baseline_daily_demand|基础日需求|计算字段|由区域需求画像得到的当前日均 Robotaxi 需求|
 |growth_factor|增长因子|计算字段|根据增长率和预测周期得到的需求增长修正|
@@ -1458,12 +1468,12 @@
 |forecast_peak_hour_demand|预测峰值小时需求|计算字段|预测日需求乘以峰值需求比例|
 |required_fleet_quantity|目标所需车辆数|计算字段|预测周期内目标区域所需 Robotaxi 数量|
 |current_fleet_quantity|当前运营车辆数|计算字段|当前可运营 Robotaxi 数量|
-|fleet_gap_quantity|车辆供给缺口|计算字段|目标所需车辆数减当前运营车辆数|
+|fleet_gap_quantity|车辆供应缺口|计算字段|目标所需车辆数减当前运营车辆数|
 |production_start_date|生产开始日期|计算字段|为了满足预测结果建议启动生产的日期|
-|supply_completion_date|供给完成日期|计算字段|生产开始日期加生产提前期得到的供给完成日期|
+|supply_completion_date|供应完成日期|计算字段|生产开始日期加生产提前期得到的供应完成日期|
 |feasible_production_quantity|可生产数量|计算字段|预测周期内生产画像约束下可形成的 Robotaxi 数量|
 |planned_production_quantity|计划生产数量|计算字段|本次预测建议转入生产计划的 Robotaxi 数量|
-|production_gap_quantity|生产缺口|计算字段|车辆供给缺口扣除计划生产数量后的剩余缺口|
+|production_gap_quantity|生产缺口|计算字段|车辆供应缺口扣除计划生产数量后的剩余缺口|
 |demand_profile_id|需求画像编号|关联字段|预测结果引用的区域需求画像|
 |supply_production_profile_id|生产画像编号|关联字段|预测结果引用的生产画像|
 |strategy_snapshot|策略快照|持久化字段|预测执行时的策略配置快照|
@@ -1475,7 +1485,7 @@
 |plan_status|计划状态|持久化字段|计划状态|
 |target_zone_id|目标区域|持久化字段|计划覆盖的目标区域|
 |planned_robotaxi_count|计划 Robotaxi 数|配置字段|计划形成的 Robotaxi 数量|
-|required_supply_quantity|需补充供给数量|计算字段|车辆供给缺口按覆盖率和安全容量修正后的供给需求|
+|required_supply_quantity|需补充供应数量|计算字段|车辆供应缺口按覆盖率和安全容量修正后的供应需求|
 |covered_gap_quantity|计划覆盖缺口|计算字段|Robotaxi 缺口按需求覆盖率计算后的计划覆盖数量|
 |safety_capacity_quantity|安全容量数量|计算字段|在计划覆盖缺口上按安全产能比例增加的数量|
 |planned_start_date|计划开始日期|配置字段|计划开始日期|
@@ -1561,7 +1571,7 @@
 |deployment_decision_run_id|投放决策执行编号|持久化字段|一次投放决策执行编号|
 |deployment_plan_id|投放计划编号|持久化字段|投放决策直接形成的计划编号|
 |target_utilization_rate|目标利用率|配置字段|投放决策希望维持的 Robotaxi 目标利用率|
-|average_fulfillment_duration_min|平均履约时长（分钟）|配置字段|订单需求换算车辆需求时使用的平均履约时长|
+|average_fulfillment_duration_min|平均订单履约执行时长（兼容）|兼容字段|旧投放决策字段；新规划与分析统一使用明确的订单履约执行时长字段|
 |average_fulfillment_cost_per_order|单均履约变动成本|配置字段|一笔新增履约预计产生的能源、资产和运营变动成本|
 |supply_gap_weight|供给缺口权重|配置字段|供给缺口在投放优先级中的权重|
 |service_pressure_weight|服务压力权重|配置字段|预计需求无法及时履约的压力权重|

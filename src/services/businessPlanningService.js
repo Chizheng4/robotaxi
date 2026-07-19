@@ -1,12 +1,12 @@
 import { createRobotaxi } from "../domain/operationsCenterTypes.js?v=20260608-v018-bfs-route-planning";
-import { getFieldSemanticDefinition } from "../domain/fieldSemanticRegistry.js?v=20260719-v047-4-0";
+import { getFieldSemanticDefinition } from "../domain/fieldSemanticRegistry.js?v=20260719-v047-4-1";
 import {
   calculateLongTermDemandPlan,
   normalizeLongTermDemandForecastResult,
   normalizeLongTermDemandForecastResults,
   resolveForecastPeriod,
   validatePlanningInputs,
-} from "../domain/longTermDemandPlanning.js?v=20260717-v047-1-0";
+} from "../domain/longTermDemandPlanning.js?v=20260719-v047-4-1";
 
 export { normalizeLongTermDemandForecastResult, normalizeLongTermDemandForecastResults };
 
@@ -83,7 +83,7 @@ export const businessPlanningObjectSchemas = {
     tabs: [
       { key: "basic", label: "策略信息", fields: ["forecast_strategy_id", "strategy_name", "strategy_type", "strategy_status", "strategy_version", "target_zone_ids"] },
       { key: "growth", label: "增长规则", fields: ["growth_scenario", "growth_model", "growth_adjustment_rate"] },
-      { key: "capacity", label: "容量参数", fields: ["demand_buffer_ratio", "operational_availability_rate", "robotaxi_available_hours_per_day", "average_pickup_duration_min", "average_trip_duration_min", "average_turnaround_duration_min"] },
+      { key: "capacity", label: "容量参数", fields: ["demand_buffer_ratio", "operational_availability_rate", "robotaxi_available_hours_per_day", "average_pickup_duration_min", "average_passenger_trip_duration_min", "average_turnaround_duration_min"] },
       { key: "time", label: "更新时间", fields: ["created_at", "updated_at"] },
     ],
     explanations: {
@@ -94,8 +94,8 @@ export const businessPlanningObjectSchemas = {
       operational_availability_rate: "扣除充电、清洁、维修等不可运营时间后的资产可用比例。",
       robotaxi_available_hours_per_day: "单台 Robotaxi 每日计划运营时长。充电、清洁、维修等不可运营时间统一通过运营可用率折减，避免重复扣减。",
       average_pickup_duration_min: "Robotaxi 前往乘客上车点的平均时间，单位为分钟。",
-      average_trip_duration_min: "服务订单从上车到下车的平均履约时间。",
-      average_turnaround_duration_min: "一次服务结束到下一次可接单之间的平均周转时间，单位为分钟。",
+      average_passenger_trip_duration_min: "乘客上车至 Robotaxi 到达下车点的平均载客行驶时长，单位为分钟。",
+      average_turnaround_duration_min: "订单送达完成至 Robotaxi 可开始下一次接驾的平均准备时长，单位为分钟。",
     },
   },
   supplyDecisionStrategy: {
@@ -142,13 +142,20 @@ export function normalizeBusinessPlanningDefaults({ businessTargets = [], supply
         ? { ...profile, production_lead_time_days: 10 }
         : profile
     )),
-    longTermDemandForecastStrategies: longTermDemandForecastStrategies.map((strategy) => (
-      strategy.forecast_strategy_id === "LDF-STR-001"
+    longTermDemandForecastStrategies: longTermDemandForecastStrategies.map((strategy) => {
+      const { average_trip_duration_min: legacyPassengerTripDuration, ...currentStrategy } = strategy;
+      const migratedStrategy = {
+        ...currentStrategy,
+        average_passenger_trip_duration_min: currentStrategy.average_passenger_trip_duration_min
+          ?? legacyPassengerTripDuration
+          ?? 30,
+      };
+      return migratedStrategy.forecast_strategy_id === "LDF-STR-001"
         && Number(strategy.growth_adjustment_rate || 0) === 0
         && strategy.created_at === strategy.updated_at
-        ? { ...strategy, growth_adjustment_rate: 0.005 }
-        : strategy
-    )),
+        ? { ...migratedStrategy, growth_adjustment_rate: 0.005 }
+        : migratedStrategy;
+    }),
   };
 }
 
@@ -351,7 +358,7 @@ export function initializeDefaultLongTermDemandForecastStrategies(now = defaultN
     operational_availability_rate: 0.9,
     robotaxi_available_hours_per_day: 24,
     average_pickup_duration_min: 8,
-    average_trip_duration_min: 30,
+    average_passenger_trip_duration_min: 30,
     average_turnaround_duration_min: 7,
     created_at: now,
     updated_at: now,
@@ -364,7 +371,7 @@ export function updateLongTermDemandForecastStrategyConfig({ strategy, patch = {
   const numericFields = [
     "growth_adjustment_rate", "demand_buffer_ratio", "operational_availability_rate",
     "robotaxi_available_hours_per_day", "average_pickup_duration_min",
-    "average_trip_duration_min", "average_turnaround_duration_min",
+    "average_passenger_trip_duration_min", "average_turnaround_duration_min",
   ];
   const normalizedPatch = { ...patch };
   numericFields.forEach((field) => {
@@ -1375,7 +1382,7 @@ function createForecastRun({
     robotaxi_capacity_snapshot: strategy ? {
       robotaxi_available_hours_per_day: strategy.robotaxi_available_hours_per_day,
       average_pickup_duration_min: strategy.average_pickup_duration_min,
-      average_trip_duration_min: strategy.average_trip_duration_min,
+      average_passenger_trip_duration_min: strategy.average_passenger_trip_duration_min ?? strategy.average_trip_duration_min,
       average_turnaround_duration_min: strategy.average_turnaround_duration_min,
       operational_availability_rate: strategy.operational_availability_rate,
     } : null,
@@ -1436,14 +1443,18 @@ function createForecastResultLegacy({ resultId, runId, strategy, businessTarget,
   const forecastDailyDemand = baselineDailyDemand * growthFactor;
   const peakDemandRatio = Number(profile.peak_demand_ratio ?? profile.peak_demand_factor ?? 0.15);
   const forecastPeakHourDemand = forecastDailyDemand * peakDemandRatio;
-  const averageTripDurationMin = Math.max(1, Number(strategy.average_trip_duration_min || 30));
+  const averagePickupDurationMin = Math.max(0, Number(strategy.average_pickup_duration_min || 0));
+  const averagePassengerTripDurationMin = Math.max(1, Number(strategy.average_passenger_trip_duration_min ?? strategy.average_trip_duration_min ?? 30));
+  const averageTurnaroundDurationMin = Math.max(0, Number(strategy.average_turnaround_duration_min || 0));
+  const averageOrderFulfillmentExecutionDurationMin = averagePickupDurationMin + averagePassengerTripDurationMin;
+  const vehicleServiceCycleDurationMin = averageOrderFulfillmentExecutionDurationMin + averageTurnaroundDurationMin;
   const vehicleAvailableHoursPerDay = Math.max(1, Number(strategy.vehicle_available_hours_per_day || 12));
   const targetDailyOrders = Number(businessTarget?.target_service_order_count || 0) / Math.max(1, forecastHorizonYears * 365);
   const targetPeakHourDemand = targetDailyOrders * peakDemandRatio;
-  const demandFleetRequirement = Math.ceil((forecastPeakHourDemand * averageTripDurationMin) / 60);
-  const targetServiceFleetRequirement = Math.ceil((targetPeakHourDemand * averageTripDurationMin) / 60);
+  const demandFleetRequirement = Math.ceil((forecastPeakHourDemand * vehicleServiceCycleDurationMin) / 60);
+  const targetServiceFleetRequirement = Math.ceil((targetPeakHourDemand * vehicleServiceCycleDurationMin) / 60);
   const targetFleetSize = Math.max(0, Number(businessTarget?.target_fleet_size || 0));
-  const productivityFleetRequirement = Math.ceil((forecastDailyDemand * (1 + bufferRatio)) / Math.max(1, (vehicleAvailableHoursPerDay * 60) / averageTripDurationMin) / utilizationTarget);
+  const productivityFleetRequirement = Math.ceil((forecastDailyDemand * (1 + bufferRatio)) / Math.max(1, (vehicleAvailableHoursPerDay * 60) / vehicleServiceCycleDurationMin) / utilizationTarget);
   const requiredFleetQuantity = Math.max(demandFleetRequirement, targetServiceFleetRequirement, targetFleetSize, productivityFleetRequirement);
   const currentFleetQuantity = robotaxis.filter((item) => item.target_zone_id === profile.target_object_id || item.service_zone_id === profile.target_object_id || profile.target_object_id === "Z-001").length;
   const fleetGapQuantity = Math.max(0, requiredFleetQuantity - currentFleetQuantity);
@@ -1482,7 +1493,11 @@ function createForecastResultLegacy({ resultId, runId, strategy, businessTarget,
     target_asset_utilization_rate: businessTarget?.target_asset_utilization_rate ?? null,
     target_order_fulfillment_rate: businessTarget?.target_order_fulfillment_rate ?? null,
     vehicle_available_hours_per_day: vehicleAvailableHoursPerDay,
-    average_trip_duration_min: averageTripDurationMin,
+    average_pickup_duration_min: averagePickupDurationMin,
+    average_passenger_trip_duration_min: averagePassengerTripDurationMin,
+    average_order_fulfillment_execution_duration_min: averageOrderFulfillmentExecutionDurationMin,
+    average_turnaround_duration_min: averageTurnaroundDurationMin,
+    vehicle_service_cycle_duration_min: vehicleServiceCycleDurationMin,
     required_fleet_quantity: requiredFleetQuantity,
     current_fleet_quantity: currentFleetQuantity,
     fleet_gap_quantity: fleetGapQuantity,

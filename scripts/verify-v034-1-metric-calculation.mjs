@@ -170,7 +170,7 @@ assert.doesNotMatch(mainSource, /runMetricCalculation\(run\.simulation_run_id, \
 assert.match(mainSource, /operatingMetricsOverview/, "经营分析必须接入经营总览");
 assert.match(navigationSource, /财务效率/, "经营分析必须接入财务效率");
 assert.match(navigationSource, /需求服务/, "经营分析必须接入需求服务");
-assert.match(navigationSource, /供给资产/, "经营分析必须接入供给资产");
+assert.match(navigationSource, /供应资产/, "经营分析必须接入供应资产");
 assert.match(navigationSource, /经营诊断/, "经营分析必须接入经营诊断");
 assert.match(navigationSource, /财务管理/, "收入、成本和财务计算记录必须归入财务管理一级菜单");
 assert.match(navigationSource, /数据计算/, "指标定义、观测和计算记录必须归入数据计算分组");

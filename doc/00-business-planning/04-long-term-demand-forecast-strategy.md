@@ -71,13 +71,13 @@ flowchart TD
   E --> J
   H --> K["扣减规划资产基数"]
   K --> L["Robotaxi 净缺口"]
-  M["生产、检验与交付能力"] --> N["目标日前可形成供给"]
+  M["生产、检验与交付能力"] --> N["目标日前可供应数量"]
   L --> N
   J --> O["形成预测结果"]
   N --> O
 ```
 
-固定顺序：地点需求汇总、有效增长、市场预测、计划承接、完整服务周期、日常运力、峰值运力、服务承载、当前资产、供给缺口、生产交付约束、基础经济性、最终结论。每一步必须以统一字段键声明输入、模型、公式、输出和来源，前端不得另造计算名称。
+固定顺序：地点需求汇总、有效增长、市场预测、计划承接、车辆服务周期、日常运力、峰值运力、服务承载、当前资产、供应缺口、生产交付约束、基础经济性、最终结论。每一步必须以统一字段键声明输入、模型编号、输入值、输出值、来源和语义版本，字段名称、业务定义与公式由统一服务解析，前端不得另造计算名称。
 
 ## 5. 预测周期
 
@@ -155,7 +155,7 @@ baseline_peak_hour_orders
 |`waiting_robotaxi_capacity`|等待 Robotaxi 容量|
 |`pickup_position_capacity`|上车位容量|
 |`dropoff_position_capacity`|下车位容量|
-|`average_service_time_min`|平均站点服务时间|
+|`average_service_stop_duration_min`|平均站点停靠时长（分钟）|
 |`operating_hours_per_day`|每日开放小时数|
 |`accessibility_factor`|可达性系数|
 |`capacity_availability_rate`|容量可用率|
@@ -164,24 +164,24 @@ baseline_peak_hour_orders
 
 ```text
 position_throughput_per_hour
-= 60 / average_service_time_min
+= 60 / average_service_stop_duration_min
 
-effective_position_capacity
-= min(pickup_position_capacity, dropoff_position_capacity)
+effective_pickup_capacity_per_hour
+= pickup_position_capacity × position_throughput_per_hour
+× accessibility_factor × capacity_availability_rate
 
-service_capacity_per_hour
-= effective_position_capacity × position_throughput_per_hour
+effective_dropoff_capacity_per_hour
+= dropoff_position_capacity × position_throughput_per_hour
+× accessibility_factor × capacity_availability_rate
 
-effective_peak_hour_capacity
-= service_capacity_per_hour
-× accessibility_factor
-× capacity_availability_rate
+effective_daily_pickup_capacity
+= effective_pickup_capacity_per_hour × operating_hours_per_day
 
-effective_daily_capacity
-= effective_peak_hour_capacity × operating_hours_per_day
+effective_daily_dropoff_capacity
+= effective_dropoff_capacity_per_hour × operating_hours_per_day
 ```
 
-Place 和 Zone 分别对所属 ServiceArea 容量求和。容量不足只形成约束和缺口，不得反向压低市场需求。
+ServiceArea 不生成市场需求。Zone 分别汇总上车与下车能力后，以较小值作为端到端承载。容量不足只形成约束和缺口，不得反向压低市场需求。
 
 ## 8. Zone 汇总与增长
 
@@ -192,11 +192,18 @@ zone.baseline_addressable_daily_orders
 zone.baseline_peak_hour_orders
 = Σ Place.baseline_peak_hour_orders
 
+zone.effective_daily_pickup_capacity
+= Σ ServiceArea.effective_daily_pickup_capacity
+
+zone.effective_daily_dropoff_capacity
+= Σ ServiceArea.effective_daily_dropoff_capacity
+
 zone.effective_daily_capacity
-= Σ ServiceArea.effective_daily_capacity
+= min(zone.effective_daily_pickup_capacity, zone.effective_daily_dropoff_capacity)
 
 zone.effective_peak_hour_capacity
-= Σ ServiceArea.effective_peak_hour_capacity
+= min(Σ ServiceArea.effective_pickup_capacity_per_hour,
+      Σ ServiceArea.effective_dropoff_capacity_per_hour)
 
 zone_period_growth_rate
 = Σ(Place.baseline_addressable_daily_orders × Place.place_period_growth_rate)
@@ -300,6 +307,27 @@ break_even_daily_orders
 系统计算可行区间并提示风险，不替代管理层自动决定经营目标。
 
 ## 10. Robotaxi 规模计算
+
+### 10.1 时间字段边界
+
+|英文字段|中文字段|开始事件|结束事件|用途|
+|---|---|---|---|---|
+|`average_passenger_trip_duration_min`|平均载客行驶时长（分钟）|乘客上车|到达下车点|载客路段效率|
+|`average_order_fulfillment_execution_duration_min`|平均订单履约执行时长（分钟）|Robotaxi 接受订单|送达完成|订单履约执行效率|
+|`average_order_end_to_end_duration_min`|平均订单全流程时长（分钟）|订单创建|订单完成|客户全流程体验，包含等待匹配|
+|`vehicle_service_cycle_duration_min`|车辆服务周期时长（分钟）|开始接驾|送达后周转完成|车辆日服务产能|
+
+固定关系：
+
+```text
+average_order_fulfillment_execution_duration_min
+= average_pickup_duration_min + average_passenger_trip_duration_min
+
+vehicle_service_cycle_duration_min
+= average_order_fulfillment_execution_duration_min + average_turnaround_duration_min
+```
+
+订单全流程时长还包含匹配等待，不参与当前车辆产能计算。不存在可靠订单事件时间戳时不得从其他时长推造该指标。
 
 所有计算字段统一使用 `robotaxi`，不使用 `vehicle` 或含义模糊的 `fleet` 数量字段。
 
@@ -412,7 +440,7 @@ uncovered_robotaxi_gap
 
 `recommended_production_quantity` 表达完整覆盖缺口需要生产的数量；`feasible_supply_quantity` 表达预测期内受产能和交付约束可完成的数量。`production_capacity_per_period` 是生产能力唯一配置真值；年度能力等其他口径只允许作为展示派生字段。
 
-趋势必须区分生产完成与质量检验合格两个里程碑：生产完成量从生产提前期结束后出现，质检合格可供给量从质量检验周期结束后出现。累计生产完成量用于观察生产管道，累计质检合格量用于判断可供给结果，剩余 Robotaxi 缺口只能由累计质检合格量冲减。预测阶段尚未发生区域物流交付，因此不得把质检合格量命名为实际交付量。必须分别输出首批生产完成日期、首批质量检验完成日期、预测期剩余缺口和全部计划供给完成日期。
+趋势必须区分生产完成与质量检验合格两个里程碑：生产完成量从生产提前期结束后出现，质检合格可供应量从质量检验周期结束后出现。累计生产完成量用于观察生产管道，累计质检合格量用于判断可供应结果，剩余 Robotaxi 缺口只能由累计质检合格量冲减。预测阶段尚未发生区域物流交付，因此不得把质检合格量命名为实际交付量。必须分别输出首批生产完成日期、首批质量检验完成日期、预测期剩余缺口和全部计划供应完成日期。
 
 ## 13. 预测策略、执行与结果
 
@@ -459,7 +487,7 @@ uncovered_robotaxi_gap
 
 预测结果页面不是普通对象表格的放大版，主视图按分析决策组织：
 
-1. 结论区：市场日订单、目标日订单、计划承接日订单、Robotaxi 缺口、承载缺口、可形成供给和剩余缺口；
+1. 结论区：市场日订单、目标日订单、计划承接日订单、Robotaxi 缺口、承载缺口、可形成供应和剩余缺口；
 2. 需求趋势：各预测周期和期末值，同时展示市场预测与计划承接量；经营目标作为管理意图单独比较，不伪装成预测曲线；
 3. 瓶颈判断：市场需求、Robotaxi 最大履约能力、ServiceArea 承载能力；
 4. Robotaxi 规模拆解：日常、峰值、经营最低、规划资产基数和新增缺口；
@@ -486,7 +514,7 @@ uncovered_robotaxi_gap
 - Zone 汇总需求等于所属 Place 需求之和；
 - 增长率单位与预测周期单位一致；
 - 画像不得提供本次执行的固定增长因子；
-- 建议生产量不超过 Robotaxi 缺口；预测期内可形成供给受生产能力和交付能力约束；
+- 建议生产量不超过 Robotaxi 缺口；预测期内可形成供应受生产能力和交付能力约束；
 - 规划资产基数、未覆盖缺口不得小于零；
 - 历史执行快照和结果不可被后续配置修改；
 - 所有前端字段和枚举通过统一字段字典显示中文。

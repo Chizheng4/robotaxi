@@ -26,7 +26,7 @@ assert.equal(getPageArchitecture("metricObservations").resourceKind, "result", "
 assert.deepEqual(
   pickFrameworkContract(getPageArchitecture("supplyPositionTracking")),
   { mode: "analysis", resourceKind: "projection", detailMode: "none", actionMode: "none", hasEventPanel: false },
-  "供给跟踪必须是无详情、无事件区的派生分析页面",
+  "供应跟踪必须是无详情、无事件区的派生分析页面",
 );
 
 const coreDocumentPages = [

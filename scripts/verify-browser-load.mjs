@@ -244,7 +244,7 @@ try {
     });
     const modelState = JSON.parse(modelResult.result?.result?.value || "{}");
     assert(modelState.hasPanel, `经营模型页面加载失败：${JSON.stringify({ modelState, exceptions, messages })}`);
-    assert.deepEqual(modelState.domainNames, ["需求", "供给", "服务", "资产", "财务", "经营反馈"]);
+    assert.deepEqual(modelState.domainNames, ["需求", "供应", "服务", "资产", "财务", "经营反馈"]);
     assert(modelState.detailHidden, "经营模型分析画布不得混入对象详情面板");
     assert.equal(modelState.documentOverflow, 0, "经营模型不得产生页面级横向溢出");
     if (mobileAssertionEnabled) assert.equal(modelState.panelOverflow, 0, "手机经营模型不得产生内容横向溢出");

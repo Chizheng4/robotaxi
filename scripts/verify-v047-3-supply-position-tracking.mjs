@@ -97,7 +97,7 @@ assert.equal(largeView.records.length, 10000);
 assert.equal(largeView.summary.current_regional_asset_quantity, 10000);
 assert.ok(performanceElapsedMs < 1000, `10,000 台供给投影耗时过高：${performanceElapsedMs.toFixed(2)}ms`);
 
-console.log(`v047.3 供给跟踪投影合同验证通过：10,000 台耗时 ${performanceElapsedMs.toFixed(2)}ms`);
+console.log(`v047.3 供应跟踪投影合同验证通过：10,000 台耗时 ${performanceElapsedMs.toFixed(2)}ms`);
 
 function asset(robotaxiId, availabilityStatus, productionBatchId = null) {
   return {

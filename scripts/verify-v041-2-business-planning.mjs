@@ -122,14 +122,14 @@ assert.equal(execution.results[0].zone_id, "Z-001", "预测结果必须记录目
 assert.ok(execution.results[0].market_forecast_daily_orders > execution.results[0].baseline_addressable_daily_orders, "预测结果必须计算增长后的日需求");
 assert.ok(execution.results[0].planned_peak_hour_orders > 0, "预测结果必须计算峰值小时需求");
 assert.ok(execution.results[0].required_robotaxi_quantity > 0, "预测结果必须计算目标所需 Robotaxi");
-assert.ok(execution.results[0].robotaxi_gap_quantity >= 0, "预测结果必须计算 Robotaxi 供给缺口");
+assert.ok(execution.results[0].robotaxi_gap_quantity >= 0, "预测结果必须计算 Robotaxi 供应缺口");
 assert.ok(execution.results[0].planned_production_quantity >= 0, "预测结果必须计算计划生产数量");
 assert.equal(execution.results[0].recommended_production_quantity, execution.results[0].robotaxi_gap_quantity, "建议生产数量必须覆盖完整 Robotaxi 缺口");
 assert.equal(execution.results[0].planned_production_quantity, execution.results[0].recommended_production_quantity, "生产计划数量必须使用完整建议量");
 assert.equal(
   execution.results[0].uncovered_robotaxi_gap,
   Math.max(0, execution.results[0].robotaxi_gap_quantity - execution.results[0].feasible_supply_quantity),
-  "预测期剩余缺口必须由预测期可形成供给计算",
+  "预测期剩余缺口必须由预测期可供应数量计算",
 );
 assert.equal(execution.results[0].first_production_completion_date, "2026-07-19", "预测结果必须按生产提前期计算首批生产完成日期");
 assert.equal(execution.results[0].first_quality_inspection_completion_date, "2026-07-22", "预测结果必须在生产完成后叠加质量检验周期");

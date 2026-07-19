@@ -131,7 +131,7 @@ const pool = createOperatingDataPool({
 });
 assert.deepEqual(Object.keys(OPERATING_ANALYSIS_PAGE_METRICS), ["operatingMetricsOverview", "serviceMetrics", "supplyAssetMetrics", "financialMetrics", "processDiagnostics", "decisionCenter"], "经营分析页面必须使用固定的五域结构并保留决策中心投影");
 assert.equal(Object.keys(OPERATING_ANALYSIS_PAGE_MODELS).length, 5, "五个经营分析页面必须由统一分析模型服务驱动");
-assert.ok(pool.pages.supplyAssetMetrics.length > 0, "供给资产页面必须读取统一经营数据池");
+assert.ok(pool.pages.supplyAssetMetrics.length > 0, "供应资产页面必须读取统一经营数据池");
 ["operatingMetricsOverview", "serviceMetrics", "supplyAssetMetrics", "financialMetrics", "processDiagnostics"].forEach((page) => {
   assert.equal(getPageArchitecture(page).mode, "analysis", `${page} 必须使用分析页面框架`);
   assert.equal(getPageArchitecture(page).detailMode, "none", `${page} 不得显示对象详情栏`);

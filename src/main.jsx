@@ -153,7 +153,7 @@ const hiddenWorkspacePages = new Set([
 const tableConfig = {
   operatingModel: {
     title: "经营模型",
-    description: "统一展示需求、供给、服务、资产、财务和经营反馈之间的经营结构。",
+    description: "统一展示需求、供应、服务、资产、财务和经营反馈之间的经营结构。",
     columns: ["operating_model_id", "operating_model_name", "operating_model_status", "operating_model_version", "model_description", "updated_at"],
   },
   decisionCenter: {
@@ -203,7 +203,7 @@ const tableConfig = {
   },
   demandProfiles: {
     title: "需求画像",
-    description: "需求画像统一展示地点、服务区和区域画像记录，用于经营规划中的长期需求预测和供给规划。",
+    description: "需求画像统一展示地点、服务区和区域画像记录，用于经营规划中的长期需求预测和供应规划。",
     columns: [
       "target_object_type",
       "target_object_name",
@@ -225,7 +225,7 @@ const tableConfig = {
   },
   supplyProductionProfiles: {
     title: "生产画像",
-    description: "生产画像描述企业自有生产形成 Robotaxi 供给能力的约束、产能和节奏。",
+    description: "生产画像描述企业自有生产形成 Robotaxi 供应能力的约束、产能和节奏。",
     columns: ["profile_id", "profile_name", "profile_status", "production_lead_time_days", "production_capacity_period_unit", "production_capacity_per_period", "ramp_up_periods", "ramp_up_capacity_ratios", "quality_inspection_lead_time_days", "delivery_capacity_per_period", "effective_from", "effective_to"],
   },
   placeDemandProfiles: {
@@ -240,7 +240,7 @@ const tableConfig = {
   },
   zoneDemandProfiles: {
     title: "区域需求画像",
-    description: "区域需求画像由地点和服务区画像计算得到，用于供给规划和运营投放判断。",
+    description: "区域需求画像由地点和服务区画像计算得到，用于供应规划和运营投放判断。",
     columns: ["profile_id", "zone_id", "profile_status", "potential_demand", "expected_robotaxi_demand", "peak_hour_demand", "growth_factor", "supply_need_score", "calculated_at"],
   },
   routes: {
@@ -290,13 +290,13 @@ const tableConfig = {
   },
   longTermDemandForecasts: {
     title: "需求预测结果",
-    description: "需求预测结果记录长期需求预测策略执行后形成的区域 Robotaxi 需求和供给缺口。",
+    description: "需求预测结果记录长期需求预测策略执行后形成的区域 Robotaxi 需求和供应缺口。",
     columns: ["forecast_result_id", "forecast_name", "forecast_status", "forecast_period_unit", "forecast_period_count", "zone_id", "market_forecast_daily_orders", "target_end_daily_orders", "planned_daily_orders", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "planned_production_quantity", "uncovered_robotaxi_gap", "requirement_driver", "data_quality_level", "created_at"],
   },
   longTermDemandForecastStrategies: {
     title: "需求预测策略",
     description: "需求预测策略定义经营目标、需求画像和生产画像如何转化为长期 Robotaxi 需求预测。",
-    columns: ["forecast_strategy_id", "strategy_name", "strategy_status", "strategy_version", "target_zone_ids", "growth_scenario", "growth_model", "growth_adjustment_rate", "demand_buffer_ratio", "operational_availability_rate", "robotaxi_available_hours_per_day", "average_pickup_duration_min", "average_trip_duration_min", "average_turnaround_duration_min", "updated_at"],
+    columns: ["forecast_strategy_id", "strategy_name", "strategy_status", "strategy_version", "target_zone_ids", "growth_scenario", "growth_model", "growth_adjustment_rate", "demand_buffer_ratio", "operational_availability_rate", "robotaxi_available_hours_per_day", "average_pickup_duration_min", "average_passenger_trip_duration_min", "average_turnaround_duration_min", "updated_at"],
   },
   longTermDemandForecastRuns: {
     title: "需求预测执行",
@@ -319,8 +319,8 @@ const tableConfig = {
     columns: ["supply_plan_id", "plan_name", "plan_status", "forecast_result_id", "supply_decision_run_id", "supply_production_profile_id", "target_zone_id", "required_robotaxi_quantity", "effective_current_robotaxi", "robotaxi_gap_quantity", "covered_gap_quantity", "safety_capacity_quantity", "required_supply_quantity", "feasible_manufacturing_quantity", "feasible_delivery_quantity", "planned_robotaxi_count", "uncovered_robotaxi_gap", "production_lead_time_days", "planned_start_date", "planned_end_date", "created_at"],
   },
   supplyPositionTracking: {
-    title: "供给跟踪",
-    description: "统一跟踪当前可用供给、区域资产与未来供给管道，并按业务来源追溯每个阶段。",
+    title: "供应跟踪",
+    description: "统一跟踪当前可用供应、区域资产与未来供应管道，并按业务来源追溯每个阶段。",
     columns: ["target_zone_name", "supply_stage", "supply_quantity", "source_object_type", "source_object_id", "supply_plan_id", "production_batch_id", "delivery_order_id", "target_ops_center_id", "robotaxi_ids", "expected_available_date", "source_updated_at"],
   },
   productionBatches: {
@@ -475,7 +475,7 @@ const tableConfig = {
   },
   deploymentDecisionStrategies: {
     title: "投放决策策略",
-    description: "结合短期需求、当前供给和经济性，决定各服务区域的投放数量与优先级。",
+    description: "结合短期需求、当前供应和经济性，决定各服务区域的投放数量与优先级。",
     columns: ["deployment_decision_strategy_id", "strategy_name", "strategy_status", "strategy_version", "decision_algorithm", "target_utilization_rate", "average_fulfillment_duration_min", "average_fulfillment_cost_per_order", "demand_weight", "supply_gap_weight", "service_pressure_weight", "profit_weight", "updated_at"],
   },
   deploymentDecisionRuns: {
@@ -624,8 +624,8 @@ const tableConfig = {
     columns: ["metric_name_cn", "metric_value", "metric_unit", "quality_status", "quality_reason", "metric_period_label", "source_record_count"],
   },
   supplyAssetMetrics: {
-    title: "供给资产",
-    description: "连接生产、交付、准入与 Robotaxi 资产状态，判断供给形成和资产使用效率。",
+    title: "供应资产",
+    description: "连接生产、交付、准入与 Robotaxi 资产状态，判断供应形成和资产使用效率。",
     columns: ["metric_name_cn", "metric_domain", "metric_value", "metric_unit", "quality_status", "quality_reason", "source_record_count", "metric_period_label"],
   },
   processDiagnostics: {
@@ -1051,7 +1051,7 @@ function getDemandProfileConfigFields(profile) {
       { key: "waiting_robotaxi_capacity", type: "number", min: 0, step: 1 },
       { key: "pickup_position_capacity", type: "number", min: 1, step: 1 },
       { key: "dropoff_position_capacity", type: "number", min: 1, step: 1 },
-      { key: "average_service_time_min", type: "number", min: 1, step: 1 },
+      { key: "average_service_stop_duration_min", type: "number", min: 1, step: 1 },
       { key: "operating_hours_per_day", type: "number", min: 1, max: 24, step: 1 },
       { key: "accessibility_factor", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
       { key: "capacity_availability_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
@@ -1128,7 +1128,7 @@ const longTermDemandForecastStrategyConfigFields = [
   { key: "operational_availability_rate", type: "number", unit: "percent", min: 0, max: 1, percentStep: 1 },
   { key: "robotaxi_available_hours_per_day", type: "number", min: 0.1, max: 24, step: 0.1 },
   { key: "average_pickup_duration_min", type: "number", min: 0, step: 1 },
-  { key: "average_trip_duration_min", type: "number", min: 0, step: 1 },
+  { key: "average_passenger_trip_duration_min", type: "number", min: 0, step: 1 },
   { key: "average_turnaround_duration_min", type: "number", min: 0, step: 1 },
 ];
 
@@ -7862,8 +7862,8 @@ function getDemandProfileDetailTabs(profile) {
   if (profile?.target_object_type === "SERVICE_AREA") {
     return [
       basic,
-      { key: "config", label: "承载参数", keys: ["parent_place_id", "waiting_robotaxi_capacity", "pickup_position_capacity", "dropoff_position_capacity", "average_service_time_min", "operating_hours_per_day", "accessibility_factor", "capacity_availability_rate"] },
-      { key: "calculated", label: "自动计算", keys: ["position_throughput_per_hour", "service_capacity_per_hour", "effective_peak_hour_capacity", "effective_daily_capacity", "calculated_at"] },
+      { key: "config", label: "承载参数", keys: ["parent_place_id", "waiting_robotaxi_capacity", "pickup_position_capacity", "dropoff_position_capacity", "average_service_stop_duration_min", "operating_hours_per_day", "accessibility_factor", "capacity_availability_rate"] },
+      { key: "calculated", label: "自动计算", keys: ["position_throughput_per_hour", "effective_pickup_capacity_per_hour", "effective_dropoff_capacity_per_hour", "effective_daily_pickup_capacity", "effective_daily_dropoff_capacity", "calculated_at"] },
       { key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] },
       { key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] },
     ];
@@ -7871,7 +7871,7 @@ function getDemandProfileDetailTabs(profile) {
   if (profile?.target_object_type === "ZONE") {
     return [
       basic,
-      { key: "calculated", label: "自动汇总", keys: ["potential_daily_trips", "baseline_addressable_daily_orders", "baseline_peak_hour_orders", "busiest_hour_share", "zone_period_growth_rate", "growth_rate_unit", "effective_daily_capacity", "effective_peak_hour_capacity", "waiting_robotaxi_capacity", "demand_distribution", "calculated_from_profile_ids", "calculated_at"] },
+      { key: "calculated", label: "自动汇总", keys: ["potential_daily_trips", "baseline_addressable_daily_orders", "baseline_peak_hour_orders", "busiest_hour_share", "zone_period_growth_rate", "growth_rate_unit", "effective_daily_pickup_capacity", "effective_daily_dropoff_capacity", "effective_daily_capacity", "effective_peak_hour_capacity", "waiting_robotaxi_capacity", "demand_distribution", "calculated_from_profile_ids", "calculated_at"] },
       { key: "steps", label: "计算过程", keys: ["profile_calculation_steps"] },
       { key: "explanation", label: "字段解释", keys: ["profile_field_explanations"] },
     ];
@@ -8772,15 +8772,15 @@ function SupplyPositionPanel({ view }) {
     <div className="supply-position-panel">
       <header className="supply-position-header">
         <div>
-          <span className="analysis-eyebrow">供给资产控制</span>
-          <h2>区域供给与在途管道</h2>
-          <p>当前供给看可用能力，区域资产看已到达资源，未来管道看生产、质检和交付进度。</p>
+          <span className="analysis-eyebrow">供应资产控制</span>
+          <h2>区域供应与在途管道</h2>
+          <p>当前供应看可用能力，区域资产看已到达资源，未来管道看生产、质检和交付进度。</p>
         </div>
         <span className={diagnostics.length ? "supply-position-health is-warning" : "supply-position-health"}>
           {diagnostics.length ? `${diagnostics.length} 项数据待核查` : "来源关系完整"}
         </span>
       </header>
-      <section className="analysis-summary-grid supply-position-summary" aria-label="供给跟踪摘要">
+      <section className="analysis-summary-grid supply-position-summary" aria-label="供应跟踪摘要">
         {summaryItems.map(([key, value]) => (
           <div className="analysis-summary-card" key={key}>
             <span>{getFieldLabel(key)}</span>
@@ -8790,7 +8790,7 @@ function SupplyPositionPanel({ view }) {
       </section>
       <section className="supply-position-section">
         <div className="supply-position-section-heading">
-          <div><h3>区域供给口径</h3><small>三种缺口逐级扣减已承诺供给与生产质检管道</small></div>
+          <div><h3>区域供应口径</h3><small>三种缺口逐级扣减已承诺供应与生产质检管道</small></div>
         </div>
         <Table size="small" rowKey={(row) => row.target_zone_id || "UNASSIGNED"} columns={zoneColumns} dataSource={zones} pagination={false} scroll={{ x: 1400 }} tableLayout="auto" />
       </section>
@@ -8905,7 +8905,7 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
       </div>
       <div className="forecast-trend-section">
         <div className="forecast-trend-toolbar">
-          <div><strong>生产与质检规划</strong><small>按生产画像展示生产完成、质检合格、可形成供给和 Robotaxi 剩余缺口</small></div>
+          <div><strong>生产与质检规划</strong><small>按生产画像展示生产完成、质检合格、可供应数量和 Robotaxi 剩余缺口</small></div>
         </div>
         <div className="forecast-trend-grid">
           <DataSeriesChart
@@ -8917,11 +8917,11 @@ function ForecastAnalysisPanel({ rows = [], selectedId = null, onSelect, onCreat
             zeroBased
           />
           <DataSeriesChart
-            title="累计供给与剩余缺口"
-            description="累计生产用于观察管道，剩余缺口只按累计可供给量扣减"
+            title="累计供应与剩余缺口"
+            description="累计生产用于观察管道，剩余缺口只按累计可供应量扣减"
             rows={normalizedSupplyTrendRows}
             series={["cumulative_production_quantity", "cumulative_quality_passed_quantity", "cumulative_delivery_quantity", "remaining_robotaxi_gap"].map((key) => ({ key, label: getFieldLabel(key), unit: "辆" }))}
-            emptyText="该历史结果尚未保存累计供给趋势"
+            emptyText="该历史结果尚未保存累计供应趋势"
             zeroBased
           />
         </div>
@@ -10730,7 +10730,7 @@ async function bootstrap() {
     import("./domain/orderMatchingTypes.js?v=20260611-v019-5-order-matching"),
     import("./domain/tripTypes.js?v=20260624-v028-1-5"),
     import("./data/cellContext.js?v=20260608-v018-bfs-route-planning"),
-	    import("./domain/fieldDisplayService.js?v=20260719-v047-4-0"),
+	    import("./domain/fieldDisplayService.js?v=20260719-v047-4-1"),
     import("./data/readinessCheckTaskValidation.js?v=20260608-v018-bfs-route-planning"),
     import("./data/deploymentTaskValidation.js?v=20260614-v020-6-route-execution"),
     import("./domain/taskTypes.js?v=20260614-v020-6-route-execution"),
@@ -10748,8 +10748,8 @@ async function bootstrap() {
 		    import("./data/businessTimingCalculator.js?v=20260624-v028-1-3"),
 		    import("./data/costModelCalculator.js?v=20260625-v029-1"),
 		    import("./data/revenueCalculator.js?v=20260625-v029-1"),
-		    import("./data/metricCalculator.js?v=20260719-v047-4-0"),
-		    import("./services/operatingDataPoolService.js?v=20260719-v047-4-0"),
+		    import("./data/metricCalculator.js?v=20260719-v047-4-1"),
+		    import("./services/operatingDataPoolService.js?v=20260719-v047-4-1"),
 		    import("./data/simulationRunBusinessScope.js?v=20260625-v029-1"),
 		    import("./services/routePlanningService.js?v=20260712-v042-0-0"),
 		    import("./domain/statusRegistry.js?v=20260625-v030-1"),
@@ -10762,12 +10762,12 @@ async function bootstrap() {
 		    import("./services/fleetOperationDispatchService.js?v=20260702-v039-0"),
 		    import("./services/taskDispatchStrategyService.js?v=20260703-v040-9"),
 		    import("./services/robotaxiTaskPlanningService.js?v=20260704-v040-14"),
-        import("./services/businessPlanningService.js?v=20260719-v047-4-0"),
+        import("./services/businessPlanningService.js?v=20260719-v047-4-1"),
 		    import("./services/operatingPlanningService.js?v=20260716-v046-0-6"),
 		    import("./services/supplyDemandBalanceService.js?v=20260712-v042-0-0"),
 		    import("./services/supplyPositionService.js?v=20260718-v047-3-0"),
 		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
-        import("./data/spatialBusinessProfileInitialization.js?v=20260717-v047-1-0"),
+        import("./data/spatialBusinessProfileInitialization.js?v=20260719-v047-4-1"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),

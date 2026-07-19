@@ -1,5 +1,5 @@
 import * as metricCalculator from "../data/metricCalculator.js?v=20260717-v047-0-0";
-import { getMetricConcept } from "../domain/fieldSemanticRegistry.js?v=20260719-v047-4-0";
+import { getMetricConcept } from "../domain/fieldSemanticRegistry.js?v=20260719-v047-4-1";
 
 export const OPERATING_ANALYSIS_PAGE_METRICS = Object.freeze({
   operatingMetricsOverview: ["OUTCOME-SERVICE-001", "OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003", "STATE-ASSET-002", "OUTCOME-FIN-005", "OUTCOME-FIN-010"],
@@ -14,18 +14,18 @@ export const OPERATING_ANALYSIS_PAGE_MODELS = Object.freeze({
   operatingMetricsOverview: analysisPage("经营总览", "经营结果是否达到规划要求，主要偏差来自哪里？", [
     insight("经营结果", "OUTCOME-FIN-010", ["OUTCOME-FIN-005", "OUTCOME-SERVICE-003"]),
     insight("需求与服务", "OUTCOME-SERVICE-001", ["OUTCOME-SERVICE-002", "OUTCOME-SERVICE-003"]),
-    insight("可用供给", "STATE-ASSET-002", ["STATE-SERVICE-001", "PROCESS-ASSET-003"]),
-  ], { comparisonDomains: ["需求", "服务", "资产", "供给", "财务"] }),
-  serviceMetrics: analysisPage("需求服务", "观察需求如何变化，现有供给能否稳定完成订单？", [
+    insight("可用供应", "STATE-ASSET-002", ["STATE-SERVICE-001", "PROCESS-ASSET-003"]),
+  ], { comparisonDomains: ["需求", "服务", "资产", "供应", "财务"] }),
+  serviceMetrics: analysisPage("需求服务", "观察需求如何变化，现有供应能否稳定完成订单？", [
     insight("需求规模", "OUTCOME-SERVICE-001", ["STATE-SERVICE-001", "OUTCOME-SERVICE-005"]),
     insight("履约结果", "OUTCOME-SERVICE-003", ["PROCESS-TRIP-001", "OUTCOME-SERVICE-004"]),
     insight("服务效率", "PROCESS-EFF-002", ["PROCESS-EFF-001", "PROCESS-MATCH-001"]),
   ], { showDemandTrend: true, comparisonDomains: ["需求", "服务"] }),
-  supplyAssetMetrics: analysisPage("供给资产", "供给形成到什么程度，Robotaxi 是否可用并被有效使用？", [
-    insight("可用供给", "STATE-ASSET-002", ["STATE-ASSET-001", "STATE-ASSET-003"]),
-    insight("供给形成", "PROCESS-SUPPLY-001", ["PROCESS-SUPPLY-002", "PROCESS-SUPPLY-003"]),
+  supplyAssetMetrics: analysisPage("供应资产", "供应形成到什么程度，Robotaxi 是否可用并被有效使用？", [
+    insight("可用供应", "STATE-ASSET-002", ["STATE-ASSET-001", "STATE-ASSET-003"]),
+    insight("供应形成", "PROCESS-SUPPLY-001", ["PROCESS-SUPPLY-002", "PROCESS-SUPPLY-003"]),
     insight("资产效率", "PROCESS-ASSET-004", ["PROCESS-ASSET-001", "PROCESS-ASSET-003"]),
-  ], { comparisonDomains: ["供给", "资产"] }),
+  ], { comparisonDomains: ["供应", "资产"] }),
   financialMetrics: analysisPage("财务效率", "收入是否覆盖变动成本和全部运营成本，单均经济性是否健康？", [
     insight("经营贡献", "OUTCOME-FIN-005", ["OUTCOME-FIN-002", "OUTCOME-FIN-007"]),
     insight("模拟运营利润", "OUTCOME-FIN-010", ["OUTCOME-FIN-008", "OUTCOME-FIN-009"]),
@@ -148,7 +148,7 @@ export function createPlanningComparisons({ planningBaseline = {}, metricRows = 
     comparison("PERFORMANCE-SERVICE-001", getMetricConcept("ORDER_FULFILLMENT_RATE").label, "服务", fulfillmentRate, null, numberValue(target.target_order_fulfillment_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-SERVICE-003"))),
     comparison("PERFORMANCE-ASSET-002", getMetricConcept("ORDER_SERVICE_TIME_UTILIZATION_RATE").label, "资产", orderServiceTimeUtilization, null, numberValue(target.target_order_service_time_utilization_rate ?? target.target_task_utilization_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("PROCESS-ASSET-002"))),
     comparison("PERFORMANCE-ASSET-001", "有效 Robotaxi 规模", "资产", effectiveRobotaxi, forecastRequiredRobotaxi, numberValue(target.target_minimum_robotaxi_quantity), "辆", [...planningBaseline.forecastSourceRefs, ...planningBaseline.targetSourceRefs], robotaxis.map((item) => ({ object_type: "Robotaxi", object_id: item.robotaxi_id }))),
-    comparison("PERFORMANCE-SUPPLY-001", "计划供给覆盖", "供给", plannedRobotaxi, forecastRequiredRobotaxi, null, "辆", [...planningBaseline.forecastSourceRefs, ...planningBaseline.supplySourceRefs], planningBaseline.supplySourceRefs),
+    comparison("PERFORMANCE-SUPPLY-001", "计划供应覆盖", "供应", plannedRobotaxi, forecastRequiredRobotaxi, null, "辆", [...planningBaseline.forecastSourceRefs, ...planningBaseline.supplySourceRefs], planningBaseline.supplySourceRefs),
     comparison("PERFORMANCE-FINANCE-001", "单均实收收入", "财务", averageRevenue, null, numberValue(target.average_revenue_per_order), "金额", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-FIN-002"))),
     comparison("PERFORMANCE-FINANCE-002", "经营贡献率", "财务", contributionMarginRate, null, numberValue(target.minimum_contribution_margin_rate), "比例", planningBaseline.targetSourceRefs, sourceRefs(metricById.get("OUTCOME-FIN-006"))),
   ];

@@ -1,11 +1,11 @@
 import { resolvePagePresentation as resolveRegisteredPagePresentation } from "./pageArchitectureRegistry.js";
 
 const PAGE_DESCRIPTION_OVERRIDES = Object.freeze({
-  operatingModel: "统一解释需求、供给、服务、资产、财务和经营反馈，连接经营规划、业务执行与经营分析。",
+  operatingModel: "统一解释需求、供应、服务、资产、财务和经营反馈，连接经营规划、业务执行与经营分析。",
   decisionCenter: "统一观察跨价值流策略能力、执行过程、异常和经营效果，源策略仍由各业务服务独立拥有。",
   operatingMetricsOverview: "汇总经营目标、预测基线与实际经营结果，识别整体达成情况和关键偏差。",
   serviceMetrics: "分析观察需求、成熟订单结果与履约效率，判断需求变化和服务能力是否匹配。",
-  supplyAssetMetrics: "连接生产、交付、准入和 Robotaxi 状态，判断供给形成与资产效率。",
+  supplyAssetMetrics: "连接生产、交付、准入和 Robotaxi 状态，判断供应形成与资产效率。",
   financialMetrics: "区分变动成本、折旧和固定成本，解释经营贡献、利润与单均经济性。",
   processDiagnostics: "从服务过程、决策影响和数据质量解释经营偏差，定位需要处理的原因。",
   metricDefinitions: "统一管理指标名称、含义、公式、单位、时间口径和来源对象。",
@@ -13,7 +13,7 @@ const PAGE_DESCRIPTION_OVERRIDES = Object.freeze({
   metricCalculationRuns: "查看每次经营数据更新的可用结果、质量问题和建议处理方式。",
   businessTargets: "设定经营周期内的订单、服务、资产和经济目标，作为预测与分析的统一基线。",
   demandProfiles: "管理地点、服务区域和 Zone 的需求事实与增长假设，为长期需求预测提供输入。",
-  supplyProductionProfiles: "描述 Robotaxi 生产、质检和交付能力，为供给计划提供能力约束。",
+  supplyProductionProfiles: "描述 Robotaxi 生产、质检和交付能力，为生产计划提供能力约束。",
   longTermDemandForecasts: "展示需求增长、Robotaxi 缺口、建议生产与交付趋势，连接经营规划和供应执行。",
   console: "在统一地图空间观察运营区域、地点、服务区域、道路、运营中心和 Robotaxi。",
 });

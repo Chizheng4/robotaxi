@@ -22,7 +22,7 @@ export const navigationGroups = Object.freeze([
   group("businessAnalysis", "经营分析", [
     page("operatingMetricsOverview", "经营总览"),
     page("serviceMetrics", "需求服务"),
-    page("supplyAssetMetrics", "供给资产"),
+    page("supplyAssetMetrics", "供应资产"),
     page("financialMetrics", "财务效率"),
     page("processDiagnostics", "经营诊断"),
     group("dataCalculationManagement", "数据计算", [
@@ -33,7 +33,7 @@ export const navigationGroups = Object.freeze([
   ]),
   group("customer", "客户管理", [page("customers", "客户列表")]),
   group("supplyManagement", "供应管理", [
-    page("supplyPositionTracking", "供给跟踪"),
+    page("supplyPositionTracking", "供应跟踪"),
     page("supplyPlans", "生产计划"),
     page("productionBatches", "生产批次"),
     group("regionDeliveryManagement", "区域交付", [

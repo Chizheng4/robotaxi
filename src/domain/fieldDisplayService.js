@@ -4,8 +4,8 @@ import {
   getDetailTitle,
   objectDictionary,
   valueDictionary,
-} from "./fieldDictionary.js?v=20260719-v047-4-0";
-import { getFieldSemanticDefinition } from "./fieldSemanticRegistry.js?v=20260719-v047-4-0";
+} from "./fieldDictionary.js?v=20260719-v047-4-1";
+import { getFieldSemanticDefinition } from "./fieldSemanticRegistry.js?v=20260719-v047-4-1";
 
 const INTERNAL_FIELD_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
 const INTERNAL_VALUE_PATTERN = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;

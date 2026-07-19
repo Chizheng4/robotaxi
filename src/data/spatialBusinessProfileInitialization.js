@@ -1,3 +1,5 @@
+import { createRegisteredCalculationStep } from "../domain/calculationModelRegistry.js";
+
 const TargetObjectType = {
   PLACE: "PLACE",
   SERVICE_AREA: "SERVICE_AREA",
@@ -101,11 +103,15 @@ function createProfileFieldExplanations(targetObjectType) {
     return {
       pickup_position_capacity: { meaning: "服务区域可同时提供的上车位置数量。", source: "服务区域配置" },
       dropoff_position_capacity: { meaning: "服务区域可同时提供的下车位置数量。", source: "服务区域配置" },
-      average_service_time_min: { meaning: "一辆 Robotaxi 完成一次站点停靠平均占用时间。", source: "人工配置" },
+      average_service_stop_duration_min: { meaning: "一辆 Robotaxi 完成一次上车或下车停靠平均占用的位置时间。", source: "人工配置" },
       operating_hours_per_day: { meaning: "服务区域每日可提供服务的小时数。", source: "人工配置" },
+      accessibility_factor: { meaning: "道路可达、停靠限制等条件对服务区域理论承载的修正比例。", source: "人工配置" },
       capacity_availability_rate: { meaning: "扣除维护、拥堵等影响后可实际使用的容量比例。", source: "人工配置" },
-      effective_peak_hour_capacity: { meaning: "服务区域最繁忙小时可承载订单数。", calculation_logic: "每小时服务容量 × 可达性系数 × 容量可用率" },
-      effective_daily_capacity: { meaning: "服务区域每日可承载订单数。", calculation_logic: "有效峰值小时容量 × 每日开放小时数" },
+      position_throughput_per_hour: { meaning: "单个上车位或下车位每小时可完成的停靠次数。", calculation_logic: "60 ÷ 平均站点停靠时长（分钟）" },
+      effective_pickup_capacity_per_hour: { meaning: "服务区域每小时可完成的有效上车订单数。", calculation_logic: "上车位容量 × 单位置小时周转 × 可达性系数 × 容量可用率" },
+      effective_dropoff_capacity_per_hour: { meaning: "服务区域每小时可完成的有效下车订单数。", calculation_logic: "下车位容量 × 单位置小时周转 × 可达性系数 × 容量可用率" },
+      effective_daily_pickup_capacity: { meaning: "服务区域每日可完成的有效上车订单数。", calculation_logic: "有效上车承载 × 每日开放小时数" },
+      effective_daily_dropoff_capacity: { meaning: "服务区域每日可完成的有效下车订单数。", calculation_logic: "有效下车承载 × 每日开放小时数" },
     };
   }
   if (targetObjectType === TargetObjectType.ZONE) {
@@ -113,8 +119,10 @@ function createProfileFieldExplanations(targetObjectType) {
       baseline_addressable_daily_orders: { meaning: "区域当前可争取日订单，是长期预测的需求基线。", calculation_logic: "Σ 区域内地点画像的当前可争取日订单" },
       baseline_peak_hour_orders: { meaning: "区域当前最繁忙小时订单。", calculation_logic: "Σ 区域内地点画像的当前峰值小时订单" },
       zone_period_growth_rate: { meaning: "区域增长率，不允许直接配置。", calculation_logic: "按地点当前可争取日订单加权汇总地点周期增长率" },
-      effective_daily_capacity: { meaning: "区域每日服务承载能力。", calculation_logic: "Σ 区域内服务区域有效日容量" },
-      effective_peak_hour_capacity: { meaning: "区域峰值小时服务承载能力。", calculation_logic: "Σ 区域内服务区域有效峰值小时容量" },
+      effective_daily_pickup_capacity: { meaning: "区域所属服务区域有效日上车承载之和。", calculation_logic: "Σ ServiceArea 有效日上车承载" },
+      effective_daily_dropoff_capacity: { meaning: "区域所属服务区域有效日下车承载之和。", calculation_logic: "Σ ServiceArea 有效日下车承载" },
+      effective_daily_capacity: { meaning: "区域每日端到端服务承载能力。", calculation_logic: "min(区域有效日上车承载, 区域有效日下车承载)" },
+      effective_peak_hour_capacity: { meaning: "区域峰值小时端到端服务承载能力。", calculation_logic: "min(区域有效上车承载, 区域有效下车承载)" },
       demand_distribution: { meaning: "区域需求来源结构。", calculation_logic: "按地点类型汇总当前可争取日订单后计算占比" },
       calculated_from_profile_ids: { meaning: "一级 Zone 画像的计算来源画像。", calculation_logic: "子区域内所有 Place 与 ServiceArea 画像编号集合" },
     };
@@ -148,7 +156,7 @@ function createPlaceDemandProfile(place, { calculatedAt = currentRealCalculation
   const dailyPopulationExposure = residentPopulation * residentTripWeight + workingPopulation * workerTripWeight + dailyVisitors * visitorTripWeight;
   const potentialDemand = dailyPopulationExposure * tripGenerationRate * demandWeight;
   const expectedDemand = potentialDemand * robotaxiAdoptionRate * serviceAcceptanceRate * competitionRetentionRate;
-  return {
+  const result = {
     ...createBaseDemandProfile({
       profileId: `DP-P-${place.place_id}`,
       profileName: `${place.place_name || place.place_id}需求画像`,
@@ -178,34 +186,26 @@ function createPlaceDemandProfile(place, { calculatedAt = currentRealCalculation
     baseline_addressable_daily_orders: roundValue(expectedDemand),
     baseline_peak_hour_orders: roundValue(expectedDemand * peakDemandRatio),
     profile_field_explanations: createProfileFieldExplanations(TargetObjectType.PLACE),
-    profile_calculation_steps: createPlaceCalculationSteps({
-      residentPopulation,
-      workingPopulation,
-      dailyVisitors,
-      tripGenerationRate,
-      demandWeight,
-      potentialDemand,
-      robotaxiAdoptionRate,
-      serviceAcceptanceRate,
-      competitionRetentionRate,
-      expectedDemand,
-      peakDemandRatio,
-    }),
     calculated_at: calculatedAt,
   };
+  result.profile_calculation_steps = createPlaceCalculationSteps(result);
+  return result;
 }
 
 function createServiceAreaDemandProfile(serviceArea, { calculatedAt = currentRealCalculationTime() } = {}) {
   const capacity = Number(serviceArea.capacity || 0);
   const pickupPositions = Math.max(1, Number(serviceArea.pickup_position_capacity || capacity || 1));
   const dropoffPositions = Math.max(1, Number(serviceArea.dropoff_position_capacity || capacity || 1));
-  const averageServiceTimeMin = Math.max(1, Number(serviceArea.average_service_time_min || 5));
+  const averageServiceStopDurationMin = Math.max(1, Number(serviceArea.average_service_stop_duration_min ?? serviceArea.average_service_time_min ?? 5));
   const accessibilityFactor = Number(serviceArea.accessibility_factor ?? 1);
   const capacityAvailabilityRate = Number(serviceArea.capacity_availability_rate ?? 0.9);
-  const positionThroughput = 60 / averageServiceTimeMin;
-  const serviceCapacityPerHour = Math.min(pickupPositions, dropoffPositions) * positionThroughput;
-  const effectivePeakCapacity = serviceCapacityPerHour * accessibilityFactor * capacityAvailabilityRate;
-  return {
+  const positionThroughput = 60 / averageServiceStopDurationMin;
+  const effectivePickupCapacityPerHour = pickupPositions * positionThroughput * accessibilityFactor * capacityAvailabilityRate;
+  const effectiveDropoffCapacityPerHour = dropoffPositions * positionThroughput * accessibilityFactor * capacityAvailabilityRate;
+  const operatingHours = Number(serviceArea.operating_hours_per_day || 24);
+  const effectiveDailyPickupCapacity = effectivePickupCapacityPerHour * operatingHours;
+  const effectiveDailyDropoffCapacity = effectiveDropoffCapacityPerHour * operatingHours;
+  const result = {
     ...createBaseDemandProfile({
       profileId: `DP-SA-${serviceArea.service_area_id}`,
       profileName: `${serviceArea.service_area_name || serviceArea.service_area_id}需求画像`,
@@ -217,19 +217,48 @@ function createServiceAreaDemandProfile(serviceArea, { calculatedAt = currentRea
     parent_place_id: serviceArea.parent_place_id || serviceArea.place_ids?.[0] || null,
     pickup_position_capacity: pickupPositions,
     dropoff_position_capacity: dropoffPositions,
-    average_service_time_min: averageServiceTimeMin,
-    operating_hours_per_day: Number(serviceArea.operating_hours_per_day || 24),
+    average_service_stop_duration_min: averageServiceStopDurationMin,
+    operating_hours_per_day: operatingHours,
     capacity_availability_rate: capacityAvailabilityRate,
     position_throughput_per_hour: roundValue(positionThroughput),
-    service_capacity_per_hour: roundValue(serviceCapacityPerHour),
-    effective_peak_hour_capacity: roundValue(effectivePeakCapacity),
-    effective_daily_capacity: roundValue(effectivePeakCapacity * Number(serviceArea.operating_hours_per_day || 24)),
+    effective_pickup_capacity_per_hour: roundValue(effectivePickupCapacityPerHour),
+    effective_dropoff_capacity_per_hour: roundValue(effectiveDropoffCapacityPerHour),
+    effective_daily_pickup_capacity: roundValue(effectiveDailyPickupCapacity),
+    effective_daily_dropoff_capacity: roundValue(effectiveDailyDropoffCapacity),
     waiting_robotaxi_capacity: Number(serviceArea.waiting_capacity || serviceArea.parking_cell_ids?.length || 0),
     accessibility_factor: accessibilityFactor,
     profile_field_explanations: createProfileFieldExplanations(TargetObjectType.SERVICE_AREA),
-    profile_calculation_steps: [],
     calculated_at: calculatedAt,
   };
+  result.profile_calculation_steps = createServiceAreaCalculationSteps(result);
+  return result;
+}
+
+function createServiceAreaCalculationSteps(result) {
+  const step = (modelId, inputValues) => createRegisteredCalculationStep({ modelId, result, inputValues, sourceRefs: ["service_area_profile_snapshot"] });
+  return [
+    step("SERVICE_AREA_POSITION_THROUGHPUT", { average_service_stop_duration_min: result.average_service_stop_duration_min }),
+    step("SERVICE_AREA_PICKUP_CAPACITY", {
+      pickup_position_capacity: result.pickup_position_capacity,
+      position_throughput_per_hour: result.position_throughput_per_hour,
+      accessibility_factor: result.accessibility_factor,
+      capacity_availability_rate: result.capacity_availability_rate,
+    }),
+    step("SERVICE_AREA_DROPOFF_CAPACITY", {
+      dropoff_position_capacity: result.dropoff_position_capacity,
+      position_throughput_per_hour: result.position_throughput_per_hour,
+      accessibility_factor: result.accessibility_factor,
+      capacity_availability_rate: result.capacity_availability_rate,
+    }),
+    step("SERVICE_AREA_DAILY_PICKUP_CAPACITY", {
+      effective_pickup_capacity_per_hour: result.effective_pickup_capacity_per_hour,
+      operating_hours_per_day: result.operating_hours_per_day,
+    }),
+    step("SERVICE_AREA_DAILY_DROPOFF_CAPACITY", {
+      effective_dropoff_capacity_per_hour: result.effective_dropoff_capacity_per_hour,
+      operating_hours_per_day: result.operating_hours_per_day,
+    }),
+  ].map((item, index) => ({ ...item, step_order: index + 1 }));
 }
 
 function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calculatedAt = null } = {}) {
@@ -259,7 +288,7 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
     const dailyPopulationExposure = residentPopulation * residentTripWeight + workingPopulation * workerTripWeight + dailyVisitors * visitorTripWeight;
     const potentialDemand = dailyPopulationExposure * tripGenerationRate * demandWeight;
     const expectedDemand = potentialDemand * robotaxiAdoptionRate * serviceAcceptanceRate * competitionRetentionRate;
-    return {
+    const result = {
       ...baseProfile,
       profile_id: existingProfile.profile_id || baseProfile.profile_id,
       profile_name: existingProfile.profile_name || baseProfile.profile_name,
@@ -288,62 +317,40 @@ function calculatePlaceDemandProfiles({ places = [], demandProfiles = [], calcul
       baseline_addressable_daily_orders: roundValue(expectedDemand),
       baseline_peak_hour_orders: roundValue(expectedDemand * peakDemandRatio),
       profile_field_explanations: createProfileFieldExplanations(TargetObjectType.PLACE),
-      profile_calculation_steps: createPlaceCalculationSteps({
-        residentPopulation,
-        workingPopulation,
-        dailyVisitors,
-        tripGenerationRate,
-        demandWeight,
-        potentialDemand,
-        robotaxiAdoptionRate,
-        serviceAcceptanceRate,
-        competitionRetentionRate,
-        expectedDemand,
-        peakDemandRatio,
-      }),
       calculated_at: nextCalculatedAt,
     };
+    result.profile_calculation_steps = createPlaceCalculationSteps(result);
+    return result;
   });
 }
 
-function createPlaceCalculationSteps({
-  residentPopulation,
-  workingPopulation,
-  dailyVisitors,
-  tripGenerationRate,
-  demandWeight,
-  potentialDemand,
-  robotaxiAdoptionRate,
-  serviceAcceptanceRate,
-  competitionRetentionRate,
-  expectedDemand,
-  peakDemandRatio,
-}) {
+function createPlaceCalculationSteps(result) {
+  const step = (modelId, inputValues) => createRegisteredCalculationStep({ modelId, result, inputValues, sourceRefs: ["place_profile_snapshot"] });
   return [
-    {
-      step_name: "潜在需求",
-      formula: "日有效人群 × 出行产生率 × 需求权重",
-      input_values: { resident_population: residentPopulation, working_population: workingPopulation, daily_visitors: dailyVisitors, trip_generation_rate: tripGenerationRate, demand_weight: demandWeight },
-      output_value: roundValue(potentialDemand),
-    },
-    {
-      step_name: "Robotaxi 需求转换",
-      formula: "潜在日出行量 × Robotaxi 采用率 × 服务接受率 × 竞争保留率",
-      input_values: {
-        potential_daily_trips: roundValue(potentialDemand),
-        robotaxi_adoption_rate: robotaxiAdoptionRate,
-        service_acceptance_rate: serviceAcceptanceRate,
-        competition_retention_rate: competitionRetentionRate,
-      },
-      output_value: roundValue(expectedDemand),
-    },
-    {
-      step_name: "峰值需求",
-      formula: "预计 Robotaxi 需求 × 高峰需求比例",
-      input_values: { expected_robotaxi_demand: roundValue(expectedDemand), peak_demand_ratio: peakDemandRatio },
-      output_value: roundValue(expectedDemand * peakDemandRatio),
-    },
-  ];
+    step("PLACE_POPULATION_EXPOSURE", {
+      resident_population: result.resident_population,
+      resident_trip_weight: result.resident_trip_weight,
+      working_population: result.working_population,
+      worker_trip_weight: result.worker_trip_weight,
+      daily_visitors: result.daily_visitors,
+      visitor_trip_weight: result.visitor_trip_weight,
+    }),
+    step("PLACE_POTENTIAL_TRIPS", {
+      daily_population_exposure: result.daily_population_exposure,
+      trip_generation_rate: result.trip_generation_rate,
+      demand_weight: result.demand_weight,
+    }),
+    step("PLACE_ADDRESSABLE_ORDERS", {
+      potential_daily_trips: result.potential_daily_trips,
+      robotaxi_adoption_rate: result.robotaxi_adoption_rate,
+      service_acceptance_rate: result.service_acceptance_rate,
+      competition_retention_rate: result.competition_retention_rate,
+    }),
+    step("PLACE_PEAK_ORDERS", {
+      baseline_addressable_daily_orders: result.baseline_addressable_daily_orders,
+      busiest_hour_share: result.busiest_hour_share,
+    }),
+  ].map((item, index) => ({ ...item, step_order: index + 1 }));
 }
 
 function topLevelZones(zones = []) {
@@ -362,27 +369,7 @@ function zoneComponentIds(zone, zones = []) {
   };
 }
 
-function serviceAreaPlaceProfiles(serviceArea, places = [], placeProfileById = new Map(), zones = []) {
-  const relatedPlaceIds = new Set(serviceArea.place_ids || []);
-  places.forEach((place) => {
-    if ((place.nearby_service_area_ids || []).includes(serviceArea.service_area_id)) {
-      relatedPlaceIds.add(place.place_id);
-    }
-  });
-  zones.forEach((zone) => {
-    if ((zone.service_area_ids || []).includes(serviceArea.service_area_id)) {
-      (zone.place_ids || []).forEach((placeId) => relatedPlaceIds.add(placeId));
-    }
-  });
-  return [...relatedPlaceIds]
-    .map((placeId) => placeProfileById.get(placeId))
-    .filter(Boolean);
-}
-
-function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zones = [], demandProfiles = [], calculatedAt = null }) {
-  const placeProfileById = new Map(demandProfiles
-    .filter((profile) => profile.target_object_type === TargetObjectType.PLACE)
-    .map((profile) => [profile.target_object_id, profile]));
+function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], demandProfiles = [], calculatedAt = null }) {
   const serviceAreaProfileById = new Map(demandProfiles
     .filter((profile) => profile.target_object_type === TargetObjectType.SERVICE_AREA)
     .map((profile) => [profile.target_object_id, profile]));
@@ -394,19 +381,17 @@ function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zo
     };
     const nextCalculatedAt = calculatedAt || existingProfile.calculated_at || baseProfile.calculated_at;
     const parentPlaceId = existingProfile.parent_place_id || serviceArea.parent_place_id || serviceArea.place_ids?.[0] || places.find((place) => (place.nearby_service_area_ids || []).includes(serviceArea.service_area_id))?.place_id || null;
-    const placeProfiles = parentPlaceId && placeProfileById.get(parentPlaceId) ? [placeProfileById.get(parentPlaceId)] : [];
     const pickupProbability = 0;
     const accessibilityFactor = Number(existingProfile.accessibility_factor ?? 1);
     const pickupPositions = Math.max(1, Number(existingProfile.pickup_position_capacity ?? baseProfile.pickup_position_capacity ?? 1));
     const dropoffPositions = Math.max(1, Number(existingProfile.dropoff_position_capacity ?? baseProfile.dropoff_position_capacity ?? 1));
-    const averageServiceTimeMin = Math.max(1, Number(existingProfile.average_service_time_min ?? baseProfile.average_service_time_min ?? 5));
+    const averageServiceStopDurationMin = Math.max(1, Number(existingProfile.average_service_stop_duration_min ?? existingProfile.average_service_time_min ?? baseProfile.average_service_stop_duration_min ?? 5));
     const operatingHours = Math.max(1, Number(existingProfile.operating_hours_per_day ?? baseProfile.operating_hours_per_day ?? 24));
     const capacityAvailabilityRate = Number(existingProfile.capacity_availability_rate ?? baseProfile.capacity_availability_rate ?? 0.9);
-    const positionThroughput = 60 / averageServiceTimeMin;
-    const serviceCapacityPerHour = Math.min(pickupPositions, dropoffPositions) * positionThroughput;
-    const effectivePeakCapacity = serviceCapacityPerHour * accessibilityFactor * capacityAvailabilityRate;
-    const serviceAreaDemand = 0;
-    return {
+    const positionThroughput = 60 / averageServiceStopDurationMin;
+    const effectivePickupCapacityPerHour = pickupPositions * positionThroughput * accessibilityFactor * capacityAvailabilityRate;
+    const effectiveDropoffCapacityPerHour = dropoffPositions * positionThroughput * accessibilityFactor * capacityAvailabilityRate;
+    const result = {
       ...existingProfile,
       profile_id: existingProfile.profile_id || baseProfile.profile_id,
       profile_name: existingProfile.profile_name || baseProfile.profile_name,
@@ -420,20 +405,26 @@ function calculateServiceAreaDemandProfiles({ serviceAreas = [], places = [], zo
       parent_place_id: parentPlaceId,
       pickup_position_capacity: pickupPositions,
       dropoff_position_capacity: dropoffPositions,
-      average_service_time_min: averageServiceTimeMin,
+      average_service_stop_duration_min: averageServiceStopDurationMin,
       operating_hours_per_day: operatingHours,
       capacity_availability_rate: capacityAvailabilityRate,
       position_throughput_per_hour: roundValue(positionThroughput),
-      service_capacity_per_hour: roundValue(serviceCapacityPerHour),
-      effective_peak_hour_capacity: roundValue(effectivePeakCapacity),
-      effective_daily_capacity: roundValue(effectivePeakCapacity * operatingHours),
+      effective_pickup_capacity_per_hour: roundValue(effectivePickupCapacityPerHour),
+      effective_dropoff_capacity_per_hour: roundValue(effectiveDropoffCapacityPerHour),
+      effective_daily_pickup_capacity: roundValue(effectivePickupCapacityPerHour * operatingHours),
+      effective_daily_dropoff_capacity: roundValue(effectiveDropoffCapacityPerHour * operatingHours),
       waiting_robotaxi_capacity: Number(existingProfile.waiting_robotaxi_capacity ?? existingProfile.waiting_capacity ?? baseProfile.waiting_robotaxi_capacity),
       accessibility_factor: accessibilityFactor,
       profile_field_explanations: createProfileFieldExplanations(TargetObjectType.SERVICE_AREA),
-      profile_calculation_steps: [],
-      calculated_from_profile_ids: placeProfiles.map((profile) => profile.profile_id),
+      calculated_from_profile_ids: [],
       calculated_at: nextCalculatedAt,
     };
+    delete result.average_service_time_min;
+    delete result.service_capacity_per_hour;
+    delete result.effective_peak_hour_capacity;
+    delete result.effective_daily_capacity;
+    result.profile_calculation_steps = createServiceAreaCalculationSteps(result);
+    return result;
   });
 }
 
@@ -449,33 +440,29 @@ function demandDistributionByPlaceType(placeProfiles = [], places = []) {
   return Object.fromEntries(Object.entries(demandByType).map(([type, value]) => [type, roundValue(Number(value || 0) / total, 4)]));
 }
 
-function createZoneCalculationSteps({ placeProfiles, serviceAreaProfiles, baselineOrders, peakOrders, growthRate, effectiveDailyCapacity, effectivePeakCapacity }) {
-  return [
-    {
-      step_name: "区域需求基线",
-      formula: "Σ 地点当前可争取日订单",
-      input_values: { calculated_from_profile_ids: placeProfiles.map((profile) => profile.profile_id) },
-      output_value: roundValue(baselineOrders),
-    },
-    {
-      step_name: "区域峰值需求",
-      formula: "Σ 地点当前峰值小时订单",
-      input_values: { calculated_from_profile_ids: placeProfiles.map((profile) => profile.profile_id) },
-      output_value: roundValue(peakOrders),
-    },
-    {
-      step_name: "区域周期增长率",
-      formula: "按地点当前可争取日订单加权汇总地点周期增长率",
-      input_values: { calculated_from_profile_ids: placeProfiles.map((profile) => profile.profile_id) },
-      output_value: roundValue(growthRate, 4),
-    },
-    {
-      step_name: "区域服务承载",
-      formula: "Σ 服务区域有效日容量 / 有效峰值小时容量",
-      input_values: { service_area_profile_ids: serviceAreaProfiles.map((profile) => profile.profile_id) },
-      output_value: { effective_daily_capacity: roundValue(effectiveDailyCapacity), effective_peak_hour_capacity: roundValue(effectivePeakCapacity) },
-    },
+function createZoneCalculationSteps({ placeProfiles, serviceAreaProfiles, result }) {
+  const placeSourceRefs = placeProfiles.map((profile) => profile.profile_id);
+  const steps = [
+    createRegisteredCalculationStep({ modelId: "ZONE_BASELINE_DEMAND", result, inputValues: {
+      calculated_from_profile_ids: placeSourceRefs,
+    }, sourceRefs: placeSourceRefs }),
+    createRegisteredCalculationStep({ modelId: "ZONE_PEAK_DEMAND", result, inputValues: {
+      calculated_from_profile_ids: placeSourceRefs,
+    }, sourceRefs: placeSourceRefs }),
+    createRegisteredCalculationStep({ modelId: "ZONE_PERIOD_GROWTH_RATE", result, inputValues: {
+      calculated_from_profile_ids: placeSourceRefs,
+    }, sourceRefs: placeSourceRefs }),
   ];
+  const sourceRefs = serviceAreaProfiles.map((profile) => profile.profile_id);
+  steps.push(createRegisteredCalculationStep({ modelId: "ZONE_DAILY_SERVICE_CAPACITY", result, inputValues: {
+    effective_daily_pickup_capacity: result.effective_daily_pickup_capacity,
+    effective_daily_dropoff_capacity: result.effective_daily_dropoff_capacity,
+  }, sourceRefs }));
+  steps.push(createRegisteredCalculationStep({ modelId: "ZONE_PEAK_SERVICE_CAPACITY", result, inputValues: {
+    effective_pickup_capacity_per_hour: result.effective_pickup_capacity_per_hour,
+    effective_dropoff_capacity_per_hour: result.effective_dropoff_capacity_per_hour,
+  }, sourceRefs }));
+  return steps.map((item, index) => ({ ...item, step_order: index + 1 }));
 }
 
 export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAreas = [], demandProfiles = [], calculatedAt = null }) {
@@ -500,8 +487,12 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
     const potentialDemand = zonePlaceProfiles.reduce((sum, profile) => sum + Number(profile.potential_daily_trips || 0), 0);
     const baselineAddressableOrders = zonePlaceProfiles.reduce((sum, profile) => sum + Number(profile.baseline_addressable_daily_orders || 0), 0);
     const baselinePeakHourOrders = zonePlaceProfiles.reduce((sum, profile) => sum + Number(profile.baseline_peak_hour_orders || 0), 0);
-    const effectiveDailyCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.effective_daily_capacity || 0), 0);
-    const effectivePeakHourCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.effective_peak_hour_capacity || 0), 0);
+    const effectiveDailyPickupCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.effective_daily_pickup_capacity || 0), 0);
+    const effectiveDailyDropoffCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.effective_daily_dropoff_capacity || 0), 0);
+    const effectivePickupCapacityPerHour = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.effective_pickup_capacity_per_hour || 0), 0);
+    const effectiveDropoffCapacityPerHour = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.effective_dropoff_capacity_per_hour || 0), 0);
+    const effectiveDailyCapacity = Math.min(effectiveDailyPickupCapacity, effectiveDailyDropoffCapacity);
+    const effectivePeakHourCapacity = Math.min(effectivePickupCapacityPerHour, effectiveDropoffCapacityPerHour);
     const waitingRobotaxiCapacity = zoneServiceAreaProfiles.reduce((sum, profile) => sum + Number(profile.waiting_robotaxi_capacity ?? profile.waiting_capacity ?? 0), 0);
     const growthRate = weightedAverage(zonePlaceProfiles, "place_period_growth_rate", "baseline_addressable_daily_orders", 0);
     const peakDemandRatio = baselineAddressableOrders > 0 ? baselinePeakHourOrders / baselineAddressableOrders : DEFAULT_PEAK_DEMAND_RATIO;
@@ -513,7 +504,7 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
       serviceAreas,
       zones,
     });
-    return {
+    const result = {
       ...createBaseDemandProfile({
         profileId: `DP-Z-${zone.zone_id}`,
         profileName: `${targetName}需求画像`,
@@ -528,6 +519,10 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
       growth_rate_unit: zonePlaceProfiles[0]?.growth_rate_unit || "MONTH",
       effective_daily_capacity: roundValue(effectiveDailyCapacity),
       effective_peak_hour_capacity: roundValue(effectivePeakHourCapacity),
+      effective_daily_pickup_capacity: roundValue(effectiveDailyPickupCapacity),
+      effective_daily_dropoff_capacity: roundValue(effectiveDailyDropoffCapacity),
+      effective_pickup_capacity_per_hour: roundValue(effectivePickupCapacityPerHour),
+      effective_dropoff_capacity_per_hour: roundValue(effectiveDropoffCapacityPerHour),
       waiting_robotaxi_capacity: roundValue(waitingRobotaxiCapacity),
       potential_daily_trips: roundValue(potentialDemand),
       baseline_addressable_daily_orders: roundValue(baselineAddressableOrders),
@@ -539,17 +534,10 @@ export function calculateZoneDemandProfiles({ zones = [], places = [], serviceAr
         ...zoneServiceAreaProfiles.map((profile) => profile.profile_id),
       ],
       profile_field_explanations: createProfileFieldExplanations(TargetObjectType.ZONE),
-      profile_calculation_steps: createZoneCalculationSteps({
-        placeProfiles: zonePlaceProfiles,
-        serviceAreaProfiles: zoneServiceAreaProfiles,
-        baselineOrders: baselineAddressableOrders,
-        peakOrders: baselinePeakHourOrders,
-        growthRate,
-        effectiveDailyCapacity,
-        effectivePeakCapacity: effectivePeakHourCapacity,
-      }),
       calculated_at: nextCalculatedAt,
     };
+    result.profile_calculation_steps = createZoneCalculationSteps({ placeProfiles: zonePlaceProfiles, serviceAreaProfiles: zoneServiceAreaProfiles, result });
+    return result;
   });
 }
 

@@ -1,3 +1,5 @@
+import { createRegisteredCalculationStep } from "./calculationModelRegistry.js";
+
 const PERIOD_DAYS = { WEEK: 7, MONTH: 30, QUARTER: 91, YEAR: 365 };
 const TREND_STEP_DAYS = { DAY: 1, WEEK: 7 };
 const MAX_SUPPLY_TREND_PERIODS = 240;
@@ -80,9 +82,10 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
       : Math.min(marketOrders, targetOrders || marketOrders);
 
   const pickupMin = positive(strategy.average_pickup_duration_min, 8);
-  const tripMin = positive(strategy.average_trip_duration_min, 30);
+  const passengerTripMin = positive(strategy.average_passenger_trip_duration_min ?? strategy.average_trip_duration_min, 30);
   const turnaroundMin = positive(strategy.average_turnaround_duration_min, 7);
-  const cycleMin = Math.max(1, pickupMin + tripMin + turnaroundMin);
+  const fulfillmentExecutionMin = Math.max(1, pickupMin + passengerTripMin);
+  const vehicleServiceCycleMin = Math.max(1, fulfillmentExecutionMin + turnaroundMin);
   const availableHours = Math.min(24, Math.max(0.1, number(strategy.robotaxi_available_hours_per_day ?? strategy.vehicle_available_hours_per_day, 12)));
   const utilization = ratio(
     businessTarget.target_order_service_time_utilization_rate
@@ -95,12 +98,12 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   );
   const availability = ratio(strategy.operational_availability_rate, 0.9);
   const buffer = ratio(strategy.demand_buffer_ratio, 0.15);
-  const theoreticalDaily = availableHours * 60 / cycleMin;
+  const theoreticalDaily = availableHours * 60 / vehicleServiceCycleMin;
   const effectiveDaily = theoreticalDaily * Math.max(0.01, utilization) * Math.max(0.01, availability);
   const dailyRequired = Math.ceil(plannedOrders * (1 + buffer) / effectiveDaily);
   const bufferedDailyOrders = plannedOrders * (1 + buffer);
   const plannedPeakOrders = plannedOrders * baselinePeakShare;
-  const peakConcurrent = plannedPeakOrders * cycleMin / 60;
+  const peakConcurrent = plannedPeakOrders * vehicleServiceCycleMin / 60;
   const peakRequired = Math.ceil(peakConcurrent / Math.max(0.01, availability));
   const serviceRequired = Math.max(dailyRequired, peakRequired);
   const businessMinimum = positive(businessTarget.target_minimum_robotaxi_quantity ?? businessTarget.target_fleet_size);
@@ -189,10 +192,11 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
     planned_daily_orders: round(plannedOrders),
     market_opportunity_gap: round(Math.max(0, marketOrders - targetOrders)),
     target_market_shortfall: round(Math.max(0, targetOrders - marketOrders)),
-    effective_service_cycle_min: round(cycleMin),
     average_pickup_duration_min: round(pickupMin),
-    average_trip_duration_min: round(tripMin),
+    average_passenger_trip_duration_min: round(passengerTripMin),
+    average_order_fulfillment_execution_duration_min: round(fulfillmentExecutionMin),
     average_turnaround_duration_min: round(turnaroundMin),
+    vehicle_service_cycle_duration_min: round(vehicleServiceCycleMin),
     robotaxi_available_hours_per_day: round(availableHours),
     target_order_service_time_utilization_rate: round(utilization, 4),
     operational_availability_rate: round(availability, 4),
@@ -247,10 +251,11 @@ export function calculateLongTermDemandPlan({ strategy, businessTarget, zoneProf
   };
   const assumptions = [
     !strategy.average_pickup_duration_min && "average_pickup_duration_min",
+    !(strategy.average_passenger_trip_duration_min ?? strategy.average_trip_duration_min) && "average_passenger_trip_duration_min",
     !strategy.average_turnaround_duration_min && "average_turnaround_duration_min",
     !strategy.operational_availability_rate && "operational_availability_rate",
   ].filter(Boolean);
-  result.data_quality_score = round((1 - assumptions.length / 3) * 100, 0);
+  result.data_quality_score = round((1 - assumptions.length / 4) * 100, 0);
   result.data_quality_level = result.data_quality_score >= 80 ? "HIGH" : result.data_quality_score >= 50 ? "MEDIUM" : "LOW";
   result.missing_input_fields = validation.missing_input_fields;
   result.assumption_fields = assumptions;
@@ -445,135 +450,119 @@ function resolvePlannedDailyOrders(marketDailyOrders, targetOrders, planningMode
 }
 
 function buildCalculationSteps(result) {
-  const step = (stepGroup, stepAction, outputField, inputValues, calculationModel, formulaExpression, outputUnit, sourceRefs = []) => ({
-    step_group: stepGroup,
-    step_action: stepAction,
-    step_name: stepAction,
-    input_values: inputValues,
-    calculation_model: calculationModel,
-    formula_expression: formulaExpression,
-    formula: formulaExpression,
-    output_field: outputField,
-    output_value: result[outputField],
-    output_unit: outputUnit,
-    source_refs: sourceRefs,
-  });
-  const planningFormula = result.planning_mode === "MARKET_LED"
-    ? "market_forecast_daily_orders"
-    : result.planning_mode === "TARGET_LED"
-      ? "target_end_daily_orders"
-      : "min(market_forecast_daily_orders, target_end_daily_orders)";
+  const step = (modelId, inputValues, sourceRefs = []) => createRegisteredCalculationStep({ modelId, result, inputValues, sourceRefs });
   return [
-    step("预测周期", "确定预测结束日期", "forecast_end_date", {
+    step("CALENDAR_PERIOD", {
       forecast_start_date: result.forecast_start_date,
       forecast_period_unit: result.forecast_period_unit,
       forecast_period_count: result.forecast_period_count,
-    }, "CALENDAR_PERIOD", "add_calendar_period(forecast_start_date, forecast_period_unit, forecast_period_count) - 1 day", "日期", ["business_target_snapshot", "strategy_snapshot"]),
-    step("需求预测", "汇总区域需求", "baseline_addressable_daily_orders", {
+    }, ["business_target_snapshot", "strategy_snapshot"]),
+    step("ZONE_PLACE_AGGREGATION", {
       baseline_addressable_daily_orders: result.baseline_addressable_daily_orders,
-    }, "ZONE_PLACE_AGGREGATION", "Σ Place.baseline_addressable_daily_orders", "日订单", ["zone_demand_snapshot", "place_demand_profile_snapshot"]),
-    step("需求预测", "计算有效增长率", "effective_period_growth_rate", {
+    }, ["zone_demand_snapshot", "place_demand_profile_snapshot"]),
+    step("GROWTH_RATE_ADJUSTMENT", {
       zone_period_growth_rate: result.zone_period_growth_rate,
       growth_adjustment_rate: result.growth_adjustment_rate,
-    }, "GROWTH_RATE_ADJUSTMENT", "zone_period_growth_rate + growth_adjustment_rate", "比例", ["zone_demand_snapshot", "strategy_snapshot"]),
-    step("需求预测", "应用增长模型", "growth_factor", {
+    }, ["zone_demand_snapshot", "strategy_snapshot"]),
+    step(result.growth_model, {
       growth_model: result.growth_model,
       effective_period_growth_rate: result.effective_period_growth_rate,
       forecast_period_count: result.forecast_period_count,
-    }, result.growth_model, result.growth_model === "LINEAR"
-      ? "max(0, 1 + effective_period_growth_rate × forecast_period_count)"
-      : "(1 + effective_period_growth_rate) ^ forecast_period_count", "倍", ["strategy_snapshot"]),
-    step("需求预测", "计算期末市场需求", "market_forecast_daily_orders", {
+    }, ["strategy_snapshot"]),
+    step("MARKET_DEMAND_FORECAST", {
       baseline_addressable_daily_orders: result.baseline_addressable_daily_orders,
       growth_factor: result.growth_factor,
-    }, "MARKET_DEMAND_FORECAST", "baseline_addressable_daily_orders × growth_factor", "日订单", ["zone_demand_snapshot", "strategy_snapshot"]),
-    step("经营目标", "确定计划承接量", "planned_daily_orders", {
+    }, ["zone_demand_snapshot", "strategy_snapshot"]),
+    step(result.planning_mode, {
       market_forecast_daily_orders: result.market_forecast_daily_orders,
       target_end_daily_orders: result.target_end_daily_orders,
       planning_mode: result.planning_mode,
-    }, result.planning_mode, planningFormula, "日订单", ["business_target_snapshot", "strategy_snapshot"]),
-    step("Robotaxi 能力", "计算完整服务周期", "effective_service_cycle_min", {
+    }, ["business_target_snapshot", "strategy_snapshot"]),
+    step("ORDER_FULFILLMENT_EXECUTION_DURATION", {
       average_pickup_duration_min: result.average_pickup_duration_min,
-      average_trip_duration_min: result.average_trip_duration_min,
+      average_passenger_trip_duration_min: result.average_passenger_trip_duration_min,
+    }, ["strategy_snapshot"]),
+    step("VEHICLE_SERVICE_CYCLE_DURATION", {
+      average_order_fulfillment_execution_duration_min: result.average_order_fulfillment_execution_duration_min,
       average_turnaround_duration_min: result.average_turnaround_duration_min,
-    }, "SERVICE_CYCLE", "average_pickup_duration_min + average_trip_duration_min + average_turnaround_duration_min", "分钟", ["strategy_snapshot"]),
-    step("Robotaxi 能力", "计算单车理论日产能", "robotaxi_theoretical_daily_orders", {
+    }, ["strategy_snapshot"]),
+    step("THEORETICAL_DAILY_CAPACITY", {
       robotaxi_available_hours_per_day: result.robotaxi_available_hours_per_day,
-      effective_service_cycle_min: result.effective_service_cycle_min,
-    }, "THEORETICAL_DAILY_CAPACITY", "robotaxi_available_hours_per_day × 60 / effective_service_cycle_min", "订单 / Robotaxi·日", ["strategy_snapshot"]),
-    step("Robotaxi 能力", "计算单车有效日产能", "robotaxi_effective_daily_orders", {
+      vehicle_service_cycle_duration_min: result.vehicle_service_cycle_duration_min,
+    }, ["strategy_snapshot"]),
+    step("EFFECTIVE_DAILY_CAPACITY", {
       robotaxi_theoretical_daily_orders: result.robotaxi_theoretical_daily_orders,
       target_order_service_time_utilization_rate: result.target_order_service_time_utilization_rate,
       operational_availability_rate: result.operational_availability_rate,
-    }, "EFFECTIVE_DAILY_CAPACITY", "robotaxi_theoretical_daily_orders × target_order_service_time_utilization_rate × operational_availability_rate", "订单 / Robotaxi·日", ["business_target_snapshot", "strategy_snapshot"]),
-    step("Robotaxi 能力", "加入需求缓冲", "buffered_daily_orders", {
+    }, ["business_target_snapshot", "strategy_snapshot"]),
+    step("DEMAND_BUFFER", {
       planned_daily_orders: result.planned_daily_orders,
       demand_buffer_ratio: result.demand_buffer_ratio,
-    }, "DEMAND_BUFFER", "planned_daily_orders × (1 + demand_buffer_ratio)", "日订单", ["strategy_snapshot"]),
-    step("Robotaxi 能力", "计算日常需求", "daily_required_robotaxi", {
+    }, ["strategy_snapshot"]),
+    step("DAILY_CAPACITY_REQUIREMENT", {
       buffered_daily_orders: result.buffered_daily_orders,
       robotaxi_effective_daily_orders: result.robotaxi_effective_daily_orders,
-    }, "DAILY_CAPACITY_REQUIREMENT", "ceil(buffered_daily_orders / robotaxi_effective_daily_orders)", "Robotaxi", ["business_target_snapshot", "strategy_snapshot"]),
-    step("Robotaxi 能力", "计算峰值小时订单", "planned_peak_hour_orders", {
+    }, ["business_target_snapshot", "strategy_snapshot"]),
+    step("PEAK_HOUR_DEMAND", {
       planned_daily_orders: result.planned_daily_orders,
       busiest_hour_share: result.busiest_hour_share,
-    }, "PEAK_HOUR_DEMAND", "planned_daily_orders × busiest_hour_share", "订单 / 小时", ["zone_demand_snapshot"]),
-    step("Robotaxi 能力", "计算峰值并发数量", "peak_concurrent_robotaxi", {
+    }, ["zone_demand_snapshot"]),
+    step("PEAK_CONCURRENCY", {
       planned_peak_hour_orders: result.planned_peak_hour_orders,
-      effective_service_cycle_min: result.effective_service_cycle_min,
-    }, "PEAK_CONCURRENCY", "planned_peak_hour_orders × effective_service_cycle_min / 60", "Robotaxi", ["strategy_snapshot"]),
-    step("Robotaxi 能力", "修正峰值可用性", "peak_required_robotaxi", {
+      vehicle_service_cycle_duration_min: result.vehicle_service_cycle_duration_min,
+    }, ["strategy_snapshot"]),
+    step("PEAK_AVAILABILITY_REQUIREMENT", {
       peak_concurrent_robotaxi: result.peak_concurrent_robotaxi,
       operational_availability_rate: result.operational_availability_rate,
-    }, "PEAK_AVAILABILITY_REQUIREMENT", "ceil(peak_concurrent_robotaxi / operational_availability_rate)", "Robotaxi", ["strategy_snapshot"]),
-    step("Robotaxi 能力", "确定服务需求规模", "service_required_robotaxi", {
+    }, ["strategy_snapshot"]),
+    step("SERVICE_REQUIREMENT", {
       daily_required_robotaxi: result.daily_required_robotaxi,
       peak_required_robotaxi: result.peak_required_robotaxi,
-    }, "SERVICE_REQUIREMENT", "max(daily_required_robotaxi, peak_required_robotaxi)", "Robotaxi"),
-    step("Robotaxi 能力", "应用经营最低规模", "required_robotaxi_quantity", {
+    }),
+    step("FINAL_REQUIREMENT", {
       service_required_robotaxi: result.service_required_robotaxi,
       target_minimum_robotaxi_quantity: result.target_minimum_robotaxi_quantity,
-    }, "FINAL_REQUIREMENT", "max(service_required_robotaxi, target_minimum_robotaxi_quantity)", "Robotaxi", ["business_target_snapshot"]),
-    step("服务承载", "校验日服务承载", "daily_capacity_gap", {
+    }, ["business_target_snapshot"]),
+    step("SERVICE_AREA_DAILY_CAPACITY", {
       planned_daily_orders: result.planned_daily_orders,
       effective_daily_capacity: result.effective_daily_capacity,
-    }, "SERVICE_AREA_DAILY_CAPACITY", "max(0, planned_daily_orders - effective_daily_capacity)", "日订单", ["service_area_capacity_snapshot"]),
-    step("服务承载", "校验峰值服务承载", "peak_capacity_gap", {
+    }, ["service_area_capacity_snapshot"]),
+    step("SERVICE_AREA_PEAK_CAPACITY", {
       planned_peak_hour_orders: result.planned_peak_hour_orders,
       effective_peak_hour_capacity: result.effective_peak_hour_capacity,
-    }, "SERVICE_AREA_PEAK_CAPACITY", "max(0, planned_peak_hour_orders - effective_peak_hour_capacity)", "订单 / 小时", ["service_area_capacity_snapshot"]),
-    step("资产缺口", "汇总规划资产基数", "effective_current_robotaxi", {
+    }, ["service_area_capacity_snapshot"]),
+    step("EFFECTIVE_ASSET_INVENTORY", {
       zone_non_retired_robotaxi_quantity: result.zone_non_retired_robotaxi_quantity,
       committed_inbound_quantity: result.committed_inbound_quantity,
       committed_outbound_quantity: result.committed_outbound_quantity,
       planned_retirement_quantity: result.planned_retirement_quantity,
-    }, "EFFECTIVE_ASSET_INVENTORY", "zone_non_retired_robotaxi_quantity + committed_inbound_quantity - committed_outbound_quantity - planned_retirement_quantity", "Robotaxi", ["robotaxi_inventory_snapshot"]),
-    step("资产缺口", "计算 Robotaxi 缺口", "robotaxi_gap_quantity", {
+    }, ["robotaxi_inventory_snapshot"]),
+    step("ROBOTAXI_GAP", {
       required_robotaxi_quantity: result.required_robotaxi_quantity,
       effective_current_robotaxi: result.effective_current_robotaxi,
-    }, "ROBOTAXI_GAP", "max(0, required_robotaxi_quantity - effective_current_robotaxi)", "Robotaxi", ["robotaxi_inventory_snapshot"]),
-    step("生产供给", "确定建议生产量", "recommended_production_quantity", {
+    }, ["robotaxi_inventory_snapshot"]),
+    step("SUPPLY_REQUIREMENT", {
       robotaxi_gap_quantity: result.robotaxi_gap_quantity,
-    }, "SUPPLY_REQUIREMENT", "robotaxi_gap_quantity", "Robotaxi", ["production_profile_snapshot"]),
-    step("生产供给", "计算预测期可形成供给", "feasible_supply_quantity", {
+    }, ["production_profile_snapshot"]),
+    step("PRODUCTION_AND_DELIVERY_CONSTRAINT", {
       feasible_manufacturing_quantity: result.feasible_manufacturing_quantity,
       feasible_delivery_quantity: result.feasible_delivery_quantity,
-    }, "PRODUCTION_AND_DELIVERY_CONSTRAINT", "min(feasible_manufacturing_quantity, feasible_delivery_quantity)", "Robotaxi", ["production_profile_snapshot"]),
-    step("生产供给", "计算预测期末剩余缺口", "uncovered_robotaxi_gap", {
+    }, ["production_profile_snapshot"]),
+    step("UNCOVERED_SUPPLY_GAP", {
       robotaxi_gap_quantity: result.robotaxi_gap_quantity,
       feasible_supply_quantity: result.feasible_supply_quantity,
-    }, "UNCOVERED_SUPPLY_GAP", "max(0, robotaxi_gap_quantity - feasible_supply_quantity)", "Robotaxi", ["production_profile_snapshot"]),
-    step("基础经济性", "计算日经营贡献", "daily_contribution_margin", {
+    }, ["production_profile_snapshot"]),
+    step("DAILY_CONTRIBUTION", {
       planned_daily_orders: result.planned_daily_orders,
       contribution_margin_per_order: result.contribution_margin_per_order,
       daily_fixed_operating_cost: result.daily_fixed_operating_cost,
-    }, "DAILY_CONTRIBUTION", "planned_daily_orders × contribution_margin_per_order - daily_fixed_operating_cost", "元 / 日", ["business_target_snapshot"]),
+    }, ["business_target_snapshot"]),
   ].map((item, index) => ({ ...item, step_order: index + 1 }));
 }
 
 export function normalizeLongTermDemandForecastResult(result = {}) {
   const steps = Array.isArray(result.calculation_steps) ? result.calculation_steps : [];
-  const hasCurrentCalculationContract = steps.length >= 20 && steps.every((item) => (
+  const hasCurrentCalculationContract = steps.length >= 25 && steps.every((item) => (
     item?.output_field
     && item?.calculation_model
     && item?.formula_expression
@@ -587,13 +576,23 @@ export function normalizeLongTermDemandForecastResult(result = {}) {
     target_order_service_time_utilization_rate: result.target_order_service_time_utilization_rate
       ?? result.target_task_utilization_rate
       ?? null,
+    average_passenger_trip_duration_min: result.average_passenger_trip_duration_min
+      ?? result.average_trip_duration_min
+      ?? null,
+    average_order_fulfillment_execution_duration_min: result.average_order_fulfillment_execution_duration_min
+      ?? (number(result.average_pickup_duration_min) + number(result.average_passenger_trip_duration_min ?? result.average_trip_duration_min)),
+    vehicle_service_cycle_duration_min: result.vehicle_service_cycle_duration_min
+      ?? result.effective_service_cycle_min
+      ?? (number(result.average_pickup_duration_min) + number(result.average_passenger_trip_duration_min ?? result.average_trip_duration_min) + number(result.average_turnaround_duration_min)),
     supply_trend_series: (result.supply_trend_series || []).map((point) => ({
       ...point,
       period_quality_passed_quantity: point.period_quality_passed_quantity ?? point.period_delivery_quantity ?? 0,
       cumulative_quality_passed_quantity: point.cumulative_quality_passed_quantity ?? point.cumulative_delivery_quantity ?? 0,
     })),
   };
-  if (hasCurrentCalculationContract) return normalizedResult;
+  delete normalizedResult.average_trip_duration_min;
+  delete normalizedResult.effective_service_cycle_min;
+  if (hasCurrentCalculationContract && steps.every((item) => item.calculation_model_version)) return normalizedResult;
   return {
     ...normalizedResult,
     calculation_steps: buildCalculationSteps(normalizedResult),

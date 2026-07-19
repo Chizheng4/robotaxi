@@ -48,7 +48,7 @@ const tableConfig = {
   },
   opsCenters: {
     title: "运营中心管理",
-    description: "运营中心是 Robotaxi 进入运营闭环的供给侧设施。",
+    description: "运营中心是 Robotaxi 进入运营闭环的供应侧设施。",
     columns: ["ops_center_id", "ops_center_name", "place_id", "map_id", "cell_ids", "service_area_ids", "capacity", "ops_center_status"],
   },
   workers: {

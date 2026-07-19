@@ -99,7 +99,7 @@ baseline_peak_hour_orders
 |`waiting_robotaxi_capacity`|等待 Robotaxi 容量|
 |`pickup_position_capacity`|上车位容量|
 |`dropoff_position_capacity`|下车位容量|
-|`average_service_time_min`|平均站点服务时间|
+|`average_service_stop_duration_min`|平均站点停靠时长（分钟）|
 |`operating_hours_per_day`|每日开放小时数|
 |`accessibility_factor`|可达性系数|
 |`capacity_availability_rate`|容量可用率|
@@ -107,20 +107,25 @@ baseline_peak_hour_orders
 ### 5.2 计算
 
 ```text
-position_throughput_per_hour = 60 / average_service_time_min
+position_throughput_per_hour = 60 / average_service_stop_duration_min
 
-service_capacity_per_hour
-= min(pickup_position_capacity, dropoff_position_capacity)
-× position_throughput_per_hour
+effective_pickup_capacity_per_hour
+= pickup_position_capacity × position_throughput_per_hour
+× accessibility_factor × capacity_availability_rate
 
-effective_peak_hour_capacity
-= service_capacity_per_hour
+effective_dropoff_capacity_per_hour
+= dropoff_position_capacity × position_throughput_per_hour
 × accessibility_factor
 × capacity_availability_rate
 
-effective_daily_capacity
-= effective_peak_hour_capacity × operating_hours_per_day
+effective_daily_pickup_capacity
+= effective_pickup_capacity_per_hour × operating_hours_per_day
+
+effective_daily_dropoff_capacity
+= effective_dropoff_capacity_per_hour × operating_hours_per_day
 ```
+
+ServiceArea 只表达一个地点附近的接驾、送达、等待与周转承载，不生成市场需求。上车位与下车位必须分别计算，不能在单个 ServiceArea 内提前取最小值；真正的端到端瓶颈在 Zone 汇总后判断。
 
 ## 6. Zone 规划画像
 
@@ -129,8 +134,16 @@ Zone 汇总字段禁止人工配置：
 ```text
 baseline_addressable_daily_orders = Σ Place.baseline_addressable_daily_orders
 baseline_peak_hour_orders = Σ Place.baseline_peak_hour_orders
-effective_daily_capacity = Σ ServiceArea.effective_daily_capacity
-effective_peak_hour_capacity = Σ ServiceArea.effective_peak_hour_capacity
+effective_daily_pickup_capacity = Σ ServiceArea.effective_daily_pickup_capacity
+effective_daily_dropoff_capacity = Σ ServiceArea.effective_daily_dropoff_capacity
+effective_pickup_capacity_per_hour = Σ ServiceArea.effective_pickup_capacity_per_hour
+effective_dropoff_capacity_per_hour = Σ ServiceArea.effective_dropoff_capacity_per_hour
+
+effective_daily_capacity
+= min(effective_daily_pickup_capacity, effective_daily_dropoff_capacity)
+
+effective_peak_hour_capacity
+= min(effective_pickup_capacity_per_hour, effective_dropoff_capacity_per_hour)
 
 zone_period_growth_rate
 = Σ(Place.baseline_addressable_daily_orders × Place.place_period_growth_rate)
@@ -152,7 +165,8 @@ zone_period_growth_rate
 - 比例在配置界面以百分比输入和展示，领域对象统一保存为 `[0, 1]`；增长率大于 `-1`；
 - 新初始化地点的出行产生率按地点类型设置：住宅区为 60%，其他地点为 90%；历史用户配置不被默认值覆盖；
 - ServiceArea 必须存在唯一有效 `parent_place_id`；
-- Zone 汇总必须满足需求和容量守恒；
+- Zone 汇总必须满足需求守恒；上车与下车容量分别守恒，端到端容量等于两端汇总能力的较小值；
+- 旧 `average_service_time_min`、`service_capacity_per_hour` 只在旧快照迁移时读取，新画像统一写入明确的停靠时长与上车、下车承载字段；
 - 计算字段不得人工配置；
 - `peak_pattern` 当前不参与预测计算，新画像不再保存或展示；高峰容量使用可计算的 `busiest_hour_share`；
 - 旧 `expected_robotaxi_demand`、`service_area_demand`、`growth_factor`、`forecast_years`、`pickup_probability`、`dropoff_probability` 只在旧快照迁移时读取；
