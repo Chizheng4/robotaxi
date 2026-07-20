@@ -58,6 +58,11 @@ node --check scripts/verify-release-version.mjs
 node --check scripts/verify-versioned-pages-workflow.mjs
 node --check scripts/wait-for-github-pages.mjs
 node --check src/ui/platformExperience.js
+node --check src/ui/visitorAnalyticsService.js
+node --check edge-functions/lib/visitAnalytics.js
+for edge_function in edge-functions/api/visits/*.js; do
+  node --check "$edge_function"
+done
 node --check src/ui/robotaxiMapProjection.js
 node --check src/ui/responsiveViewport.js
 node --check src/ui/releaseHistory.js
@@ -75,6 +80,7 @@ node --check src/services/operatingDataPoolService.js
 node --check src/services/operatingModelService.js
 node --check src/services/publicDemoBootstrapService.js
 node scripts/verify-v045-1-page-presentation.mjs
+node scripts/verify-v048-visitor-analytics.mjs
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js

@@ -105,6 +105,20 @@ export const objectDictionary = {
 };
 
 export const fieldDictionary = {
+  visit_id: "访问编号",
+  visitor_identifier: "匿名访客",
+  visit_started_at: "开始访问时间",
+  visit_last_active_at: "最后活跃时间",
+  visit_ended_at: "结束访问时间",
+  active_duration_seconds: "有效使用时长（秒）",
+  device_type: "设备类型",
+  page_path: "访问页面",
+  referrer_type: "访问来源",
+  timezone: "时区",
+  coarse_region: "粗粒度地域",
+  website_version: "网站版本",
+  platform_entered: "是否进入平台",
+  heartbeat_count: "活跃记录次数",
   map_id: "地图编号",
   map_name: "地图名称",
   map_width_m: "地图宽度（米）",
@@ -1613,6 +1627,13 @@ export function getDetailTitle(type) {
 }
 
 export const valueDictionary = {
+  MOBILE: "手机",
+  DESKTOP: "电脑",
+  UNKNOWN_DEVICE: "未知设备",
+  DIRECT_VISIT: "直接访问",
+  GITHUB_REFERRAL: "GitHub 引导",
+  WECHAT_REFERRAL: "微信引导",
+  EXTERNAL_REFERRAL: "外部引导",
   BUSINESS_PLANNING: "经营规划",
   SUPPLY: "供应管理",
   SUPPLY_DEMAND: "供需投放",

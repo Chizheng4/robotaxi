@@ -62,6 +62,7 @@ let supplyDemandBalanceService;
 let supplyPositionService;
 let publicDemoBootstrapService;
 let platformExperience;
+let visitorAnalyticsService;
 let releaseFreshnessService;
 let robotaxiMapProjection;
 let responsiveViewport;
@@ -1231,9 +1232,13 @@ function normalizeSupplyProductionProfileDraft(draft) {
 
 function PlatformEntry() {
   const [accessSession, setAccessSession] = useState(() => platformExperience.readAccessSession());
+  const [visitorRecordsToken, setVisitorRecordsToken] = useState(null);
 
   useEffect(() => {
     releaseFreshnessService?.ensureLatestRelease?.();
+    const stopTracking = visitorAnalyticsService.startVisitTracking({ version: releaseHistory[0]?.version || "未知版本" });
+    if (accessSession) visitorAnalyticsService.markPlatformEntered();
+    return stopTracking;
   }, []);
 
   useEffect(() => {
@@ -1256,7 +1261,10 @@ function PlatformEntry() {
 
   function enterPlatform(userName) {
     const result = platformExperience.createAccessSession(userName);
-    if (result.succeeded) setAccessSession(result.session);
+    if (result.succeeded) {
+      visitorAnalyticsService.markPlatformEntered();
+      setAccessSession(result.session);
+    }
     return result;
   }
 
@@ -1265,17 +1273,45 @@ function PlatformEntry() {
     setAccessSession(null);
   }
 
-  if (!accessSession) return <PlatformLogin onEnter={enterPlatform} />;
+  if (visitorRecordsToken) return <VisitorRecordsScreen token={visitorRecordsToken} onExit={() => setVisitorRecordsToken(null)} />;
+  if (!accessSession) return <PlatformLogin onEnter={enterPlatform} onVisitorRecordsAuthenticated={setVisitorRecordsToken} />;
   return <App currentUser={accessSession.user_name} onLogout={exitPlatform} />;
 }
 
-function PlatformLogin({ onEnter }) {
+function PlatformLogin({ onEnter, onVisitorRecordsAuthenticated }) {
   const [userName, setUserName] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [visitorPasswordOpen, setVisitorPasswordOpen] = useState(false);
+  const [visitorPassword, setVisitorPassword] = useState("");
+  const [visitorPasswordError, setVisitorPasswordError] = useState("");
+  const [visitorPasswordLoading, setVisitorPasswordLoading] = useState(false);
 
   function attemptLogin(value) {
+    if (String(value || "").trim() === "访问") {
+      setErrorMessage("");
+      setVisitorPassword("");
+      setVisitorPasswordError("");
+      setVisitorPasswordOpen(true);
+      return;
+    }
     const result = onEnter(value);
     setErrorMessage(result.succeeded ? "" : result.reason);
+  }
+
+  async function submitVisitorPassword(event) {
+    event?.preventDefault?.();
+    if (visitorPasswordLoading) return;
+    setVisitorPasswordLoading(true);
+    setVisitorPasswordError("");
+    try {
+      const result = await visitorAnalyticsService.authenticateVisitorRecords(visitorPassword);
+      setVisitorPasswordOpen(false);
+      onVisitorRecordsAuthenticated(result.token);
+    } catch (error) {
+      setVisitorPasswordError(error.message || "访问记录验证失败");
+    } finally {
+      setVisitorPasswordLoading(false);
+    }
   }
 
   function submitLogin(event) {
@@ -1312,6 +1348,107 @@ function PlatformLogin({ onEnter }) {
         <div className={errorMessage ? "platform-login-feedback visible" : "platform-login-feedback"} role="status">
           {errorMessage || "登录名称校验"}
         </div>
+      </section>
+      <Modal
+        title="查看访问记录"
+        open={visitorPasswordOpen}
+        centered
+        width={360}
+        destroyOnClose
+        footer={null}
+        onCancel={() => setVisitorPasswordOpen(false)}
+      >
+        <form className="visitor-password-form" onSubmit={submitVisitorPassword}>
+          <label htmlFor="visitor-record-password">访问密码</label>
+          <Input.Password
+            id="visitor-record-password"
+            autoComplete="current-password"
+            value={visitorPassword}
+            status={visitorPasswordError ? "error" : undefined}
+            placeholder="请输入访问密码"
+            onChange={(event) => {
+              setVisitorPassword(event.target.value);
+              if (visitorPasswordError) setVisitorPasswordError("");
+            }}
+          />
+          <div className={visitorPasswordError ? "visitor-password-feedback visible" : "visitor-password-feedback"} role="status">
+            {visitorPasswordError || "密码仅用于查看访问记录"}
+          </div>
+          <Button type="primary" htmlType="submit" loading={visitorPasswordLoading} disabled={!visitorPassword}>进入访问记录</Button>
+        </form>
+      </Modal>
+    </main>
+  );
+}
+
+function VisitorRecordsScreen({ token, onExit }) {
+  const [period, setPeriod] = useState("7D");
+  const [data, setData] = useState(() => ({ summary: {}, records: [] }));
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setErrorMessage("");
+    visitorAnalyticsService.loadVisitorRecords({ token, period })
+      .then((result) => { if (!cancelled) setData(result); })
+      .catch((error) => { if (!cancelled) setErrorMessage(error.message || "访问记录加载失败"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [period, reloadToken, token]);
+
+  const summary = data.summary || {};
+  return (
+    <main className="visitor-records-shell">
+      <section className="visitor-records-panel" aria-labelledby="visitor-records-title">
+        <header className="visitor-records-header">
+          <div>
+            <h1 id="visitor-records-title">访问记录</h1>
+            <p>{data.storage_mode === "LOCAL_PREVIEW" ? "本地预览数据，仅保存在当前浏览器" : "仅展示匿名访问情况，不保存原始 IP"}</p>
+          </div>
+          <Button onClick={onExit}>退出</Button>
+        </header>
+        <nav className="visitor-records-period" aria-label="查看周期">
+          {[{ key: "1D", label: "近 24 小时" }, { key: "7D", label: "近 7 日" }, { key: "30D", label: "近 30 日" }].map((item) => (
+            <button className={period === item.key ? "is-active" : ""} key={item.key} type="button" onClick={() => setPeriod(item.key)}>{item.label}</button>
+          ))}
+        </nav>
+        {errorMessage ? (
+          <div className="visitor-records-message" role="status">
+            <strong>暂时无法读取访问记录</strong>
+            <span>{errorMessage}</span>
+            <Button size="small" onClick={() => setReloadToken((current) => current + 1)}>重新加载</Button>
+          </div>
+        ) : (
+          <>
+            <div className="visitor-records-summary" aria-busy={loading}>
+              <div><span>访问次数</span><strong>{summary.visit_count || 0}</strong></div>
+              <div><span>匿名访客</span><strong>{summary.unique_visitor_count || 0}</strong></div>
+              <div><span>平均有效时长</span><strong>{visitorAnalyticsService.formatActiveDuration(summary.average_active_duration_seconds)}</strong></div>
+              <div><span>进入平台</span><strong>{summary.platform_entry_count || 0}</strong></div>
+            </div>
+            <div className="visitor-records-list" aria-busy={loading}>
+              {loading && <div className="visitor-records-empty">正在读取访问记录</div>}
+              {!loading && data.records.length === 0 && <div className="visitor-records-empty">当前周期暂无访问记录</div>}
+              {!loading && data.records.map((record) => (
+                <article key={record.visit_id}>
+                  <div>
+                    <strong>{new Date(record.visit_started_at).toLocaleString("zh-CN", { hour12: false })}</strong>
+                    <span>{getDisplayValue(record.device_type, "device_type")} · {record.coarse_region || "未知地域"}</span>
+                  </div>
+                  <dl>
+                    <div><dt>{getFieldLabel("visitor_identifier")}</dt><dd>{record.visitor_identifier || "-"}</dd></div>
+                    <div><dt>{getFieldLabel("active_duration_seconds")}</dt><dd>{visitorAnalyticsService.formatActiveDuration(record.active_duration_seconds)}</dd></div>
+                    <div><dt>{getFieldLabel("referrer_type")}</dt><dd>{getDisplayValue(record.referrer_type, "referrer_type")}</dd></div>
+                    <div><dt>{getFieldLabel("website_version")}</dt><dd>{record.website_version || "-"}</dd></div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
       </section>
     </main>
   );
@@ -10841,6 +10978,7 @@ async function bootstrap() {
 		    supplyManagementInitializationModule,
 		    spatialBusinessProfileInitializationModule,
 		    platformExperienceModule,
+		    visitorAnalyticsServiceModule,
 		    robotaxiMapProjectionModule,
 		    responsiveViewportModule,
 		    spatialCatalogServiceModule,
@@ -10919,6 +11057,7 @@ async function bootstrap() {
 		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
         import("./data/spatialBusinessProfileInitialization.js?v=20260719-v047-4-1"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
+		    import("./ui/visitorAnalyticsService.js?v=20260720-v048-0-0"),
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
@@ -11003,6 +11142,7 @@ async function bootstrap() {
 		  splitDemandProfilesByTarget = spatialBusinessProfileInitializationModule.splitDemandProfilesByTarget;
 		  updateDemandProfileConfig = spatialBusinessProfileInitializationModule.updateDemandProfileConfig;
 		  platformExperience = platformExperienceModule;
+		  visitorAnalyticsService = visitorAnalyticsServiceModule;
 		  robotaxiMapProjection = robotaxiMapProjectionModule;
 		  responsiveViewport = responsiveViewportModule;
 		  spatialCatalogService = spatialCatalogServiceModule;

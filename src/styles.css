@@ -520,6 +520,140 @@
   }
 }
 
+/* Public visitor analytics: a dedicated lightweight surface, separate from business workbench pages. */
+.visitor-password-form {
+  display: grid;
+  gap: 10px;
+}
+
+.visitor-password-form label {
+  color: var(--text-soft);
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+
+.visitor-password-form .ant-btn {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.visitor-password-feedback {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.visitor-password-feedback.visible { color: #b65050; }
+
+.visitor-records-shell {
+  position: fixed;
+  inset: var(--app-viewport-offset-top) auto auto var(--app-viewport-offset-left);
+  width: var(--app-viewport-width);
+  height: var(--app-viewport-height);
+  overflow: auto;
+  background: var(--canvas);
+  color: var(--text);
+}
+
+.visitor-records-panel {
+  width: min(860px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+
+.visitor-records-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.visitor-records-header h1 {
+  margin: 0 0 5px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.visitor-records-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.visitor-records-period {
+  display: flex;
+  gap: 18px;
+  padding: 14px 0 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.visitor-records-period button {
+  padding: 3px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--font-xs);
+  cursor: pointer;
+}
+
+.visitor-records-period button.is-active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.visitor-records-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 14px;
+  border-block: 1px solid var(--line-soft);
+}
+
+.visitor-records-summary > div {
+  display: grid;
+  gap: 6px;
+  padding: 13px 14px;
+  border-right: 1px solid var(--line-soft);
+}
+
+.visitor-records-summary > div:last-child { border-right: 0; }
+.visitor-records-summary span { color: var(--muted); font-size: var(--font-xs); }
+.visitor-records-summary strong { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.visitor-records-list { display: grid; }
+.visitor-records-list article {
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr);
+  gap: 22px;
+  padding: 15px 2px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.visitor-records-list article > div { display: grid; align-content: start; gap: 4px; }
+.visitor-records-list article > div strong { font-size: var(--font-sm); font-weight: 600; }
+.visitor-records-list article > div span { color: var(--muted); font-size: var(--font-xs); }
+.visitor-records-list dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin: 0; }
+.visitor-records-list dl > div { display: flex; justify-content: space-between; gap: 10px; }
+.visitor-records-list dt { color: var(--muted); font-size: var(--font-xs); }
+.visitor-records-list dd { margin: 0; font-size: var(--font-xs); text-align: right; overflow-wrap: anywhere; }
+.visitor-records-empty,
+.visitor-records-message { padding: 48px 0; color: var(--muted); font-size: var(--font-sm); text-align: center; }
+.visitor-records-message { display: grid; justify-items: center; gap: 8px; }
+.visitor-records-message strong { color: var(--text); }
+
+@media (max-width: 767px) {
+  .visitor-records-panel { width: calc(100% - 28px); padding: max(18px, env(safe-area-inset-top)) 0 32px; }
+  .visitor-records-header h1 { font-size: 20px; }
+  .visitor-records-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .visitor-records-summary > div:nth-child(2n) { border-right: 0; }
+  .visitor-records-summary > div:nth-child(-n + 2) { border-bottom: 1px solid var(--line-soft); }
+  .visitor-records-list article { grid-template-columns: 1fr; gap: 10px; }
+  .visitor-records-list dl { grid-template-columns: 1fr; }
+}
+
 /* v045 经营模型与数据分析页面共享同一分析画布。 */
 .record-page-new.analytical-workspace {
   min-width: 0;
