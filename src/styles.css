@@ -1256,6 +1256,86 @@
   color: var(--text-primary);
 }
 
+.spatial-plan-trigger {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  left: 12px;
+  border-color: rgba(190, 204, 216, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-secondary);
+  box-shadow: 0 4px 14px rgba(39, 61, 82, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.spatial-plan-editor {
+  position: absolute;
+  z-index: 5;
+  top: 50px;
+  left: 12px;
+  display: grid;
+  gap: 10px;
+  width: min(320px, calc(100% - 24px));
+  max-height: calc(100% - 68px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid rgba(190, 204, 216, 0.9);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 28px rgba(39, 61, 82, 0.13);
+  backdrop-filter: blur(14px);
+}
+
+.spatial-plan-editor header,
+.spatial-plan-editor label,
+.spatial-plan-impact {
+  display: grid;
+  gap: 5px;
+}
+
+.spatial-plan-editor header {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.spatial-plan-editor label > span,
+.spatial-plan-impact span,
+.spatial-plan-notice {
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+}
+
+.spatial-plan-editor .ant-select,
+.spatial-plan-editor .ant-input {
+  width: 100%;
+}
+
+.spatial-plan-editor-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.spatial-plan-history-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.spatial-plan-impact {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.spatial-plan-notice {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.spatial-plan-notice.error {
+  color: var(--danger);
+}
+
 @media (max-width: 560px) {
   .map-floating-actions {
     align-items: center;
@@ -1270,6 +1350,12 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .spatial-plan-trigger {
+    top: 8px;
+    left: 8px;
+    max-width: calc(100% - 80px);
   }
 }
 

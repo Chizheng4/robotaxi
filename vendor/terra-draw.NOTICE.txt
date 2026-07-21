@@ -1,0 +1,8 @@
+Terra Draw 1.32.1 and Terra Draw MapLibre GL Adapter 1.4.1
+Copyright (c) James Gardner and contributors
+License: MIT
+Source: https://github.com/JamesLMilner/terra-draw
+
+Bundled locally for the Robotaxi operating-space editor. The libraries provide
+geometry drawing and MapLibre integration only; Robotaxi business validation,
+versioning and publishing remain in the project service layer.

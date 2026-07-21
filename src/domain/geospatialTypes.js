@@ -24,7 +24,7 @@ export function createMapDataset(input = {}) {
     basemap_provider: input.basemap_provider || BasemapProvider.OPEN_FREE_MAP,
     basemap_style_url: input.basemap_style_url || "",
     data_attribution: input.data_attribution || "",
+    geographic_bounds: Array.isArray(input.geographic_bounds) ? input.geographic_bounds : null,
     dataset_status: input.dataset_status || "ACTIVE",
   };
 }
-

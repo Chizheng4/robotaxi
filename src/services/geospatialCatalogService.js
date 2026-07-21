@@ -6,34 +6,42 @@ export function createGeospatialScene(data = {}, dataset, projectionConfig = {})
   const projector = createCellProjector(map, dataset, projectionConfig);
   const route = resolveSelectedRoute(data);
 
+  const zones = applyPublishedGeometry(featureCollection((data.zones || [])
+    .filter((zone) => !zone.parent_zone_id)
+    .map((zone) => areaFeature("zone", zone.zone_id, zone.zone_name, zone.cell_ids, zone, projector))), data.operatingSpatialPlans, "ZONE");
+  const places = applyPublishedGeometry(featureCollection((data.places || [])
+    .map((place) => areaFeature("place", place.place_id, place.place_name, place.cell_ids, place, projector))), data.operatingSpatialPlans, "PLACE");
+  const serviceAreas = applyPublishedGeometry(featureCollection((data.serviceAreas || [])
+    .map((area) => areaFeature("serviceArea", area.service_area_id, area.service_area_name, area.cell_ids || area.covered_cell_ids, area, projector))), data.operatingSpatialPlans, "SERVICE_AREA");
+  const roads = featureCollection(createRoadFeatures(data, projector));
+  const opsCenters = featureCollection((data.opsCenters || []).map((center) => pointFeature(
+    "opsCenter",
+    center.ops_center_id,
+    center.ops_center_name,
+    representativeCell(center.cell_ids, center.current_cell_id),
+    center,
+    projector,
+  )));
+  const robotaxis = featureCollection((data.robotaxis || data.robotaxi || []).map((robotaxi) => pointFeature(
+    "robotaxi",
+    robotaxi.robotaxi_id,
+    robotaxi.robotaxi_id,
+    robotaxi.current_cell_id,
+    robotaxi,
+    projector,
+  )).filter(Boolean));
+  const routeCollection = route ? featureCollection([routeFeature(route, data.roadSegments || [], projector)].filter(Boolean)) : EMPTY_COLLECTION;
   return {
     dataset,
     bounds: projector.mapBounds,
-    zones: featureCollection((data.zones || [])
-      .filter((zone) => !zone.parent_zone_id)
-      .map((zone) => areaFeature("zone", zone.zone_id, zone.zone_name, zone.cell_ids, zone, projector))),
-    places: featureCollection((data.places || [])
-      .map((place) => areaFeature("place", place.place_id, place.place_name, place.cell_ids, place, projector))),
-    serviceAreas: featureCollection((data.serviceAreas || [])
-      .map((area) => areaFeature("serviceArea", area.service_area_id, area.service_area_name, area.cell_ids || area.covered_cell_ids, area, projector))),
-    roads: featureCollection(createRoadFeatures(data, projector)),
-    opsCenters: featureCollection((data.opsCenters || []).map((center) => pointFeature(
-      "opsCenter",
-      center.ops_center_id,
-      center.ops_center_name,
-      representativeCell(center.cell_ids, center.current_cell_id),
-      center,
-      projector,
-    ))),
-    robotaxis: featureCollection((data.robotaxis || data.robotaxi || []).map((robotaxi) => pointFeature(
-      "robotaxi",
-      robotaxi.robotaxi_id,
-      robotaxi.robotaxi_id,
-      robotaxi.current_cell_id,
-      robotaxi,
-      projector,
-    )).filter(Boolean)),
-    route: route ? featureCollection([routeFeature(route, data.roadSegments || [], projector)].filter(Boolean)) : EMPTY_COLLECTION,
+    zones,
+    places,
+    serviceAreas,
+    roads,
+    opsCenters,
+    robotaxis,
+    route: routeCollection,
+    sourceVersions: createSourceVersions({ zones, places, serviceAreas, roads, opsCenters, robotaxis, route: routeCollection }),
   };
 }
 
@@ -185,6 +193,78 @@ function featureCollection(features) {
   return { type: "FeatureCollection", features: features.filter(Boolean) };
 }
 
+function applyPublishedGeometry(collection, plans = [], targetType) {
+  const published = (plans || [])
+    .filter((plan) => plan.operating_spatial_plan_status === "PUBLISHED")
+    .flatMap((plan) => (plan.spatial_plan_features || []).map((feature) => ({ ...feature, plan })))
+    .filter(({ target_object_type, geometry_geojson }) => target_object_type === targetType && geometry_geojson);
+  if (!published.length) return collection;
+  const latestByObject = new Map();
+  for (const item of published) {
+    const key = item.target_object_id || item.spatial_plan_feature_id;
+    const current = latestByObject.get(key);
+    if (!current || Number(item.plan.spatial_plan_version || 0) >= Number(current.plan.spatial_plan_version || 0)) latestByObject.set(key, item);
+  }
+  const replaced = new Set();
+  const features = collection.features.map((feature) => {
+    const planned = latestByObject.get(feature.properties.object_id);
+    if (!planned) return feature;
+    replaced.add(feature.properties.object_id);
+    return {
+      ...feature,
+      geometry: planned.geometry_geojson,
+      properties: {
+        ...feature.properties,
+        spatial_plan_id: planned.plan.operating_spatial_plan_id,
+        spatial_plan_version: planned.plan.spatial_plan_version,
+      },
+    };
+  });
+  for (const [key, planned] of latestByObject) {
+    if (replaced.has(key) || planned.target_object_id) continue;
+    features.push({
+      type: "Feature",
+      id: planned.spatial_plan_feature_id,
+      geometry: planned.geometry_geojson,
+      properties: {
+        object_type: targetType === "SERVICE_AREA" ? "serviceArea" : targetType.toLowerCase(),
+        object_id: planned.spatial_plan_feature_id,
+        object_name: planned.target_object_name,
+        object_status: "PUBLISHED",
+        spatial_plan_id: planned.plan.operating_spatial_plan_id,
+        spatial_plan_version: planned.plan.spatial_plan_version,
+        pending_initialization: true,
+      },
+    });
+  }
+  return featureCollection(features);
+}
+
+function createSourceVersions(collections) {
+  return Object.fromEntries(Object.entries(collections).map(([key, collection]) => [
+    key,
+    (collection.features || []).map((feature) => `${feature.id}:${feature.properties?.spatial_plan_version || "0"}:${coordinateSignature(feature.geometry)}`).join("|"),
+  ]));
+}
+
+function coordinateSignature(geometry) {
+  const coordinates = [];
+  collectCoordinateSignature(geometry?.coordinates, coordinates);
+  if (!coordinates.length) return "empty";
+  const first = coordinates[0];
+  const last = coordinates[coordinates.length - 1];
+  return `${coordinates.length}:${first[0].toFixed(5)},${first[1].toFixed(5)}:${last[0].toFixed(5)},${last[1].toFixed(5)}`;
+}
+
+function collectCoordinateSignature(value, output) {
+  if (!Array.isArray(value)) return;
+  if (value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1])) {
+    output.push(value);
+    return;
+  }
+  value.forEach((item) => collectCoordinateSignature(item, output));
+}
+
 function createEmptyScene(dataset) {
   return {
     dataset,
@@ -196,6 +276,7 @@ function createEmptyScene(dataset) {
     opsCenters: EMPTY_COLLECTION,
     robotaxis: EMPTY_COLLECTION,
     route: EMPTY_COLLECTION,
+    sourceVersions: {},
   };
 }
 

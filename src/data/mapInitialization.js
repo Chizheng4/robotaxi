@@ -79,6 +79,7 @@ export function initializeMapSpace() {
     serviceAreas,
     zones,
     routes: [],
+    operatingSpatialPlans: [],
   };
 }
 

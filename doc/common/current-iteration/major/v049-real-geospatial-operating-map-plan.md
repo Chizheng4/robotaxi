@@ -73,8 +73,9 @@
 
 ### 阶段 4：空间编辑闭环
 
+- [x] 固定运营空间方案对象、生命周期和发布边界，详见 `doc/common/iteration-history/major/v049.1-guangzhou-operating-space-modeling-plan.md`。
 - [ ] 建立浏览模式和空间编辑模式权限与状态隔离。
-- [ ] 接入通用几何绘制适配器，支持点、线和面草稿。
+- [ ] 接入通用几何绘制适配器，首期支持 Zone、Place 和 ServiceArea 面草稿。
 - [ ] 建立撤销、重做、取消、保存、校验错误和影响预览。
 - [ ] 保存动作只调用空间对象服务；页面不得直接修改 GeoJSON 或对象关系。
 - [ ] 完成 Zone、Place、ServiceArea、运营中心范围的编辑校验。

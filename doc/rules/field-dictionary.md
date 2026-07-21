@@ -673,6 +673,29 @@
 |basemap_style_url|底图样式地址|数据集字段|底图样式资源地址；不可用时允许降级|
 |data_attribution|地图数据归因|数据集字段|地图数据来源和许可归因文案|
 |dataset_status|数据集状态|数据集字段|地图数据集当前是否可用于投影|
+|geographic_bounds|地理边界|数据集字段|地图数据集允许浏览与建模的经纬度边界|
+
+### 2.1 运营空间方案
+
+运营空间方案承接地图上的绘制、校验、影响预览和发布，不直接替代 Zone、Place 或 ServiceArea 业务对象。
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|operating_spatial_plan_id|运营空间方案编号|持久化字段|一次运营空间建模方案的唯一编号|
+|operating_spatial_plan_name|运营空间方案名称|持久化字段|方案的用户可读名称|
+|operating_spatial_plan_status|方案状态|状态字段|草稿、已校验、已发布或已取消|
+|spatial_plan_version|方案版本|持久化字段|同一目标空间调整的不可变版本|
+|spatial_plan_features|空间要素|关系字段|方案包含的 Zone、Place 或 ServiceArea 几何草稿|
+|spatial_plan_feature_id|空间要素编号|持久化字段|方案内空间要素唯一编号|
+|target_object_type|目标对象类型|类型字段|空间要素对应的业务对象类型|
+|target_object_id|目标对象编号|关系字段|关联已有对象时保存其编号；新要素可为空|
+|target_object_name|目标对象名称|快照字段|发布时使用的目标对象名称快照|
+|geometry_geojson|地理几何|持久化字段|使用 EPSG:4326 的标准 GeoJSON 几何|
+|geometry_type|几何类型|类型字段|首期区域建模固定为 Polygon|
+|validation_status|校验状态|状态字段|空间服务校验是否通过|
+|validation_issues|校验问题|结果字段|未通过校验的结构化中文原因|
+|impact_summary|影响预览|结果字段|发布将影响的投影、画像和路线范围|
+|published_at|发布时间|事实字段|方案发布为地理投影版本的真实时间|
 
 ---
 

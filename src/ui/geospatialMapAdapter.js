@@ -27,6 +27,9 @@ export function createGeospatialMapAdapter(options = {}) {
   let ready = false;
   let destroyed = false;
   let fallbackApplied = false;
+  let editing = false;
+  let draw = null;
+  const appliedSourceVersions = {};
   const map = new MapLibre.Map({
     container: options.container,
     style: currentScene?.dataset?.basemap_style_url || cloneFallbackStyle(),
@@ -54,6 +57,7 @@ export function createGeospatialMapAdapter(options = {}) {
   map.on("style.load", () => {
     if (destroyed) return;
     ready = true;
+    Object.keys(appliedSourceVersions).forEach((key) => delete appliedSourceVersions[key]);
     installScene();
   });
   map.on("error", (event) => {
@@ -74,6 +78,7 @@ export function createGeospatialMapAdapter(options = {}) {
       if (!map.getSource(sourceId)) {
         map.addSource(sourceId, { type: "geojson", data: currentScene?.[sourceId] || emptyCollection() });
       }
+      appliedSourceVersions[sourceId] = currentScene?.sourceVersions?.[sourceId] || "";
       if (!map.getLayer(definition.layerId)) map.addLayer(createLayer(sourceId, definition));
       bindLayerEvents(definition.layerId);
     }
@@ -88,6 +93,7 @@ export function createGeospatialMapAdapter(options = {}) {
       if (!map.getSource(sourceId)) {
         map.addSource(sourceId, { type: "geojson", data: createLabelCollection(currentScene?.[sceneKey]) });
       }
+      appliedSourceVersions[sourceId] = currentScene?.sourceVersions?.[sceneKey] || "";
       if (map.getLayer(layerId)) continue;
       map.addLayer({
         id: layerId,
@@ -115,19 +121,23 @@ export function createGeospatialMapAdapter(options = {}) {
     if (boundLayers.has(layerId)) return;
     boundLayers.add(layerId);
     map.on("mouseenter", layerId, (event) => {
+      if (editing) return;
       map.getCanvas().style.cursor = "pointer";
       const feature = event.features?.[0];
       if (feature) options.onHover?.(feature.properties, event.point);
     });
     map.on("mousemove", layerId, (event) => {
+      if (editing) return;
       const feature = event.features?.[0];
       if (feature) options.onHover?.(feature.properties, event.point);
     });
     map.on("mouseleave", layerId, () => {
+      if (editing) return;
       map.getCanvas().style.cursor = "";
       options.onHoverEnd?.();
     });
     map.on("click", layerId, (event) => {
+      if (editing) return;
       const feature = event.features?.[0];
       if (!feature) return;
       event.originalEvent.__robotaxiMapObjectHandled = true;
@@ -136,6 +146,7 @@ export function createGeospatialMapAdapter(options = {}) {
   }
 
   map.on("click", (event) => {
+    if (editing) return;
     if (event.originalEvent.__robotaxiMapObjectHandled) return;
     options.onBlankClick?.();
   });
@@ -144,10 +155,16 @@ export function createGeospatialMapAdapter(options = {}) {
     currentScene = nextScene;
     if (!ready || !map.isStyleLoaded()) return;
     for (const sourceId of Object.keys(SOURCE_DEFINITIONS)) {
+      const nextVersion = currentScene?.sourceVersions?.[sourceId] || "";
+      if (appliedSourceVersions[sourceId] === nextVersion) continue;
       map.getSource(sourceId)?.setData(currentScene?.[sourceId] || emptyCollection());
+      appliedSourceVersions[sourceId] = nextVersion;
     }
     for (const [sceneKey, definition] of Object.entries(LABEL_DEFINITIONS)) {
+      const nextVersion = currentScene?.sourceVersions?.[sceneKey] || "";
+      if (appliedSourceVersions[definition.sourceId] === nextVersion) continue;
       map.getSource(definition.sourceId)?.setData(createLabelCollection(currentScene?.[sceneKey]));
+      appliedSourceVersions[definition.sourceId] = nextVersion;
     }
   }
 
@@ -165,14 +182,49 @@ export function createGeospatialMapAdapter(options = {}) {
     if (currentScene?.bounds) map.fitBounds(currentScene.bounds, { padding: options.compact ? 24 : 52, duration: 280 });
   }
 
+  function startPolygonDrawing(onFinish) {
+    const Terra = globalThis.RobotaxiTerraDraw;
+    if (!Terra?.TerraDraw || !Terra?.TerraDrawMapLibreGLAdapter) throw new Error("地图绘制组件未加载");
+    stopDrawing();
+    editing = true;
+    draw = new Terra.TerraDraw({
+      adapter: new Terra.TerraDrawMapLibreGLAdapter({ map, prefixId: "robotaxi-spatial-plan" }),
+      modes: [new Terra.TerraDrawPolygonMode(), new Terra.TerraDrawSelectMode()],
+      undoRedo: { sessionLevel: new Terra.TerraDrawSessionUndoRedo() },
+    });
+    draw.on("finish", (id) => {
+      const feature = draw?.getSnapshotFeature(id);
+      if (!feature) return;
+      draw.setMode("select");
+      onFinish?.(JSON.parse(JSON.stringify(feature.geometry)));
+    });
+    draw.start();
+    draw.setMode("polygon");
+  }
+
+  function stopDrawing() {
+    if (draw) draw.stop();
+    draw = null;
+    editing = false;
+  }
+
   return {
     updateScene,
     updateSelection,
     fitScene,
+    startPolygonDrawing,
+    restartPolygonDrawing(onFinish) {
+      startPolygonDrawing(onFinish);
+    },
+    undoDrawing: () => draw?.undo() || false,
+    redoDrawing: () => draw?.redo() || false,
+    clearDrawing: () => draw?.clear(),
+    stopDrawing,
     resize: () => map.resize(),
     destroy() {
       destroyed = true;
       clearTimeout(styleTimeout);
+      stopDrawing();
       map.remove();
     },
   };
