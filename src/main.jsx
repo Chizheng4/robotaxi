@@ -1,5 +1,5 @@
 const { useEffect, useMemo, useRef, useState } = React;
-const { Button, Descriptions, Dropdown, Empty, Input, InputNumber, Layout, Menu, Modal, Popover, Select, Space, Table, Tabs, Tag, Typography } = antd;
+const { Button, Descriptions, Dropdown, Empty, Input, InputNumber, Layout, Menu, Modal, Popover, Segmented, Select, Space, Table, Tabs, Tag, Typography } = antd;
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 
@@ -68,6 +68,9 @@ let robotaxiMapProjection;
 let responsiveViewport;
 let spatialCatalogService;
 let mapSceneService;
+let geospatialCatalogService;
+let geospatialMapAdapter;
+let geospatialReferenceData;
 let pageContextService;
 let dataChartService;
 let metricObjectPresentationService;
@@ -8293,6 +8296,10 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   const map = data.maps[0];
   const compactMapViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 560px)").matches;
   const defaultViewport = { zoom: 1, panX: 0, panY: 0 };
+  const [mapMode, setMapMode] = useState(() => {
+    if (typeof window === "undefined") return "geospatial";
+    return window.localStorage.getItem("robotaxi.mapMode") || "geospatial";
+  });
   const scene = useMemo(
     () => mapSceneService.createMapScene(data),
     [data.maps, data.zones, data.places, data.serviceAreas, data.roads, data.roadSegments],
@@ -8314,6 +8321,14 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   const selectedRoute = selectedRouteId
     ? data.routes.find((route) => route.route_id === selectedRouteId)
     : null;
+  const geospatialScene = useMemo(
+    () => geospatialCatalogService.createGeospatialScene({
+      ...data,
+      selectedRouteId,
+      selectedRobotaxi,
+    }, geospatialReferenceData.GEOSPATIAL_MAP_DATASET, geospatialReferenceData.GEOSPATIAL_PROJECTION_CONFIG),
+    [data.maps, data.zones, data.places, data.serviceAreas, data.roads, data.roadSegments, data.opsCenters, data.robotaxis, data.routes, selectedRouteId],
+  );
   const highlightedCells = new Set(selectedRoute ? routeCellIds(selectedRoute, data.roadSegments) : []);
   const highlightedRoutePoints = [...highlightedCells].map((cellId) => {
     const { row, col } = parseCellId(cellId);
@@ -8364,6 +8379,11 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
 
   function resetViewport() {
     setViewport(defaultViewport);
+  }
+
+  function changeMapMode(nextMode) {
+    setMapMode(nextMode);
+    if (typeof window !== "undefined") window.localStorage.setItem("robotaxi.mapMode", nextMode);
   }
 
   function handleWheel(event) {
@@ -8502,9 +8522,16 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
     <section className="map-page-new">
       <div ref={stageRef} className="map-stage" data-zoom-band={zoomBand}>
         <div className="map-floating-actions">
-          <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeZoom(viewport.zoom + 0.2)}>+</Button>
-          <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeZoom(viewport.zoom - 0.2)}>−</Button>
-          <Button size="small" aria-label="复位地图" title="复位" onClick={resetViewport}>⌖</Button>
+          <Segmented
+            className="map-mode-switch"
+            size="small"
+            value={mapMode}
+            options={[{ label: "地理", value: "geospatial" }, { label: "网格", value: "simulation" }]}
+            onChange={changeMapMode}
+          />
+          {mapMode === "simulation" && <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeZoom(viewport.zoom + 0.2)}>+</Button>}
+          {mapMode === "simulation" && <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeZoom(viewport.zoom - 0.2)}>−</Button>}
+          {mapMode === "simulation" && <Button size="small" aria-label="复位地图" title="复位" onClick={resetViewport}>⌖</Button>}
           <Button size="small" aria-label="地图图层" title="图层" onClick={() => setLayersOpen((current) => !current)}>▤</Button>
         </div>
         {layersOpen && (
@@ -8514,7 +8541,17 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
             ))}
           </div>
         )}
-        <svg
+        {mapMode === "geospatial" ? (
+          <GeospatialMapCanvas
+            scene={geospatialScene}
+            data={data}
+            selected={selected}
+            compact={compactMapViewport}
+            mobileLayout={mobileLayout}
+            onSelect={onSelect}
+            onClear={onClear}
+          />
+        ) : <svg
           className="zone-canvas-new"
           viewBox={`${camera.x} ${camera.y} ${camera.width} ${camera.height}`}
           preserveAspectRatio="none"
@@ -8628,7 +8665,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
               data-active={selected?.type === "map" && selected?.id === map.map_id}
             />
           </g>
-        </svg>
+        </svg>}
         {hoverPresentation && (
           <div className={hovered.touch ? "map-hover-card touch" : "map-hover-card"} style={{ left: hovered.x, top: hovered.y }} role="status">
             <strong>{hoverPresentation.title}</strong>
@@ -8657,6 +8694,117 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
       </div>
     </section>
   );
+}
+
+function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onSelect, onClear }) {
+  const containerRef = useRef(null);
+  const adapterRef = useRef(null);
+  const [hovered, setHovered] = useState(null);
+  const [mapStatus, setMapStatus] = useState({ status: "LOADING", message: "正在加载地理底图" });
+  const hoverPresentation = hovered
+    ? mapSceneService.getMapObjectPresentation(hovered.type, hovered.id, data)
+    : null;
+
+  useEffect(() => {
+    if (!containerRef.current) return undefined;
+    try {
+      adapterRef.current = geospatialMapAdapter.createGeospatialMapAdapter({
+        container: containerRef.current,
+        scene,
+        selected,
+        compact,
+        onStatusChange: setMapStatus,
+        onHover: (properties, point) => setHovered((current) => current?.pinned ? current : createGeospatialHover(properties, point, containerRef.current, false)),
+        onHoverEnd: () => setHovered((current) => current?.pinned ? current : null),
+        onSelect: (properties, point) => {
+          const nextHover = createGeospatialHover(properties, point, containerRef.current, true);
+          if (mobileLayout) {
+            setHovered((current) => {
+              if (current?.touch && current.type === nextHover.type && current.id === nextHover.id) {
+                onSelect(nextHover.type, nextHover.id);
+                return null;
+              }
+              return { ...nextHover, touch: true, pinned: false };
+            });
+            return;
+          }
+          setHovered(nextHover);
+          onSelect(nextHover.type, nextHover.id);
+        },
+        onBlankClick: () => {
+          setHovered(null);
+          onClear?.();
+        },
+      });
+      setMapStatus({ status: "READY", message: "" });
+    } catch (error) {
+      setMapStatus({ status: "UNAVAILABLE", message: error.message || "地图引擎不可用" });
+    }
+    return () => {
+      adapterRef.current?.destroy();
+      adapterRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    adapterRef.current?.updateScene(scene);
+  }, [scene]);
+
+  useEffect(() => {
+    adapterRef.current?.updateSelection(selected);
+  }, [selected]);
+
+  return (
+    <div className="geospatial-map-shell">
+      <div ref={containerRef} className="geospatial-map-canvas" role="img" aria-label="Robotaxi 真实地理空间运营地图" />
+      {mapStatus.status === "UNAVAILABLE" && (
+        <div className="geospatial-map-unavailable" role="status">
+          <strong>地理地图暂不可用</strong>
+          <span>{mapStatus.message}</span>
+        </div>
+      )}
+      {mapStatus.status === "FALLBACK" && <span className="geospatial-map-status">底图降级 · 运营对象仍可用</span>}
+      <span className="geospatial-map-attribution">{scene.dataset.data_attribution}</span>
+      {hoverPresentation && (
+        <div className={hovered.touch ? "map-hover-card touch" : "map-hover-card"} style={{ left: hovered.x, top: hovered.y }} role="status">
+          <strong>{hoverPresentation.title}</strong>
+          {hoverPresentation.subtitle && <span>{getDisplayValue(hoverPresentation.subtitle)}</span>}
+          <dl>
+            {hoverPresentation.fields.map(({ field, value }) => (
+              <div key={field}><dt>{getFieldLabel(field)}</dt><dd>{getFieldDisplayValue(field, value, {})}</dd></div>
+            ))}
+          </dl>
+          {hovered.touch && (
+            <Button
+              className="map-hover-detail-action"
+              type="text"
+              size="small"
+              onClick={() => {
+                onSelect(hovered.type, hovered.id);
+                setHovered(null);
+              }}
+            >
+              查看详情
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function createGeospatialHover(properties, point, container, pinned) {
+  const rect = container?.getBoundingClientRect();
+  const width = rect?.width || 320;
+  const height = rect?.height || 480;
+  const cardWidth = Math.min(260, Math.max(210, width - 16));
+  return {
+    type: properties.object_type,
+    id: properties.object_id,
+    x: Math.max(8, Math.min(Number(point?.x || 0) + 12, width - cardWidth - 8)),
+    y: Math.max(8, Math.min(Number(point?.y || 0) + 12, height - 180)),
+    pinned,
+  };
 }
 
 function MapAnchorLabel({ className, x, y, scale, label }) {
@@ -10983,6 +11131,9 @@ async function bootstrap() {
 		    responsiveViewportModule,
 		    spatialCatalogServiceModule,
 		    mapSceneServiceModule,
+		    geospatialCatalogServiceModule,
+		    geospatialMapAdapterModule,
+		    geospatialReferenceDataModule,
 		    pageContextServiceModule,
 		    dataChartServiceModule,
 		    metricObjectPresentationServiceModule,
@@ -11062,6 +11213,9 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
+		    import("./services/geospatialCatalogService.js?v=20260721-v049-0-0"),
+		    import("./ui/geospatialMapAdapter.js?v=20260721-v049-0-0"),
+		    import("./data/geospatialReferenceData.js?v=20260721-v049-0-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
         import("./ui/dataChartService.js?v=20260717-v047-1-0"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),
@@ -11147,6 +11301,9 @@ async function bootstrap() {
 		  responsiveViewport = responsiveViewportModule;
 		  spatialCatalogService = spatialCatalogServiceModule;
 		  mapSceneService = mapSceneServiceModule;
+		  geospatialCatalogService = geospatialCatalogServiceModule;
+		  geospatialMapAdapter = geospatialMapAdapterModule;
+		  geospatialReferenceData = geospatialReferenceDataModule;
 		  pageContextService = pageContextServiceModule;
 		  dataChartService = dataChartServiceModule;
 		  metricObjectPresentationService = metricObjectPresentationServiceModule;

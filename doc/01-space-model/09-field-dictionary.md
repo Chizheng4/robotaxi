@@ -3,7 +3,8 @@
 空间模型字段字典已合并到统一字段字典：
 
 ```text
-doc/common/field-dictionary.md
+doc/rules/field-dictionary.md
+src/domain/fieldDictionary.js
 ```
 
 后续不再在空间模型目录下维护独立字段字典。
@@ -13,7 +14,7 @@ doc/common/field-dictionary.md
 新增或修改 Map、Cell、Road、RoadNode、RoadSegment、Place、ServiceArea、Zone、Route 等相关字段时，应同步更新：
 
 1. 对应业务对象文档；
-2. `doc/common/field-dictionary.md`；
-3. 初始化数据；
-4. 校验规则；
-5. 前端字段映射。
+2. `doc/rules/field-dictionary.md`；
+3. `src/domain/fieldDictionary.js`；
+4. 初始化或迁移数据；
+5. 服务层和展示合同校验。

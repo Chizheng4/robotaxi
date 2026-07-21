@@ -13,10 +13,11 @@ Codex 应基于以下文档理解对象定义：
 03-roadnode.md
 04-roadsegment.md
 05-place.md
-06-servicearea.md
-07-zone.md
 09-field-dictionary.md
+11-multi-zone-map-scene-design.md
 ```
+
+ServiceArea 与 Zone 的对象边界以 `00-space-model-overview.md` 为准，多 Zone 初始化关系以 `11-multi-zone-map-scene-design.md` 为准。
 
 本文档只描述初始化目标、空间布局、对象数量、生成规则和校验规则。
 
@@ -99,14 +100,18 @@ Zone
 ```json
 {
   "map_id": "M-001",
-  "map_name": "20台Robotaxi最小运营模拟地图",
-  "map_width_m": 2000,
+  "map_name": "双区域 Robotaxi 运营网络地图",
+  "map_width_m": 4200,
   "map_height_m": 2000,
   "cell_size_m": 50,
-  "grid_cols": 40,
+  "grid_cols": 84,
   "grid_rows": 40,
-  "total_cells": 1600,
-  "coordinate_type": "SIMULATION_GRID"
+  "total_cells": 3360,
+  "coordinate_type": "SIMULATION_GRID",
+  "spatial_mode": "SIMULATION_GRID",
+  "coordinate_reference_system": "SIMULATION_GRID",
+  "map_dataset_id": "MAP-DATASET-GZ-DEMO-001",
+  "map_dataset_version": "2026.07.21-1"
 }
 ```
 
@@ -114,12 +119,12 @@ Zone
 
 ## 5. Cell 初始化规则
 
-生成 40 × 40 共 1600 个 Cell。
+生成 40 × 84 共 3360 个 Cell。真实地理模式通过版本化地图数据集把这些既有 Cell 投影到 WGS84，经纬度只属于地理投影，不改写模拟 Cell 的行列事实。
 
 ```text
 cell_id = C-row-col
 row = 0 ~ 39
-col = 0 ~ 39
+col = 0 ~ 83
 ```
 
 初始全部 Cell 设为：

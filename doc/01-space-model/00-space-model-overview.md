@@ -27,7 +27,14 @@ Map
 └── Zone
 ```
 
-目标是在不依赖真实地图的前提下，构建一个可支撑 Robotaxi 运营模拟的空间基础模型。
+当前实现以不依赖真实地图的模拟网格为稳定运行基础，并规划通过双空间模式增加真实地理坐标、真实道路网络和可治理几何。真实地图是同一空间业务对象的另一种投影与路由能力，不替代现有 Cell 模拟空间，也不形成第二套业务对象。
+
+真实地理空间升级的正式方案见：
+
+```text
+12-real-geospatial-operating-map-design.md
+../common/current-iteration/major/v049-real-geospatial-operating-map-plan.md
+```
 
 字段英文名、中文名和前端显示规则统一维护在：
 

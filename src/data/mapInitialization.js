@@ -42,6 +42,10 @@ export function initializeMapSpace() {
     grid_rows: GRID_ROWS,
     total_cells: GRID_ROWS * GRID_COLS,
     coordinate_type: "SIMULATION_GRID",
+    spatial_mode: "SIMULATION_GRID",
+    coordinate_reference_system: "SIMULATION_GRID",
+    map_dataset_id: "MAP-DATASET-GZ-DEMO-001",
+    map_dataset_version: "2026.07.21-1",
   });
 
   const cells = createCells(map);

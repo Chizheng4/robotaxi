@@ -114,6 +114,11 @@ node --check scripts/verify-v047-7-production-exception-closure.mjs
 node --check src/domain/decisionExplanationContract.js
 node --check src/domain/calculationModelRegistry.js
 node --check src/services/spatialCatalogService.js
+node --check src/domain/geospatialTypes.js
+node --check src/data/geospatialReferenceData.js
+node --check src/services/geospatialCatalogService.js
+node --check src/ui/geospatialMapAdapter.js
+node --check scripts/verify-v049-geospatial-map.mjs
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
 node --check src/data/simulationRunBusinessScope.js
@@ -211,6 +216,7 @@ node scripts/verify-v047-5-decision-explanation-architecture.mjs
 node scripts/verify-v047-3-supply-position-tracking.mjs
 node scripts/verify-v047-6-production-supply-cost-loop.mjs
 node scripts/verify-v047-7-production-exception-closure.mjs
+node scripts/verify-v049-geospatial-map.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

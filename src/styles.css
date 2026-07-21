@@ -1167,6 +1167,112 @@
   .map-stage[data-zoom-band="detail"] .map-place-anchor { display: none !important; }
 }
 
+/* v049.0 unified geospatial map adapter */
+.geospatial-map-shell,
+.geospatial-map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.geospatial-map-shell {
+  overflow: hidden;
+  background: #eef3f6;
+}
+
+.geospatial-map-canvas {
+  font-family: var(--font-family);
+}
+
+.geospatial-map-canvas .maplibregl-canvas {
+  outline: 0;
+}
+
+.geospatial-map-canvas .maplibregl-ctrl-group {
+  overflow: hidden;
+  border: 1px solid rgba(201, 214, 226, 0.9);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(39, 61, 82, 0.08);
+}
+
+.geospatial-map-canvas .maplibregl-ctrl button {
+  width: 30px;
+  height: 30px;
+}
+
+.geospatial-map-canvas .maplibregl-ctrl-attrib {
+  display: none;
+}
+
+.map-mode-switch {
+  margin-right: 2px;
+  background: rgba(232, 239, 245, 0.9);
+}
+
+.map-mode-switch .ant-segmented-item-label {
+  min-height: 26px;
+  padding-inline: 8px;
+  line-height: 26px;
+  font-size: var(--font-xs);
+}
+
+.geospatial-map-attribution,
+.geospatial-map-status {
+  position: absolute;
+  z-index: 3;
+  bottom: 7px;
+  left: 8px;
+  max-width: calc(100% - 88px);
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.3;
+  backdrop-filter: blur(8px);
+}
+
+.geospatial-map-status {
+  bottom: 32px;
+  color: var(--text-secondary);
+}
+
+.geospatial-map-unavailable {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  gap: 4px;
+  width: min(300px, calc(100% - 32px));
+  padding: 14px 16px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text-secondary);
+  text-align: center;
+  box-shadow: 0 8px 22px rgba(39, 61, 82, 0.08);
+}
+
+.geospatial-map-unavailable strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 560px) {
+  .map-floating-actions {
+    align-items: center;
+  }
+
+  .map-mode-switch .ant-segmented-item-label {
+    padding-inline: 6px;
+  }
+
+  .geospatial-map-attribution {
+    max-width: calc(100% - 76px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 @media (min-width: 768px) {
   .console-workbench,
   .console-workbench.detail-collapsed {

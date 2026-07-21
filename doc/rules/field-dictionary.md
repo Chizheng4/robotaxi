@@ -663,6 +663,16 @@
 |grid_rows|网格行数|持久化字段|地图纵向 Cell 数量|
 |total_cells|网格总数|持久化字段|Cell 总数|
 |coordinate_type|坐标类型|持久化字段|模拟地图使用的坐标体系|
+|spatial_mode|空间模式|持久化字段|地图使用模拟网格或真实地理空间模式|
+|coordinate_reference_system|坐标参考系|持久化字段|地图空间事实使用的坐标参考系；模拟网格不冒充经纬度|
+|map_dataset_id|地图数据集编号|持久化字段|地图几何、道路和地理投影共同引用的数据集编号|
+|map_dataset_version|地图数据集版本|持久化字段|不可变地图数据集版本，用于路径和历史事实追溯|
+|center_longitude|中心点经度|数据集字段|真实地理地图默认定位中心点经度|
+|center_latitude|中心点纬度|数据集字段|真实地理地图默认定位中心点纬度|
+|basemap_provider|底图来源|数据集字段|可替换底图 Provider，不作为业务空间事实|
+|basemap_style_url|底图样式地址|数据集字段|底图样式资源地址；不可用时允许降级|
+|data_attribution|地图数据归因|数据集字段|地图数据来源和许可归因文案|
+|dataset_status|数据集状态|数据集字段|地图数据集当前是否可用于投影|
 
 ---
 
