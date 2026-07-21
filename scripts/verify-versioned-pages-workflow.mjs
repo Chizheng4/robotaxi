@@ -8,7 +8,7 @@ assert(workflow.includes("github.event.head_commit.message"), "Actions 运行名
 assert(/push:\s*\n\s+branches:\s*\n\s+- main/.test(workflow), "Pages 必须由受保护的 main 环境触发");
 assert(workflow.includes("verify-release-version.mjs"), "Pages 构建前必须校验标签与 VERSION.md");
 assert(workflow.includes("git fetch --force --tags origin"), "Pages 校验前必须显式同步版本标签");
-assert(workflow.includes('git rev-parse "$RELEASE_VERSION^{}"'), "Pages 必须校验标签指向当前提交");
+assert(workflow.includes('git rev-parse "$RELEASE_VERSION^{commit}"'), "Pages 必须兼容轻量与附注标签并校验其指向当前提交");
 assert(!workflow.includes("git log -1 --format=%s"), "Pages 发布不得依赖提交说明格式");
 assert(publishCommand.includes("git -c http.version=HTTP/1.1 push"), "双击发布命令必须规避不稳定的 HTTP/2 推送链路");
 assert(publishCommand.includes("DEFAULT_GITHUB_PROXY=\"http://127.0.0.1:7897\""), "双击发布命令必须自动探测本地 GitHub 代理");

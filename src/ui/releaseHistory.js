@@ -1,6 +1,21 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v048.0.1",
+    "title": "修复 GitHub Pages 发布工作流对轻量 Git 标签的版本校验失败",
+    "changes": [
+      "发布工作流改用 `^{commit}` 解析版本标签，同时兼容项目现有的轻量标签和附注标签。",
+      "保持标签必须指向当前发布提交的严格校验，不放宽 VERSION、标签与代码提交的一致性要求。",
+      "更新版本化发布工作流门禁，后续若重新引入只支持单一标签类型的校验将在提交前失败。"
+    ],
+    "audienceTitle": "发布标签兼容修复",
+    "audienceChanges": [
+      "修复版本已正确推送但 GitHub Actions 在“Verify release version”阶段失败的问题。",
+      "正式发布继续使用原有 publish 指令，无需改变操作流程。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v048.0.0",
     "title": "建立公开演示访问记录服务及 EdgeOne 接入基础，在 KV 审核期间仍可完成本地全流程验证",
     "changes": [
