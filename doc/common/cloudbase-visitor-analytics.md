@@ -2,7 +2,7 @@
 
 ## 1. 目标与边界
 
-公开网站继续使用 `https://chizheng4.github.io/robotaxi/`。GitHub Pages 负责静态网站，腾讯云 CloudBase 仅提供匿名登录、云函数和访问记录存储，不承载 Robotaxi 业务数据。
+公开网站继续使用 `https://chizheng4.github.io/robotaxi/`。GitHub Pages 负责静态网站，腾讯云 CloudBase 仅提供 HTTP 云函数和访问记录存储，不承载 Robotaxi 业务数据。
 
 - 输入“金星”并成功进入平台后，才创建一条访问记录。
 - 输入“访问”时不计入普通访问；密码验证成功后只显示访问记录。
@@ -18,29 +18,34 @@
 
 数据库集合固定为 `visitor_sessions`。浏览器不能直接读写集合，全部操作必须经过 `visitorAnalytics` 云函数。
 
-## 3. 控制台配置
+## 3. 部署配置
 
 环境 ID：`robotaxi-visit-records-d8e34876e`。
 
-1. 在“登录授权”启用匿名登录。
-2. 在 Web 安全域名中加入 `chizheng4.github.io`。
-3. 创建集合 `visitor_sessions`，安全规则设为禁止客户端直接读写。
-4. 创建 Node.js 18 或更高版本的云函数 `visitorAnalytics`，上传仓库目录 `cloudfunctions/visitorAnalytics`，部署时安装固定版本的 CloudBase JS SDK 依赖。
-5. 为云函数配置环境变量：
+当前免费体验版不能增加 GitHub Pages 安全域名，因此不使用 Web SDK 匿名登录。正式链路固定为：GitHub Pages `fetch` → CloudBase 默认 HTTP 域名 → `visitorAnalytics` HTTP 云函数 → `visitor_sessions`。
+
+1. 创建集合 `visitor_sessions`，客户端权限保持关闭。
+2. 使用 CloudBase CLI 将 `cloudfunctions/visitorAnalytics` 部署为 Node.js 20 HTTP 云函数，并绑定默认域名路径。
+3. HTTP 网关关闭安全域名跨域校验，由云函数只放行 GitHub Pages 正式域名和本地验证域名。
+4. 为云函数配置环境变量：
 
 |变量名|要求|
 |---|---|
 |`VISIT_ADMIN_PASSWORD`|只在控制台设置，不写入代码或文档|
 |`VISIT_TOKEN_SECRET`|至少 24 位随机字符串，只在控制台设置|
 
-6. 云函数调用权限允许已完成匿名登录的 Web 用户调用。
-7. 部署后使用 GitHub Pages 正式地址分别验证“金星”和“访问”入口。
+5. 将生成的 HTTPS 地址写入 `index.html` 的 `robotaxi-visit-api-base` 元数据。
+6. 部署后使用 GitHub Pages 正式地址分别验证“金星”和“访问”入口。
+
+当前已部署 HTTP 地址：`https://robotaxi-visit-records-d8e34876e.service.tcloudbase.com/visitor-analytics`。云函数、集合、跨域、密码验证、写入和查询已通过真实 API 验证，验收产生的临时记录已清理。
+
+查看密码由 `visitorAnalytics` 云函数的环境变量 `VISIT_ADMIN_PASSWORD` 唯一控制。修改时进入 CloudBase 环境的云函数列表，打开 `visitorAnalytics` 的函数配置并更新该环境变量，然后重新部署函数；密码不得写入仓库、网页或数据库。
 
 ## 4. 本地与线上行为
 
-- `localhost` 或 `127.0.0.1` 且未配置环境 ID 时使用本机预览记录。
-- 当前正式构建已配置 CloudBase 环境 ID，因此正式网站只读写 CloudBase。
-- 本地调试正式 CloudBase 时也必须满足安全域名配置；CloudBase 异常只显示访问记录服务不可用，不影响平台。
+- `localhost` 或 `127.0.0.1` 且未配置 HTTPS API 地址时使用本机预览记录。
+- 配置 HTTPS API 地址后，正式网站只通过 HTTP 云函数读写 CloudBase。
+- CloudBase 异常只显示访问记录服务不可用，不影响平台。
 
 ## 5. 验收
 

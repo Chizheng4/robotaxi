@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.2.2",
+    "title": "完成 CloudBase 访问记录公网接入，并修复 iOS 与微信内置浏览器中访问密码输入导致页面缩放和弹框溢出的问题",
+    "changes": [
+      "CloudBase 访问记录改为 GitHub Pages 直接调用 HTTP 云函数，完成集合、跨域、密码验证、真实写入和查询验证，不再依赖免费套餐不支持的 Web 安全域名。",
+      "新增可复用的移动端稳定输入弹框规范：输入字号不低于 16px、弹框宽度受可视视口约束、聚焦时不主动滚动页面，避免 iOS 自动放大和横向偏移。",
+      "关闭访问密码弹框和验证成功前先释放输入焦点，使键盘收起后登录页恢复稳定位置。",
+      "更新访问记录部署文档与验证合同，CloudBase 异常仍不影响普通平台登录。"
+    ],
+    "audienceTitle": "访问记录与手机登录稳定性",
+    "audienceChanges": [
+      "输入“访问”后，手机端密码弹框保持在屏幕内，输入和关闭时不再把登录页持续放大。",
+      "访问记录已经使用 CloudBase 保存，普通访客仍只需输入“金星”进入平台。",
+      "查看密码保存在 CloudBase 云函数环境变量中，可以独立修改，不会写入网站代码。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.2.1",
     "title": "把公开演示访问记录从受限的 EdgeOne 方案迁移到 CloudBase 免费后端，保持 GitHub Pages 正式域名和现有平台业务不变",
     "changes": [

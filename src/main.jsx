@@ -1312,7 +1312,7 @@ function PlatformLogin({ onEnter, onVisitorRecordsAuthenticated }) {
     setVisitorPasswordError("");
     try {
       const result = await visitorAnalyticsService.authenticateVisitorRecords(visitorPassword);
-      setVisitorPasswordOpen(false);
+      closeVisitorPassword();
       onVisitorRecordsAuthenticated(result.token);
     } catch (error) {
       setVisitorPasswordError(error.message || "访问记录验证失败");
@@ -1324,6 +1324,12 @@ function PlatformLogin({ onEnter, onVisitorRecordsAuthenticated }) {
   function submitLogin(event) {
     event.preventDefault();
     attemptLogin(userName);
+  }
+
+  function closeVisitorPassword() {
+    const activeElement = document.activeElement;
+    if (activeElement?.closest?.(".viewport-stable-dialog")) activeElement.blur();
+    setVisitorPasswordOpen(false);
   }
 
   return (
@@ -1361,9 +1367,10 @@ function PlatformLogin({ onEnter, onVisitorRecordsAuthenticated }) {
         open={visitorPasswordOpen}
         centered
         width={360}
+        rootClassName="viewport-stable-dialog visitor-password-modal-root"
         destroyOnClose
         footer={null}
-        onCancel={() => setVisitorPasswordOpen(false)}
+        onCancel={closeVisitorPassword}
       >
         <form className="visitor-password-form" onSubmit={submitVisitorPassword}>
           <label htmlFor="visitor-record-password">访问密码</label>

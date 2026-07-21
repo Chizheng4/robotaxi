@@ -1,4 +1,4 @@
-const cloudbase = require("@cloudbase/js-sdk");
+const cloudbase = require("@cloudbase/node-sdk");
 const crypto = require("node:crypto");
 
 const app = cloudbase.init({ env: cloudbase.SYMBOL_CURRENT_ENV });
@@ -8,8 +8,37 @@ const collection = db.collection("visitor_sessions");
 const allowedPeriods = new Map([["1D", 1], ["7D", 7], ["30D", 30]]);
 const allowedActions = new Set(["START_VISIT", "HEARTBEAT_VISIT", "END_VISIT", "AUTHENTICATE", "LIST_RECORDS"]);
 const tokenLifetimeSeconds = 15 * 60;
+const allowedOrigins = new Set([
+  "https://chizheng4.github.io",
+  "http://127.0.0.1:4173",
+  "http://127.0.0.1:8765",
+  "http://localhost:4173",
+  "http://localhost:8765",
+]);
 
 exports.main = async (event = {}) => {
+  if (isHttpEvent(event)) return handleHttpRequest(event);
+  return executeAction(event);
+};
+
+async function handleHttpRequest(event) {
+  const origin = String(event.headers?.origin || event.headers?.Origin || "");
+  const corsHeaders = createCorsHeaders(origin);
+  if (origin && !allowedOrigins.has(origin)) return httpResponse(403, { succeeded: false, code: "ORIGIN_NOT_ALLOWED", message: "当前网站来源无权访问" }, corsHeaders);
+  if (String(event.httpMethod || "").toUpperCase() === "OPTIONS") return { statusCode: 204, headers: corsHeaders, body: "" };
+  if (String(event.httpMethod || "").toUpperCase() !== "POST") return httpResponse(405, { succeeded: false, code: "METHOD_NOT_ALLOWED", message: "仅支持 POST 请求" }, corsHeaders);
+  let request;
+  try {
+    const body = event.isBase64Encoded ? Buffer.from(event.body || "", "base64").toString("utf8") : event.body;
+    request = typeof body === "string" ? JSON.parse(body || "{}") : (body || {});
+  } catch {
+    return httpResponse(400, { succeeded: false, code: "INVALID_JSON", message: "请求内容格式无效" }, corsHeaders);
+  }
+  const result = await executeAction(request);
+  return httpResponse(result.succeeded ? 200 : 400, result, corsHeaders);
+}
+
+async function executeAction(event = {}) {
   try {
     const action = String(event.action || "");
     if (!allowedActions.has(action)) throw new ServiceError("不支持的访问记录操作", "INVALID_ACTION");
@@ -31,7 +60,27 @@ exports.main = async (event = {}) => {
       message: error instanceof ServiceError ? error.message : "访问记录服务暂时不可用",
     };
   }
-};
+}
+
+function isHttpEvent(event) {
+  return Boolean(event && (event.httpMethod || event.requestContext || typeof event.body === "string"));
+}
+
+function createCorsHeaders(origin) {
+  const headers = {
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "Origin",
+  };
+  if (allowedOrigins.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+}
+
+function httpResponse(statusCode, payload, headers) {
+  return { statusCode, headers, body: JSON.stringify(payload) };
+}
 
 async function startVisit(payload) {
   const visitId = requireId(payload.visit_id, "访问编号无效");

@@ -5,14 +5,13 @@ const localPreviewPassword = "金星";
 const heartbeatIntervalMs = 300_000;
 let localRecordsToken = null;
 let tracker = null;
-let cloudBasePromise = null;
 
-export function getCloudBaseEnv(documentRef = globalThis.document) {
-  return String(documentRef?.querySelector?.('meta[name="robotaxi-cloudbase-env"]')?.content || "").trim();
+export function getVisitorAnalyticsApi(documentRef = globalThis.document) {
+  return String(documentRef?.querySelector?.('meta[name="robotaxi-visit-api-base"]')?.content || "").trim();
 }
 
 export function isConfigured(documentRef = globalThis.document) {
-  return Boolean(getCloudBaseEnv(documentRef));
+  return /^https:\/\//.test(getVisitorAnalyticsApi(documentRef));
 }
 
 export function getStorageMode(documentRef = globalThis.document, locationRef = globalThis.location) {
@@ -165,39 +164,19 @@ function createVisitPayload(session, version) {
 }
 
 async function callCloudBase(action, payload) {
-  const app = await getCloudBaseApp();
-  const response = await app.callFunction({ name: "visitorAnalytics", data: { action, payload } });
-  const result = response?.result ?? response;
+  const api = getVisitorAnalyticsApi();
+  if (!api) throw new Error("访问记录服务尚未完成 CloudBase 配置");
+  const response = await fetch(api, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, payload }),
+    cache: "no-store",
+    keepalive: action === "END_VISIT",
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok && !result) throw new Error("访问记录服务暂时不可用");
   if (result?.succeeded === false) throw new Error(result.message || "访问记录服务暂时不可用");
   return result?.data ?? result;
-}
-
-async function getCloudBaseApp() {
-  if (!cloudBasePromise) {
-    cloudBasePromise = import("../../vendor/cloudbase.esm.js").then(async ({ default: cloudbase }) => {
-      const env = getCloudBaseEnv();
-      if (!env) throw new Error("访问记录服务尚未完成 CloudBase 配置");
-      const app = cloudbase.init({ env });
-      const auth = app.auth();
-      const state = await auth.getLoginState?.();
-      if (!state) {
-        if (typeof auth.signInAnonymously === "function") await auth.signInAnonymously();
-        else await auth.anonymousAuthProvider().signIn();
-      }
-      return app;
-    }).catch((error) => {
-      cloudBasePromise = null;
-      throw new Error(normalizeCloudBaseError(error));
-    });
-  }
-  return cloudBasePromise;
-}
-
-function normalizeCloudBaseError(error) {
-  const message = String(error?.message || "");
-  if (/domain|source|CORS|illegal/i.test(message)) return "当前网站域名尚未加入 CloudBase 安全域名";
-  if (/anonymous|auth/i.test(message)) return "CloudBase 匿名登录尚未启用";
-  return "访问记录服务暂时不可用";
 }
 
 function detectBrowserType(userAgent = "") {

@@ -74,7 +74,7 @@ export function attachResponsiveViewport(windowRef = window, documentRef = docum
 
     if (snapshot.keyboardOpen && !keyboardWasOpen) {
       const focusedElement = documentRef.activeElement;
-      if (!focusedElement?.closest?.(".platform-login-panel")) {
+      if (!focusedElement?.closest?.(".platform-login-panel, .viewport-stable-dialog")) {
         focusedElement?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
       }
     }
