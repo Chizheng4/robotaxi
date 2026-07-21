@@ -81,6 +81,7 @@ node --check src/services/operatingModelService.js
 node --check src/services/publicDemoBootstrapService.js
 node scripts/verify-v045-1-page-presentation.mjs
 node scripts/verify-v048-visitor-analytics.mjs
+node scripts/verify-v049-2-1-cloudbase-visitor-analytics.mjs
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js
 node --check src/domain/fieldDictionary.js

@@ -3,7 +3,7 @@
 ## 状态
 
 - 状态：执行中。
-- 版本边界：`v048` 工程阶段已经完成；EdgeOne KV 审核和公网绑定保留为独立外部待办，不阻塞本版本工程实施。
+- 版本边界：`v048` 工程阶段已经完成；访问记录已在 `v049.2.1` 迁移到 CloudBase，控制台部署和公网验收保留为独立外部待办，不阻塞地图工程实施。
 - 正式方案：`doc/01-space-model/12-real-geospatial-operating-map-design.md`。
 - 当前中版本：`v049.2.0` 双空间场景隔离，详见 `doc/common/current-iteration/major/v049.2-dual-spatial-scenario-isolation-plan.md`。
 

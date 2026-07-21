@@ -3140,16 +3140,17 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |字段名|中文名|字段性质|业务含义|
 |---|---|---|---|
 |visit_id|访问编号|平台运维字段|一次浏览器标签页访问会话的唯一编号|
-|visitor_identifier|匿名访客|平台运维字段|由服务端对 IP 与浏览器特征进行不可逆摘要后的短标识|
+|visitor_identifier|匿名访客|平台运维字段|由服务端对浏览器本地随机标识进行不可逆摘要后的短标识，不保存原始标识|
 |visit_started_at|开始访问时间|平台运维字段|本次访问开始时间|
 |visit_last_active_at|最后活跃时间|平台运维字段|最近一次可见页面活跃时间|
 |visit_ended_at|结束访问时间|平台运维字段|浏览器上报的访问结束时间，可为空|
 |active_duration_seconds|有效使用时长（秒）|平台运维字段|页面可见期间累计的近似活跃时长|
 |device_type|设备类型|平台运维字段|手机、电脑或未知设备|
-|page_path|访问页面|平台运维字段|访问时的站内路径，不包含输入内容|
+|browser_type|浏览器类型|平台运维字段|微信、Edge、Chrome、Safari 或其他浏览器|
+|page_path|访问页面|平台运维兼容字段|旧版记录的站内路径；CloudBase 版本不再采集|
 |referrer_type|访问来源|平台运维字段|直接访问、GitHub、微信或其他外部引导|
 |timezone|时区|平台运维字段|浏览器报告的时区|
-|coarse_region|粗粒度地域|平台运维字段|EdgeOne 请求头提供的国家或省级地域，不保存精确位置|
+|coarse_region|粗粒度地域|平台运维兼容字段|旧版 EdgeOne 记录可能包含的国家或省级地域；CloudBase 版本不再采集|
 |website_version|网站版本|平台运维字段|访问时公开站点显示的版本|
 |platform_entered|是否进入平台|平台运维字段|本次访问是否通过“金星”进入业务平台|
 |heartbeat_count|活跃记录次数|平台运维字段|页面可见期间成功更新活跃时长的次数|
@@ -3161,6 +3162,11 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |MOBILE|手机|
 |DESKTOP|电脑|
 |UNKNOWN_DEVICE|未知设备|
+|WECHAT_BROWSER|微信浏览器|
+|EDGE_BROWSER|Edge 浏览器|
+|CHROME_BROWSER|Chrome 浏览器|
+|SAFARI_BROWSER|Safari 浏览器|
+|OTHER_BROWSER|其他浏览器|
 |DIRECT_VISIT|直接访问|
 |GITHUB_REFERRAL|GitHub 引导|
 |WECHAT_REFERRAL|微信引导|

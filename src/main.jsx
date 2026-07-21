@@ -1443,7 +1443,7 @@ function VisitorRecordsScreen({ token, onExit }) {
                 <article key={record.visit_id}>
                   <div>
                     <strong>{new Date(record.visit_started_at).toLocaleString("zh-CN", { hour12: false })}</strong>
-                    <span>{getDisplayValue(record.device_type, "device_type")} · {record.coarse_region || "未知地域"}</span>
+                    <span>{getDisplayValue(record.device_type, "device_type")} · {getDisplayValue(record.browser_type, "browser_type")}</span>
                   </div>
                   <dl>
                     <div><dt>{getFieldLabel("visitor_identifier")}</dt><dd>{record.visitor_identifier || "-"}</dd></div>
@@ -11385,7 +11385,7 @@ async function bootstrap() {
 		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
         import("./data/spatialBusinessProfileInitialization.js?v=20260719-v047-4-1"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
-		    import("./ui/visitorAnalyticsService.js?v=20260720-v048-0-0"),
+		    import("./ui/visitorAnalyticsService.js?v=20260721-v049-2-1"),
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
