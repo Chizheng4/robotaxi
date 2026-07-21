@@ -30,6 +30,7 @@ const geometry = {
 const draft = createDraft({
   plans: [],
   dataset: GEOSPATIAL_MAP_DATASET,
+  spatialScenarioId: "SCENE-CITY-GZ-001",
   target: {
     target_object_type: "ZONE",
     target_object_id: targetZone.zone_id,
@@ -61,6 +62,7 @@ assert.deepEqual(targetZone.cell_ids, originalCellIds, "发布地理投影不应
 const invalidDraft = createDraft({
   plans,
   dataset: GEOSPATIAL_MAP_DATASET,
+  spatialScenarioId: "SCENE-CITY-GZ-001",
   target: {
     target_object_type: "PLACE",
     target_object_id: data.places[0].place_id,

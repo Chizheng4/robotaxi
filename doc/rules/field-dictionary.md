@@ -675,7 +675,26 @@
 |dataset_status|数据集状态|数据集字段|地图数据集当前是否可用于投影|
 |geographic_bounds|地理边界|数据集字段|地图数据集允许浏览与建模的经纬度边界|
 
-### 2.1 运营空间方案
+### 2.1 空间场景
+
+空间场景固定一套独立的空间事实、目录、道路、位置和路径规划能力。城市地理与网格仿真可以映射同一经营对象，但不得混用空间事实。
+
+|属性英文名|中文名|字段性质|含义|
+|---|---|---|---|
+|spatial_scenario_id|空间场景编号|持久化字段|独立空间场景唯一编号|
+|spatial_scenario_name|空间场景名称|持久化字段|面向用户的场景名称|
+|spatial_scenario_type|空间场景类型|类型字段|城市地理或网格仿真|
+|spatial_scenario_status|空间场景状态|状态字段|规划中或已启用|
+|spatial_catalog_version|空间目录版本|版本字段|场景内原生空间事实目录版本|
+|routing_provider_type|路径规划来源|能力字段|该场景可使用的道路图与路径规划来源|
+|position_provider_type|位置来源|能力字段|该场景 Robotaxi 位置事实来源|
+|business_runtime_enabled|是否支持业务运行|能力字段|订单、任务和模拟运行是否可使用该场景|
+|active_spatial_scenario_id|当前业务运行场景|运行配置|当前业务运行实际使用的空间场景编号|
+|capability_message|场景能力说明|说明字段|向用户解释当前场景已具备和尚未具备的能力|
+
+枚举：`CITY_GEOGRAPHIC` 为城市地理，`GRID_SIMULATION` 为网格仿真；`PLANNING` 为规划中，`ACTIVE` 为已启用。`UNAVAILABLE` 表示对应 Provider 尚未具备，不得通过其他场景投影伪造。
+
+### 2.2 运营空间方案
 
 运营空间方案承接地图上的绘制、校验、影响预览和发布，不直接替代 Zone、Place 或 ServiceArea 业务对象。
 
@@ -684,6 +703,7 @@
 |operating_spatial_plan_id|运营空间方案编号|持久化字段|一次运营空间建模方案的唯一编号|
 |operating_spatial_plan_name|运营空间方案名称|持久化字段|方案的用户可读名称|
 |operating_spatial_plan_status|方案状态|状态字段|草稿、已校验、已发布或已取消|
+|spatial_scenario_id|空间场景编号|关系字段|方案只在所属空间场景内校验、发布和覆盖|
 |spatial_plan_version|方案版本|持久化字段|同一目标空间调整的不可变版本|
 |spatial_plan_features|空间要素|关系字段|方案包含的 Zone、Place 或 ServiceArea 几何草稿|
 |spatial_plan_feature_id|空间要素编号|持久化字段|方案内空间要素唯一编号|

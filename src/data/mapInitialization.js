@@ -25,6 +25,7 @@ import {
   createZone,
 } from "../domain/types.js?v=20260608-v018-bfs-route-planning";
 import { ZONE1_OPS_CENTER_CELL_IDS } from "./spatialReferenceData.js?v=20260712-v042-0-5";
+import { initializeSpatialScenarios } from "./spatialScenarioInitialization.js?v=20260721-v049-2-0";
 
 const MAP_ID = "M-001";
 const CELL_SIZE_M = 50;
@@ -70,6 +71,7 @@ export function initializeMapSpace() {
 
   const zones = createZones(map, cells, roadSegments, places, serviceAreas);
   return {
+    ...initializeSpatialScenarios(),
     maps: [map],
     cells,
     roads,

@@ -71,6 +71,9 @@ let mapSceneService;
 let geospatialCatalogService;
 let geospatialMapAdapter;
 let geospatialReferenceData;
+let citySpatialCatalog;
+let spatialScenarioService;
+let spatialScenarioInitialization;
 let operatingSpatialPlanService;
 let pageContextService;
 let dataChartService;
@@ -8299,8 +8302,11 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   const compactMapViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 560px)").matches;
   const defaultViewport = { zoom: 1, panX: 0, panY: 0 };
   const [mapMode, setMapMode] = useState(() => {
-    if (typeof window === "undefined") return "geospatial";
-    return window.localStorage.getItem("robotaxi.mapMode") || "geospatial";
+    if (typeof window === "undefined") return "CITY_GEOGRAPHIC";
+    const saved = window.localStorage.getItem("robotaxi.mapMode");
+    if (saved === "geospatial") return "CITY_GEOGRAPHIC";
+    if (saved === "simulation") return "GRID_SIMULATION";
+    return saved || "CITY_GEOGRAPHIC";
   });
   const scene = useMemo(
     () => mapSceneService.createMapScene(data),
@@ -8323,13 +8329,22 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   const selectedRoute = selectedRouteId
     ? data.routes.find((route) => route.route_id === selectedRouteId)
     : null;
+  const spatialScenarioState = spatialScenarioService.normalizeSpatialScenarioState(data);
+  const cityScenario = spatialScenarioService.getCityGeographicScenario(spatialScenarioState);
+  const gridScenario = spatialScenarioService.getGridSimulationScenario(spatialScenarioState);
+  const activeBusinessScenario = spatialScenarioService.getActiveBusinessScenario(spatialScenarioState);
+  const viewScenario = mapMode === "CITY_GEOGRAPHIC" ? cityScenario : gridScenario;
+  const scenarioPresentation = spatialScenarioService.createScenarioPresentation(viewScenario, activeBusinessScenario);
+  const cityPlans = operatingSpatialPlanService.normalizePlanScenarios(
+    data.operatingSpatialPlans || [],
+    spatialScenarioInitialization.CITY_SPATIAL_SCENARIO_ID,
+  );
   const geospatialScene = useMemo(
-    () => geospatialCatalogService.createGeospatialScene({
-      ...data,
-      selectedRouteId,
-      selectedRobotaxi,
-    }, geospatialReferenceData.GEOSPATIAL_MAP_DATASET, geospatialReferenceData.GEOSPATIAL_PROJECTION_CONFIG),
-    [data.maps, data.zones, data.places, data.serviceAreas, data.roads, data.roadSegments, data.opsCenters, data.robotaxis, data.routes, data.operatingSpatialPlans, selectedRouteId],
+    () => geospatialCatalogService.createCityGeographicScene({
+      catalog: citySpatialCatalog.CITY_SPATIAL_CATALOG,
+      plans: cityPlans,
+    }, geospatialReferenceData.GEOSPATIAL_MAP_DATASET),
+    [data.operatingSpatialPlans],
   );
   const highlightedCells = new Set(selectedRoute ? routeCellIds(selectedRoute, data.roadSegments) : []);
   const highlightedRoutePoints = [...highlightedCells].map((cellId) => {
@@ -8528,13 +8543,17 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
             className="map-mode-switch"
             size="small"
             value={mapMode}
-            options={[{ label: "地理", value: "geospatial" }, { label: "网格", value: "simulation" }]}
+            options={[{ label: "城市地理", value: "CITY_GEOGRAPHIC" }, { label: "网格仿真", value: "GRID_SIMULATION" }]}
             onChange={changeMapMode}
           />
-          {mapMode === "simulation" && <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeZoom(viewport.zoom + 0.2)}>+</Button>}
-          {mapMode === "simulation" && <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeZoom(viewport.zoom - 0.2)}>−</Button>}
-          {mapMode === "simulation" && <Button size="small" aria-label="复位地图" title="复位" onClick={resetViewport}>⌖</Button>}
+          {mapMode === "GRID_SIMULATION" && <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeZoom(viewport.zoom + 0.2)}>+</Button>}
+          {mapMode === "GRID_SIMULATION" && <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeZoom(viewport.zoom - 0.2)}>−</Button>}
+          {mapMode === "GRID_SIMULATION" && <Button size="small" aria-label="复位地图" title="复位" onClick={resetViewport}>⌖</Button>}
           <Button size="small" aria-label="地图图层" title="图层" onClick={() => setLayersOpen((current) => !current)}>▤</Button>
+        </div>
+        <div className="spatial-scenario-status" role="status">
+          <strong>{scenarioPresentation.viewLabel}</strong>
+          <span>{scenarioPresentation.sameScenario ? "业务运行中" : `业务运行：${scenarioPresentation.runtimeLabel}`}</span>
         </div>
         {layersOpen && (
           <div className="map-layer-panel" role="dialog" aria-label="地图图层说明">
@@ -8543,9 +8562,11 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
             ))}
           </div>
         )}
-        {mapMode === "geospatial" ? (
+        {mapMode === "CITY_GEOGRAPHIC" ? (
           <GeospatialMapCanvas
             scene={geospatialScene}
+            spatialScenario={cityScenario}
+            plans={cityPlans}
             data={data}
             selected={selected}
             compact={compactMapViewport}
@@ -8699,7 +8720,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   );
 }
 
-function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onSelect, onClear, onSpatialPlansChange }) {
+function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, compact, mobileLayout, onSelect, onClear, onSpatialPlansChange }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
   const [hovered, setHovered] = useState(null);
@@ -8763,7 +8784,7 @@ function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onS
     adapterRef.current?.updateSelection(selected);
   }, [selected]);
 
-  const targetOptions = useMemo(() => createSpatialPlanTargetOptions(targetType, data), [targetType, data.zones, data.places, data.serviceAreas]);
+  const targetOptions = useMemo(() => createSpatialPlanTargetOptions(targetType, scene), [targetType, scene]);
 
   function beginDrawing() {
     const selectedTarget = targetOptions.find((option) => option.value === targetId);
@@ -8776,8 +8797,9 @@ function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onS
     try {
       adapterRef.current?.startPolygonDrawing((geometry) => {
         const plan = operatingSpatialPlanService.createDraft({
-          plans: data.operatingSpatialPlans || [],
+          plans,
           dataset: scene.dataset,
+          spatialScenarioId: spatialScenario.spatial_scenario_id,
           target: {
             target_object_type: targetType,
             target_object_id: targetId === "__NEW__" ? null : targetId,
@@ -8786,7 +8808,7 @@ function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onS
           geometry,
         });
         setActivePlan(plan);
-        onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(data.operatingSpatialPlans || [], plan));
+        onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, plan));
         setEditorNotice("草稿已形成，请校验空间关系");
       });
     } catch (error) {
@@ -8798,17 +8820,17 @@ function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onS
     if (!activePlan) return;
     const validated = operatingSpatialPlanService.validateDraft(activePlan, {
       dataset: scene.dataset,
-      catalog: data,
+      catalog: scene,
     });
     setActivePlan(validated);
-    onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(data.operatingSpatialPlans || [], validated));
+    onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, validated));
     setEditorNotice(validated.validation_issues.length ? validated.validation_issues.join("；") : "校验通过，可以发布地理投影版本");
   }
 
   function publishPlan() {
     if (!activePlan) return;
     try {
-      const result = operatingSpatialPlanService.publishValidatedPlan(activePlan, { plans: data.operatingSpatialPlans || [] });
+      const result = operatingSpatialPlanService.publishValidatedPlan(activePlan, { plans });
       setActivePlan(result.published);
       onSpatialPlansChange?.(result.plans);
       adapterRef.current?.stopDrawing();
@@ -8822,7 +8844,7 @@ function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onS
     if (!activePlan || activePlan.operating_spatial_plan_status === "PUBLISHED") return;
     try {
       const cancelled = operatingSpatialPlanService.cancelDraft(activePlan);
-      onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(data.operatingSpatialPlans || [], cancelled));
+      onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, cancelled));
       adapterRef.current?.clearDrawing();
       setActivePlan(null);
       setEditorNotice("草稿已取消，已发布空间和模拟运行未改变");
@@ -8888,6 +8910,7 @@ function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onS
       {mapStatus.status === "FALLBACK" && <span className="geospatial-map-status">底图降级 · 运营对象仍可用</span>}
       {mapStatus.status === "INFO" && <span className="geospatial-map-status">{mapStatus.message}</span>}
       <span className="geospatial-map-attribution">{scene.dataset.data_attribution}</span>
+      <span className="geospatial-map-capability">{spatialScenario.capability_message}</span>
       {hoverPresentation && (
         <div className={hovered.touch ? "map-hover-card touch" : "map-hover-card"} style={{ left: hovered.x, top: hovered.y }} role="status">
           <strong>{hoverPresentation.title}</strong>
@@ -8916,15 +8939,17 @@ function GeospatialMapCanvas({ scene, data, selected, compact, mobileLayout, onS
   );
 }
 
-function createSpatialPlanTargetOptions(targetType, data) {
+function createSpatialPlanTargetOptions(targetType, scene) {
   const config = {
-    ZONE: [data.zones || [], "zone_id", "zone_name"],
-    PLACE: [data.places || [], "place_id", "place_name"],
-    SERVICE_AREA: [data.serviceAreas || [], "service_area_id", "service_area_name"],
+    ZONE: scene.zones,
+    PLACE: scene.places,
+    SERVICE_AREA: scene.serviceAreas,
   }[targetType];
   if (!config) return [];
-  const [rows, idField, nameField] = config;
-  return rows.map((row) => ({ label: row[nameField] || row[idField], value: row[idField] }));
+  return (config.features || []).map((feature) => ({
+    label: feature.properties.object_name || feature.properties.object_id,
+    value: feature.properties.object_id,
+  }));
 }
 
 function createGeospatialHover(properties, point, container, pinned) {
@@ -11282,6 +11307,9 @@ async function bootstrap() {
 		    geospatialCatalogServiceModule,
 		    geospatialMapAdapterModule,
 		    geospatialReferenceDataModule,
+		    citySpatialCatalogModule,
+		    spatialScenarioServiceModule,
+		    spatialScenarioInitializationModule,
 		    operatingSpatialPlanServiceModule,
 		    pageContextServiceModule,
 		    dataChartServiceModule,
@@ -11296,7 +11324,7 @@ async function bootstrap() {
 		    publicDemoBootstrapServiceModule,
 		    releaseFreshnessServiceModule,
 		  ] = await Promise.all([
-    import("./data/mapInitialization.js?v=20260712-v042-0-0"),
+    import("./data/mapInitialization.js?v=20260721-v049-2-0"),
     import("./data/mapValidation.js?v=20260712-v042-0-0"),
     import("./data/operationsCenterInitialization.js?v=20260608-v018-bfs-route-planning"),
     import("./data/customerInitialization.js?v=20260611-v019-1-customer"),
@@ -11362,10 +11390,13 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
-			    import("./services/geospatialCatalogService.js?v=20260721-v049-1-0"),
+			    import("./services/geospatialCatalogService.js?v=20260721-v049-2-0"),
 			    import("./ui/geospatialMapAdapter.js?v=20260721-v049-1-0"),
 			    import("./data/geospatialReferenceData.js?v=20260721-v049-1-0"),
-		    import("./services/operatingSpatialPlanService.js?v=20260721-v049-1-0"),
+			    import("./data/citySpatialCatalog.js?v=20260721-v049-2-0"),
+			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
+			    import("./data/spatialScenarioInitialization.js?v=20260721-v049-2-0"),
+		    import("./services/operatingSpatialPlanService.js?v=20260721-v049-2-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
         import("./ui/dataChartService.js?v=20260717-v047-1-0"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),
@@ -11454,6 +11485,9 @@ async function bootstrap() {
 		  geospatialCatalogService = geospatialCatalogServiceModule;
 		  geospatialMapAdapter = geospatialMapAdapterModule;
 		  geospatialReferenceData = geospatialReferenceDataModule;
+		  citySpatialCatalog = citySpatialCatalogModule;
+		  spatialScenarioService = spatialScenarioServiceModule;
+		  spatialScenarioInitialization = spatialScenarioInitializationModule;
 		  operatingSpatialPlanService = operatingSpatialPlanServiceModule;
 		  pageContextService = pageContextServiceModule;
 		  dataChartService = dataChartServiceModule;

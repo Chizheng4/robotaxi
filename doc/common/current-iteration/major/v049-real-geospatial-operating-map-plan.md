@@ -5,6 +5,7 @@
 - 状态：执行中。
 - 版本边界：`v048` 工程阶段已经完成；EdgeOne KV 审核和公网绑定保留为独立外部待办，不阻塞本版本工程实施。
 - 正式方案：`doc/01-space-model/12-real-geospatial-operating-map-design.md`。
+- 当前中版本：`v049.2.0` 双空间场景隔离，详见 `doc/common/current-iteration/major/v049.2-dual-spatial-scenario-isolation-plan.md`。
 
 ## 价值目标
 
@@ -33,6 +34,8 @@
 
 ### 阶段 1：对象、字段与数据架构
 
+- [x] 建立城市地理与网格仿真的独立空间场景、能力和运行资格合同。
+- [ ] 隔离两个场景的空间目录、道路图、位置、Route 和运行快照，禁止运行时互相投影冒充原生事实。
 - [ ] 审计现有 Map、Cell、Road、RoadNode、RoadSegment、Place、ServiceArea、Zone、OpsCenter、Robotaxi、Route 和 RoutePlanningRun 字段。
 - [ ] 固定模拟坐标、地理坐标、渲染坐标三者边界和转换责任。
 - [x] 定义首期地图数据集、坐标参考和 Cell 地理投影合同；对象原始几何编辑合同留待阶段 2。

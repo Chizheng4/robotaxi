@@ -8,10 +8,11 @@ import {
 
 const ALLOWED_TARGET_TYPES = new Set(Object.values(SpatialPlanTargetType));
 
-export function createDraft({ plans = [], dataset, target, geometry, now = new Date().toISOString() }) {
+export function createDraft({ plans = [], dataset, spatialScenarioId, target, geometry, now = new Date().toISOString() }) {
+  if (!spatialScenarioId) throw new Error("缺少空间场景，不能创建运营空间方案");
   const sequence = nextSequence(plans);
   const planId = `OSP-${String(sequence).padStart(4, "0")}`;
-  const previousVersions = plans.filter((plan) => plan.spatial_plan_features?.some((feature) => (
+  const previousVersions = plans.filter((plan) => plan.spatial_scenario_id === spatialScenarioId && plan.spatial_plan_features?.some((feature) => (
     feature.target_object_type === target.target_object_type
     && feature.target_object_id
     && feature.target_object_id === target.target_object_id
@@ -20,6 +21,7 @@ export function createDraft({ plans = [], dataset, target, geometry, now = new D
     operating_spatial_plan_id: planId,
     operating_spatial_plan_name: `${target.target_object_name || "未命名对象"}运营空间方案`,
     operating_spatial_plan_status: OperatingSpatialPlanStatus.DRAFT,
+    spatial_scenario_id: spatialScenarioId,
     spatial_plan_version: Math.max(0, ...previousVersions.map((plan) => Number(plan.spatial_plan_version || 0))) + 1,
     map_dataset_id: dataset.map_dataset_id,
     map_dataset_version: dataset.map_dataset_version,
@@ -39,6 +41,7 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
   assertEditable(plan);
   const issues = [];
   if (!plan.operating_spatial_plan_name?.trim()) issues.push("请填写运营空间方案名称");
+  if (!plan.spatial_scenario_id) issues.push("方案缺少空间场景");
   if (plan.map_dataset_id !== dataset?.map_dataset_id || plan.map_dataset_version !== dataset?.map_dataset_version) {
     issues.push("方案引用的地图数据集版本与当前地图不一致");
   }
@@ -71,7 +74,8 @@ export function publishValidatedPlan(plan, { plans = [], now = new Date().toISOS
     .map((feature) => `${feature.target_object_type}:${feature.target_object_id}`));
   const nextPlans = plans.map((item) => {
     if (item.operating_spatial_plan_status !== OperatingSpatialPlanStatus.PUBLISHED) return item;
-    const overlaps = item.spatial_plan_features?.some((feature) => supersededIds.has(`${feature.target_object_type}:${feature.target_object_id}`));
+    const overlaps = item.spatial_scenario_id === plan.spatial_scenario_id
+      && item.spatial_plan_features?.some((feature) => supersededIds.has(`${feature.target_object_type}:${feature.target_object_id}`));
     return overlaps ? { ...item, operating_spatial_plan_status: OperatingSpatialPlanStatus.CANCELLED, updated_at: now } : item;
   });
   const published = {
@@ -94,15 +98,20 @@ export function upsertPlan(plans = [], plan) {
   return [...plans.filter((item) => item.operating_spatial_plan_id !== plan.operating_spatial_plan_id), plan];
 }
 
-export function getPublishedFeatures(plans = []) {
+export function getPublishedFeatures(plans = [], { spatialScenarioId } = {}) {
   return plans
-    .filter((plan) => plan.operating_spatial_plan_status === OperatingSpatialPlanStatus.PUBLISHED)
+    .filter((plan) => plan.operating_spatial_plan_status === OperatingSpatialPlanStatus.PUBLISHED
+      && (!spatialScenarioId || plan.spatial_scenario_id === spatialScenarioId))
     .flatMap((plan) => (plan.spatial_plan_features || []).map((feature) => ({
       ...clone(feature),
       operating_spatial_plan_id: plan.operating_spatial_plan_id,
       spatial_plan_version: plan.spatial_plan_version,
       published_at: plan.published_at,
     })));
+}
+
+export function normalizePlanScenarios(plans = [], defaultSpatialScenarioId) {
+  return plans.map((plan) => plan.spatial_scenario_id ? plan : { ...plan, spatial_scenario_id: defaultSpatialScenarioId });
 }
 
 function validateFeature(feature, dataset, catalog, issues) {
@@ -122,13 +131,14 @@ function validateFeature(feature, dataset, catalog, issues) {
 }
 
 function targetExists(feature, catalog) {
-  const collection = {
+  const source = {
     ZONE: catalog.zones,
     PLACE: catalog.places,
     SERVICE_AREA: catalog.serviceAreas,
   }[feature.target_object_type] || [];
+  const collection = Array.isArray(source) ? source : source.features || [];
   const key = { ZONE: "zone_id", PLACE: "place_id", SERVICE_AREA: "service_area_id" }[feature.target_object_type];
-  return collection.some((item) => item[key] === feature.target_object_id);
+  return collection.some((item) => (item[key] || item.properties?.object_id) === feature.target_object_id);
 }
 
 function createImpactSummary(plan) {

@@ -21,6 +21,7 @@ export function createOperatingSpatialPlan(input = {}) {
     operating_spatial_plan_id: input.operating_spatial_plan_id,
     operating_spatial_plan_name: input.operating_spatial_plan_name,
     operating_spatial_plan_status: input.operating_spatial_plan_status || OperatingSpatialPlanStatus.DRAFT,
+    spatial_scenario_id: input.spatial_scenario_id,
     spatial_plan_version: Number(input.spatial_plan_version || 1),
     map_dataset_id: input.map_dataset_id,
     map_dataset_version: input.map_dataset_version,

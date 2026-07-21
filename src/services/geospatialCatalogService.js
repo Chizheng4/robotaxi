@@ -1,5 +1,27 @@
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
+export function createCityGeographicScene({ catalog, plans = [] } = {}, dataset) {
+  if (!catalog || !dataset) return createEmptyScene(dataset);
+  const scenarioId = catalog.spatial_scenario_id;
+  const zones = applyPublishedGeometry(cloneCollection(catalog.zones), plans, "ZONE", scenarioId);
+  const places = applyPublishedGeometry(cloneCollection(catalog.places), plans, "PLACE", scenarioId);
+  const serviceAreas = applyPublishedGeometry(cloneCollection(catalog.serviceAreas), plans, "SERVICE_AREA", scenarioId);
+  const scene = {
+    dataset,
+    spatialScenarioId: scenarioId,
+    spatialCatalogVersion: catalog.spatial_catalog_version,
+    bounds: dataset.geographic_bounds,
+    zones,
+    places,
+    serviceAreas,
+    roads: cloneCollection(catalog.roads),
+    opsCenters: cloneCollection(catalog.opsCenters),
+    robotaxis: cloneCollection(catalog.robotaxis),
+    route: cloneCollection(catalog.route),
+  };
+  return { ...scene, sourceVersions: createSourceVersions(scene) };
+}
+
 export function createGeospatialScene(data = {}, dataset, projectionConfig = {}) {
   const map = (data.maps || []).find((item) => item.map_id === dataset?.map_id) || data.maps?.[0];
   if (!map || !dataset) return createEmptyScene(dataset);
@@ -193,9 +215,10 @@ function featureCollection(features) {
   return { type: "FeatureCollection", features: features.filter(Boolean) };
 }
 
-function applyPublishedGeometry(collection, plans = [], targetType) {
+function applyPublishedGeometry(collection, plans = [], targetType, scenarioId = null) {
   const published = (plans || [])
-    .filter((plan) => plan.operating_spatial_plan_status === "PUBLISHED")
+    .filter((plan) => plan.operating_spatial_plan_status === "PUBLISHED"
+      && (!scenarioId || plan.spatial_scenario_id === scenarioId))
     .flatMap((plan) => (plan.spatial_plan_features || []).map((feature) => ({ ...feature, plan })))
     .filter(({ target_object_type, geometry_geojson }) => target_object_type === targetType && geometry_geojson);
   if (!published.length) return collection;
@@ -238,6 +261,10 @@ function applyPublishedGeometry(collection, plans = [], targetType) {
     });
   }
   return featureCollection(features);
+}
+
+function cloneCollection(collection) {
+  return collection ? JSON.parse(JSON.stringify(collection)) : { type: "FeatureCollection", features: [] };
 }
 
 function createSourceVersions(collections) {
