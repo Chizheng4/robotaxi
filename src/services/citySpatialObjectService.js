@@ -1,5 +1,5 @@
-import { PlaceType, ServiceAreaType, ZoneLevel } from "../domain/types.js?v=20260722-v049-3-0";
-import { ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-3-0";
+import { PlaceType, ServiceAreaType, ZoneLevel } from "../domain/types.js?v=20260722-v049-4-0";
+import { ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-4-0";
 
 const OBJECT_CONFIG = Object.freeze({
   ZONE: { collection: "zones", prefix: "GZ-Z", objectType: "zone" },
@@ -36,6 +36,29 @@ export function validateSpatialPlanFeature(feature, catalog = {}, issues = []) {
   if (targetType === "ZONE") validateZone(feature, catalog, issues);
   if (targetType === "PLACE") validatePlace(feature, catalog, issues);
   if (targetType === "SERVICE_AREA") validateServiceArea(feature, catalog, issues);
+  return issues;
+}
+
+export function validateCitySpatialCatalog(catalog = {}, issues = []) {
+  const zones = catalog.zones?.features || [];
+  const places = catalog.places?.features || [];
+  const serviceAreas = catalog.serviceAreas?.features || [];
+  for (const zone of zones) {
+    const properties = zone.properties || {};
+    if ((properties.zone_level || ZoneLevel.ZONE) !== ZoneLevel.ZONE) continue;
+    const children = zones.filter((item) => item.properties?.parent_zone_id === properties.object_id);
+    const expectsChildren = properties.zone_structure_mode === ZoneStructureMode.TWO_LEVEL;
+    if (expectsChildren && !children.length) issues.push(`${properties.object_name}采用两级区域结构，但没有二级子区域`);
+    if (!expectsChildren && children.length) issues.push(`${properties.object_name}采用一级区域结构，不能包含二级子区域`);
+  }
+  for (const item of [...places, ...serviceAreas]) {
+    const zone = findFeature(catalog.zones, item.properties?.zone_id);
+    if (!zone) issues.push(`${item.properties?.object_name || "空间对象"}缺少有效的直接归属区域`);
+    if (zone?.properties?.zone_level === ZoneLevel.ZONE
+      && zone.properties.zone_structure_mode === ZoneStructureMode.TWO_LEVEL) {
+      issues.push(`${item.properties?.object_name || "空间对象"}必须直接归属二级子区域`);
+    }
+  }
   return issues;
 }
 
@@ -132,10 +155,6 @@ function applyFeature(catalog, feature, plan) {
     features.push(next);
   }
   catalog[config.collection] = { type: "FeatureCollection", features };
-  if (feature.target_object_type === "ZONE" && feature.zone_level === ZoneLevel.SUB_ZONE && feature.parent_zone_id) {
-    const parent = findFeature(catalog.zones, feature.parent_zone_id);
-    if (parent) parent.properties.zone_structure_mode = ZoneStructureMode.TWO_LEVEL;
-  }
 }
 
 function publishedPlans(plans, scenarioId) {

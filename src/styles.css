@@ -520,6 +520,68 @@
   }
 }
 
+/* v049.4.0 unified map controls and desktop-only spatial planning */
+.map-floating-actions {
+  top: 12px;
+  right: auto !important;
+  bottom: auto;
+  left: 12px;
+}
+
+.map-navigation-actions {
+  position: absolute;
+  z-index: 4;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid rgba(201, 214, 226, 0.9);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 14px rgba(39, 61, 82, 0.08);
+}
+
+.map-navigation-actions .ant-btn {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid rgba(218, 226, 233, 0.8);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.map-navigation-actions .ant-btn:first-child { border-left: 0; }
+.spatial-plan-trigger { top: 54px; right: auto; left: 12px; }
+.map-layer-panel { top: auto; right: 12px; bottom: 54px; }
+
+@media (min-width: 768px) {
+  .console-workbench:not(.detail-collapsed) .map-floating-actions,
+  .console-workbench.detail-collapsed .map-floating-actions { right: auto !important; }
+  .console-workbench:not(.detail-collapsed) .map-navigation-actions,
+  .console-workbench:not(.detail-collapsed) .map-layer-panel { right: 340px !important; }
+  .console-workbench.detail-collapsed .map-navigation-actions,
+  .console-workbench.detail-collapsed .map-layer-panel { right: 52px !important; }
+}
+
+@media (max-width: 767px) {
+  .spatial-plan-trigger,
+  .spatial-plan-editor { display: none !important; }
+  .map-floating-actions { top: 8px; left: 8px; }
+  .map-navigation-actions { right: 8px; bottom: 8px; }
+  .map-layer-panel { right: 8px; bottom: 50px; }
+  .geospatial-map-attribution {
+    right: 124px;
+    bottom: 8px;
+    max-width: calc(100% - 140px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 /* Public visitor analytics: a dedicated lightweight surface, separate from business workbench pages. */
 .visitor-password-form {
   display: grid;

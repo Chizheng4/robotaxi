@@ -34,7 +34,7 @@ const factoryDraft = createDraft({
     target_object_type: "PLACE",
     target_object_name: "广州示范生产工厂",
     source_object_exists: false,
-    zone_id: "Z-001",
+    zone_id: "GZ-Z-0001",
     place_type: "FACTORY",
   },
   geometry: factoryGeometry,
@@ -49,7 +49,7 @@ const factoryPublication = publishValidatedPlan(validatedFactory, { plans: [], n
 const factoryScene = createCityGeographicScene({ catalog: CITY_SPATIAL_CATALOG, plans: factoryPublication.plans }, GEOSPATIAL_MAP_DATASET);
 const factory = factoryScene.places.features.find((feature) => feature.properties.object_name === "广州示范生产工厂");
 assert.equal(factory.properties.place_type, "FACTORY");
-assert.equal(factory.properties.zone_id, "Z-001");
+assert.equal(factory.properties.zone_id, "GZ-Z-0001");
 
 const subZoneDraft = createDraft({
   plans: factoryPublication.plans,
@@ -61,16 +61,13 @@ const subZoneDraft = createDraft({
     target_object_name: "核心服务子区域",
     source_object_exists: false,
     zone_level: "SUB_ZONE",
-    parent_zone_id: "Z-001",
+    parent_zone_id: "GZ-Z-0001",
   },
   geometry: polygon(113.230, 23.120, 113.245, 23.135),
 });
 const validatedSubZone = validateDraft(subZoneDraft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: factoryScene });
-assert.equal(validatedSubZone.validation_status, "VALID", validatedSubZone.validation_issues.join("；"));
-const subZonePublication = publishValidatedPlan(validatedSubZone, { plans: factoryPublication.plans });
-const twoLevelScene = createCityGeographicScene({ catalog: CITY_SPATIAL_CATALOG, plans: subZonePublication.plans }, GEOSPATIAL_MAP_DATASET);
-assert.equal(twoLevelScene.zones.features.find((feature) => feature.properties.object_id === "Z-001").properties.zone_structure_mode, "TWO_LEVEL");
-assert.equal(twoLevelScene.zones.features.find((feature) => feature.properties.object_name === "核心服务子区域").properties.parent_zone_id, "Z-001");
+assert.equal(validatedSubZone.validation_status, "INVALID");
+assert.ok(validatedSubZone.validation_issues.some((issue) => issue.includes("一级区域结构")), "二级区域不得隐式改变父区域结构");
 
 const invalidThirdLevel = createDraft({
   plans: factoryPublication.plans,

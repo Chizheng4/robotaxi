@@ -702,7 +702,9 @@
 |---|---|---|---|
 |operating_spatial_plan_id|运营区域方案编号|持久化字段|一次运营区域建模方案的唯一编号|
 |operating_spatial_plan_name|运营区域方案名称|持久化字段|方案的用户可读名称|
-|operating_spatial_plan_status|方案状态|状态字段|草稿、已校验、已发布或已取消|
+|operating_spatial_plan_status|方案状态|状态字段|草稿、已校验、已发布、已被新版本替代或已取消|
+|superseded_at|版本替代时间|事实字段|旧方案被新版本替代的真实时间|
+|superseded_by_plan_id|替代方案编号|关联字段|替代当前旧版本的运营区域方案编号|
 |spatial_scenario_id|空间场景编号|关系字段|方案只在所属空间场景内校验、发布和覆盖|
 |spatial_plan_version|方案版本|持久化字段|同一目标空间调整的不可变版本|
 |spatial_plan_features|空间要素|关系字段|方案包含的 Zone、Place 或 ServiceArea 几何草稿|
@@ -2259,6 +2261,7 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |HOTEL|酒店|
 |TRANSPORT_HUB|交通枢纽|
 |OPS_CENTER|运营中心|
+|SUPERSEDED|已被新版本替代|
 |BALANCED|均衡需求|
 |MORNING_OUTBOUND|早高峰流出|
 |EVENING_INBOUND|晚高峰流入|

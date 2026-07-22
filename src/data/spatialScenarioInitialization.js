@@ -8,6 +8,7 @@ import {
 
 export const GRID_SPATIAL_SCENARIO_ID = "SCENE-GRID-001";
 export const CITY_SPATIAL_SCENARIO_ID = "SCENE-CITY-GZ-001";
+export const CITY_SPATIAL_CATALOG_VERSION = "2026.07.22-city-3";
 
 export function initializeSpatialScenarios() {
   return {
@@ -30,7 +31,7 @@ export function initializeSpatialScenarios() {
         spatial_scenario_type: SpatialScenarioType.CITY_GEOGRAPHIC,
         spatial_scenario_status: SpatialScenarioStatus.PLANNING,
         map_dataset_id: "MAP-DATASET-GZ-DEMO-001",
-        spatial_catalog_version: "2026.07.21-city-1",
+        spatial_catalog_version: CITY_SPATIAL_CATALOG_VERSION,
         routing_provider_type: RoutingProviderType.UNAVAILABLE,
         position_provider_type: PositionProviderType.UNAVAILABLE,
         business_runtime_enabled: false,

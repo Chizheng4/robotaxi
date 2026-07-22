@@ -2,6 +2,7 @@ export const OperatingSpatialPlanStatus = Object.freeze({
   DRAFT: "DRAFT",
   VALIDATED: "VALIDATED",
   PUBLISHED: "PUBLISHED",
+  SUPERSEDED: "SUPERSEDED",
   CANCELLED: "CANCELLED",
 });
 
@@ -38,6 +39,8 @@ export function createOperatingSpatialPlan(input = {}) {
     created_at: input.created_at,
     updated_at: input.updated_at,
     published_at: input.published_at || null,
+    superseded_at: input.superseded_at || null,
+    superseded_by_plan_id: input.superseded_by_plan_id || null,
   };
 }
 

@@ -42,7 +42,6 @@ export function createGeospatialMapAdapter(options = {}) {
     maxPitch: 0,
   });
 
-  map.addControl(new MapLibre.NavigationControl({ showCompass: false, visualizePitch: false }), "bottom-right");
   map.addControl(new MapLibre.AttributionControl({ compact: true }), "bottom-left");
 
   const styleTimeout = setTimeout(() => {
@@ -182,7 +181,25 @@ export function createGeospatialMapAdapter(options = {}) {
     if (currentScene?.bounds) map.fitBounds(currentScene.bounds, { padding: options.compact ? 24 : 52, duration: 280 });
   }
 
-  function startPolygonDrawing(onFinish) {
+  function zoomBy(delta) {
+    map.easeTo({ zoom: Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), map.getZoom() + delta)), duration: 160 });
+  }
+
+  function fitGeometry(geometry) {
+    const coordinates = geometry?.type === "Polygon" ? geometry.coordinates.flatMap((ring) => ring) : [];
+    if (!coordinates.length) return;
+    const bounds = coordinates.reduce(
+      (result, coordinate) => result.extend(coordinate),
+      new globalThis.maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+    );
+    map.fitBounds(bounds, {
+      padding: options.compact ? 48 : { top: 84, right: 72, bottom: 72, left: 360 },
+      maxZoom: 15,
+      duration: 320,
+    });
+  }
+
+  function createDraw() {
     const Terra = globalThis.RobotaxiTerraDraw;
     if (!Terra?.TerraDraw || !Terra?.TerraDrawMapLibreGLAdapter) throw new Error("地图绘制组件未加载");
     stopDrawing();
@@ -192,14 +209,40 @@ export function createGeospatialMapAdapter(options = {}) {
       modes: [new Terra.TerraDrawPolygonMode(), new Terra.TerraDrawSelectMode()],
       undoRedo: { sessionLevel: new Terra.TerraDrawSessionUndoRedo() },
     });
+    draw.start();
+    return draw;
+  }
+
+  function startPolygonDrawing(onFinish) {
+    createDraw();
     draw.on("finish", (id) => {
       const feature = draw?.getSnapshotFeature(id);
       if (!feature) return;
       draw.setMode("select");
       onFinish?.(JSON.parse(JSON.stringify(feature.geometry)));
     });
-    draw.start();
     draw.setMode("polygon");
+  }
+
+  function startPolygonEditing(geometry) {
+    if (geometry?.type !== "Polygon") throw new Error("当前对象没有可编辑的多边形边界");
+    createDraw();
+    const [addition] = draw.addFeatures([{
+      type: "Feature",
+      properties: { mode: "polygon" },
+      geometry: JSON.parse(JSON.stringify(geometry)),
+    }]);
+    const featureId = addition?.id ?? addition;
+    if (featureId === undefined || featureId === null) throw new Error("当前边界无法载入地图编辑器");
+    draw.setMode("select");
+    draw.selectFeature?.(featureId);
+    fitGeometry(geometry);
+    return featureId;
+  }
+
+  function getDrawingGeometry() {
+    const feature = draw?.getSnapshot?.().find((item) => item.geometry?.type === "Polygon");
+    return feature?.geometry ? JSON.parse(JSON.stringify(feature.geometry)) : null;
   }
 
   function stopDrawing() {
@@ -212,7 +255,10 @@ export function createGeospatialMapAdapter(options = {}) {
     updateScene,
     updateSelection,
     fitScene,
+    zoomBy,
     startPolygonDrawing,
+    startPolygonEditing,
+    getDrawingGeometry,
     restartPolygonDrawing(onFinish) {
       startPolygonDrawing(onFinish);
     },

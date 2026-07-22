@@ -8324,6 +8324,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   const stageRef = useRef(null);
   const sceneRef = useRef(null);
   const frameRef = useRef(0);
+  const cityMapControllerRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: compactMapViewport ? 320 : 960, height: 720 });
   const [viewport, setViewport] = useState(defaultViewport);
   const [hovered, setHovered] = useState(null);
@@ -8400,6 +8401,16 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
 
   function resetViewport() {
     setViewport(defaultViewport);
+  }
+
+  function changeActiveMapZoom(delta) {
+    if (mapMode === "CITY_GEOGRAPHIC") cityMapControllerRef.current?.zoomBy(delta);
+    else changeZoom(viewport.zoom + delta * 0.2);
+  }
+
+  function resetActiveMap() {
+    if (mapMode === "CITY_GEOGRAPHIC") cityMapControllerRef.current?.fitScene();
+    else resetViewport();
   }
 
   function changeMapMode(nextMode) {
@@ -8550,9 +8561,11 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
             options={[{ label: "城市地理", value: "CITY_GEOGRAPHIC" }, { label: "网格仿真", value: "GRID_SIMULATION" }]}
             onChange={changeMapMode}
           />
-          {mapMode === "GRID_SIMULATION" && <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeZoom(viewport.zoom + 0.2)}>+</Button>}
-          {mapMode === "GRID_SIMULATION" && <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeZoom(viewport.zoom - 0.2)}>−</Button>}
-          {mapMode === "GRID_SIMULATION" && <Button size="small" aria-label="复位地图" title="复位" onClick={resetViewport}>⌖</Button>}
+        </div>
+        <div className="map-navigation-actions">
+          <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeActiveMapZoom(1)}>+</Button>
+          <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeActiveMapZoom(-1)}>−</Button>
+          <Button size="small" aria-label="复位地图" title="复位" onClick={resetActiveMap}>⌖</Button>
           <Button size="small" aria-label="地图图层" title="图层" onClick={() => setLayersOpen((current) => !current)}>▤</Button>
         </div>
         {layersOpen && (
@@ -8574,6 +8587,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
             onSelect={onSelect}
             onClear={onClear}
             onSpatialPlansChange={onSpatialPlansChange}
+            onControllerReady={(controller) => { cityMapControllerRef.current = controller; }}
           />
         ) : <svg
           className="zone-canvas-new"
@@ -8720,7 +8734,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   );
 }
 
-function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, compact, mobileLayout, onSelect, onClear, onSpatialPlansChange }) {
+function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, compact, mobileLayout, onSelect, onClear, onSpatialPlansChange, onControllerReady }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
   const [hovered, setHovered] = useState(null);
@@ -8737,6 +8751,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   const [placeId, setPlaceId] = useState("");
   const [serviceAreaType, setServiceAreaType] = useState("PICKUP_DROPOFF");
   const [activePlan, setActivePlan] = useState(null);
+  const [editingExistingBoundary, setEditingExistingBoundary] = useState(false);
   const [editorNotice, setEditorNotice] = useState("");
   const hoverPresentation = hovered
     ? mapSceneService.getMapObjectPresentation(hovered.type, hovered.id, data)
@@ -8773,6 +8788,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
           onClear?.();
         },
       });
+      onControllerReady?.(adapterRef.current);
       setMapStatus({ status: "READY", message: "" });
     } catch (error) {
       setMapStatus({ status: "UNAVAILABLE", message: error.message || "地图引擎不可用" });
@@ -8780,6 +8796,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     return () => {
       adapterRef.current?.destroy();
       adapterRef.current = null;
+      onControllerReady?.(null);
     };
   }, []);
 
@@ -8801,6 +8818,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   function selectTarget(value) {
     setTargetId(value);
     setActivePlan(null);
+    setEditingExistingBoundary(false);
     if (value === "__NEW__") return;
     const properties = targetOptions.find((option) => option.value === value)?.properties || {};
     setZoneLevel(properties.zone_level || "ZONE");
@@ -8812,6 +8830,35 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     setServiceAreaType(properties.service_area_type || "PICKUP_DROPOFF");
   }
 
+  function createPlanFromGeometry(geometry) {
+    const selectedTarget = targetOptions.find((option) => option.value === targetId);
+    const targetName = targetId === "__NEW__" ? newTargetName.trim() : selectedTarget?.label;
+    const plan = operatingSpatialPlanService.createDraft({
+      plans,
+      dataset: scene.dataset,
+      spatialScenarioId: spatialScenario.spatial_scenario_id,
+      target: {
+        target_object_type: targetType,
+        target_object_id: targetId === "__NEW__" ? null : targetId,
+        target_object_name: targetName,
+        source_object_exists: targetId !== "__NEW__",
+        zone_level: targetType === "ZONE" ? zoneLevel : null,
+        zone_structure_mode: targetType === "ZONE" && zoneLevel === "ZONE" ? zoneStructureMode : null,
+        parent_zone_id: targetType === "ZONE" && zoneLevel === "SUB_ZONE" ? parentZoneId : null,
+        zone_id: targetType !== "ZONE" ? zoneId : null,
+        place_type: targetType === "PLACE" ? placeType : null,
+        place_id: targetType === "SERVICE_AREA" ? placeId : null,
+        service_area_type: targetType === "SERVICE_AREA" ? serviceAreaType : null,
+      },
+      geometry,
+      catalog: scene,
+    });
+    setActivePlan(plan);
+    setEditingExistingBoundary(false);
+    onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, plan));
+    setEditorNotice("草稿已形成，请校验空间关系");
+  }
+
   function beginDrawing() {
     const selectedTarget = targetOptions.find((option) => option.value === targetId);
     const targetName = targetId === "__NEW__" ? newTargetName.trim() : selectedTarget?.label;
@@ -8821,34 +8868,25 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     }
     setEditorNotice("请在地图上依次点击边界顶点，点击首个点完成绘制");
     try {
-      adapterRef.current?.startPolygonDrawing((geometry) => {
-        const plan = operatingSpatialPlanService.createDraft({
-          plans,
-          dataset: scene.dataset,
-          spatialScenarioId: spatialScenario.spatial_scenario_id,
-          target: {
-            target_object_type: targetType,
-            target_object_id: targetId === "__NEW__" ? null : targetId,
-            target_object_name: targetName,
-            source_object_exists: targetId !== "__NEW__",
-            zone_level: targetType === "ZONE" ? zoneLevel : null,
-            zone_structure_mode: targetType === "ZONE" && zoneLevel === "ZONE" ? zoneStructureMode : null,
-            parent_zone_id: targetType === "ZONE" && zoneLevel === "SUB_ZONE" ? parentZoneId : null,
-            zone_id: targetType !== "ZONE" ? zoneId : null,
-            place_type: targetType === "PLACE" ? placeType : null,
-            place_id: targetType === "SERVICE_AREA" ? placeId : null,
-            service_area_type: targetType === "SERVICE_AREA" ? serviceAreaType : null,
-          },
-          geometry,
-          catalog: scene,
-        });
-        setActivePlan(plan);
-        onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, plan));
-        setEditorNotice("草稿已形成，请校验空间关系");
-      });
+      if (targetId !== "__NEW__" && selectedTarget?.geometry) {
+        adapterRef.current?.startPolygonEditing(selectedTarget.geometry);
+        setEditingExistingBoundary(true);
+        setEditorNotice("已载入当前边界。拖动顶点调整，完成后点击形成草稿");
+        return;
+      }
+      adapterRef.current?.startPolygonDrawing(createPlanFromGeometry);
     } catch (error) {
       setEditorNotice(error.message || "地图绘制组件不可用");
     }
+  }
+
+  function captureEditedBoundary() {
+    const geometry = adapterRef.current?.getDrawingGeometry();
+    if (!geometry) {
+      setEditorNotice("尚未取得有效边界，请继续调整或重新载入");
+      return;
+    }
+    createPlanFromGeometry(geometry);
   }
 
   function validatePlan() {
@@ -8869,7 +8907,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       setActivePlan(result.published);
       onSpatialPlansChange?.(result.plans);
       adapterRef.current?.stopDrawing();
-      setEditorNotice("运营区域方案已发布；城市空间对象已更新，网格业务与模拟运行未改变");
+      setEditorNotice("空间规划方案已发布；城市空间对象已更新，网格业务与模拟运行未改变");
     } catch (error) {
       setEditorNotice(error.message || "方案发布失败");
     }
@@ -8892,23 +8930,23 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     adapterRef.current?.stopDrawing();
     setEditorOpen(false);
     setActivePlan(null);
+    setEditingExistingBoundary(false);
     setEditorNotice("");
   }
 
   return (
     <div className="geospatial-map-shell">
       <div ref={containerRef} className="geospatial-map-canvas" role="img" aria-label="Robotaxi 真实地理空间运营地图" />
-      <Button
+      {!mobileLayout && <Button
         className="spatial-plan-trigger"
         size="small"
-        disabled={mobileLayout}
-        title={mobileLayout ? "区域边界规划建议使用电脑端" : "在地图上规划运营区域"}
+        title="在地图上规划运营区域"
         onClick={() => {
           setEditorOpen(true);
         }}
       >
         规划运营区域
-      </Button>
+      </Button>}
       {editorOpen && !mobileLayout && (
         <aside className="spatial-plan-editor" aria-label="运营区域规划">
           <header><strong>运营区域规划</strong><Button type="text" size="small" aria-label="关闭运营区域规划" onClick={closeEditor}>×</Button></header>
@@ -8927,7 +8965,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
           {targetType === "SERVICE_AREA" && <label><span>{getFieldLabel("place_id")}</span><Select size="small" value={placeId || undefined} placeholder="请选择关联地点" options={placeOptions} onChange={setPlaceId} /></label>}
           {targetType === "SERVICE_AREA" && <label><span>{getFieldLabel("service_area_type")}</span><Select size="small" value={serviceAreaType} options={planningContract.serviceAreaTypes.map((value) => ({ value, label: getDisplayValue(value) }))} onChange={setServiceAreaType} /></label>}
           <div className="spatial-plan-editor-actions">
-            <Button size="small" onClick={beginDrawing}>{activePlan ? "重新绘制" : "绘制区域"}</Button>
+            <Button size="small" onClick={editingExistingBoundary ? captureEditedBoundary : beginDrawing}>{editingExistingBoundary ? "形成草稿" : (targetId === "__NEW__" ? "绘制区域" : "调整边界")}</Button>
             <Button size="small" disabled={!activePlan} onClick={validatePlan}>校验</Button>
             <Button size="small" type="primary" disabled={activePlan?.operating_spatial_plan_status !== "VALIDATED"} onClick={publishPlan}>发布</Button>
           </div>
@@ -8983,11 +9021,12 @@ function createSpatialPlanTargetOptions(targetType, scene) {
     SERVICE_AREA: scene.serviceAreas,
   }[targetType];
   if (!config) return [];
-  return (config.features || []).map((feature) => ({
-    label: feature.properties.object_name || feature.properties.object_id,
-    value: feature.properties.object_id,
-    properties: feature.properties,
-  }));
+	  return (config.features || []).map((feature) => ({
+	    label: feature.properties.object_name || feature.properties.object_id,
+	    value: feature.properties.object_id,
+	    properties: feature.properties,
+	    geometry: feature.geometry,
+	  }));
 }
 
 function createGeospatialHover(properties, point, container, pinned) {
@@ -11429,12 +11468,12 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 			    import("./services/geospatialCatalogService.js?v=20260721-v049-2-0"),
-			    import("./ui/geospatialMapAdapter.js?v=20260721-v049-1-0"),
+				    import("./ui/geospatialMapAdapter.js?v=20260722-v049-4-0"),
 			    import("./data/geospatialReferenceData.js?v=20260721-v049-1-0"),
-			    import("./data/citySpatialCatalog.js?v=20260722-v049-3-0"),
+				    import("./data/citySpatialCatalog.js?v=20260722-v049-4-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
-			    import("./data/spatialScenarioInitialization.js?v=20260721-v049-2-0"),
-		    import("./services/operatingSpatialPlanService.js?v=20260722-v049-3-0"),
+				    import("./data/spatialScenarioInitialization.js?v=20260722-v049-4-0"),
+			    import("./services/operatingSpatialPlanService.js?v=20260722-v049-4-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
         import("./ui/dataChartService.js?v=20260717-v047-1-0"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),

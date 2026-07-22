@@ -4,14 +4,15 @@ import {
   SpatialPlanValidationStatus,
   createOperatingSpatialPlan,
   createSpatialPlanFeature,
-} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-3-0";
+} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-4-0";
 import {
   createCityObjectId,
   createCitySpatialImpact,
   getCitySpatialPlanningContract,
   materializeCitySpatialCatalog,
+  validateCitySpatialCatalog,
   validateSpatialPlanFeature,
-} from "./citySpatialObjectService.js?v=20260722-v049-3-0";
+} from "./citySpatialObjectService.js?v=20260722-v049-4-0";
 
 export { getCitySpatialPlanningContract };
 
@@ -65,6 +66,14 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
     validateFeature(feature, dataset, effectiveCatalog, issues);
     validateSpatialPlanFeature(feature, effectiveCatalog, issues);
   }
+  if (!issues.length) {
+    const candidateCatalog = materializeCitySpatialCatalog(effectiveCatalog, [{
+      ...plan,
+      operating_spatial_plan_status: OperatingSpatialPlanStatus.PUBLISHED,
+      published_at: plan.updated_at || new Date().toISOString(),
+    }]);
+    validateCitySpatialCatalog(candidateCatalog, issues);
+  }
 
   const valid = issues.length === 0;
   const now = new Date().toISOString();
@@ -90,7 +99,13 @@ export function publishValidatedPlan(plan, { plans = [], now = new Date().toISOS
     if (item.operating_spatial_plan_status !== OperatingSpatialPlanStatus.PUBLISHED) return item;
     const overlaps = item.spatial_scenario_id === plan.spatial_scenario_id
       && item.spatial_plan_features?.some((feature) => supersededIds.has(`${feature.target_object_type}:${feature.target_object_id}`));
-    return overlaps ? { ...item, operating_spatial_plan_status: OperatingSpatialPlanStatus.CANCELLED, updated_at: now } : item;
+    return overlaps ? {
+      ...item,
+      operating_spatial_plan_status: OperatingSpatialPlanStatus.SUPERSEDED,
+      superseded_at: now,
+      superseded_by_plan_id: plan.operating_spatial_plan_id,
+      updated_at: now,
+    } : item;
   });
   const published = {
     ...clone(plan),
