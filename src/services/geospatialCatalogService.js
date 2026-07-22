@@ -1,23 +1,26 @@
+import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-3-0";
+
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
 export function createCityGeographicScene({ catalog, plans = [] } = {}, dataset) {
   if (!catalog || !dataset) return createEmptyScene(dataset);
-  const scenarioId = catalog.spatial_scenario_id;
-  const zones = applyPublishedGeometry(cloneCollection(catalog.zones), plans, "ZONE", scenarioId);
-  const places = applyPublishedGeometry(cloneCollection(catalog.places), plans, "PLACE", scenarioId);
-  const serviceAreas = applyPublishedGeometry(cloneCollection(catalog.serviceAreas), plans, "SERVICE_AREA", scenarioId);
+  const materializedCatalog = materializeCitySpatialCatalog(catalog, plans);
+  const scenarioId = materializedCatalog.spatial_scenario_id;
+  const zones = cloneCollection(materializedCatalog.zones);
+  const places = cloneCollection(materializedCatalog.places);
+  const serviceAreas = cloneCollection(materializedCatalog.serviceAreas);
   const scene = {
     dataset,
     spatialScenarioId: scenarioId,
-    spatialCatalogVersion: catalog.spatial_catalog_version,
+    spatialCatalogVersion: materializedCatalog.spatial_catalog_version,
     bounds: dataset.geographic_bounds,
     zones,
     places,
     serviceAreas,
-    roads: cloneCollection(catalog.roads),
-    opsCenters: cloneCollection(catalog.opsCenters),
-    robotaxis: cloneCollection(catalog.robotaxis),
-    route: cloneCollection(catalog.route),
+    roads: cloneCollection(materializedCatalog.roads),
+    opsCenters: cloneCollection(materializedCatalog.opsCenters),
+    robotaxis: cloneCollection(materializedCatalog.robotaxis),
+    route: cloneCollection(materializedCatalog.route),
   };
   return { ...scene, sourceVersions: createSourceVersions(scene) };
 }

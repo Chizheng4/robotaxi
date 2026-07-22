@@ -1249,58 +1249,6 @@
   backdrop-filter: blur(8px);
 }
 
-.spatial-scenario-status {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: calc(100% - 360px);
-  padding: 6px 9px;
-  border: 1px solid rgba(201, 214, 226, 0.88);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 4px 14px rgba(39, 61, 82, 0.06);
-  backdrop-filter: blur(8px);
-}
-
-.spatial-scenario-status strong,
-.spatial-scenario-status span {
-  overflow: hidden;
-  font-size: var(--font-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.spatial-scenario-status strong { color: var(--text-primary); }
-.spatial-scenario-status span { color: var(--text-tertiary); }
-
-.geospatial-map-capability {
-  position: absolute;
-  z-index: 3;
-  right: 12px;
-  bottom: 48px;
-  max-width: min(420px, calc(100% - 24px));
-  padding: 4px 7px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.84);
-  color: var(--text-tertiary);
-  font-size: 10px;
-  backdrop-filter: blur(8px);
-}
-
-@media (max-width: 767px) {
-  .spatial-scenario-status {
-    top: 52px;
-    max-width: calc(100% - 24px);
-  }
-
-  .spatial-scenario-status span { display: none; }
-  .geospatial-map-capability { display: none; }
-}
-
 .geospatial-map-status {
   bottom: 32px;
   color: var(--text-secondary);

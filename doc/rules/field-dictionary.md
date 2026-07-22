@@ -694,22 +694,30 @@
 
 枚举：`CITY_GEOGRAPHIC` 为城市地理，`GRID_SIMULATION` 为网格仿真；`PLANNING` 为规划中，`ACTIVE` 为已启用。`UNAVAILABLE` 表示对应 Provider 尚未具备，不得通过其他场景投影伪造。
 
-### 2.2 运营空间方案
+### 2.2 运营区域方案
 
-运营空间方案承接地图上的绘制、校验、影响预览和发布，不直接替代 Zone、Place 或 ServiceArea 业务对象。
+运营区域方案承接地图上的绘制、关系校验、影响预览和发布。发布后生成或更新城市空间目录中的 Zone、Place 或 ServiceArea，但不改变当前网格仿真的对象、单据和模拟运行。
 
 |属性英文名|中文名|字段性质|含义|
 |---|---|---|---|
-|operating_spatial_plan_id|运营空间方案编号|持久化字段|一次运营空间建模方案的唯一编号|
-|operating_spatial_plan_name|运营空间方案名称|持久化字段|方案的用户可读名称|
+|operating_spatial_plan_id|运营区域方案编号|持久化字段|一次运营区域建模方案的唯一编号|
+|operating_spatial_plan_name|运营区域方案名称|持久化字段|方案的用户可读名称|
 |operating_spatial_plan_status|方案状态|状态字段|草稿、已校验、已发布或已取消|
 |spatial_scenario_id|空间场景编号|关系字段|方案只在所属空间场景内校验、发布和覆盖|
 |spatial_plan_version|方案版本|持久化字段|同一目标空间调整的不可变版本|
 |spatial_plan_features|空间要素|关系字段|方案包含的 Zone、Place 或 ServiceArea 几何草稿|
 |spatial_plan_feature_id|空间要素编号|持久化字段|方案内空间要素唯一编号|
 |target_object_type|目标对象类型|类型字段|空间要素对应的业务对象类型|
-|target_object_id|目标对象编号|关系字段|关联已有对象时保存其编号；新要素可为空|
+|target_object_id|目标对象编号|关系字段|关联已有对象或创建新对象时均保存稳定编号|
 |target_object_name|目标对象名称|快照字段|发布时使用的目标对象名称快照|
+|source_object_exists|是否更新现有对象|事实字段|区分更新已有城市对象与创建新城市对象|
+|zone_structure_mode|区域层级模式|类型字段|一级区域或两级区域；城市场景最多支持两级|
+|zone_level|区域层级|类型字段|城市场景只允许运营区域或子区域|
+|parent_zone_id|父级区域编号|关系字段|二级子区域必须关联一级运营区域|
+|zone_id|运营区域编号|关系字段|地点和服务区域直接归属的一级或二级区域|
+|place_type|地点类型|类型字段|地点的业务功能类型，包括住宅、办公、商业、运营中心和工厂等|
+|place_id|地点编号|关系字段|服务区域关联的地点；运营中心和工厂对象也通过此字段关联地点|
+|service_area_type|服务区域类型|类型字段|服务区域承担的上下车、待命等服务类型|
 |geometry_geojson|地理几何|持久化字段|使用 EPSG:4326 的标准 GeoJSON 几何|
 |geometry_type|几何类型|类型字段|首期区域建模固定为 Polygon|
 |validation_status|校验状态|状态字段|空间服务校验是否通过|
@@ -807,6 +815,7 @@
 |map_id|地图编号|持久化字段|所属 Map|
 |place_name|地点名称|持久化字段|地点名称|
 |place_type|地点类型|持久化字段|现实场景或土地使用类型|
+|zone_id|运营区域编号|关系字段|地点直接归属的一级或二级运营区域|
 |place_status|地点状态|持久化字段|地点状态|
 |cell_ids|覆盖地点网格|持久化字段|覆盖的 PLACE Cell 列表|
 |demand_weight|需求权重|持久化字段|相对需求强度|
@@ -828,6 +837,7 @@
 |road_segment_ids|关联道路片段列表|持久化字段|关联 RoadSegment 列表|
 |place_ids|关联地点列表|持久化字段|关联 Place 列表，可为空|
 |zone_id|运营区域编号|持久化字段|所属 Zone，可为空|
+|place_id|关联地点编号|关系字段|服务区域关联的地点；服务区域不是上下车点本身|
 |pickup_cell_ids|可上车网格|持久化字段|支持上车的 Cell 列表|
 |dropoff_cell_ids|可下车网格|持久化字段|支持下车的 Cell 列表|
 |temp_stop_cell_ids|可临停网格|持久化字段|支持临停的 Cell 列表|

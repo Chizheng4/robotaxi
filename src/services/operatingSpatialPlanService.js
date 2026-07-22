@@ -4,12 +4,21 @@ import {
   SpatialPlanValidationStatus,
   createOperatingSpatialPlan,
   createSpatialPlanFeature,
-} from "../domain/operatingSpatialPlanTypes.js?v=20260721-v049-1-0";
+} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-3-0";
+import {
+  createCityObjectId,
+  createCitySpatialImpact,
+  getCitySpatialPlanningContract,
+  materializeCitySpatialCatalog,
+  validateSpatialPlanFeature,
+} from "./citySpatialObjectService.js?v=20260722-v049-3-0";
+
+export { getCitySpatialPlanningContract };
 
 const ALLOWED_TARGET_TYPES = new Set(Object.values(SpatialPlanTargetType));
 
-export function createDraft({ plans = [], dataset, spatialScenarioId, target, geometry, now = new Date().toISOString() }) {
-  if (!spatialScenarioId) throw new Error("缺少空间场景，不能创建运营空间方案");
+export function createDraft({ plans = [], dataset, catalog = {}, spatialScenarioId, target, geometry, now = new Date().toISOString() }) {
+  if (!spatialScenarioId) throw new Error("缺少空间场景，不能创建运营区域方案");
   const sequence = nextSequence(plans);
   const planId = `OSP-${String(sequence).padStart(4, "0")}`;
   const previousVersions = plans.filter((plan) => plan.spatial_scenario_id === spatialScenarioId && plan.spatial_plan_features?.some((feature) => (
@@ -17,9 +26,10 @@ export function createDraft({ plans = [], dataset, spatialScenarioId, target, ge
     && feature.target_object_id
     && feature.target_object_id === target.target_object_id
   )));
+  const targetObjectId = target.target_object_id || createCityObjectId(target.target_object_type, plans, catalog);
   return createOperatingSpatialPlan({
     operating_spatial_plan_id: planId,
-    operating_spatial_plan_name: `${target.target_object_name || "未命名对象"}运营空间方案`,
+    operating_spatial_plan_name: `${target.target_object_name || "未命名对象"}运营区域方案`,
     operating_spatial_plan_status: OperatingSpatialPlanStatus.DRAFT,
     spatial_scenario_id: spatialScenarioId,
     spatial_plan_version: Math.max(0, ...previousVersions.map((plan) => Number(plan.spatial_plan_version || 0))) + 1,
@@ -29,6 +39,8 @@ export function createDraft({ plans = [], dataset, spatialScenarioId, target, ge
     spatial_plan_features: [createSpatialPlanFeature({
       spatial_plan_feature_id: `${planId}-F01`,
       ...target,
+      target_object_id: targetObjectId,
+      source_object_exists: target.source_object_exists ?? Boolean(target.target_object_id),
       geometry_geojson: clone(geometry),
     })],
     validation_status: SpatialPlanValidationStatus.INVALID,
@@ -40,7 +52,7 @@ export function createDraft({ plans = [], dataset, spatialScenarioId, target, ge
 export function validateDraft(plan, { dataset, catalog = {} } = {}) {
   assertEditable(plan);
   const issues = [];
-  if (!plan.operating_spatial_plan_name?.trim()) issues.push("请填写运营空间方案名称");
+  if (!plan.operating_spatial_plan_name?.trim()) issues.push("请填写运营区域方案名称");
   if (!plan.spatial_scenario_id) issues.push("方案缺少空间场景");
   if (plan.map_dataset_id !== dataset?.map_dataset_id || plan.map_dataset_version !== dataset?.map_dataset_version) {
     issues.push("方案引用的地图数据集版本与当前地图不一致");
@@ -48,8 +60,10 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
   if (plan.coordinate_reference_system !== "EPSG:4326") issues.push("当前只支持 WGS84 经纬度几何");
   if (!plan.spatial_plan_features?.length) issues.push("方案至少需要一个空间要素");
 
+  const effectiveCatalog = materializeCitySpatialCatalog(catalog, []);
   for (const feature of plan.spatial_plan_features || []) {
-    validateFeature(feature, dataset, catalog, issues);
+    validateFeature(feature, dataset, effectiveCatalog, issues);
+    validateSpatialPlanFeature(feature, effectiveCatalog, issues);
   }
 
   const valid = issues.length === 0;
@@ -67,7 +81,7 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
 export function publishValidatedPlan(plan, { plans = [], now = new Date().toISOString() } = {}) {
   if (plan?.operating_spatial_plan_status !== OperatingSpatialPlanStatus.VALIDATED
     || plan.validation_status !== SpatialPlanValidationStatus.VALID) {
-    throw new Error("运营空间方案校验通过后才能发布");
+    throw new Error("运营区域方案校验通过后才能发布");
   }
   const supersededIds = new Set(plan.spatial_plan_features
     .filter((feature) => feature.target_object_id)
@@ -117,7 +131,7 @@ export function normalizePlanScenarios(plans = [], defaultSpatialScenarioId) {
 function validateFeature(feature, dataset, catalog, issues) {
   if (!ALLOWED_TARGET_TYPES.has(feature.target_object_type)) issues.push("请选择运营区域、地点或服务区域");
   if (!feature.target_object_name?.trim()) issues.push("请填写目标对象名称");
-  if (feature.target_object_id && !targetExists(feature, catalog)) issues.push(`目标对象 ${feature.target_object_id} 不存在`);
+  if (feature.source_object_exists && feature.target_object_id && !targetExists(feature, catalog)) issues.push(`目标对象 ${feature.target_object_id} 不存在`);
   const ring = feature.geometry_geojson?.type === "Polygon" ? feature.geometry_geojson.coordinates?.[0] : null;
   if (!Array.isArray(ring) || ring.length < 4) {
     issues.push("请在地图上绘制至少三个顶点的闭合区域");
@@ -142,7 +156,7 @@ function targetExists(feature, catalog) {
 }
 
 function createImpactSummary(plan) {
-  const existing = plan.spatial_plan_features.filter((feature) => feature.target_object_id).length;
+  const existing = plan.spatial_plan_features.filter((feature) => feature.source_object_exists).length;
   const created = plan.spatial_plan_features.length - existing;
   return {
     affected_feature_count: plan.spatial_plan_features.length,
@@ -151,12 +165,13 @@ function createImpactSummary(plan) {
     demand_profile_recalculation_required: true,
     route_reassessment_required: true,
     simulation_runtime_changed: false,
+    city_spatial_objects: plan.spatial_plan_features.map(createCitySpatialImpact),
   };
 }
 
 function assertEditable(plan) {
   if (!plan || ![OperatingSpatialPlanStatus.DRAFT, OperatingSpatialPlanStatus.VALIDATED].includes(plan.operating_spatial_plan_status)) {
-    throw new Error("当前运营空间方案不可编辑");
+    throw new Error("当前运营区域方案不可编辑");
   }
 }
 

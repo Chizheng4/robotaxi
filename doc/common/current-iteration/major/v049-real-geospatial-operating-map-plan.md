@@ -5,7 +5,7 @@
 - 状态：执行中。
 - 版本边界：`v048` 工程阶段已经完成；访问记录已在 `v049.2.1` 迁移到 CloudBase，控制台部署和公网验收保留为独立外部待办，不阻塞地图工程实施。
 - 正式方案：`doc/01-space-model/12-real-geospatial-operating-map-design.md`。
-- 当前中版本：`v049.2.0` 双空间场景隔离，详见 `doc/common/current-iteration/major/v049.2-dual-spatial-scenario-isolation-plan.md`。
+- 当前中版本：`v049.3.0` 城市空间对象底座；在城市地理目录中建立两级 Zone、Place 类型和 ServiceArea 关系，不接管网格业务运行。
 
 ## 价值目标
 
@@ -46,11 +46,11 @@
 
 ### 阶段 2：空间对象服务
 
-- [ ] 建立统一空间对象服务，负责几何创建、修改、版本和关系校验。
+- [x] 建立城市空间目录服务，负责发布方案生成城市 Zone、Place、ServiceArea 目录对象及不可变版本投影。
 - [ ] 建立地图数据目录服务，管理数据集来源、覆盖范围、版本和启用状态。
 - [ ] 建立坐标转换适配器，业务对象只保存声明过坐标系的事实。
 - [ ] 建立 Cell 与地理几何映射服务，避免页面按像素推导业务关系。
-- [ ] 建立 Place、ServiceArea、Zone、Road、OpsCenter 的几何与归属校验。
+- [x] 建立一级/二级 Zone、Place、ServiceArea 的几何与归属校验；Road、上下车点和独立 Factory/OpsCenter 资源接入保留后续阶段。
 - [ ] 建立空间对象变更后的画像待重算、路线影响和运行态兼容事件。
 - [ ] 增加服务层单元测试和非法几何、关系冲突、版本冲突测试。
 
@@ -77,13 +77,13 @@
 ### 阶段 4：空间编辑闭环
 
 - [x] 固定运营空间方案对象、生命周期和发布边界，详见 `doc/common/iteration-history/major/v049.1-guangzhou-operating-space-modeling-plan.md`。
-- [ ] 建立浏览模式和空间编辑模式权限与状态隔离。
-- [ ] 接入通用几何绘制适配器，首期支持 Zone、Place 和 ServiceArea 面草稿。
-- [ ] 建立撤销、重做、取消、保存、校验错误和影响预览。
-- [ ] 保存动作只调用空间对象服务；页面不得直接修改 GeoJSON 或对象关系。
-- [ ] 完成 Zone、Place、ServiceArea、运营中心范围的编辑校验。
+- [x] 建立浏览模式和城市空间编辑模式状态隔离，手机保持查看模式。
+- [x] 接入 Terra Draw 几何绘制适配器，支持 Zone、Place 和 ServiceArea 面草稿。
+- [x] 建立撤销、重做、取消、校验错误和影响预览。
+- [x] 发布动作只调用运营区域方案与城市空间目录服务；页面不得直接修改目录对象。
+- [x] 完成 Zone 两级上限、父子归属、Place 类型与 Zone 归属、ServiceArea 关联 Place/Zone 校验。
 - [ ] 完成 RoadNode/RoadSegment 导入或维护边界；首期不允许页面修改 OSM 底图。
-- [ ] 桌面完成多边形编辑；手机首期完成查看和简单点位能力，复杂编辑明确限制。
+- [x] 桌面完成多边形绘制和重绘；手机首期保持已发布对象查看，复杂编辑明确限制。
 
 ### 阶段 5：统一路径规划 Provider
 

@@ -11,6 +11,11 @@ export const SpatialPlanTargetType = Object.freeze({
   SERVICE_AREA: "SERVICE_AREA",
 });
 
+export const ZoneStructureMode = Object.freeze({
+  FLAT: "FLAT",
+  TWO_LEVEL: "TWO_LEVEL",
+});
+
 export const SpatialPlanValidationStatus = Object.freeze({
   VALID: "VALID",
   INVALID: "INVALID",
@@ -45,5 +50,12 @@ export function createSpatialPlanFeature(input = {}) {
     geometry_type: input.geometry_geojson?.type || input.geometry_type || "Polygon",
     geometry_geojson: input.geometry_geojson,
     parent_zone_id: input.parent_zone_id || null,
+    zone_id: input.zone_id || null,
+    zone_level: input.zone_level || null,
+    zone_structure_mode: input.zone_structure_mode || null,
+    place_type: input.place_type || null,
+    place_id: input.place_id || null,
+    service_area_type: input.service_area_type || null,
+    source_object_exists: Boolean(input.source_object_exists),
   };
 }
