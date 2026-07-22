@@ -8859,6 +8859,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   function createPlanFromGeometry(geometry) {
     const selectedTarget = targetOptions.find((option) => option.value === targetId);
     const targetName = targetId === "__NEW__" ? newTargetName.trim() : selectedTarget?.label;
+    const sourceFeatureSnapshot = adapterRef.current?.inspectPlanningGeometry(geometry) || [];
     const plan = operatingSpatialPlanService.createDraft({
       plans,
       dataset: scene.dataset,
@@ -8875,6 +8876,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
         place_type: targetType === "PLACE" ? placeType : null,
         place_id: targetType === "SERVICE_AREA" ? placeId : null,
         service_area_type: targetType === "SERVICE_AREA" ? serviceAreaType : null,
+        source_feature_snapshot: sourceFeatureSnapshot,
       },
       geometry,
       catalog: scene,
@@ -8882,7 +8884,22 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     setActivePlan(plan);
     setEditingExistingBoundary(false);
     onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, plan));
-    setEditorNotice("草稿已形成，请校验空间关系");
+    setEditorNotice(sourceFeatureSnapshot.length
+      ? `草稿已形成，并识别 ${sourceFeatureSnapshot.length} 个底图参考要素，请校验空间关系`
+      : "草稿已形成；当前缩放级别未识别到底图参考要素，请确认边界后校验");
+  }
+
+  function resolvePlanningParentGeometry() {
+    if (targetType === "ZONE" && zoneLevel === "SUB_ZONE") {
+      return firstLevelZoneOptions.find((option) => option.value === parentZoneId)?.geometry || null;
+    }
+    if (targetType === "SERVICE_AREA" && placeId) {
+      return placeOptions.find((option) => option.value === placeId)?.geometry || null;
+    }
+    if (targetType !== "ZONE" && zoneId) {
+      return zoneOptions.find((option) => option.value === zoneId)?.geometry || null;
+    }
+    return null;
   }
 
   function beginDrawing() {
@@ -8890,6 +8907,18 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     const targetName = targetId === "__NEW__" ? newTargetName.trim() : selectedTarget?.label;
     if (!targetName) {
       setEditorNotice("请先选择目标对象或填写新对象名称");
+      return;
+    }
+    if (targetType === "ZONE" && zoneLevel === "SUB_ZONE" && !parentZoneId) {
+      setEditorNotice("请先选择一级运营区域，系统会聚焦父级范围后再绘制二级子区域");
+      return;
+    }
+    if (targetType !== "ZONE" && !zoneId) {
+      setEditorNotice("请先选择直接归属区域，地点和服务区域必须绘制在其范围内");
+      return;
+    }
+    if (targetType === "SERVICE_AREA" && !placeId) {
+      setEditorNotice("请先选择关联地点，服务区域必须与地点属于同一运营区域");
       return;
     }
     setEditorNotice("请在地图上依次点击边界顶点，点击首个点完成绘制");
@@ -8900,6 +8929,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
         setEditorNotice("已载入当前边界。拖动顶点调整，完成后点击形成草稿");
         return;
       }
+      adapterRef.current?.focusPlanningParent(resolvePlanningParentGeometry(), targetType);
       adapterRef.current?.startPolygonDrawing(createPlanFromGeometry);
     } catch (error) {
       setEditorNotice(error.message || "地图绘制组件不可用");
@@ -8923,7 +8953,10 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     });
     setActivePlan(validated);
     onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, validated));
-    setEditorNotice(validated.validation_issues.length ? validated.validation_issues.join("；") : "校验通过，可以发布城市空间目录版本");
+    const coverageWarnings = validated.spatial_plan_features?.[0]?.spatial_validation_summary?.coverage_issues || [];
+    setEditorNotice(validated.validation_issues.length
+      ? validated.validation_issues.join("；")
+      : ["校验通过，可以发布城市空间目录版本", ...coverageWarnings].join("；"));
   }
 
   function createDeactivationPlan() {
@@ -9017,10 +9050,10 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
           {targetId === "__NEW__" && <label><span>对象名称</span><Input size="small" value={newTargetName} onChange={(event) => setNewTargetName(event.target.value)} /></label>}
           {targetType === "ZONE" && <label><span>{getFieldLabel("zone_level")}</span><Select size="small" value={zoneLevel} options={planningContract.zoneLevels.map((value) => ({ value, label: getDisplayValue(value) }))} onChange={(value) => { setZoneLevel(value); if (value === "ZONE") setParentZoneId(""); }} /></label>}
           {targetType === "ZONE" && zoneLevel === "ZONE" && <label><span>{getFieldLabel("zone_structure_mode")}</span><Select size="small" value={zoneStructureMode} options={planningContract.zoneStructureModes.map((value) => ({ value, label: getDisplayValue(value) }))} onChange={setZoneStructureMode} /></label>}
-          {targetType === "ZONE" && zoneLevel === "SUB_ZONE" && <label><span>{getFieldLabel("parent_zone_id")}</span><Select size="small" value={parentZoneId || undefined} placeholder="请选择一级运营区域" options={firstLevelZoneOptions} onChange={setParentZoneId} /></label>}
-          {targetType !== "ZONE" && <label><span>{getFieldLabel("zone_id")}</span><Select size="small" value={zoneId || undefined} placeholder="请选择直接归属区域" options={zoneOptions} onChange={(value) => { setZoneId(value); setPlaceId(""); }} /></label>}
+          {targetType === "ZONE" && zoneLevel === "SUB_ZONE" && <label><span>{getFieldLabel("parent_zone_id")}</span><Select size="small" value={parentZoneId || undefined} placeholder="请选择一级运营区域" options={firstLevelZoneOptions} onChange={(value) => { setParentZoneId(value); const geometry = firstLevelZoneOptions.find((option) => option.value === value)?.geometry; adapterRef.current?.focusPlanningParent(geometry, "ZONE"); }} /></label>}
+          {targetType !== "ZONE" && <label><span>{getFieldLabel("zone_id")}</span><Select size="small" value={zoneId || undefined} placeholder="请选择直接归属区域" options={zoneOptions} onChange={(value) => { setZoneId(value); setPlaceId(""); const geometry = zoneOptions.find((option) => option.value === value)?.geometry; adapterRef.current?.focusPlanningParent(geometry, targetType); }} /></label>}
           {targetType === "PLACE" && <label><span>{getFieldLabel("place_type")}</span><Select size="small" value={placeType} options={planningContract.placeTypes.map((value) => ({ value, label: getDisplayValue(value) }))} onChange={setPlaceType} /></label>}
-          {targetType === "SERVICE_AREA" && <label><span>{getFieldLabel("place_id")}</span><Select size="small" value={placeId || undefined} placeholder="请选择关联地点" options={placeOptions} onChange={setPlaceId} /></label>}
+          {targetType === "SERVICE_AREA" && <label><span>{getFieldLabel("place_id")}</span><Select size="small" value={placeId || undefined} placeholder="请选择关联地点" options={placeOptions} onChange={(value) => { setPlaceId(value); const geometry = placeOptions.find((option) => option.value === value)?.geometry; adapterRef.current?.focusPlanningParent(geometry, "SERVICE_AREA"); }} /></label>}
           {targetType === "SERVICE_AREA" && <label><span>{getFieldLabel("service_area_type")}</span><Select size="small" value={serviceAreaType} options={planningContract.serviceAreaTypes.map((value) => ({ value, label: getDisplayValue(value) }))} onChange={setServiceAreaType} /></label>}
           <div className="spatial-plan-editor-actions">
             <Button size="small" onClick={editingExistingBoundary ? captureEditedBoundary : beginDrawing}>{editingExistingBoundary ? "形成草稿" : (targetId === "__NEW__" ? "绘制区域" : "调整边界")}</Button>
@@ -9033,6 +9066,11 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
             <Button type="text" danger size="small" disabled={!targetId || targetId === "__NEW__"} onClick={createDeactivationPlan}>停用对象</Button>
             <Button type="text" size="small" disabled={!activePlan || activePlan.operating_spatial_plan_status === "PUBLISHED"} onClick={cancelPlan}>取消草稿</Button>
           </div>
+          {activePlan?.spatial_plan_features?.[0]?.source_feature_snapshot?.length > 0 && (() => {
+            const sourceFeatures = activePlan.spatial_plan_features[0].source_feature_snapshot;
+            const count = (category) => sourceFeatures.filter((item) => item.feature_category === `MAP_${category}`).length;
+            return <div className="spatial-plan-reference"><strong>底图参考</strong><span>道路 {count("ROAD")}</span><span>建筑 {count("BUILDING")}</span><span>地点 {count("PLACE")}</span><span>水域 {count("WATER")}</span></div>;
+          })()}
           {activePlan?.impact_summary && <div className="spatial-plan-impact"><strong>影响预览</strong><span>更新 {activePlan.impact_summary.existing_projection_update_count} 个城市对象</span><span>创建 {activePlan.impact_summary.pending_initialization_count} 个城市对象</span><span>网格业务与模拟运行不改变</span></div>}
           {editorNotice && <p className={activePlan?.validation_issues?.length ? "spatial-plan-notice error" : "spatial-plan-notice"}>{editorNotice}</p>}
         </aside>
@@ -11536,13 +11574,13 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
-		    import("./services/geospatialCatalogService.js?v=20260722-v049-4-1"),
-			    import("./ui/geospatialMapAdapter.js?v=20260722-v049-4-1"),
+		    import("./services/geospatialCatalogService.js?v=20260722-v049-5-0"),
+			    import("./ui/geospatialMapAdapter.js?v=20260722-v049-5-0"),
 			    import("./data/geospatialReferenceData.js?v=20260721-v049-1-0"),
 				    import("./data/citySpatialCatalog.js?v=20260722-v049-4-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
 				    import("./data/spatialScenarioInitialization.js?v=20260722-v049-4-0"),
-			    import("./services/operatingSpatialPlanService.js?v=20260722-v049-4-1"),
+			    import("./services/operatingSpatialPlanService.js?v=20260722-v049-5-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
         import("./ui/dataChartService.js?v=20260717-v047-1-0"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),

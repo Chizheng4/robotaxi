@@ -1373,6 +1373,22 @@
   gap: 5px;
 }
 
+.spatial-plan-reference {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.spatial-plan-reference strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .spatial-plan-editor header {
   grid-template-columns: 1fr auto;
   align-items: center;

@@ -1,18 +1,22 @@
 const SOURCE_DEFINITIONS = Object.freeze({
-  zones: { layerId: "robotaxi-zones", type: "fill" },
-  places: { layerId: "robotaxi-places", type: "fill" },
-  serviceAreas: { layerId: "robotaxi-service-areas", type: "fill" },
-  roads: { layerId: "robotaxi-roads", type: "line" },
-  opsCenters: { layerId: "robotaxi-ops-centers", type: "circle" },
-  robotaxis: { layerId: "robotaxi-vehicles", type: "circle" },
-  route: { layerId: "robotaxi-selected-route", type: "line" },
+  zones: { type: "fill", layers: [
+    { layerId: "robotaxi-zones", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
+    { layerId: "robotaxi-sub-zones", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
+  ] },
+  places: { layerId: "robotaxi-places", type: "fill", minzoom: 12, maxzoom: 18 },
+  serviceAreas: { layerId: "robotaxi-service-areas", type: "fill", minzoom: 14 },
+  roads: { layerId: "robotaxi-roads", type: "line", minzoom: 13 },
+  opsCenters: { layerId: "robotaxi-ops-centers", type: "circle", minzoom: 11 },
+  robotaxis: { layerId: "robotaxi-vehicles", type: "circle", minzoom: 14 },
+  route: { layerId: "robotaxi-selected-route", type: "line", minzoom: 12 },
 });
 
-const LABEL_DEFINITIONS = Object.freeze({
-  zones: { sourceId: "zoneLabels", layerId: "robotaxi-zone-labels", size: 12, minzoom: 3 },
-  places: { sourceId: "placeLabels", layerId: "robotaxi-place-labels", size: 11, minzoom: 13 },
-  serviceAreas: { sourceId: "serviceAreaLabels", layerId: "robotaxi-service-area-labels", size: 10, minzoom: 15 },
-});
+const LABEL_DEFINITIONS = Object.freeze([
+  { sceneKey: "zones", sourceId: "zoneLabels", layerId: "robotaxi-zone-labels", size: 12, minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
+  { sceneKey: "zones", sourceId: "zoneLabels", layerId: "robotaxi-sub-zone-labels", size: 11, minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
+  { sceneKey: "places", sourceId: "placeLabels", layerId: "robotaxi-place-labels", size: 11, minzoom: 12, maxzoom: 18 },
+  { sceneKey: "serviceAreas", sourceId: "serviceAreaLabels", layerId: "robotaxi-service-area-labels", size: 10, minzoom: 14 },
+]);
 
 const FALLBACK_STYLE = Object.freeze({
   version: 8,
@@ -80,8 +84,15 @@ export function createGeospatialMapAdapter(options = {}) {
         map.addSource(sourceId, { type: "geojson", data: currentScene?.[sourceId] || emptyCollection() });
       }
       appliedSourceVersions[sourceId] = currentScene?.sourceVersions?.[sourceId] || "";
-      if (!map.getLayer(definition.layerId)) map.addLayer(createLayer(sourceId, definition));
-      bindLayerEvents(definition.layerId);
+      for (const layerDefinition of layerDefinitions(definition)) {
+        if (!map.getLayer(layerDefinition.layerId)) {
+          const beforeId = layerDefinition.type === "fill" ? firstBasemapLabelLayerId() : undefined;
+          const layer = createLayer(sourceId, layerDefinition);
+          if (beforeId) map.addLayer(layer, beforeId);
+          else map.addLayer(layer);
+        }
+        bindLayerEvents(layerDefinition.layerId);
+      }
     }
     installLabelLayers();
     updateSelection(options.selected || null);
@@ -89,8 +100,8 @@ export function createGeospatialMapAdapter(options = {}) {
 
   function installLabelLayers() {
     if (!map.getStyle()?.glyphs) return;
-    for (const [sceneKey, definition] of Object.entries(LABEL_DEFINITIONS)) {
-      const { sourceId, layerId, size, minzoom } = definition;
+    for (const definition of LABEL_DEFINITIONS) {
+      const { sceneKey, sourceId, layerId, size, minzoom, maxzoom, filter } = definition;
       if (!map.getSource(sourceId)) {
         map.addSource(sourceId, { type: "geojson", data: createLabelCollection(currentScene?.[sceneKey]) });
       }
@@ -101,6 +112,8 @@ export function createGeospatialMapAdapter(options = {}) {
         type: "symbol",
         source: sourceId,
         minzoom,
+        maxzoom,
+        filter,
         layout: {
           "text-field": ["get", "object_name"],
           "text-size": size,
@@ -161,7 +174,8 @@ export function createGeospatialMapAdapter(options = {}) {
       map.getSource(sourceId)?.setData(currentScene?.[sourceId] || emptyCollection());
       appliedSourceVersions[sourceId] = nextVersion;
     }
-    for (const [sceneKey, definition] of Object.entries(LABEL_DEFINITIONS)) {
+    for (const definition of LABEL_DEFINITIONS) {
+      const { sceneKey } = definition;
       const nextVersion = currentScene?.sourceVersions?.[sceneKey] || "";
       if (appliedSourceVersions[definition.sourceId] === nextVersion) continue;
       map.getSource(definition.sourceId)?.setData(createLabelCollection(currentScene?.[sceneKey]));
@@ -206,17 +220,69 @@ export function createGeospatialMapAdapter(options = {}) {
   }
 
   function fitGeometry(geometry) {
+    fitPlanningGeometry(geometry, 0);
+  }
+
+  function fitPlanningGeometry(geometry, minimumZoom = 0) {
     const coordinates = geometry?.type === "Polygon" ? geometry.coordinates.flatMap((ring) => ring) : [];
     if (!coordinates.length) return;
     const bounds = coordinates.reduce(
       (result, coordinate) => result.extend(coordinate),
       new globalThis.maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
     );
+    const padding = options.compact ? 48 : { top: 84, right: 72, bottom: 72, left: 360 };
+    const camera = map.cameraForBounds?.(bounds, { padding, maxZoom: 15 });
+    if (camera) {
+      map.easeTo({ ...camera, zoom: Math.max(minimumZoom, camera.zoom), duration: 320 });
+      return;
+    }
     map.fitBounds(bounds, {
-      padding: options.compact ? 48 : { top: 84, right: 72, bottom: 72, left: 360 },
+      padding,
       maxZoom: 15,
       duration: 320,
     });
+  }
+
+  function focusPlanningParent(geometry, targetType) {
+    const minimumZoom = { ZONE: 8, PLACE: 13, SERVICE_AREA: 15 }[targetType] || 8;
+    if (geometry) {
+      fitPlanningGeometry(geometry, minimumZoom);
+      return;
+    }
+    if (map.getZoom() < minimumZoom) map.easeTo({ zoom: minimumZoom, duration: 260 });
+  }
+
+  function inspectPlanningGeometry(geometry) {
+    if (!ready || !map.isStyleLoaded() || geometry?.type !== "Polygon") return [];
+    const coordinates = geometry.coordinates?.[0] || [];
+    if (!coordinates.length) return [];
+    const pixels = coordinates.map((coordinate) => map.project(coordinate));
+    const bounds = pixels.reduce((result, point) => ({
+      minX: Math.min(result.minX, point.x), minY: Math.min(result.minY, point.y),
+      maxX: Math.max(result.maxX, point.x), maxY: Math.max(result.maxY, point.y),
+    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+    const ownLayers = new Set([
+      ...Object.values(SOURCE_DEFINITIONS).flatMap((definition) => layerDefinitions(definition).map((item) => item.layerId)),
+      ...LABEL_DEFINITIONS.map((definition) => definition.layerId),
+    ]);
+    const features = map.queryRenderedFeatures([[bounds.minX, bounds.minY], [bounds.maxX, bounds.maxY]])
+      .filter((feature) => !ownLayers.has(feature.layer?.id))
+      .filter((feature) => featureTouchesPlanningGeometry(feature, geometry));
+    const unique = new Map();
+    for (const feature of features) {
+      const category = classifyBasemapFeature(feature);
+      const name = feature.properties?.name_zh || feature.properties?.name || feature.properties?.ref || "";
+      const key = `${feature.source || ""}:${feature.sourceLayer || feature.layer?.["source-layer"] || ""}:${feature.id ?? name}:${category}`;
+      if (unique.has(key)) continue;
+      unique.set(key, {
+        source_feature_id: feature.id == null ? null : String(feature.id),
+        source_layer_id: feature.sourceLayer || feature.layer?.["source-layer"] || feature.layer?.id || "",
+        source_feature_name: String(name || ""),
+        feature_category: `MAP_${category}`,
+      });
+      if (unique.size >= 80) break;
+    }
+    return [...unique.values()];
   }
 
   function createDraw() {
@@ -271,12 +337,20 @@ export function createGeospatialMapAdapter(options = {}) {
     editing = false;
   }
 
+  function firstBasemapLabelLayerId() {
+    return map.getStyle()?.layers?.find((layer) => (
+      layer.type === "symbol" && !String(layer.id).startsWith("robotaxi-")
+    ))?.id;
+  }
+
   return {
     updateScene,
     updateSelection,
     fitScene,
     getCameraState: readCamera,
     zoomBy,
+    focusPlanningParent,
+    inspectPlanningGeometry,
     startPolygonDrawing,
     startPolygonEditing,
     getDrawingGeometry,
@@ -297,10 +371,11 @@ export function createGeospatialMapAdapter(options = {}) {
   };
 }
 
-function createLayer(sourceId, { layerId, type }) {
+function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
   if (type === "fill") {
     const colors = {
       "robotaxi-zones": ["#729c87", 0.09, "#507966"],
+      "robotaxi-sub-zones": ["#79a58d", 0.12, "#4f7f69"],
       "robotaxi-places": ["#d7ba78", 0.24, "#a48b54"],
       "robotaxi-service-areas": ["#56a596", 0.28, "#327a6d"],
     };
@@ -309,6 +384,9 @@ function createLayer(sourceId, { layerId, type }) {
       id: layerId,
       type,
       source: sourceId,
+      minzoom,
+      maxzoom,
+      filter,
       paint: {
         "fill-color": color,
         "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], Math.min(0.55, opacity + 0.18), opacity],
@@ -335,12 +413,105 @@ function createLayer(sourceId, { layerId, type }) {
     id: layerId,
     type,
     source: sourceId,
+    minzoom,
+    maxzoom,
+    filter,
     paint: {
       "line-color": layerId === "robotaxi-selected-route" ? "#2f6fe4" : ["case", ["boolean", ["feature-state", "selected"], false], "#2f6fe4", "#8295a6"],
       "line-width": layerId === "robotaxi-selected-route" ? 5 : ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 4],
       "line-opacity": layerId === "robotaxi-selected-route" ? 0.92 : 0.7,
     },
   };
+}
+
+function layerDefinitions(definition) {
+  return definition.layers || [definition];
+}
+
+function classifyBasemapFeature(feature) {
+  const token = `${feature.layer?.id || ""} ${feature.sourceLayer || feature.layer?.["source-layer"] || ""}`.toLowerCase();
+  if (/water|river|lake|ocean/.test(token)) return "WATER";
+  if (/road|street|transportation|highway|path/.test(token)) return "ROAD";
+  if (/building/.test(token)) return "BUILDING";
+  if (/poi|place|label/.test(token)) return "PLACE";
+  if (/landuse|landcover|park|industrial|residential|commercial/.test(token)) return "LANDUSE";
+  return "OTHER";
+}
+
+function featureTouchesPlanningGeometry(feature, planningGeometry) {
+  const ring = planningGeometry?.coordinates?.[0];
+  if (!ring?.length) return false;
+  const lines = coordinateLines(feature.geometry);
+  const points = lines.flat();
+  if (!points.length) return false;
+  if (points.some((point) => pointInRingInclusive(point, ring))) return true;
+  if (ring.some((point) => pointInFeatureGeometry(point, feature.geometry))) return true;
+  if (lines.some((line) => lineSegments(line).some(([start, end]) => (
+    lineSegments(ring).some(([boundaryStart, boundaryEnd]) => segmentsIntersect(start, end, boundaryStart, boundaryEnd))
+  )))) return true;
+  return pointInRing(geometryCenter(feature.geometry), ring);
+}
+
+function coordinateLines(geometry) {
+  if (!geometry) return [];
+  if (geometry.type === "Point") return [[geometry.coordinates]];
+  if (geometry.type === "MultiPoint" || geometry.type === "LineString") return [geometry.coordinates];
+  if (geometry.type === "MultiLineString" || geometry.type === "Polygon") return geometry.coordinates;
+  if (geometry.type === "MultiPolygon") return geometry.coordinates.flat();
+  return [];
+}
+
+function lineSegments(line = []) {
+  return line.slice(0, -1).map((point, index) => [point, line[index + 1]]);
+}
+
+function pointInFeatureGeometry(point, geometry) {
+  if (geometry?.type === "Polygon") return geometry.coordinates.some((ring) => pointInRingInclusive(point, ring));
+  if (geometry?.type === "MultiPolygon") return geometry.coordinates.some((polygon) => polygon.some((ring) => pointInRingInclusive(point, ring)));
+  return false;
+}
+
+function pointInRingInclusive(point, ring) {
+  if (lineSegments(ring).some(([start, end]) => pointOnSegment(point, start, end))) return true;
+  return pointInRing(point, ring);
+}
+
+function segmentsIntersect(a, b, c, d) {
+  const o1 = orientation(a, b, c);
+  const o2 = orientation(a, b, d);
+  const o3 = orientation(c, d, a);
+  const o4 = orientation(c, d, b);
+  if (o1 !== o2 && o3 !== o4) return true;
+  return (o1 === 0 && pointOnSegment(c, a, b))
+    || (o2 === 0 && pointOnSegment(d, a, b))
+    || (o3 === 0 && pointOnSegment(a, c, d))
+    || (o4 === 0 && pointOnSegment(b, c, d));
+}
+
+function orientation(a, b, c) {
+  const value = (b[1] - a[1]) * (c[0] - b[0]) - (b[0] - a[0]) * (c[1] - b[1]);
+  if (Math.abs(value) <= Number.EPSILON) return 0;
+  return value > 0 ? 1 : 2;
+}
+
+function pointOnSegment(point, start, end) {
+  const cross = (point[1] - start[1]) * (end[0] - start[0]) - (point[0] - start[0]) * (end[1] - start[1]);
+  if (Math.abs(cross) > 1e-10) return false;
+  return point[0] >= Math.min(start[0], end[0]) - 1e-10
+    && point[0] <= Math.max(start[0], end[0]) + 1e-10
+    && point[1] >= Math.min(start[1], end[1]) - 1e-10
+    && point[1] <= Math.max(start[1], end[1]) + 1e-10;
+}
+
+function pointInRing([x, y], ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const intersects = ((yi > y) !== (yj > y)) && x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
 }
 
 function selectionReference(selected) {

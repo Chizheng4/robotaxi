@@ -1,4 +1,4 @@
-import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-4-1";
+import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-5-0";
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 

@@ -5,7 +5,7 @@ import {
   SpatialPlanValidationStatus,
   createOperatingSpatialPlan,
   createSpatialPlanFeature,
-} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-4-0";
+} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-5-0";
 import {
   createCityObjectId,
   createCitySpatialImpact,
@@ -13,7 +13,11 @@ import {
   materializeCitySpatialCatalog,
   validateCitySpatialCatalog,
   validateSpatialPlanFeature,
-} from "./citySpatialObjectService.js?v=20260722-v049-4-0";
+} from "./citySpatialObjectService.js?v=20260722-v049-5-0";
+import {
+  summarizeSpatialCoverage,
+  validatePolygonGeometry,
+} from "./spatialTopologyService.js?v=20260722-v049-5-0";
 
 export { getCitySpatialPlanningContract };
 
@@ -45,6 +49,8 @@ export function createDraft({ plans = [], dataset, catalog = {}, spatialScenario
       target_object_id: targetObjectId,
       source_object_exists: target.source_object_exists ?? Boolean(target.target_object_id),
       geometry_geojson: clone(geometry),
+      source_feature_snapshot: clone(target.source_feature_snapshot || []),
+      spatial_validation_summary: clone(target.spatial_validation_summary || null),
     })],
     validation_status: SpatialPlanValidationStatus.INVALID,
     created_at: now,
@@ -155,16 +161,21 @@ function validateFeature(feature, dataset, catalog, issues) {
     validateDeactivation(feature, catalog, issues);
     return;
   }
+  const geometryIssues = [];
+  validatePolygonGeometry(feature.geometry_geojson, geometryIssues);
+  issues.push(...geometryIssues);
   const ring = feature.geometry_geojson?.type === "Polygon" ? feature.geometry_geojson.coordinates?.[0] : null;
-  if (!Array.isArray(ring) || ring.length < 4) {
-    issues.push("请在地图上绘制至少三个顶点的闭合区域");
-    return;
-  }
-  if (!samePoint(ring[0], ring[ring.length - 1])) issues.push("区域边界必须闭合");
-  if (ring.some((point) => !validCoordinate(point))) issues.push("区域包含无效经纬度坐标");
-  if (Math.abs(polygonArea(ring)) < 1e-10) issues.push("区域面积过小或边界无效");
+  if (!ring || geometryIssues.length) return;
   const bounds = dataset?.geographic_bounds;
   if (Array.isArray(bounds) && ring.some((point) => !insideBounds(point, bounds))) issues.push("区域超出广州受控演示范围");
+  if (feature.source_feature_snapshot?.length) {
+    const coverage = summarizeSpatialCoverage({
+      targetType: feature.target_object_type,
+      sourceFeatures: feature.source_feature_snapshot,
+    });
+    feature.spatial_validation_summary = coverage;
+    issues.push(...coverage.coverage_issues.filter((issue) => issue.includes("不能只覆盖")));
+  }
 }
 
 function validateDeactivation(feature, catalog, issues) {
@@ -226,24 +237,8 @@ function nextSequence(plans) {
   return Math.max(0, ...plans.map((plan) => Number(String(plan.operating_spatial_plan_id || "").match(/(\d+)$/)?.[1] || 0))) + 1;
 }
 
-function validCoordinate(point) {
-  return Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1])
-    && point[0] >= -180 && point[0] <= 180 && point[1] >= -90 && point[1] <= 90;
-}
-
 function insideBounds(point, bounds) {
   return point[0] >= bounds[0][0] && point[0] <= bounds[1][0] && point[1] >= bounds[0][1] && point[1] <= bounds[1][1];
-}
-
-function samePoint(left, right) {
-  return Array.isArray(left) && Array.isArray(right) && left[0] === right[0] && left[1] === right[1];
-}
-
-function polygonArea(ring) {
-  return ring.slice(0, -1).reduce((sum, point, index) => {
-    const next = ring[index + 1];
-    return sum + point[0] * next[1] - next[0] * point[1];
-  }, 0) / 2;
 }
 
 function clone(value) {

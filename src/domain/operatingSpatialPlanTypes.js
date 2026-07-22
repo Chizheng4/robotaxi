@@ -65,6 +65,8 @@ export function createSpatialPlanFeature(input = {}) {
     place_type: input.place_type || null,
     place_id: input.place_id || null,
     service_area_type: input.service_area_type || null,
+    source_feature_snapshot: Array.isArray(input.source_feature_snapshot) ? input.source_feature_snapshot : [],
+    spatial_validation_summary: input.spatial_validation_summary || null,
     source_object_exists: Boolean(input.source_object_exists),
   };
 }

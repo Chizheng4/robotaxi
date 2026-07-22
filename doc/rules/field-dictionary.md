@@ -723,10 +723,24 @@
 |service_area_type|服务区域类型|类型字段|服务区域承担的上下车、待命等服务类型|
 |geometry_geojson|地理几何|持久化字段|使用 EPSG:4326 的标准 GeoJSON 几何|
 |geometry_type|几何类型|类型字段|首期区域建模固定为 Polygon|
+|source_feature_snapshot|底图要素快照|快照字段|绘制边界时从当前地图数据集和缩放级别识别的道路、建筑、地点、水域等紧凑参考，不替代正式业务对象|
+|source_feature_count|底图要素数量|计算字段|当前边界识别到底图参考要素的去重数量|
+|source_feature_id|底图要素编号|外部引用字段|底图数据源提供的要素编号；数据源未提供时为空|
+|source_layer_id|底图图层编号|外部引用字段|底图要素所属来源图层，用于来源追溯和分类|
+|source_feature_name|底图要素名称|快照字段|底图要素在方案形成时的名称快照|
+|feature_category|底图要素类型|类型字段|道路、建筑、地点、水域、土地利用或其他参考类型|
+|spatial_validation_summary|空间校验摘要|结果字段|几何、层级、底图覆盖和可服务性校验结果摘要|
+|road_reference_count|道路参考数量|计算字段|边界内识别到的道路参考数量|
+|building_reference_count|建筑参考数量|计算字段|边界内识别到的建筑参考数量|
+|place_reference_count|地点参考数量|计算字段|边界内识别到的地点参考数量|
+|water_reference_count|水域参考数量|计算字段|边界内识别到的水域参考数量|
+|coverage_issues|覆盖校验问题|结果字段|边界覆盖水域、道路接入等规划辅助校验问题|
 |validation_status|校验状态|状态字段|空间服务校验是否通过|
 |validation_issues|校验问题|结果字段|未通过校验的结构化中文原因|
 |impact_summary|影响预览|结果字段|发布将影响的投影、画像和路线范围|
 |published_at|发布时间|事实字段|方案发布为地理投影版本的真实时间|
+
+底图要素类型枚举：`MAP_ROAD` 为底图道路，`MAP_BUILDING` 为底图建筑，`MAP_PLACE` 为底图地点，`MAP_WATER` 为底图水域，`MAP_LANDUSE` 为底图土地利用，`MAP_OTHER` 为其他底图要素。这些值只用于规划参考快照，不等同于正式 Road、Place 或其他业务对象。
 
 ---
 

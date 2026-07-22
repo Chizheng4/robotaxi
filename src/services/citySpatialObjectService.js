@@ -1,5 +1,6 @@
 import { PlaceType, ServiceAreaType, ZoneLevel } from "../domain/types.js?v=20260722-v049-4-0";
-import { ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-4-0";
+import { ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-5-0";
+import { geometryContains } from "./spatialTopologyService.js?v=20260722-v049-5-0";
 
 const OBJECT_CONFIG = Object.freeze({
   ZONE: { collection: "zones", prefix: "GZ-Z", objectType: "zone" },
@@ -45,7 +46,12 @@ export function validateCitySpatialCatalog(catalog = {}, issues = []) {
   const serviceAreas = activeFeatures(catalog.serviceAreas);
   for (const zone of zones) {
     const properties = zone.properties || {};
-    if ((properties.zone_level || ZoneLevel.ZONE) !== ZoneLevel.ZONE) continue;
+    if ((properties.zone_level || ZoneLevel.ZONE) === ZoneLevel.SUB_ZONE) {
+      const parent = findFeature(catalog.zones, properties.parent_zone_id);
+      if (!parent) issues.push(`${properties.object_name}缺少有效的一级运营区域`);
+      else if (!geometryContains(parent.geometry, zone.geometry)) issues.push(`${properties.object_name}边界必须位于一级运营区域内`);
+      continue;
+    }
     const children = zones.filter((item) => item.properties?.parent_zone_id === properties.object_id);
     const expectsChildren = properties.zone_structure_mode === ZoneStructureMode.TWO_LEVEL;
     if (expectsChildren && !children.length) issues.push(`${properties.object_name}采用两级区域结构，但没有二级子区域`);
@@ -54,9 +60,17 @@ export function validateCitySpatialCatalog(catalog = {}, issues = []) {
   for (const item of [...places, ...serviceAreas]) {
     const zone = findFeature(catalog.zones, item.properties?.zone_id);
     if (!zone) issues.push(`${item.properties?.object_name || "空间对象"}缺少有效的直接归属区域`);
+    else if (!geometryContains(zone.geometry, item.geometry)) issues.push(`${item.properties?.object_name || "空间对象"}边界必须位于直接归属区域内`);
     if (zone?.properties?.zone_level === ZoneLevel.ZONE
       && zone.properties.zone_structure_mode === ZoneStructureMode.TWO_LEVEL) {
       issues.push(`${item.properties?.object_name || "空间对象"}必须直接归属二级子区域`);
+    }
+  }
+  for (const serviceArea of serviceAreas) {
+    const place = findFeature(catalog.places, serviceArea.properties?.place_id);
+    if (!place) issues.push(`${serviceArea.properties?.object_name || "服务区域"}缺少有效的关联地点`);
+    else if (place.properties?.zone_id !== serviceArea.properties?.zone_id) {
+      issues.push(`${serviceArea.properties?.object_name || "服务区域"}与关联地点必须归属同一运营区域`);
     }
   }
   return issues;
@@ -156,6 +170,8 @@ function applyFeature(catalog, feature, plan) {
     place_type: feature.place_type || null,
     place_id: feature.place_id || null,
     service_area_type: feature.service_area_type || null,
+    source_feature_snapshot: clone(feature.source_feature_snapshot || []),
+    spatial_validation_summary: clone(feature.spatial_validation_summary || null),
   };
   const next = {
     type: "Feature",
@@ -195,24 +211,6 @@ function collectCatalogIds(catalog, collectionName) {
 function findFeature(collection, id) {
   return (collection?.features || []).find((feature) => feature.properties?.object_status !== "DISABLED"
     && (feature.properties?.object_id || feature.id) === id) || null;
-}
-
-function geometryContains(container, child) {
-  const containerRing = container?.type === "Polygon" ? container.coordinates?.[0] : null;
-  const childRing = child?.type === "Polygon" ? child.coordinates?.[0] : null;
-  if (!containerRing || !childRing) return false;
-  return childRing.slice(0, -1).every((point) => pointInPolygon(point, containerRing));
-}
-
-function pointInPolygon([x, y], ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i];
-    const [xj, yj] = ring[j];
-    const intersects = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
-    if (intersects) inside = !inside;
-  }
-  return inside;
 }
 
 function clone(value) {
