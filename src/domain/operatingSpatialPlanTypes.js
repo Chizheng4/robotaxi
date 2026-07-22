@@ -22,6 +22,11 @@ export const SpatialPlanValidationStatus = Object.freeze({
   INVALID: "INVALID",
 });
 
+export const SpatialPlanChangeType = Object.freeze({
+  UPSERT: "UPSERT",
+  DEACTIVATE: "DEACTIVATE",
+});
+
 export function createOperatingSpatialPlan(input = {}) {
   return {
     operating_spatial_plan_id: input.operating_spatial_plan_id,
@@ -47,6 +52,7 @@ export function createOperatingSpatialPlan(input = {}) {
 export function createSpatialPlanFeature(input = {}) {
   return {
     spatial_plan_feature_id: input.spatial_plan_feature_id,
+    spatial_change_type: input.spatial_change_type || SpatialPlanChangeType.UPSERT,
     target_object_type: input.target_object_type,
     target_object_id: input.target_object_id || null,
     target_object_name: input.target_object_name,

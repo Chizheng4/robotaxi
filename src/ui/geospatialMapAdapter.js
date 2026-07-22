@@ -29,6 +29,7 @@ export function createGeospatialMapAdapter(options = {}) {
   let fallbackApplied = false;
   let editing = false;
   let draw = null;
+  let initialCamera = null;
   const appliedSourceVersions = {};
   const map = new MapLibre.Map({
     container: options.container,
@@ -52,6 +53,7 @@ export function createGeospatialMapAdapter(options = {}) {
     ready = true;
     clearTimeout(styleTimeout);
     installScene();
+    initialCamera = readCamera();
   });
   map.on("style.load", () => {
     if (destroyed) return;
@@ -178,7 +180,25 @@ export function createGeospatialMapAdapter(options = {}) {
   }
 
   function fitScene() {
-    if (currentScene?.bounds) map.fitBounds(currentScene.bounds, { padding: options.compact ? 24 : 52, duration: 280 });
+    map.stop?.();
+    if (initialCamera) {
+      map.easeTo({ ...initialCamera, duration: 240 });
+      return;
+    }
+    if (currentScene?.bounds) {
+      map.fitBounds(currentScene.bounds, { padding: options.compact ? 24 : 52, duration: 0 });
+      initialCamera = readCamera();
+    }
+  }
+
+  function readCamera() {
+    const center = map.getCenter();
+    return {
+      center: [center.lng, center.lat],
+      zoom: map.getZoom(),
+      bearing: map.getBearing?.() || 0,
+      pitch: map.getPitch?.() || 0,
+    };
   }
 
   function zoomBy(delta) {
@@ -255,6 +275,7 @@ export function createGeospatialMapAdapter(options = {}) {
     updateScene,
     updateSelection,
     fitScene,
+    getCameraState: readCamera,
     zoomBy,
     startPolygonDrawing,
     startPolygonEditing,

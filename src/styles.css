@@ -6706,3 +6706,35 @@ html[data-keyboard-open="true"] .platform-login-panel {
     padding-inline: 10px;
   }
 }
+
+/* City and grid maps share one stable control layout. Keep this block last so legacy map rules cannot move it. */
+.map-page-new > .map-stage > .map-floating-actions {
+  top: 12px !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 12px !important;
+}
+
+.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-trigger {
+  top: 54px !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 12px !important;
+}
+
+.map-page-new > .map-stage > .map-navigation-actions {
+  top: auto !important;
+  bottom: 12px !important;
+}
+
+@media (max-width: 767px) {
+  .map-page-new > .map-stage > .map-floating-actions {
+    top: 8px !important;
+    left: 8px !important;
+  }
+
+  .map-page-new > .map-stage > .map-navigation-actions {
+    right: 8px !important;
+    bottom: 8px !important;
+  }
+}

@@ -1,5 +1,6 @@
 import {
   OperatingSpatialPlanStatus,
+  SpatialPlanChangeType,
   SpatialPlanTargetType,
   SpatialPlanValidationStatus,
   createOperatingSpatialPlan,
@@ -18,7 +19,7 @@ export { getCitySpatialPlanningContract };
 
 const ALLOWED_TARGET_TYPES = new Set(Object.values(SpatialPlanTargetType));
 
-export function createDraft({ plans = [], dataset, catalog = {}, spatialScenarioId, target, geometry, now = new Date().toISOString() }) {
+export function createDraft({ plans = [], dataset, catalog = {}, spatialScenarioId, target, geometry, changeType = SpatialPlanChangeType.UPSERT, now = new Date().toISOString() }) {
   if (!spatialScenarioId) throw new Error("缺少空间场景，不能创建运营区域方案");
   const sequence = nextSequence(plans);
   const planId = `OSP-${String(sequence).padStart(4, "0")}`;
@@ -40,6 +41,7 @@ export function createDraft({ plans = [], dataset, catalog = {}, spatialScenario
     spatial_plan_features: [createSpatialPlanFeature({
       spatial_plan_feature_id: `${planId}-F01`,
       ...target,
+      spatial_change_type: changeType,
       target_object_id: targetObjectId,
       source_object_exists: target.source_object_exists ?? Boolean(target.target_object_id),
       geometry_geojson: clone(geometry),
@@ -64,7 +66,9 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
   const effectiveCatalog = materializeCitySpatialCatalog(catalog, []);
   for (const feature of plan.spatial_plan_features || []) {
     validateFeature(feature, dataset, effectiveCatalog, issues);
-    validateSpatialPlanFeature(feature, effectiveCatalog, issues);
+    if (feature.spatial_change_type !== SpatialPlanChangeType.DEACTIVATE) {
+      validateSpatialPlanFeature(feature, effectiveCatalog, issues);
+    }
   }
   if (!issues.length) {
     const candidateCatalog = materializeCitySpatialCatalog(effectiveCatalog, [{
@@ -147,6 +151,10 @@ function validateFeature(feature, dataset, catalog, issues) {
   if (!ALLOWED_TARGET_TYPES.has(feature.target_object_type)) issues.push("请选择运营区域、地点或服务区域");
   if (!feature.target_object_name?.trim()) issues.push("请填写目标对象名称");
   if (feature.source_object_exists && feature.target_object_id && !targetExists(feature, catalog)) issues.push(`目标对象 ${feature.target_object_id} 不存在`);
+  if (feature.spatial_change_type === SpatialPlanChangeType.DEACTIVATE) {
+    validateDeactivation(feature, catalog, issues);
+    return;
+  }
   const ring = feature.geometry_geojson?.type === "Polygon" ? feature.geometry_geojson.coordinates?.[0] : null;
   if (!Array.isArray(ring) || ring.length < 4) {
     issues.push("请在地图上绘制至少三个顶点的闭合区域");
@@ -157,6 +165,30 @@ function validateFeature(feature, dataset, catalog, issues) {
   if (Math.abs(polygonArea(ring)) < 1e-10) issues.push("区域面积过小或边界无效");
   const bounds = dataset?.geographic_bounds;
   if (Array.isArray(bounds) && ring.some((point) => !insideBounds(point, bounds))) issues.push("区域超出广州受控演示范围");
+}
+
+function validateDeactivation(feature, catalog, issues) {
+  if (!feature.source_object_exists || !feature.target_object_id) {
+    issues.push("只有已发布的城市空间对象可以停用");
+    return;
+  }
+  const active = (collection) => (collection?.features || []).filter((item) => item.properties?.object_status !== "DISABLED");
+  if (feature.target_object_type === "ZONE") {
+    const dependencies = [
+      ...active(catalog.zones).filter((item) => item.properties?.parent_zone_id === feature.target_object_id),
+      ...active(catalog.places).filter((item) => item.properties?.zone_id === feature.target_object_id),
+      ...active(catalog.serviceAreas).filter((item) => item.properties?.zone_id === feature.target_object_id),
+      ...active(catalog.opsCenters).filter((item) => item.properties?.zone_id === feature.target_object_id),
+    ];
+    if (dependencies.length) issues.push(`该运营区域仍关联 ${dependencies.length} 个有效空间对象，请先调整或停用下级对象`);
+  }
+  if (feature.target_object_type === "PLACE") {
+    const serviceAreas = active(catalog.serviceAreas).filter((item) => item.properties?.place_id === feature.target_object_id);
+    const opsCenters = active(catalog.opsCenters).filter((item) => item.properties?.place_id === feature.target_object_id);
+    if (serviceAreas.length || opsCenters.length) {
+      issues.push(`该地点仍关联 ${serviceAreas.length + opsCenters.length} 个有效服务区域或运营中心，请先处理关联对象`);
+    }
+  }
 }
 
 function targetExists(feature, catalog) {

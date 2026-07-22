@@ -1,4 +1,4 @@
-import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-3-0";
+import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-4-1";
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
@@ -6,9 +6,9 @@ export function createCityGeographicScene({ catalog, plans = [] } = {}, dataset)
   if (!catalog || !dataset) return createEmptyScene(dataset);
   const materializedCatalog = materializeCitySpatialCatalog(catalog, plans);
   const scenarioId = materializedCatalog.spatial_scenario_id;
-  const zones = cloneCollection(materializedCatalog.zones);
-  const places = cloneCollection(materializedCatalog.places);
-  const serviceAreas = cloneCollection(materializedCatalog.serviceAreas);
+  const zones = activeCollection(materializedCatalog.zones);
+  const places = activeCollection(materializedCatalog.places);
+  const serviceAreas = activeCollection(materializedCatalog.serviceAreas);
   const scene = {
     dataset,
     spatialScenarioId: scenarioId,
@@ -18,11 +18,18 @@ export function createCityGeographicScene({ catalog, plans = [] } = {}, dataset)
     places,
     serviceAreas,
     roads: cloneCollection(materializedCatalog.roads),
-    opsCenters: cloneCollection(materializedCatalog.opsCenters),
+    opsCenters: activeCollection(materializedCatalog.opsCenters),
     robotaxis: cloneCollection(materializedCatalog.robotaxis),
     route: cloneCollection(materializedCatalog.route),
   };
   return { ...scene, sourceVersions: createSourceVersions(scene) };
+}
+
+function activeCollection(collection) {
+  return {
+    type: "FeatureCollection",
+    features: (collection?.features || []).filter((feature) => feature.properties?.object_status !== "DISABLED").map(clone),
+  };
 }
 
 export function createGeospatialScene(data = {}, dataset, projectionConfig = {}) {
@@ -313,4 +320,8 @@ function createEmptyScene(dataset) {
 function parseCellId(cellId) {
   const match = String(cellId || "").match(/^C-(\d+)-(\d+)$/);
   return match ? { row: Number(match[1]), col: Number(match[2]) } : null;
+}
+
+function clone(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
 }

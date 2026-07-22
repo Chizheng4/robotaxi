@@ -40,9 +40,9 @@ export function validateSpatialPlanFeature(feature, catalog = {}, issues = []) {
 }
 
 export function validateCitySpatialCatalog(catalog = {}, issues = []) {
-  const zones = catalog.zones?.features || [];
-  const places = catalog.places?.features || [];
-  const serviceAreas = catalog.serviceAreas?.features || [];
+  const zones = activeFeatures(catalog.zones);
+  const places = activeFeatures(catalog.places);
+  const serviceAreas = activeFeatures(catalog.serviceAreas);
   for (const zone of zones) {
     const properties = zone.properties || {};
     if ((properties.zone_level || ZoneLevel.ZONE) !== ZoneLevel.ZONE) continue;
@@ -123,6 +123,23 @@ function applyFeature(catalog, feature, plan) {
   const config = OBJECT_CONFIG[feature.target_object_type];
   if (!config || !feature.target_object_id) return;
   const collection = catalog[config.collection] || { type: "FeatureCollection", features: [] };
+  const existing = (collection.features || []).findIndex((item) => item.properties?.object_id === feature.target_object_id);
+  if (feature.spatial_change_type === "DEACTIVATE") {
+    if (existing < 0) return;
+    const features = [...(collection.features || [])];
+    features[existing] = {
+      ...features[existing],
+      properties: {
+        ...features[existing].properties,
+        object_status: "DISABLED",
+        operating_spatial_plan_id: plan.operating_spatial_plan_id,
+        spatial_plan_id: plan.operating_spatial_plan_id,
+        spatial_catalog_version: plan.spatial_plan_version,
+      },
+    };
+    catalog[config.collection] = { type: "FeatureCollection", features };
+    return;
+  }
   const properties = {
     object_type: config.objectType,
     object_id: feature.target_object_id,
@@ -146,7 +163,6 @@ function applyFeature(catalog, feature, plan) {
     properties,
     geometry: clone(feature.geometry_geojson),
   };
-  const existing = (collection.features || []).findIndex((item) => item.properties?.object_id === feature.target_object_id);
   const features = [...(collection.features || [])];
   if (existing >= 0) {
     next.properties = { ...features[existing].properties, ...properties };
@@ -155,6 +171,10 @@ function applyFeature(catalog, feature, plan) {
     features.push(next);
   }
   catalog[config.collection] = { type: "FeatureCollection", features };
+}
+
+function activeFeatures(collection) {
+  return (collection?.features || []).filter((feature) => feature.properties?.object_status !== "DISABLED");
 }
 
 function publishedPlans(plans, scenarioId) {
@@ -173,7 +193,8 @@ function collectCatalogIds(catalog, collectionName) {
 }
 
 function findFeature(collection, id) {
-  return (collection?.features || []).find((feature) => (feature.properties?.object_id || feature.id) === id) || null;
+  return (collection?.features || []).find((feature) => feature.properties?.object_status !== "DISABLED"
+    && (feature.properties?.object_id || feature.id) === id) || null;
 }
 
 function geometryContains(container, child) {

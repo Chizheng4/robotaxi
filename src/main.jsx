@@ -8814,13 +8814,19 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   const firstLevelZoneOptions = useMemo(() => zoneOptions.filter((option) => (option.properties?.zone_level || "ZONE") === "ZONE"), [zoneOptions]);
   const placeOptions = useMemo(() => createSpatialPlanTargetOptions("PLACE", scene)
     .filter((option) => !zoneId || option.properties?.zone_id === zoneId), [scene, zoneId]);
+  const selectedSpatialTarget = resolveSelectedSpatialTarget(selected, scene);
 
-  function selectTarget(value) {
-    setTargetId(value);
+  useEffect(() => {
+    if (!editorOpen || !selectedSpatialTarget) return;
+    setTargetType(selectedSpatialTarget.targetType);
+    setTargetId(selectedSpatialTarget.id);
     setActivePlan(null);
     setEditingExistingBoundary(false);
-    if (value === "__NEW__") return;
-    const properties = targetOptions.find((option) => option.value === value)?.properties || {};
+    applyTargetProperties(selectedSpatialTarget.feature.properties);
+    setEditorNotice("已载入地图所选对象，可以调整边界或停用对象");
+  }, [editorOpen, selected?.type, selected?.id]);
+
+  function applyTargetProperties(properties = {}) {
     setZoneLevel(properties.zone_level || "ZONE");
     setZoneStructureMode(properties.zone_structure_mode || "FLAT");
     setParentZoneId(properties.parent_zone_id || "");
@@ -8828,6 +8834,26 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     setPlaceType(properties.place_type || "RESIDENTIAL");
     setPlaceId(properties.place_id || "");
     setServiceAreaType(properties.service_area_type || "PICKUP_DROPOFF");
+  }
+
+  function openPlanningEditor() {
+    setEditorOpen(true);
+    setActivePlan(null);
+    setEditingExistingBoundary(false);
+    setEditorNotice("");
+    if (!selectedSpatialTarget) return;
+    setTargetType(selectedSpatialTarget.targetType);
+    setTargetId(selectedSpatialTarget.id);
+    applyTargetProperties(selectedSpatialTarget.feature.properties);
+  }
+
+  function selectTarget(value) {
+    setTargetId(value);
+    setActivePlan(null);
+    setEditingExistingBoundary(false);
+    if (value === "__NEW__") return;
+    const properties = targetOptions.find((option) => option.value === value)?.properties || {};
+    applyTargetProperties(properties);
   }
 
   function createPlanFromGeometry(geometry) {
@@ -8900,6 +8926,37 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     setEditorNotice(validated.validation_issues.length ? validated.validation_issues.join("；") : "校验通过，可以发布城市空间目录版本");
   }
 
+  function createDeactivationPlan() {
+    const selectedTarget = targetOptions.find((option) => option.value === targetId);
+    if (!selectedTarget || targetId === "__NEW__") {
+      setEditorNotice("请先选择需要停用的已发布空间对象");
+      return;
+    }
+    const draft = operatingSpatialPlanService.createDraft({
+      plans,
+      dataset: scene.dataset,
+      spatialScenarioId: spatialScenario.spatial_scenario_id,
+      target: {
+        target_object_type: targetType,
+        target_object_id: targetId,
+        target_object_name: selectedTarget.label,
+        source_object_exists: true,
+      },
+      geometry: selectedTarget.geometry,
+      changeType: "DEACTIVATE",
+      catalog: scene,
+    });
+    const validated = operatingSpatialPlanService.validateDraft(draft, {
+      dataset: scene.dataset,
+      catalog: scene,
+    });
+    setActivePlan(validated);
+    onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, validated));
+    setEditorNotice(validated.validation_issues.length
+      ? validated.validation_issues.join("；")
+      : "停用校验通过。发布后对象将退出当前城市地图，历史版本仍会保留");
+  }
+
   function publishPlan() {
     if (!activePlan) return;
     try {
@@ -8907,7 +8964,10 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       setActivePlan(result.published);
       onSpatialPlansChange?.(result.plans);
       adapterRef.current?.stopDrawing();
-      setEditorNotice("空间规划方案已发布；城市空间对象已更新，网格业务与模拟运行未改变");
+      const isDeactivation = result.published.spatial_plan_features?.[0]?.spatial_change_type === "DEACTIVATE";
+      setEditorNotice(isDeactivation
+        ? "对象已停用并退出当前城市地图；历史版本已保留，网格业务未改变"
+        : "空间规划方案已发布；城市空间对象已更新，网格业务与模拟运行未改变");
     } catch (error) {
       setEditorNotice(error.message || "方案发布失败");
     }
@@ -8940,12 +9000,10 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       {!mobileLayout && <Button
         className="spatial-plan-trigger"
         size="small"
-        title="在地图上规划运营区域"
-        onClick={() => {
-          setEditorOpen(true);
-        }}
+        title={selectedSpatialTarget ? "编辑当前选中的城市空间对象" : "在地图上规划运营区域"}
+        onClick={openPlanningEditor}
       >
-        规划运营区域
+        {selectedSpatialTarget ? "编辑所选对象" : "规划运营区域"}
       </Button>}
       {editorOpen && !mobileLayout && (
         <aside className="spatial-plan-editor" aria-label="运营区域规划">
@@ -8972,6 +9030,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
           <div className="spatial-plan-history-actions">
             <Button type="text" size="small" onClick={() => adapterRef.current?.undoDrawing()}>撤销</Button>
             <Button type="text" size="small" onClick={() => adapterRef.current?.redoDrawing()}>重做</Button>
+            <Button type="text" danger size="small" disabled={!targetId || targetId === "__NEW__"} onClick={createDeactivationPlan}>停用对象</Button>
             <Button type="text" size="small" disabled={!activePlan || activePlan.operating_spatial_plan_status === "PUBLISHED"} onClick={cancelPlan}>取消草稿</Button>
           </div>
           {activePlan?.impact_summary && <div className="spatial-plan-impact"><strong>影响预览</strong><span>更新 {activePlan.impact_summary.existing_projection_update_count} 个城市对象</span><span>创建 {activePlan.impact_summary.pending_initialization_count} 个城市对象</span><span>网格业务与模拟运行不改变</span></div>}
@@ -8985,7 +9044,6 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
         </div>
       )}
       {mapStatus.status === "FALLBACK" && <span className="geospatial-map-status">底图降级 · 运营对象仍可用</span>}
-      <span className="geospatial-map-attribution">{scene.dataset.data_attribution}</span>
       {hoverPresentation && (
         <div className={hovered.touch ? "map-hover-card touch" : "map-hover-card"} style={{ left: hovered.x, top: hovered.y }} role="status">
           <strong>{hoverPresentation.title}</strong>
@@ -9012,6 +9070,17 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       )}
     </div>
   );
+}
+
+function resolveSelectedSpatialTarget(selected, scene) {
+  const config = {
+    zone: { targetType: "ZONE", collection: scene.zones },
+    place: { targetType: "PLACE", collection: scene.places },
+    serviceArea: { targetType: "SERVICE_AREA", collection: scene.serviceAreas },
+  }[selected?.type];
+  if (!config) return null;
+  const feature = (config.collection?.features || []).find((item) => item.properties?.object_id === selected.id);
+  return feature ? { targetType: config.targetType, id: selected.id, feature } : null;
 }
 
 function createSpatialPlanTargetOptions(targetType, scene) {
@@ -11467,13 +11536,13 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
-			    import("./services/geospatialCatalogService.js?v=20260721-v049-2-0"),
-				    import("./ui/geospatialMapAdapter.js?v=20260722-v049-4-0"),
+		    import("./services/geospatialCatalogService.js?v=20260722-v049-4-1"),
+			    import("./ui/geospatialMapAdapter.js?v=20260722-v049-4-1"),
 			    import("./data/geospatialReferenceData.js?v=20260721-v049-1-0"),
 				    import("./data/citySpatialCatalog.js?v=20260722-v049-4-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
 				    import("./data/spatialScenarioInitialization.js?v=20260722-v049-4-0"),
-			    import("./services/operatingSpatialPlanService.js?v=20260722-v049-4-0"),
+			    import("./services/operatingSpatialPlanService.js?v=20260722-v049-4-1"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
         import("./ui/dataChartService.js?v=20260717-v047-1-0"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),

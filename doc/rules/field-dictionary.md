@@ -709,6 +709,7 @@
 |spatial_plan_version|方案版本|持久化字段|同一目标空间调整的不可变版本|
 |spatial_plan_features|空间要素|关系字段|方案包含的 Zone、Place 或 ServiceArea 几何草稿|
 |spatial_plan_feature_id|空间要素编号|持久化字段|方案内空间要素唯一编号|
+|spatial_change_type|空间变更类型|类型字段|空间方案对目标对象执行新增或调整，或者经过依赖校验后停用对象|
 |target_object_type|目标对象类型|类型字段|空间要素对应的业务对象类型|
 |target_object_id|目标对象编号|关系字段|关联已有对象或创建新对象时均保存稳定编号|
 |target_object_name|目标对象名称|快照字段|发布时使用的目标对象名称快照|
