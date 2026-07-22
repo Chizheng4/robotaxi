@@ -5,7 +5,7 @@ import {
   SpatialPlanValidationStatus,
   createOperatingSpatialPlan,
   createSpatialPlanFeature,
-} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-5-0";
+} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-6-0";
 import {
   createCityObjectId,
   createCitySpatialImpact,
@@ -13,11 +13,11 @@ import {
   materializeCitySpatialCatalog,
   validateCitySpatialCatalog,
   validateSpatialPlanFeature,
-} from "./citySpatialObjectService.js?v=20260722-v049-5-0";
+} from "./citySpatialObjectService.js?v=20260722-v049-6-0";
 import {
   summarizeSpatialCoverage,
   validatePolygonGeometry,
-} from "./spatialTopologyService.js?v=20260722-v049-5-0";
+} from "./spatialTopologyService.js?v=20260722-v049-6-0";
 
 export { getCitySpatialPlanningContract };
 
@@ -51,6 +51,10 @@ export function createDraft({ plans = [], dataset, catalog = {}, spatialScenario
       geometry_geojson: clone(geometry),
       source_feature_snapshot: clone(target.source_feature_snapshot || []),
       spatial_validation_summary: clone(target.spatial_validation_summary || null),
+      planning_zoom_band: target.planning_zoom_band || null,
+      relationship_inference_status: target.relationship_inference_status || null,
+      contained_object_refs: clone(target.contained_object_refs || []),
+      conflict_object_refs: clone(target.conflict_object_refs || []),
     })],
     validation_status: SpatialPlanValidationStatus.INVALID,
     created_at: now,
@@ -175,6 +179,12 @@ function validateFeature(feature, dataset, catalog, issues) {
     });
     feature.spatial_validation_summary = coverage;
     issues.push(...coverage.coverage_issues.filter((issue) => issue.includes("不能只覆盖")));
+  }
+  if (feature.relationship_inference_status === "REQUIRES_ADJUSTMENT") {
+    issues.push("空间关系存在冲突，请调整边界后重新规划");
+  }
+  if (feature.conflict_object_refs?.length) {
+    issues.push(`边界与 ${feature.conflict_object_refs.length} 个既有空间对象部分重叠`);
   }
 }
 

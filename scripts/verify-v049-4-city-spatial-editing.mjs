@@ -6,15 +6,17 @@ import { CITY_SPATIAL_SCENARIO_ID } from "../src/data/spatialScenarioInitializat
 import { materializeCitySpatialCatalog } from "../src/services/citySpatialObjectService.js";
 import { createCityGeographicScene } from "../src/services/geospatialCatalogService.js";
 import { createDraft, publishValidatedPlan, validateDraft } from "../src/services/operatingSpatialPlanService.js";
+import { createCitySpatialCatalogFixture } from "./fixtures/city-spatial-catalog.mjs";
 
-const place = CITY_SPATIAL_CATALOG.places.features.find((item) => item.properties.object_id === "GZ-P-0003");
+const testCatalog = createCitySpatialCatalogFixture();
+const place = testCatalog.places.features.find((item) => item.properties.object_id === "GZ-P-0003");
 assert.ok(place, "演示地点必须存在");
 const editedGeometry = structuredClone(place.geometry);
 editedGeometry.coordinates[0][1][0] += 0.0005;
 
 const draft = createDraft({
   plans: [],
-  catalog: CITY_SPATIAL_CATALOG,
+  catalog: testCatalog,
   dataset: GEOSPATIAL_MAP_DATASET,
   spatialScenarioId: CITY_SPATIAL_SCENARIO_ID,
   target: {
@@ -28,10 +30,10 @@ const draft = createDraft({
   geometry: editedGeometry,
   now: "2026-07-22T10:00:00.000Z",
 });
-const validated = validateDraft(draft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: CITY_SPATIAL_CATALOG });
+const validated = validateDraft(draft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: testCatalog });
 assert.equal(validated.validation_status, "VALID", validated.validation_issues.join("；"));
 const first = publishValidatedPlan(validated, { plans: [], now: "2026-07-22T10:01:00.000Z" });
-const materialized = materializeCitySpatialCatalog(CITY_SPATIAL_CATALOG, first.plans);
+const materialized = materializeCitySpatialCatalog(testCatalog, first.plans);
 assert.deepEqual(materialized.places.features.find((item) => item.properties.object_id === place.properties.object_id).geometry, editedGeometry);
 
 const secondDraft = createDraft({
@@ -55,7 +57,7 @@ const second = publishValidatedPlan(secondValidated, { plans: first.plans, now: 
 assert.equal(second.plans.find((item) => item.operating_spatial_plan_id === first.published.operating_spatial_plan_id).operating_spatial_plan_status, "SUPERSEDED");
 assert.equal(second.published.spatial_plan_version, 2);
 
-const serviceArea = CITY_SPATIAL_CATALOG.serviceAreas.features[0];
+const serviceArea = testCatalog.serviceAreas.features[0];
 const deactivateDraft = createDraft({
   plans: second.plans,
   catalog: materialized,
@@ -74,13 +76,13 @@ const deactivateDraft = createDraft({
 const deactivateValidated = validateDraft(deactivateDraft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: materialized });
 assert.equal(deactivateValidated.validation_status, "VALID", deactivateValidated.validation_issues.join("；"));
 const deactivated = publishValidatedPlan(deactivateValidated, { plans: second.plans, now: "2026-07-22T10:05:00.000Z" });
-const sceneAfterDeactivation = createCityGeographicScene({ catalog: CITY_SPATIAL_CATALOG, plans: deactivated.plans }, GEOSPATIAL_MAP_DATASET);
+const sceneAfterDeactivation = createCityGeographicScene({ catalog: testCatalog, plans: deactivated.plans }, GEOSPATIAL_MAP_DATASET);
 assert.equal(sceneAfterDeactivation.serviceAreas.features.some((item) => item.properties.object_id === serviceArea.properties.object_id), false, "停用对象不得继续显示在当前城市地图");
 
-const zone = CITY_SPATIAL_CATALOG.zones.features[0];
+const zone = testCatalog.zones.features[0];
 const blockedZoneDraft = createDraft({
   plans: deactivated.plans,
-  catalog: CITY_SPATIAL_CATALOG,
+  catalog: testCatalog,
   dataset: GEOSPATIAL_MAP_DATASET,
   spatialScenarioId: CITY_SPATIAL_SCENARIO_ID,
   target: {
@@ -92,7 +94,7 @@ const blockedZoneDraft = createDraft({
   geometry: zone.geometry,
   changeType: "DEACTIVATE",
 });
-const blockedZone = validateDraft(blockedZoneDraft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: CITY_SPATIAL_CATALOG });
+const blockedZone = validateDraft(blockedZoneDraft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: testCatalog });
 assert.equal(blockedZone.validation_status, "INVALID");
 assert(blockedZone.validation_issues.some((issue) => issue.includes("下级对象")), "停用运营区域必须阻止遗留有效下级对象");
 

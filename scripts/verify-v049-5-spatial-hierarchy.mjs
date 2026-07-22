@@ -10,6 +10,9 @@ import {
   summarizeSpatialCoverage,
   validatePolygonGeometry,
 } from "../src/services/spatialTopologyService.js";
+import { createCitySpatialCatalogFixture } from "./fixtures/city-spatial-catalog.mjs";
+
+const testCatalog = createCitySpatialCatalogFixture();
 
 const polygon = (coordinates) => ({ type: "Polygon", coordinates: [[...coordinates, coordinates[0]]] });
 const outer = polygon([[113, 22], [114, 22], [114, 23], [113, 23]]);
@@ -28,14 +31,14 @@ const coverage = summarizeSpatialCoverage({
 assert.equal(coverage.water_reference_count, 1);
 assert(coverage.coverage_issues.some((issue) => issue.includes("水域")), "纯水域服务区域必须形成阻断问题");
 
-const brokenCatalog = structuredClone(CITY_SPATIAL_CATALOG);
+const brokenCatalog = structuredClone(testCatalog);
 brokenCatalog.places.features[0].geometry = crossing;
 assert(validateCitySpatialCatalog(brokenCatalog, []).some((issue) => issue.includes("边界必须位于")), "完整目录校验必须识别已有对象越界");
 
-const serviceArea = CITY_SPATIAL_CATALOG.serviceAreas.features[0];
+const serviceArea = testCatalog.serviceAreas.features[0];
 const waterOnlyDraft = createDraft({
   plans: [],
-  catalog: CITY_SPATIAL_CATALOG,
+  catalog: testCatalog,
   dataset: GEOSPATIAL_MAP_DATASET,
   spatialScenarioId: CITY_SPATIAL_SCENARIO_ID,
   target: {
@@ -50,7 +53,7 @@ const waterOnlyDraft = createDraft({
   },
   geometry: serviceArea.geometry,
 });
-const waterOnlyValidation = validateDraft(waterOnlyDraft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: CITY_SPATIAL_CATALOG });
+const waterOnlyValidation = validateDraft(waterOnlyDraft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: testCatalog });
 assert.equal(waterOnlyValidation.validation_status, "INVALID");
 assert(waterOnlyValidation.validation_issues.some((issue) => issue.includes("水域")));
 

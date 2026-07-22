@@ -1,6 +1,6 @@
 import { PlaceType, ServiceAreaType, ZoneLevel } from "../domain/types.js?v=20260722-v049-4-0";
-import { ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-5-0";
-import { geometryContains } from "./spatialTopologyService.js?v=20260722-v049-5-0";
+import { ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-6-0";
+import { geometryContains, geometryIntersects } from "./spatialTopologyService.js?v=20260722-v049-6-0";
 
 const OBJECT_CONFIG = Object.freeze({
   ZONE: { collection: "zones", prefix: "GZ-Z", objectType: "zone" },
@@ -71,6 +71,8 @@ export function validateCitySpatialCatalog(catalog = {}, issues = []) {
     if (!place) issues.push(`${serviceArea.properties?.object_name || "服务区域"}缺少有效的关联地点`);
     else if (place.properties?.zone_id !== serviceArea.properties?.zone_id) {
       issues.push(`${serviceArea.properties?.object_name || "服务区域"}与关联地点必须归属同一运营区域`);
+    } else if (!geometryIntersects(place.geometry, serviceArea.geometry)) {
+      issues.push(`${serviceArea.properties?.object_name || "服务区域"}必须与关联地点相邻或相交`);
     }
   }
   return issues;
@@ -131,6 +133,7 @@ function validateServiceArea(feature, catalog, issues) {
     issues.push("两级区域中的服务区域必须直接归属二级子区域");
   }
   if (place && place.properties?.zone_id && place.properties.zone_id !== feature.zone_id) issues.push("服务区域与关联地点必须归属同一运营区域");
+  if (place && !geometryIntersects(place.geometry, feature.geometry_geojson)) issues.push("服务区域必须与关联地点相邻或相交");
 }
 
 function applyFeature(catalog, feature, plan) {
@@ -170,6 +173,10 @@ function applyFeature(catalog, feature, plan) {
     place_type: feature.place_type || null,
     place_id: feature.place_id || null,
     service_area_type: feature.service_area_type || null,
+    planning_zoom_band: feature.planning_zoom_band || null,
+    relationship_inference_status: feature.relationship_inference_status || null,
+    contained_object_refs: clone(feature.contained_object_refs || []),
+    conflict_object_refs: clone(feature.conflict_object_refs || []),
     source_feature_snapshot: clone(feature.source_feature_snapshot || []),
     spatial_validation_summary: clone(feature.spatial_validation_summary || null),
   };
@@ -187,6 +194,24 @@ function applyFeature(catalog, feature, plan) {
     features.push(next);
   }
   catalog[config.collection] = { type: "FeatureCollection", features };
+  synchronizeZoneStructure(catalog, feature);
+}
+
+function synchronizeZoneStructure(catalog, feature) {
+  if (feature.target_object_type !== "ZONE" || !feature.parent_zone_id) return;
+  const zones = [...(catalog.zones?.features || [])];
+  const parentIndex = zones.findIndex((item) => item.properties?.object_id === feature.parent_zone_id);
+  if (parentIndex < 0) return;
+  const activeChildren = zones.filter((item) => item.properties?.parent_zone_id === feature.parent_zone_id
+    && item.properties?.object_status !== "DISABLED");
+  zones[parentIndex] = {
+    ...zones[parentIndex],
+    properties: {
+      ...zones[parentIndex].properties,
+      zone_structure_mode: activeChildren.length ? ZoneStructureMode.TWO_LEVEL : ZoneStructureMode.FLAT,
+    },
+  };
+  catalog.zones = { type: "FeatureCollection", features: zones };
 }
 
 function activeFeatures(collection) {

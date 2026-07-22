@@ -130,6 +130,7 @@ node --check src/services/spatialScenarioService.js
 node --check scripts/verify-v049-2-spatial-scenario-isolation.mjs
 node --check scripts/verify-v049-4-city-spatial-editing.mjs
 node --check scripts/verify-v049-5-spatial-hierarchy.mjs
+node --check scripts/verify-v049-6-map-driven-spatial-planning.mjs
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
 node --check src/data/simulationRunBusinessScope.js
@@ -233,6 +234,7 @@ node scripts/verify-v049-2-spatial-scenario-isolation.mjs
 node scripts/verify-v049-3-city-spatial-foundation.mjs
 node scripts/verify-v049-4-city-spatial-editing.mjs
 node scripts/verify-v049-5-spatial-hierarchy.mjs
+node scripts/verify-v049-6-map-driven-spatial-planning.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

@@ -724,6 +724,10 @@
 |geometry_geojson|地理几何|持久化字段|使用 EPSG:4326 的标准 GeoJSON 几何|
 |geometry_type|几何类型|类型字段|首期区域建模固定为 Polygon|
 |source_feature_snapshot|底图要素快照|快照字段|绘制边界时从当前地图数据集和缩放级别识别的道路、建筑、地点、水域等紧凑参考，不替代正式业务对象|
+|planning_zoom_band|规划视角层级|快照字段|形成空间草稿时的城市、区域、地点或服务区域语义视角|
+|relationship_inference_status|空间关系识别状态|运行态字段|根据正式几何目录自动识别父级、直接归属和关联地点后的状态|
+|contained_object_refs|完整包含对象|关系快照|当前边界完整包含的已发布空间对象引用|
+|conflict_object_refs|边界冲突对象|关系快照|与当前边界部分重叠、需要用户调整的空间对象引用|
 |source_feature_count|底图要素数量|计算字段|当前边界识别到底图参考要素的去重数量|
 |source_feature_id|底图要素编号|外部引用字段|底图数据源提供的要素编号；数据源未提供时为空|
 |source_layer_id|底图图层编号|外部引用字段|底图要素所属来源图层，用于来源追溯和分类|

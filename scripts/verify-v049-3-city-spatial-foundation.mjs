@@ -5,8 +5,10 @@ import { GEOSPATIAL_MAP_DATASET } from "../src/data/geospatialReferenceData.js";
 import { CITY_SPATIAL_SCENARIO_ID, GRID_SPATIAL_SCENARIO_ID } from "../src/data/spatialScenarioInitialization.js";
 import { createCityGeographicScene } from "../src/services/geospatialCatalogService.js";
 import { createDraft, publishValidatedPlan, validateDraft } from "../src/services/operatingSpatialPlanService.js";
+import { createCitySpatialCatalogFixture, polygon } from "./fixtures/city-spatial-catalog.mjs";
 
 const gridData = initializeMapSpace();
+const testCatalog = createCitySpatialCatalogFixture();
 const gridSnapshot = JSON.stringify({
   activeSpatialScenarioId: gridData.activeSpatialScenarioId,
   zones: gridData.zones,
@@ -17,14 +19,15 @@ const gridSnapshot = JSON.stringify({
 });
 assert.equal(gridData.activeSpatialScenarioId, GRID_SPATIAL_SCENARIO_ID);
 
-const baseScene = createCityGeographicScene({ catalog: CITY_SPATIAL_CATALOG, plans: [] }, GEOSPATIAL_MAP_DATASET);
+assert.equal(CITY_SPATIAL_CATALOG.zones.features.length, 0, "城市地理正式目录必须由规划产生，不得初始化网格演示对象");
+const baseScene = createCityGeographicScene({ catalog: testCatalog, plans: [] }, GEOSPATIAL_MAP_DATASET);
 assert.equal(baseScene.spatialScenarioId, CITY_SPATIAL_SCENARIO_ID);
 assert.ok(baseScene.zones.features.every((feature) => feature.properties.zone_level === "ZONE"));
 assert.ok(baseScene.places.features.every((feature) => feature.properties.zone_id && feature.properties.place_type));
 assert.ok(baseScene.serviceAreas.features.every((feature) => feature.properties.zone_id && feature.properties.place_id));
 assert.ok(baseScene.opsCenters.features.every((feature) => feature.properties.place_id));
 
-const factoryGeometry = polygon(113.242, 23.112, 113.246, 23.116);
+const factoryGeometry = polygon(113.255, 23.112, 113.266, 23.122);
 const factoryDraft = createDraft({
   plans: [],
   catalog: baseScene,
@@ -46,7 +49,7 @@ assert.equal(validatedFactory.validation_status, "VALID", validatedFactory.valid
 assert.equal(validatedFactory.impact_summary.simulation_runtime_changed, false);
 assert.equal(validatedFactory.impact_summary.pending_initialization_count, 1);
 const factoryPublication = publishValidatedPlan(validatedFactory, { plans: [], now: "2026-07-22T00:01:00.000Z" });
-const factoryScene = createCityGeographicScene({ catalog: CITY_SPATIAL_CATALOG, plans: factoryPublication.plans }, GEOSPATIAL_MAP_DATASET);
+const factoryScene = createCityGeographicScene({ catalog: testCatalog, plans: factoryPublication.plans }, GEOSPATIAL_MAP_DATASET);
 const factory = factoryScene.places.features.find((feature) => feature.properties.object_name === "广州示范生产工厂");
 assert.equal(factory.properties.place_type, "FACTORY");
 assert.equal(factory.properties.zone_id, "GZ-Z-0001");
@@ -67,7 +70,7 @@ const subZoneDraft = createDraft({
 });
 const validatedSubZone = validateDraft(subZoneDraft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: factoryScene });
 assert.equal(validatedSubZone.validation_status, "INVALID");
-assert.ok(validatedSubZone.validation_issues.some((issue) => issue.includes("一级区域结构")), "二级区域不得隐式改变父区域结构");
+assert.ok(validatedSubZone.validation_issues.some((issue) => issue.includes("必须直接归属二级子区域")));
 
 const invalidThirdLevel = createDraft({
   plans: factoryPublication.plans,
@@ -95,16 +98,3 @@ assert.equal(JSON.stringify({
 }), gridSnapshot, "城市空间对象发布不得改写网格业务事实");
 
 console.log("v049.3 城市空间底层对象与网格运行隔离验证通过");
-
-function polygon(minLng, minLat, maxLng, maxLat) {
-  return {
-    type: "Polygon",
-    coordinates: [[
-      [minLng, minLat],
-      [maxLng, minLat],
-      [maxLng, maxLat],
-      [minLng, maxLat],
-      [minLng, minLat],
-    ]],
-  };
-}

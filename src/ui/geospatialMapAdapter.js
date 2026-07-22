@@ -58,6 +58,7 @@ export function createGeospatialMapAdapter(options = {}) {
     clearTimeout(styleTimeout);
     installScene();
     initialCamera = readCamera();
+    emitViewChange();
   });
   map.on("style.load", () => {
     if (destroyed) return;
@@ -69,6 +70,12 @@ export function createGeospatialMapAdapter(options = {}) {
     if (!ready && !fallbackApplied) applyFallbackStyle();
     options.onStatusChange?.({ status: fallbackApplied ? "FALLBACK" : "DEGRADED", message: event?.error?.message || "底图加载异常" });
   });
+  map.on("moveend", emitViewChange);
+
+  function emitViewChange() {
+    if (destroyed) return;
+    options.onViewChange?.(readCamera());
+  }
 
   function applyFallbackStyle() {
     if (fallbackApplied || destroyed) return;
@@ -131,6 +138,7 @@ export function createGeospatialMapAdapter(options = {}) {
   }
 
   const boundLayers = new Set();
+  let hoveredReference = null;
   function bindLayerEvents(layerId) {
     if (boundLayers.has(layerId)) return;
     boundLayers.add(layerId);
@@ -138,16 +146,23 @@ export function createGeospatialMapAdapter(options = {}) {
       if (editing) return;
       map.getCanvas().style.cursor = "pointer";
       const feature = event.features?.[0];
-      if (feature) options.onHover?.(feature.properties, event.point);
+      if (feature) {
+        updateHoverState(feature);
+        options.onHover?.(feature.properties, event.point);
+      }
     });
     map.on("mousemove", layerId, (event) => {
       if (editing) return;
       const feature = event.features?.[0];
-      if (feature) options.onHover?.(feature.properties, event.point);
+      if (feature) {
+        updateHoverState(feature);
+        options.onHover?.(feature.properties, event.point);
+      }
     });
     map.on("mouseleave", layerId, () => {
       if (editing) return;
       map.getCanvas().style.cursor = "";
+      clearHoverState();
       options.onHoverEnd?.();
     });
     map.on("click", layerId, (event) => {
@@ -157,6 +172,20 @@ export function createGeospatialMapAdapter(options = {}) {
       event.originalEvent.__robotaxiMapObjectHandled = true;
       options.onSelect?.(feature.properties, event.point);
     });
+  }
+
+  function updateHoverState(feature) {
+    const next = feature?.source && feature?.id !== undefined ? { source: feature.source, id: feature.id } : null;
+    if (hoveredReference && (hoveredReference.source !== next?.source || hoveredReference.id !== next?.id)) {
+      map.setFeatureState(hoveredReference, { hovered: false });
+    }
+    hoveredReference = next;
+    if (hoveredReference) map.setFeatureState(hoveredReference, { hovered: true });
+  }
+
+  function clearHoverState() {
+    if (hoveredReference && map.getSource(hoveredReference.source)) map.setFeatureState(hoveredReference, { hovered: false });
+    hoveredReference = null;
   }
 
   map.on("click", (event) => {
@@ -389,7 +418,11 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
       filter,
       paint: {
         "fill-color": color,
-        "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], Math.min(0.55, opacity + 0.18), opacity],
+        "fill-opacity": ["case",
+          ["boolean", ["feature-state", "selected"], false], Math.min(0.55, opacity + 0.2),
+          ["boolean", ["feature-state", "hovered"], false], Math.min(0.48, opacity + 0.12),
+          opacity,
+        ],
         "fill-outline-color": outline,
       },
     };

@@ -67,6 +67,10 @@ export function createSpatialPlanFeature(input = {}) {
     service_area_type: input.service_area_type || null,
     source_feature_snapshot: Array.isArray(input.source_feature_snapshot) ? input.source_feature_snapshot : [],
     spatial_validation_summary: input.spatial_validation_summary || null,
+    planning_zoom_band: input.planning_zoom_band || null,
+    relationship_inference_status: input.relationship_inference_status || null,
+    contained_object_refs: Array.isArray(input.contained_object_refs) ? input.contained_object_refs : [],
+    conflict_object_refs: Array.isArray(input.conflict_object_refs) ? input.conflict_object_refs : [],
     source_object_exists: Boolean(input.source_object_exists),
   };
 }
