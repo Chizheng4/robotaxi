@@ -1,11 +1,12 @@
 import {
   OperatingSpatialPlanStatus,
+  CITY_SPATIAL_PLAN_CONTRACT_VERSION,
   SpatialPlanChangeType,
   SpatialPlanTargetType,
   SpatialPlanValidationStatus,
   createOperatingSpatialPlan,
   createSpatialPlanFeature,
-} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-6-0";
+} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-7-0";
 import {
   createCityObjectId,
   createCitySpatialImpact,
@@ -13,7 +14,7 @@ import {
   materializeCitySpatialCatalog,
   validateCitySpatialCatalog,
   validateSpatialPlanFeature,
-} from "./citySpatialObjectService.js?v=20260722-v049-6-0";
+} from "./citySpatialObjectService.js?v=20260722-v049-7-0";
 import {
   summarizeSpatialCoverage,
   validatePolygonGeometry,
@@ -39,6 +40,7 @@ export function createDraft({ plans = [], dataset, catalog = {}, spatialScenario
     operating_spatial_plan_status: OperatingSpatialPlanStatus.DRAFT,
     spatial_scenario_id: spatialScenarioId,
     spatial_plan_version: Math.max(0, ...previousVersions.map((plan) => Number(plan.spatial_plan_version || 0))) + 1,
+    spatial_plan_contract_version: CITY_SPATIAL_PLAN_CONTRACT_VERSION,
     map_dataset_id: dataset.map_dataset_id,
     map_dataset_version: dataset.map_dataset_version,
     coordinate_reference_system: dataset.coordinate_reference_system,
@@ -67,6 +69,7 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
   const issues = [];
   if (!plan.operating_spatial_plan_name?.trim()) issues.push("请填写运营区域方案名称");
   if (!plan.spatial_scenario_id) issues.push("方案缺少空间场景");
+  if (plan.spatial_plan_contract_version !== CITY_SPATIAL_PLAN_CONTRACT_VERSION) issues.push("当前方案不符合城市空间规划合同，请重新创建方案");
   if (plan.map_dataset_id !== dataset?.map_dataset_id || plan.map_dataset_version !== dataset?.map_dataset_version) {
     issues.push("方案引用的地图数据集版本与当前地图不一致");
   }
@@ -144,6 +147,7 @@ export function upsertPlan(plans = [], plan) {
 export function getPublishedFeatures(plans = [], { spatialScenarioId } = {}) {
   return plans
     .filter((plan) => plan.operating_spatial_plan_status === OperatingSpatialPlanStatus.PUBLISHED
+      && plan.spatial_plan_contract_version === CITY_SPATIAL_PLAN_CONTRACT_VERSION
       && (!spatialScenarioId || plan.spatial_scenario_id === spatialScenarioId))
     .flatMap((plan) => (plan.spatial_plan_features || []).map((feature) => ({
       ...clone(feature),

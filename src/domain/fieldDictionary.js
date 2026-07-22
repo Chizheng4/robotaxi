@@ -157,6 +157,7 @@ export const fieldDictionary = {
   superseded_at: "版本替代时间",
   superseded_by_plan_id: "替代方案编号",
   spatial_plan_version: "方案版本",
+  spatial_plan_contract_version: "空间规划合同版本",
   spatial_plan_features: "空间要素",
   spatial_plan_feature_id: "空间要素编号",
   spatial_change_type: "空间变更类型",
@@ -2817,6 +2818,10 @@ export const valueDictionary = {
 
 export const fieldValueDictionary = {
   ...canonicalFieldValues,
+  zone_level: {
+    ZONE: "一级运营区域",
+    SUB_ZONE: "二级子区域",
+  },
   output_unit: {
     DATE: "日期",
     ORDER_PER_DAY: "单/日",

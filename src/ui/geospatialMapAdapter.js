@@ -1,4 +1,8 @@
 const SOURCE_DEFINITIONS = Object.freeze({
+  cityBoundary: { type: "fill", layers: [
+    { layerId: "robotaxi-city-extent-fill", type: "fill", minzoom: 5, maxzoom: 10 },
+    { layerId: "robotaxi-city-boundary", type: "line", minzoom: 5, maxzoom: 11 },
+  ] },
   zones: { type: "fill", layers: [
     { layerId: "robotaxi-zones", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
     { layerId: "robotaxi-sub-zones", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
@@ -12,6 +16,7 @@ const SOURCE_DEFINITIONS = Object.freeze({
 });
 
 const LABEL_DEFINITIONS = Object.freeze([
+  { sceneKey: "cityBoundary", sourceId: "cityBoundaryLabels", layerId: "robotaxi-city-boundary-label", size: 12, minzoom: 5, maxzoom: 10 },
   { sceneKey: "zones", sourceId: "zoneLabels", layerId: "robotaxi-zone-labels", size: 12, minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
   { sceneKey: "zones", sourceId: "zoneLabels", layerId: "robotaxi-sub-zone-labels", size: 11, minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
   { sceneKey: "places", sourceId: "placeLabels", layerId: "robotaxi-place-labels", size: 11, minzoom: 12, maxzoom: 18 },
@@ -98,7 +103,7 @@ export function createGeospatialMapAdapter(options = {}) {
           if (beforeId) map.addLayer(layer, beforeId);
           else map.addLayer(layer);
         }
-        bindLayerEvents(layerDefinition.layerId);
+        if (sourceId !== "cityBoundary") bindLayerEvents(layerDefinition.layerId);
       }
     }
     installLabelLayers();
@@ -134,6 +139,7 @@ export function createGeospatialMapAdapter(options = {}) {
           "text-halo-width": 1.2,
         },
       });
+      if (sceneKey !== "cityBoundary") bindLayerEvents(layerId);
     }
   }
 
@@ -321,7 +327,16 @@ export function createGeospatialMapAdapter(options = {}) {
     editing = true;
     draw = new Terra.TerraDraw({
       adapter: new Terra.TerraDrawMapLibreGLAdapter({ map, prefixId: "robotaxi-spatial-plan" }),
-      modes: [new Terra.TerraDrawPolygonMode(), new Terra.TerraDrawSelectMode()],
+      modes: [new Terra.TerraDrawPolygonMode(), new Terra.TerraDrawSelectMode({
+        flags: {
+          polygon: {
+            feature: {
+              draggable: false,
+              coordinates: { midpoints: true, draggable: true, deletable: true },
+            },
+          },
+        },
+      })],
       undoRedo: { sessionLevel: new Terra.TerraDrawSessionUndoRedo() },
     });
     draw.start();
@@ -360,6 +375,12 @@ export function createGeospatialMapAdapter(options = {}) {
     return feature?.geometry ? JSON.parse(JSON.stringify(feature.geometry)) : null;
   }
 
+  function finishPolygonDrawing() {
+    if (!draw || !editing) return false;
+    map.getCanvas().dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+    return true;
+  }
+
   function stopDrawing() {
     if (draw) draw.stop();
     draw = null;
@@ -381,6 +402,7 @@ export function createGeospatialMapAdapter(options = {}) {
     focusPlanningParent,
     inspectPlanningGeometry,
     startPolygonDrawing,
+    finishPolygonDrawing,
     startPolygonEditing,
     getDrawingGeometry,
     restartPolygonDrawing(onFinish) {
@@ -403,6 +425,7 @@ export function createGeospatialMapAdapter(options = {}) {
 function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
   if (type === "fill") {
     const colors = {
+      "robotaxi-city-extent-fill": ["#7aa7a1", 0.055, "#577e9b"],
       "robotaxi-zones": ["#729c87", 0.09, "#507966"],
       "robotaxi-sub-zones": ["#79a58d", 0.12, "#4f7f69"],
       "robotaxi-places": ["#d7ba78", 0.24, "#a48b54"],
@@ -450,9 +473,10 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
     maxzoom,
     filter,
     paint: {
-      "line-color": layerId === "robotaxi-selected-route" ? "#2f6fe4" : ["case", ["boolean", ["feature-state", "selected"], false], "#2f6fe4", "#8295a6"],
-      "line-width": layerId === "robotaxi-selected-route" ? 5 : ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 4],
-      "line-opacity": layerId === "robotaxi-selected-route" ? 0.92 : 0.7,
+      "line-color": layerId === "robotaxi-selected-route" ? "#2f6fe4" : layerId === "robotaxi-city-boundary" ? "#577e9b" : ["case", ["boolean", ["feature-state", "selected"], false], "#2f6fe4", "#8295a6"],
+      "line-width": layerId === "robotaxi-selected-route" ? 5 : layerId === "robotaxi-city-boundary" ? 2.2 : ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 4],
+      "line-opacity": layerId === "robotaxi-selected-route" ? 0.92 : layerId === "robotaxi-city-boundary" ? 0.82 : 0.7,
+      ...(layerId === "robotaxi-city-boundary" ? { "line-dasharray": [4, 3] } : {}),
     },
   };
 }

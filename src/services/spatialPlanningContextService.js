@@ -18,7 +18,7 @@ export function resolvePlanningContext({ zoom = 0, catalog = {} } = {}) {
   return context(SpatialPlanningZoomBand.SERVICE_AREA, "SERVICE_AREA", null, "当前视角适合规划服务区域");
 }
 
-export function inferSpatialRelationships({ targetType, geometry, catalog = {}, existingObjectId = null } = {}) {
+export function inferSpatialRelationships({ targetType, geometry, catalog = {}, existingObjectId = null, requestedZoneLevel = null } = {}) {
   const zones = features(catalog.zones).filter((feature) => objectId(feature) !== existingObjectId);
   const places = features(catalog.places).filter((feature) => objectId(feature) !== existingObjectId);
   const serviceAreas = features(catalog.serviceAreas).filter((feature) => objectId(feature) !== existingObjectId);
@@ -39,10 +39,13 @@ export function inferSpatialRelationships({ targetType, geometry, catalog = {}, 
 
   if (targetType === "ZONE") {
     const parent = containingZones.find((feature) => (feature.properties?.zone_level || "ZONE") === "ZONE");
+    if (requestedZoneLevel === "SUB_ZONE" && !parent) issues.push("二级子区域必须完整位于一个一级运营区域内");
+    if (requestedZoneLevel === "ZONE" && parent) issues.push("一级运营区域不能位于另一个一级运营区域内；请改为二级子区域或调整边界");
+    const resolvedLevel = requestedZoneLevel || (parent ? "SUB_ZONE" : "ZONE");
     return result({
-      zone_level: parent ? "SUB_ZONE" : "ZONE",
-      parent_zone_id: parent ? objectId(parent) : null,
-      zone_structure_mode: parent ? null : (contained.some((item) => item.object_type === "zone") ? "TWO_LEVEL" : "FLAT"),
+      zone_level: resolvedLevel,
+      parent_zone_id: resolvedLevel === "SUB_ZONE" && parent ? objectId(parent) : null,
+      zone_structure_mode: resolvedLevel === "SUB_ZONE" ? null : (contained.some((item) => item.object_type === "zone") ? "TWO_LEVEL" : "FLAT"),
     }, contained, conflicts, issues);
   }
 

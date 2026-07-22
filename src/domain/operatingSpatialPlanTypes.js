@@ -27,6 +27,8 @@ export const SpatialPlanChangeType = Object.freeze({
   DEACTIVATE: "DEACTIVATE",
 });
 
+export const CITY_SPATIAL_PLAN_CONTRACT_VERSION = "CITY_SPATIAL_V2";
+
 export function createOperatingSpatialPlan(input = {}) {
   return {
     operating_spatial_plan_id: input.operating_spatial_plan_id,
@@ -34,6 +36,7 @@ export function createOperatingSpatialPlan(input = {}) {
     operating_spatial_plan_status: input.operating_spatial_plan_status || OperatingSpatialPlanStatus.DRAFT,
     spatial_scenario_id: input.spatial_scenario_id,
     spatial_plan_version: Number(input.spatial_plan_version || 1),
+    spatial_plan_contract_version: input.spatial_plan_contract_version || null,
     map_dataset_id: input.map_dataset_id,
     map_dataset_version: input.map_dataset_version,
     coordinate_reference_system: input.coordinate_reference_system || "EPSG:4326",

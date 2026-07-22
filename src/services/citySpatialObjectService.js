@@ -1,5 +1,5 @@
 import { PlaceType, ServiceAreaType, ZoneLevel } from "../domain/types.js?v=20260722-v049-4-0";
-import { ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-6-0";
+import { CITY_SPATIAL_PLAN_CONTRACT_VERSION, ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-7-0";
 import { geometryContains, geometryIntersects } from "./spatialTopologyService.js?v=20260722-v049-6-0";
 
 const OBJECT_CONFIG = Object.freeze({
@@ -220,7 +220,9 @@ function activeFeatures(collection) {
 
 function publishedPlans(plans, scenarioId) {
   return (plans || [])
-    .filter((plan) => plan.operating_spatial_plan_status === "PUBLISHED" && (!scenarioId || plan.spatial_scenario_id === scenarioId))
+    .filter((plan) => plan.operating_spatial_plan_status === "PUBLISHED"
+      && plan.spatial_plan_contract_version === CITY_SPATIAL_PLAN_CONTRACT_VERSION
+      && (!scenarioId || plan.spatial_scenario_id === scenarioId))
     .sort((left, right) => String(left.published_at || "").localeCompare(String(right.published_at || "")));
 }
 

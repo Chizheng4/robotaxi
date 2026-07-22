@@ -1,4 +1,4 @@
-import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-6-0";
+import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-7-0";
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
@@ -14,6 +14,7 @@ export function createCityGeographicScene({ catalog, plans = [] } = {}, dataset)
     spatialScenarioId: scenarioId,
     spatialCatalogVersion: materializedCatalog.spatial_catalog_version,
     bounds: dataset.geographic_bounds,
+    cityBoundary: createCityBoundaryReference(dataset),
     zones,
     places,
     serviceAreas,
@@ -88,6 +89,7 @@ export function validateGeospatialScene(scene) {
   for (const key of ["zones", "places", "serviceAreas", "roads", "opsCenters", "robotaxis", "route"]) {
     if (scene?.[key]?.type !== "FeatureCollection") errors.push(`${key} 不是有效地理图层`);
   }
+  if (scene?.cityBoundary && scene.cityBoundary.type !== "FeatureCollection") errors.push("cityBoundary 不是有效地理图层");
   return { valid: errors.length === 0, errors };
 }
 
@@ -306,6 +308,7 @@ function createEmptyScene(dataset) {
   return {
     dataset,
     bounds: null,
+    cityBoundary: dataset ? createCityBoundaryReference(dataset) : EMPTY_COLLECTION,
     zones: EMPTY_COLLECTION,
     places: EMPTY_COLLECTION,
     serviceAreas: EMPTY_COLLECTION,
@@ -315,6 +318,28 @@ function createEmptyScene(dataset) {
     route: EMPTY_COLLECTION,
     sourceVersions: {},
   };
+}
+
+function createCityBoundaryReference(dataset) {
+  const bounds = dataset?.geographic_bounds;
+  if (!Array.isArray(bounds) || bounds.length !== 2) return EMPTY_COLLECTION;
+  const [[minLng, minLat], [maxLng, maxLat]] = bounds;
+  return featureCollection([{
+    type: "Feature",
+    id: "GZ-CONTROLLED-DEMO-EXTENT",
+    properties: {
+      object_type: "cityBoundary",
+      object_id: "GZ-CONTROLLED-DEMO-EXTENT",
+      object_name: "广州受控演示范围",
+      reference_type: "CONTROLLED_EXTENT",
+    },
+    geometry: {
+      type: "Polygon",
+      coordinates: [[
+        [minLng, minLat], [maxLng, minLat], [maxLng, maxLat], [minLng, maxLat], [minLng, minLat],
+      ]],
+    },
+  }]);
 }
 
 function parseCellId(cellId) {

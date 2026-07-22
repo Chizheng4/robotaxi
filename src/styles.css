@@ -1348,6 +1348,18 @@
   backdrop-filter: blur(10px);
 }
 
+.spatial-plan-edit-trigger {
+  position: absolute;
+  z-index: 4;
+  top: 52px;
+  left: 128px;
+  border-color: rgba(190, 204, 216, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-secondary);
+  box-shadow: 0 4px 14px rgba(39, 61, 82, 0.08);
+  backdrop-filter: blur(10px);
+}
+
 .spatial-plan-editor {
   position: absolute;
   z-index: 5;
@@ -1431,6 +1443,17 @@
   display: flex;
   justify-content: flex-end;
   gap: 2px;
+}
+
+.spatial-plan-object-management {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
 }
 
 .spatial-plan-impact {
@@ -6746,11 +6769,16 @@ html[data-keyboard-open="true"] .platform-login-panel {
   left: 12px !important;
 }
 
-.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-trigger {
+.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-trigger,
+.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-edit-trigger {
   top: 54px !important;
   right: auto !important;
   bottom: auto !important;
   left: 12px !important;
+}
+
+.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-edit-trigger {
+  left: 128px !important;
 }
 
 .map-page-new > .map-stage > .map-navigation-actions {
