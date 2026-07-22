@@ -23,7 +23,7 @@ let scene = createCityGeographicScene({ catalog: CITY_SPATIAL_CATALOG, plans }, 
   scene,
   targetType: "ZONE",
   name: "广州测试运营区域",
-  geometry: polygon(113.20, 23.08, 113.32, 23.18),
+  geometry: polygon(113.23, 23.10, 113.28, 23.14),
   extra: { zone_structure_mode: "FLAT" },
 }));
 assert.equal(scene.zones.features.length, 1);
@@ -33,7 +33,7 @@ assert.equal(scene.zones.features.length, 1);
   scene,
   targetType: "ZONE",
   name: "核心服务子区域",
-  geometry: polygon(113.22, 23.10, 113.30, 23.16),
+  geometry: polygon(113.24, 23.105, 113.275, 23.13),
 }));
 const subZone = scene.zones.features.find((feature) => feature.properties.zone_level === "SUB_ZONE");
 const parentZone = scene.zones.features.find((feature) => feature.properties.zone_level === "ZONE");
@@ -65,7 +65,7 @@ assert.equal(serviceArea.properties.zone_id, subZone.properties.object_id);
 
 const conflict = inferSpatialRelationships({
   targetType: "PLACE",
-  geometry: polygon(113.26, 23.118, 113.31, 23.15),
+  geometry: polygon(113.26, 23.118, 113.279, 23.135),
   catalog: scene,
 });
 assert.equal(conflict.inference_status, "REQUIRES_ADJUSTMENT");

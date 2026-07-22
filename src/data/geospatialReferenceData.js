@@ -16,7 +16,7 @@ export const GEOSPATIAL_MAP_DATASET = Object.freeze(createMapDataset({
   basemap_provider: BasemapProvider.OPEN_FREE_MAP,
   basemap_style_url: "https://tiles.openfreemap.org/styles/liberty",
   data_attribution: "底图 © OpenFreeMap；地图数据 © OpenStreetMap contributors",
-  geographic_bounds: [[112.9, 22.75], [114.05, 23.95]],
+  geographic_bounds: [[112.958508, 22.515714], [114.059957, 23.932916]],
 }));
 
 export const GEOSPATIAL_PROJECTION_CONFIG = Object.freeze({

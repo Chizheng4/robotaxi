@@ -38,6 +38,16 @@ assert.equal(baseScene.route.features.length, 0, "城市地理不得显示网格
 assert.ok(data.roads.length > 0 && data.cells.length > 0, "网格仿真数据必须保持独立可用");
 
 const target = baseScene.zones.features[0];
+const guangzhouCenterGeometry = {
+  type: "Polygon",
+  coordinates: [[
+    [113.23, 23.10],
+    [113.28, 23.10],
+    [113.28, 23.14],
+    [113.23, 23.14],
+    [113.23, 23.10],
+  ]],
+};
 const draft = createDraft({
   plans: [],
   dataset: GEOSPATIAL_MAP_DATASET,
@@ -47,7 +57,7 @@ const draft = createDraft({
     target_object_id: target.properties.object_id,
     target_object_name: target.properties.object_name,
   },
-  geometry: target.geometry,
+  geometry: guangzhouCenterGeometry,
 });
 const validated = validateDraft(draft, { dataset: GEOSPATIAL_MAP_DATASET, catalog: baseScene });
 assert.equal(validated.validation_status, "VALID");

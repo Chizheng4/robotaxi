@@ -1,7 +1,7 @@
 const SOURCE_DEFINITIONS = Object.freeze({
   cityBoundary: { type: "fill", layers: [
-    { layerId: "robotaxi-city-extent-fill", type: "fill", minzoom: 5, maxzoom: 10 },
-    { layerId: "robotaxi-city-boundary", type: "line", minzoom: 5, maxzoom: 11 },
+    { layerId: "robotaxi-city-extent-fill", type: "fill", minzoom: 5, maxzoom: 11 },
+    { layerId: "robotaxi-city-boundary", type: "line", minzoom: 5, maxzoom: 16 },
   ] },
   zones: { type: "fill", layers: [
     { layerId: "robotaxi-zones", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
@@ -38,6 +38,8 @@ export function createGeospatialMapAdapter(options = {}) {
   let fallbackApplied = false;
   let editing = false;
   let draw = null;
+  let activeDrawFinish = null;
+  let drawCompletionPending = false;
   let initialCamera = null;
   const appliedSourceVersions = {};
   const map = new MapLibre.Map({
@@ -288,9 +290,12 @@ export function createGeospatialMapAdapter(options = {}) {
   }
 
   function inspectPlanningGeometry(geometry) {
-    if (!ready || !map.isStyleLoaded() || geometry?.type !== "Polygon") return [];
+    if (!ready || !map.isStyleLoaded() || geometry?.type !== "Polygon") {
+      return { status: "MAP_NOT_READY", message: "地图尚未完成加载，请稍候再试", features: [], zoom: map.getZoom?.() ?? null };
+    }
     const coordinates = geometry.coordinates?.[0] || [];
-    if (!coordinates.length) return [];
+    if (!coordinates.length) return { status: "INVALID_GEOMETRY", message: "当前边界没有有效坐标", features: [], zoom: map.getZoom() };
+    const tilesLoaded = !map.areTilesLoaded || map.areTilesLoaded();
     const pixels = coordinates.map((coordinate) => map.project(coordinate));
     const bounds = pixels.reduce((result, point) => ({
       minX: Math.min(result.minX, point.x), minY: Math.min(result.minY, point.y),
@@ -300,8 +305,23 @@ export function createGeospatialMapAdapter(options = {}) {
       ...Object.values(SOURCE_DEFINITIONS).flatMap((definition) => layerDefinitions(definition).map((item) => item.layerId)),
       ...LABEL_DEFINITIONS.map((definition) => definition.layerId),
     ]);
-    const features = map.queryRenderedFeatures([[bounds.minX, bounds.minY], [bounds.maxX, bounds.maxY]])
-      .filter((feature) => !ownLayers.has(feature.layer?.id))
+    const styleLayers = map.getStyle()?.layers || [];
+    const vectorLayerRefs = new Map();
+    for (const layer of styleLayers) {
+      if (!layer.source || !layer["source-layer"] || ownLayers.has(layer.id)) continue;
+      const key = `${layer.source}:${layer["source-layer"]}`;
+      if (!vectorLayerRefs.has(key)) vectorLayerRefs.set(key, { source: layer.source, sourceLayer: layer["source-layer"] });
+    }
+    const sourceFeatures = [...vectorLayerRefs.values()].flatMap(({ source, sourceLayer }) => {
+      try {
+        return map.querySourceFeatures(source, { sourceLayer }).map((feature) => ({ ...feature, source, sourceLayer }));
+      } catch (_error) {
+        return [];
+      }
+    });
+    const renderedFeatures = map.queryRenderedFeatures([[bounds.minX, bounds.minY], [bounds.maxX, bounds.maxY]])
+      .filter((feature) => !ownLayers.has(feature.layer?.id));
+    const features = [...sourceFeatures, ...renderedFeatures]
       .filter((feature) => featureTouchesPlanningGeometry(feature, geometry));
     const unique = new Map();
     for (const feature of features) {
@@ -315,9 +335,24 @@ export function createGeospatialMapAdapter(options = {}) {
         source_feature_name: String(name || ""),
         feature_category: `MAP_${category}`,
       });
-      if (unique.size >= 80) break;
+      if (unique.size >= 120) break;
     }
-    return [...unique.values()];
+    if (!unique.size && !tilesLoaded) {
+      return {
+        status: "TILES_LOADING",
+        message: "当前范围的底图要素仍在加载，请稍候再完成绘制",
+        features: [],
+        zoom: map.getZoom(),
+        source_layer_count: vectorLayerRefs.size,
+      };
+    }
+    return {
+      status: "READY",
+      message: unique.size ? `已识别 ${unique.size} 个底图参考要素` : "当前范围未识别到可用底图要素，请放大地图或调整边界",
+      features: [...unique.values()],
+      zoom: map.getZoom(),
+      source_layer_count: vectorLayerRefs.size,
+    };
   }
 
   function createDraw() {
@@ -345,11 +380,12 @@ export function createGeospatialMapAdapter(options = {}) {
 
   function startPolygonDrawing(onFinish) {
     createDraw();
+    activeDrawFinish = onFinish;
+    drawCompletionPending = false;
     draw.on("finish", (id) => {
       const feature = draw?.getSnapshotFeature(id);
       if (!feature) return;
-      draw.setMode("select");
-      onFinish?.(JSON.parse(JSON.stringify(feature.geometry)));
+      completePolygonDrawing(feature.geometry);
     });
     draw.setMode("polygon");
   }
@@ -371,20 +407,38 @@ export function createGeospatialMapAdapter(options = {}) {
   }
 
   function getDrawingGeometry() {
-    const feature = draw?.getSnapshot?.().find((item) => item.geometry?.type === "Polygon");
-    return feature?.geometry ? JSON.parse(JSON.stringify(feature.geometry)) : null;
+    const feature = draw?.getSnapshot?.().find((item) => ["Polygon", "LineString"].includes(item.geometry?.type));
+    return normalizePlanningPolygon(feature?.geometry);
   }
 
   function finishPolygonDrawing() {
-    if (!draw || !editing) return false;
-    map.getCanvas().dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
-    return true;
+    if (!draw || !editing) return { ok: false, message: "当前没有正在绘制的边界" };
+    const geometry = getDrawingGeometry();
+    if (!geometry) return { ok: false, message: "请至少绘制三个不同的边界点" };
+    return completePolygonDrawing(geometry);
+  }
+
+  function completePolygonDrawing(geometry) {
+    if (drawCompletionPending) return { ok: false, message: "边界正在处理，请稍候" };
+    const normalized = normalizePlanningPolygon(geometry);
+    if (!normalized) return { ok: false, message: "请至少绘制三个不同的边界点" };
+    drawCompletionPending = true;
+    try {
+      draw?.setMode("select");
+      activeDrawFinish?.(normalized);
+      return { ok: true, geometry: normalized };
+    } finally {
+      drawCompletionPending = false;
+      activeDrawFinish = null;
+    }
   }
 
   function stopDrawing() {
     if (draw) draw.stop();
     draw = null;
     editing = false;
+    activeDrawFinish = null;
+    drawCompletionPending = false;
   }
 
   function firstBasemapLabelLayerId() {
@@ -422,10 +476,27 @@ export function createGeospatialMapAdapter(options = {}) {
   };
 }
 
+export function normalizePlanningPolygon(geometry) {
+  let ring = null;
+  if (geometry?.type === "Polygon") ring = geometry.coordinates?.[0];
+  if (geometry?.type === "LineString") ring = geometry.coordinates;
+  if (!Array.isArray(ring)) return null;
+  const unique = [];
+  for (const point of ring) {
+    if (!Array.isArray(point) || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) continue;
+    const previous = unique[unique.length - 1];
+    if (!previous || previous[0] !== point[0] || previous[1] !== point[1]) unique.push([point[0], point[1]]);
+  }
+  if (unique.length > 1 && unique[0][0] === unique[unique.length - 1][0] && unique[0][1] === unique[unique.length - 1][1]) unique.pop();
+  if (unique.length < 3) return null;
+  unique.push([...unique[0]]);
+  return { type: "Polygon", coordinates: [unique] };
+}
+
 function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
   if (type === "fill") {
     const colors = {
-      "robotaxi-city-extent-fill": ["#7aa7a1", 0.055, "#577e9b"],
+      "robotaxi-city-extent-fill": ["#6f9d98", 0.08, "#3f7084"],
       "robotaxi-zones": ["#729c87", 0.09, "#507966"],
       "robotaxi-sub-zones": ["#79a58d", 0.12, "#4f7f69"],
       "robotaxi-places": ["#d7ba78", 0.24, "#a48b54"],
@@ -473,10 +544,10 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
     maxzoom,
     filter,
     paint: {
-      "line-color": layerId === "robotaxi-selected-route" ? "#2f6fe4" : layerId === "robotaxi-city-boundary" ? "#577e9b" : ["case", ["boolean", ["feature-state", "selected"], false], "#2f6fe4", "#8295a6"],
-      "line-width": layerId === "robotaxi-selected-route" ? 5 : layerId === "robotaxi-city-boundary" ? 2.2 : ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 4],
-      "line-opacity": layerId === "robotaxi-selected-route" ? 0.92 : layerId === "robotaxi-city-boundary" ? 0.82 : 0.7,
-      ...(layerId === "robotaxi-city-boundary" ? { "line-dasharray": [4, 3] } : {}),
+      "line-color": layerId === "robotaxi-selected-route" ? "#2f6fe4" : layerId === "robotaxi-city-boundary" ? "#3f7084" : ["case", ["boolean", ["feature-state", "selected"], false], "#2f6fe4", "#8295a6"],
+      "line-width": layerId === "robotaxi-selected-route" ? 5 : layerId === "robotaxi-city-boundary" ? 2.6 : ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 4],
+      "line-opacity": layerId === "robotaxi-selected-route" ? 0.92 : layerId === "robotaxi-city-boundary" ? 0.94 : 0.7,
+      ...(layerId === "robotaxi-city-boundary" ? { "line-dasharray": [3, 2] } : {}),
     },
   };
 }

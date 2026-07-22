@@ -1,4 +1,5 @@
 import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-7-0";
+import { GUANGZHOU_ADMINISTRATIVE_BOUNDARY } from "../data/guangzhouAdministrativeBoundary.js?v=20260722-v049-8-0";
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
@@ -321,24 +322,10 @@ function createEmptyScene(dataset) {
 }
 
 function createCityBoundaryReference(dataset) {
-  const bounds = dataset?.geographic_bounds;
-  if (!Array.isArray(bounds) || bounds.length !== 2) return EMPTY_COLLECTION;
-  const [[minLng, minLat], [maxLng, maxLat]] = bounds;
+  if (!dataset?.geographic_bounds) return EMPTY_COLLECTION;
   return featureCollection([{
-    type: "Feature",
-    id: "GZ-CONTROLLED-DEMO-EXTENT",
-    properties: {
-      object_type: "cityBoundary",
-      object_id: "GZ-CONTROLLED-DEMO-EXTENT",
-      object_name: "广州受控演示范围",
-      reference_type: "CONTROLLED_EXTENT",
-    },
-    geometry: {
-      type: "Polygon",
-      coordinates: [[
-        [minLng, minLat], [maxLng, minLat], [maxLng, maxLat], [minLng, maxLat], [minLng, minLat],
-      ]],
-    },
+    ...clone(GUANGZHOU_ADMINISTRATIVE_BOUNDARY),
+    id: GUANGZHOU_ADMINISTRATIVE_BOUNDARY.properties.object_id,
   }]);
 }
 

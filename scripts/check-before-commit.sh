@@ -117,6 +117,7 @@ node --check src/domain/calculationModelRegistry.js
 node --check src/services/spatialCatalogService.js
 node --check src/domain/geospatialTypes.js
 node --check src/data/geospatialReferenceData.js
+node --check src/data/guangzhouAdministrativeBoundary.js
 node --check src/services/geospatialCatalogService.js
 node --check src/ui/geospatialMapAdapter.js
 node --check scripts/verify-v049-geospatial-map.mjs

@@ -8855,7 +8855,17 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   function createPlanFromGeometry(geometry) {
     const selectedTarget = targetOptions.find((option) => option.value === targetId);
     const targetName = newTargetName.trim() || selectedTarget?.label;
-    const sourceFeatureSnapshot = adapterRef.current?.inspectPlanningGeometry(geometry) || [];
+    const inspection = adapterRef.current?.inspectPlanningGeometry(geometry) || { status: "MAP_NOT_READY", features: [] };
+    setDrawingBoundary(false);
+    if (inspection.status !== "READY") {
+      setEditorNotice(inspection.message || "底图要素尚未准备完成，请稍候重试");
+      return;
+    }
+    const sourceFeatureSnapshot = inspection.features || [];
+    if (!sourceFeatureSnapshot.length) {
+      setEditorNotice(inspection.message || "当前范围未识别到底图要素，请放大地图或调整边界后重试");
+      return;
+    }
     const inference = spatialPlanningContextService.inferSpatialRelationships({
       targetType,
       geometry,
@@ -8890,7 +8900,6 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       catalog: scene,
     });
     setActivePlan(plan);
-    setDrawingBoundary(false);
     setEditingExistingBoundary(false);
     onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, plan));
     setEditorNotice(inference.issues.length
@@ -8900,7 +8909,8 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
 
   function beginDrawing() {
     if (drawingBoundary) {
-      adapterRef.current?.finishPolygonDrawing();
+      const result = adapterRef.current?.finishPolygonDrawing();
+      if (!result?.ok) setEditorNotice(result?.message || "边界尚未完成，请至少绘制三个不同的边界点");
       return;
     }
     const selectedTarget = targetOptions.find((option) => option.value === targetId);
@@ -8920,7 +8930,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       adapterRef.current?.focusPlanningParent(null, targetType);
       adapterRef.current?.startPolygonDrawing(createPlanFromGeometry);
       setDrawingBoundary(true);
-      setEditorNotice("请依次点击至少三个边界点，完成后点击“完成绘制”或按回车");
+      setEditorNotice("请依次点击至少三个边界点，然后点击“完成绘制”");
     } catch (error) {
       setEditorNotice(error.message || "地图绘制组件不可用");
     }
@@ -11585,13 +11595,13 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
-		    import("./services/geospatialCatalogService.js?v=20260722-v049-7-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260722-v049-7-0"),
-			    import("./data/geospatialReferenceData.js?v=20260721-v049-1-0"),
+		    import("./services/geospatialCatalogService.js?v=20260722-v049-8-0"),
+		    import("./ui/geospatialMapAdapter.js?v=20260722-v049-8-0"),
+			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
 				    import("./data/spatialScenarioInitialization.js?v=20260722-v049-4-0"),
-			    import("./services/operatingSpatialPlanService.js?v=20260722-v049-7-0"),
+			    import("./services/operatingSpatialPlanService.js?v=20260722-v049-8-0"),
 			    import("./services/spatialPlanningContextService.js?v=20260722-v049-7-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
         import("./ui/dataChartService.js?v=20260717-v047-1-0"),

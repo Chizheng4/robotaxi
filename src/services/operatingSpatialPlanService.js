@@ -16,9 +16,11 @@ import {
   validateSpatialPlanFeature,
 } from "./citySpatialObjectService.js?v=20260722-v049-7-0";
 import {
+  geometryContains,
   summarizeSpatialCoverage,
   validatePolygonGeometry,
 } from "./spatialTopologyService.js?v=20260722-v049-6-0";
+import { GUANGZHOU_ADMINISTRATIVE_BOUNDARY } from "../data/guangzhouAdministrativeBoundary.js?v=20260722-v049-8-0";
 
 export { getCitySpatialPlanningContract };
 
@@ -176,6 +178,9 @@ function validateFeature(feature, dataset, catalog, issues) {
   if (!ring || geometryIssues.length) return;
   const bounds = dataset?.geographic_bounds;
   if (Array.isArray(bounds) && ring.some((point) => !insideBounds(point, bounds))) issues.push("区域超出广州受控演示范围");
+  if (!geometryContains(GUANGZHOU_ADMINISTRATIVE_BOUNDARY.geometry, feature.geometry_geojson)) {
+    issues.push("区域必须完整位于广州市行政范围内");
+  }
   if (feature.source_feature_snapshot?.length) {
     const coverage = summarizeSpatialCoverage({
       targetType: feature.target_object_type,
