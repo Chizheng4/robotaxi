@@ -6797,3 +6797,61 @@ html[data-keyboard-open="true"] .platform-login-panel {
     bottom: 8px !important;
   }
 }
+
+/* v049.9.0 city spatial visual language. Keep last to protect the shared map contract. */
+.map-page-new > .map-stage > .map-floating-actions,
+.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-trigger,
+.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-edit-trigger,
+.map-page-new > .map-stage > .map-navigation-actions {
+  border-color: rgba(188, 203, 216, 0.82);
+  background: rgba(250, 252, 253, 0.9);
+  box-shadow: 0 5px 16px rgba(43, 64, 83, 0.09);
+  backdrop-filter: blur(14px) saturate(115%);
+}
+
+.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-trigger,
+.map-page-new > .map-stage > .geospatial-map-shell > .spatial-plan-edit-trigger {
+  color: #354f63;
+  font-weight: 500;
+}
+
+.geospatial-map-canvas .maplibregl-canvas {
+  cursor: grab;
+}
+
+.geospatial-map-canvas .maplibregl-canvas:active {
+  cursor: grabbing;
+}
+
+.geospatial-map-shell .map-hover-card {
+  width: 218px;
+  padding: 10px 11px;
+  border-color: rgba(190, 204, 215, 0.84);
+  border-radius: 6px;
+  background: rgba(252, 253, 254, 0.93);
+  box-shadow: 0 10px 26px rgba(37, 57, 75, 0.12);
+  backdrop-filter: blur(16px) saturate(112%);
+}
+
+.geospatial-map-shell .map-hover-card > strong {
+  color: #263d50;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.geospatial-map-shell .map-hover-card > span {
+  color: #728394;
+}
+
+.geospatial-map-shell .map-hover-card dl {
+  padding-top: 7px;
+  border-top: 1px solid rgba(211, 220, 228, 0.72);
+}
+
+@media (max-width: 767px) {
+  .geospatial-map-shell .map-hover-card {
+    width: min(218px, calc(100% - 16px));
+    max-height: min(210px, calc(100% - 24px));
+    overflow-y: auto;
+  }
+}

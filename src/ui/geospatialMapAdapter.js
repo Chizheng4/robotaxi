@@ -1,14 +1,52 @@
+export const CITY_SPATIAL_VISUAL_TOKENS = Object.freeze({
+  city: { fill: "#6f9d98", opacity: 0.055, line: "#3f7084" },
+  zone: { fill: "#78a58e", opacity: 0.145, line: "#4f7868" },
+  subZone: { fill: "#78a9ad", opacity: 0.16, line: "#4c7f84" },
+  place: {
+    fallback: "#a5b3bd",
+    residential: "#8fb89f",
+    office: "#8ba9c8",
+    commercial: "#d4ad68",
+    school: "#a2b486",
+    hospital: "#c99191",
+    metro: "#73aeb1",
+    hotel: "#b395b2",
+    transport: "#7ea7b7",
+    opsCenter: "#6f8a9d",
+    factory: "#8d91a6",
+  },
+  serviceArea: {
+    fallback: "#70a99f",
+    pickupDropoff: "#5ca698",
+    temporaryStop: "#8ea7b5",
+    parking: "#839ab1",
+    standby: "#8c9f86",
+    mixed: "#769ca2",
+    opsCenter: "#697f96",
+  },
+  selected: "#2f6fe4",
+  hovered: "#416e83",
+});
+
 const SOURCE_DEFINITIONS = Object.freeze({
   cityBoundary: { type: "fill", layers: [
-    { layerId: "robotaxi-city-extent-fill", type: "fill", minzoom: 5, maxzoom: 11 },
-    { layerId: "robotaxi-city-boundary", type: "line", minzoom: 5, maxzoom: 16 },
+    { layerId: "robotaxi-city-extent-fill", type: "fill", minzoom: 5, maxzoom: 11, interactive: false },
+    { layerId: "robotaxi-city-boundary", type: "line", minzoom: 5, maxzoom: 16, interactive: false },
   ] },
   zones: { type: "fill", layers: [
     { layerId: "robotaxi-zones", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
+    { layerId: "robotaxi-zone-boundaries", type: "line", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
     { layerId: "robotaxi-sub-zones", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
+    { layerId: "robotaxi-sub-zone-boundaries", type: "line", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
   ] },
-  places: { layerId: "robotaxi-places", type: "fill", minzoom: 12, maxzoom: 18 },
-  serviceAreas: { layerId: "robotaxi-service-areas", type: "fill", minzoom: 14 },
+  places: { type: "fill", layers: [
+    { layerId: "robotaxi-places", type: "fill", minzoom: 12, maxzoom: 18 },
+    { layerId: "robotaxi-place-boundaries", type: "line", minzoom: 12, maxzoom: 18, interactive: false },
+  ] },
+  serviceAreas: { type: "fill", layers: [
+    { layerId: "robotaxi-service-areas", type: "fill", minzoom: 14 },
+    { layerId: "robotaxi-service-area-boundaries", type: "line", minzoom: 14, interactive: false },
+  ] },
   roads: { layerId: "robotaxi-roads", type: "line", minzoom: 13 },
   opsCenters: { layerId: "robotaxi-ops-centers", type: "circle", minzoom: 11 },
   robotaxis: { layerId: "robotaxi-vehicles", type: "circle", minzoom: 14 },
@@ -105,7 +143,7 @@ export function createGeospatialMapAdapter(options = {}) {
           if (beforeId) map.addLayer(layer, beforeId);
           else map.addLayer(layer);
         }
-        if (sourceId !== "cityBoundary") bindLayerEvents(layerDefinition.layerId);
+        if (sourceId !== "cityBoundary" && layerDefinition.interactive !== false) bindLayerEvents(layerDefinition.layerId);
       }
     }
     installLabelLayers();
@@ -183,7 +221,7 @@ export function createGeospatialMapAdapter(options = {}) {
   }
 
   function updateHoverState(feature) {
-    const next = feature?.source && feature?.id !== undefined ? { source: feature.source, id: feature.id } : null;
+    const next = featureStateReference(feature);
     if (hoveredReference && (hoveredReference.source !== next?.source || hoveredReference.id !== next?.id)) {
       map.setFeatureState(hoveredReference, { hovered: false });
     }
@@ -495,14 +533,7 @@ export function normalizePlanningPolygon(geometry) {
 
 function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
   if (type === "fill") {
-    const colors = {
-      "robotaxi-city-extent-fill": ["#6f9d98", 0.08, "#3f7084"],
-      "robotaxi-zones": ["#729c87", 0.09, "#507966"],
-      "robotaxi-sub-zones": ["#79a58d", 0.12, "#4f7f69"],
-      "robotaxi-places": ["#d7ba78", 0.24, "#a48b54"],
-      "robotaxi-service-areas": ["#56a596", 0.28, "#327a6d"],
-    };
-    const [color, opacity, outline] = colors[layerId];
+    const style = fillStyle(layerId);
     return {
       id: layerId,
       type,
@@ -511,13 +542,13 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
       maxzoom,
       filter,
       paint: {
-        "fill-color": color,
+        "fill-color": style.color,
         "fill-opacity": ["case",
-          ["boolean", ["feature-state", "selected"], false], Math.min(0.55, opacity + 0.2),
-          ["boolean", ["feature-state", "hovered"], false], Math.min(0.48, opacity + 0.12),
-          opacity,
+          ["boolean", ["feature-state", "selected"], false], Math.min(0.42, style.opacity + 0.18),
+          ["boolean", ["feature-state", "hovered"], false], Math.min(0.32, style.opacity + 0.1),
+          style.opacity,
         ],
-        "fill-outline-color": outline,
+        "fill-outline-color": style.line,
       },
     };
   }
@@ -536,6 +567,7 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
       },
     };
   }
+  const boundaryStyle = lineStyle(layerId);
   return {
     id: layerId,
     type,
@@ -544,11 +576,117 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
     maxzoom,
     filter,
     paint: {
-      "line-color": layerId === "robotaxi-selected-route" ? "#2f6fe4" : layerId === "robotaxi-city-boundary" ? "#3f7084" : ["case", ["boolean", ["feature-state", "selected"], false], "#2f6fe4", "#8295a6"],
-      "line-width": layerId === "robotaxi-selected-route" ? 5 : layerId === "robotaxi-city-boundary" ? 2.6 : ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 4],
-      "line-opacity": layerId === "robotaxi-selected-route" ? 0.92 : layerId === "robotaxi-city-boundary" ? 0.94 : 0.7,
-      ...(layerId === "robotaxi-city-boundary" ? { "line-dasharray": [3, 2] } : {}),
+      "line-color": boundaryStyle.color,
+      "line-width": boundaryStyle.width,
+      "line-opacity": boundaryStyle.opacity,
+      ...(boundaryStyle.dasharray ? { "line-dasharray": boundaryStyle.dasharray } : {}),
     },
+  };
+}
+
+function fillStyle(layerId) {
+  if (layerId === "robotaxi-city-extent-fill") {
+    return {
+      color: CITY_SPATIAL_VISUAL_TOKENS.city.fill,
+      opacity: CITY_SPATIAL_VISUAL_TOKENS.city.opacity,
+      line: CITY_SPATIAL_VISUAL_TOKENS.city.line,
+    };
+  }
+  if (layerId === "robotaxi-zones") {
+    return {
+      color: CITY_SPATIAL_VISUAL_TOKENS.zone.fill,
+      opacity: CITY_SPATIAL_VISUAL_TOKENS.zone.opacity,
+      line: CITY_SPATIAL_VISUAL_TOKENS.zone.line,
+    };
+  }
+  if (layerId === "robotaxi-sub-zones") {
+    return {
+      color: CITY_SPATIAL_VISUAL_TOKENS.subZone.fill,
+      opacity: CITY_SPATIAL_VISUAL_TOKENS.subZone.opacity,
+      line: CITY_SPATIAL_VISUAL_TOKENS.subZone.line,
+    };
+  }
+  if (layerId === "robotaxi-places") {
+    const colors = CITY_SPATIAL_VISUAL_TOKENS.place;
+    return {
+      color: ["match", ["get", "place_type"],
+        "RESIDENTIAL", colors.residential,
+        "OFFICE", colors.office,
+        "COMMERCIAL", colors.commercial,
+        "SCHOOL", colors.school,
+        "HOSPITAL", colors.hospital,
+        "METRO_STATION", colors.metro,
+        "HOTEL", colors.hotel,
+        "TRANSPORT_HUB", colors.transport,
+        "OPS_CENTER", colors.opsCenter,
+        "FACTORY", colors.factory,
+        colors.fallback,
+      ],
+      opacity: 0.18,
+      line: "#768998",
+    };
+  }
+  const colors = CITY_SPATIAL_VISUAL_TOKENS.serviceArea;
+  return {
+    color: ["match", ["get", "service_area_type"],
+      "PICKUP_DROPOFF", colors.pickupDropoff,
+      "TEMP_STOP", colors.temporaryStop,
+      "PARKING", colors.parking,
+      "STANDBY", colors.standby,
+      "MIXED", colors.mixed,
+      "OPS_CENTER_AREA", colors.opsCenter,
+      colors.fallback,
+    ],
+    opacity: 0.22,
+    line: "#477d77",
+  };
+}
+
+function lineStyle(layerId) {
+  if (layerId === "robotaxi-selected-route") {
+    return { color: CITY_SPATIAL_VISUAL_TOKENS.selected, width: 5, opacity: 0.92 };
+  }
+  if (layerId === "robotaxi-city-boundary") {
+    return {
+      color: CITY_SPATIAL_VISUAL_TOKENS.city.line,
+      width: ["interpolate", ["linear"], ["zoom"], 5, 1.1, 10, 1.8, 16, 2.2],
+      opacity: 0.9,
+      dasharray: [3, 2],
+    };
+  }
+  const style = {
+    "robotaxi-zone-boundaries": { line: CITY_SPATIAL_VISUAL_TOKENS.zone.line, width: [1.4, 2.6] },
+    "robotaxi-sub-zone-boundaries": { line: CITY_SPATIAL_VISUAL_TOKENS.subZone.line, width: [1.2, 2.3] },
+    "robotaxi-place-boundaries": { line: "#7b8993", width: [0.85, 1.8] },
+    "robotaxi-service-area-boundaries": { line: "#477d77", width: [0.9, 1.9], dasharray: [2, 1.4] },
+  }[layerId];
+  if (style) {
+    return {
+      color: ["case",
+        ["boolean", ["feature-state", "selected"], false], CITY_SPATIAL_VISUAL_TOKENS.selected,
+        ["boolean", ["feature-state", "hovered"], false], CITY_SPATIAL_VISUAL_TOKENS.hovered,
+        style.line,
+      ],
+      width: ["case",
+        ["boolean", ["feature-state", "selected"], false], style.width[1],
+        ["boolean", ["feature-state", "hovered"], false], (style.width[0] + style.width[1]) / 2,
+        style.width[0],
+      ],
+      opacity: ["case",
+        ["boolean", ["feature-state", "selected"], false], 0.98,
+        ["boolean", ["feature-state", "hovered"], false], 0.9,
+        0.72,
+      ],
+      dasharray: style.dasharray,
+    };
+  }
+  return {
+    color: ["case",
+      ["boolean", ["feature-state", "selected"], false], CITY_SPATIAL_VISUAL_TOKENS.selected,
+      "#8295a6",
+    ],
+    width: ["interpolate", ["linear"], ["zoom"], 10, 1.5, 16, 4],
+    opacity: 0.7,
   };
 }
 
@@ -653,6 +791,16 @@ function selectionReference(selected) {
     route: "route",
   }[selected?.type];
   return source ? { source, id: selected.id } : null;
+}
+
+function featureStateReference(feature) {
+  const properties = feature?.properties || {};
+  const objectReference = selectionReference({
+    type: properties.object_type,
+    id: properties.object_id,
+  });
+  if (objectReference) return objectReference;
+  return feature?.source && feature?.id !== undefined ? { source: feature.source, id: feature.id } : null;
 }
 
 function emptyCollection() {
