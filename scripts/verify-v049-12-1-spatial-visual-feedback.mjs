@@ -19,11 +19,11 @@ for (const layerId of [
   assert(adapterSource.includes(layerId), `缺少空间范围图层：${layerId}`);
 }
 
-assert.match(adapterSource, /city:\s*\{[^}]*opacity:\s*0\.11/);
-assert.match(adapterSource, /zone:\s*\{[^}]*opacity:\s*0\.22/);
+assert.match(adapterSource, /city:\s*\{[^}]*opacity:\s*0\.15/);
+assert.match(adapterSource, /zone:\s*\{[^}]*opacity:\s*0\.27/);
 assert(catalogSource.includes("createCityBoundaryMask(dataset)"));
 assert(catalogSource.includes("boundaryRing.reverse()"));
-assert.match(adapterSource, /robotaxi-city-boundary-label".*maxzoom:\s*9/);
+assert(adapterSource.includes("CITY_SPATIAL_ZOOM_BANDS.cityLabel.max"));
 assert(mainSource.includes("spatial-plan-action-feedback"));
 assert(mainSource.includes('activePlan.operating_spatial_plan_status === "PUBLISHED"'));
 assert(mainSource.includes('adapterRef.current?.fitGeometry(publishedFeature.geometry_geojson)'));

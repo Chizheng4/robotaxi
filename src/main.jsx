@@ -8908,7 +8908,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       onControllerReady?.(adapterRef.current);
       setMapStatus({ status: "READY", message: "" });
     } catch (error) {
-      setMapStatus({ status: "UNAVAILABLE", message: error.message || "地图引擎不可用" });
+      setMapStatus({ status: "UNAVAILABLE", message: getGeospatialUnavailableMessage(error) });
     }
     return () => {
       adapterRef.current?.destroy();
@@ -9508,6 +9508,14 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       )}
     </div>
   );
+}
+
+function getGeospatialUnavailableMessage(error) {
+  const technicalMessage = String(error?.message || error || "");
+  if (/webgl|performancecaveat|vector|context/i.test(technicalMessage)) {
+    return "当前设备暂不支持城市底图，可切换网格仿真继续查看。";
+  }
+  return "城市底图加载失败，可稍后重试或切换网格仿真。";
 }
 
 function resolveSelectedSpatialTarget(selected, scene) {
@@ -11986,7 +11994,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-10-0"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-12-2e"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),

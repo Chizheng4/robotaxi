@@ -1,7 +1,7 @@
 export const CITY_SPATIAL_VISUAL_TOKENS = Object.freeze({
-  city: { fill: "#6f9d98", opacity: 0.11, line: "#315f73" },
-  zone: { fill: "#78a58e", opacity: 0.22, line: "#3f6f62" },
-  subZone: { fill: "#78a9ad", opacity: 0.21, line: "#3f7278" },
+  city: { fill: "#78a9a3", opacity: 0.15, line: "#315f73" },
+  zone: { fill: "#78a58e", opacity: 0.27, line: "#315f5a" },
+  subZone: { fill: "#78a9ad", opacity: 0.25, line: "#356b72" },
   place: {
     fallback: "#a5b3bd",
     residential: "#8fb89f",
@@ -28,14 +28,21 @@ export const CITY_SPATIAL_VISUAL_TOKENS = Object.freeze({
   hovered: "#416e83",
 });
 
+export const CITY_SPATIAL_ZOOM_BANDS = Object.freeze({
+  cityScope: { min: 3.5, fillMax: 10.5, boundaryMax: 12 },
+  zone: { min: 6, max: 13.5 },
+  subZone: { min: 9, max: 15.5 },
+  cityLabel: { min: 4, max: 8.4 },
+});
+
 const SOURCE_DEFINITIONS = Object.freeze({
   cityMask: { type: "fill", layers: [
-    { layerId: "robotaxi-city-outside-mask", type: "fill", minzoom: 5, maxzoom: 11, interactive: false },
+    { layerId: "robotaxi-city-outside-mask", type: "fill", minzoom: CITY_SPATIAL_ZOOM_BANDS.cityScope.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.cityScope.fillMax, interactive: false },
   ] },
   cityBoundary: { type: "fill", layers: [
-    { layerId: "robotaxi-city-extent-fill", type: "fill", minzoom: 5, maxzoom: 11, interactive: false },
-    { layerId: "robotaxi-city-boundary-halo", type: "line", minzoom: 5, maxzoom: 16, interactive: false },
-    { layerId: "robotaxi-city-boundary", type: "line", minzoom: 5, maxzoom: 16, interactive: false },
+    { layerId: "robotaxi-city-extent-fill", type: "fill", minzoom: CITY_SPATIAL_ZOOM_BANDS.cityScope.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.cityScope.fillMax, interactive: false },
+    { layerId: "robotaxi-city-boundary-halo", type: "line", minzoom: CITY_SPATIAL_ZOOM_BANDS.cityScope.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.cityScope.boundaryMax, interactive: false },
+    { layerId: "robotaxi-city-boundary", type: "line", minzoom: CITY_SPATIAL_ZOOM_BANDS.cityScope.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.cityScope.boundaryMax, interactive: false },
   ] },
   administrativeUnits: { type: "fill", layers: [
     { layerId: "robotaxi-administrative-units", type: "fill", minzoom: 6, maxzoom: 12 },
@@ -48,12 +55,12 @@ const SOURCE_DEFINITIONS = Object.freeze({
     { layerId: "robotaxi-selected-physical-unit-boundaries", type: "line", minzoom: 12, interactive: false },
   ] },
   zones: { type: "fill", layers: [
-    { layerId: "robotaxi-zones", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
-    { layerId: "robotaxi-zone-boundary-halo", type: "line", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
-    { layerId: "robotaxi-zone-boundaries", type: "line", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
-    { layerId: "robotaxi-sub-zones", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
-    { layerId: "robotaxi-sub-zone-boundary-halo", type: "line", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
-    { layerId: "robotaxi-sub-zone-boundaries", type: "line", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
+    { layerId: "robotaxi-zones", minzoom: CITY_SPATIAL_ZOOM_BANDS.zone.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.zone.max, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
+    { layerId: "robotaxi-zone-boundary-halo", type: "line", minzoom: CITY_SPATIAL_ZOOM_BANDS.zone.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.zone.max, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
+    { layerId: "robotaxi-zone-boundaries", type: "line", minzoom: CITY_SPATIAL_ZOOM_BANDS.zone.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.zone.max, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
+    { layerId: "robotaxi-sub-zones", minzoom: CITY_SPATIAL_ZOOM_BANDS.subZone.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.subZone.max, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
+    { layerId: "robotaxi-sub-zone-boundary-halo", type: "line", minzoom: CITY_SPATIAL_ZOOM_BANDS.subZone.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.subZone.max, filter: ["==", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
+    { layerId: "robotaxi-sub-zone-boundaries", type: "line", minzoom: CITY_SPATIAL_ZOOM_BANDS.subZone.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.subZone.max, filter: ["==", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
   ] },
   places: { type: "fill", layers: [
     { layerId: "robotaxi-places", type: "fill", minzoom: 12, maxzoom: 18 },
@@ -70,7 +77,7 @@ const SOURCE_DEFINITIONS = Object.freeze({
 });
 
 const LABEL_DEFINITIONS = Object.freeze([
-  { sceneKey: "cityBoundary", sourceId: "cityBoundaryLabels", layerId: "robotaxi-city-boundary-label", size: 12, minzoom: 5, maxzoom: 9 },
+  { sceneKey: "cityBoundary", sourceId: "cityBoundaryLabels", layerId: "robotaxi-city-boundary-label", size: 13, minzoom: CITY_SPATIAL_ZOOM_BANDS.cityLabel.min, maxzoom: CITY_SPATIAL_ZOOM_BANDS.cityLabel.max },
   { sceneKey: "administrativeUnits", sourceId: "administrativeUnitLabels", layerId: "robotaxi-administrative-unit-labels", size: 11, minzoom: 7, maxzoom: 11 },
   { sceneKey: "zones", sourceId: "zoneLabels", layerId: "robotaxi-zone-labels", size: 12, minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
   { sceneKey: "zones", sourceId: "zoneLabels", layerId: "robotaxi-sub-zone-labels", size: 11, minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
@@ -100,6 +107,9 @@ export function createGeospatialMapAdapter(options = {}) {
   let selectedAdministrativeUnitIds = new Set();
   let currentPhysicalSelection = emptyCollection();
   const appliedSourceVersions = {};
+  const filteredBasemapLabelLayers = new Set();
+  const layerInstallErrors = [];
+  const mapErrors = [];
   const map = new MapLibre.Map({
     container: options.container,
     style: currentScene?.dataset?.basemap_style_url || cloneFallbackStyle(),
@@ -128,18 +138,23 @@ export function createGeospatialMapAdapter(options = {}) {
   map.on("style.load", () => {
     if (destroyed) return;
     ready = true;
+    filteredBasemapLabelLayers.clear();
     Object.keys(appliedSourceVersions).forEach((key) => delete appliedSourceVersions[key]);
     installScene();
   });
   map.on("error", (event) => {
+    mapErrors.push(event?.error?.message || "地图运行异常");
+    if (mapErrors.length > 12) mapErrors.shift();
     if (!ready && !fallbackApplied) applyFallbackStyle();
     options.onStatusChange?.({ status: fallbackApplied ? "FALLBACK" : "DEGRADED", message: event?.error?.message || "底图加载异常" });
   });
   map.on("moveend", emitViewChange);
+  map.on("idle", emitVisualDiagnostics);
 
   function emitViewChange() {
     if (destroyed) return;
     options.onViewChange?.(readCamera());
+    emitVisualDiagnostics();
   }
 
   function applyFallbackStyle() {
@@ -151,6 +166,7 @@ export function createGeospatialMapAdapter(options = {}) {
 
   function installScene() {
     if (!map.isStyleLoaded()) return;
+    suppressDuplicateBasemapCityLabels();
     for (const [sourceId, definition] of Object.entries(SOURCE_DEFINITIONS)) {
       if (!map.getSource(sourceId)) {
         map.addSource(sourceId, {
@@ -163,10 +179,14 @@ export function createGeospatialMapAdapter(options = {}) {
       appliedSourceVersions[sourceId] = currentScene?.sourceVersions?.[sourceId] || "";
       for (const layerDefinition of layerDefinitions(definition)) {
         if (!map.getLayer(layerDefinition.layerId)) {
-          const beforeId = layerDefinition.type === "fill" ? firstBasemapLabelLayerId() : undefined;
+          const beforeId = shouldSitBelowBasemapLabels(sourceId) ? firstBasemapLabelLayerId() : undefined;
           const layer = createLayer(sourceId, layerDefinition);
-          if (beforeId) map.addLayer(layer, beforeId);
-          else map.addLayer(layer);
+          try {
+            if (beforeId) map.addLayer(layer, beforeId);
+            else map.addLayer(layer);
+          } catch (error) {
+            layerInstallErrors.push(`${layerDefinition.layerId}:${error?.message || "图层安装失败"}`);
+          }
         }
         if (sourceId === "administrativeUnits" && layerDefinition.interactive !== false) bindAdministrativeUnitEvents(layerDefinition.layerId);
         else if (sourceId !== "cityBoundary" && layerDefinition.interactive !== false) bindLayerEvents(layerDefinition.layerId);
@@ -175,6 +195,84 @@ export function createGeospatialMapAdapter(options = {}) {
     installLabelLayers();
     updateSelection(options.selected || null);
     applyAdministrativeSelection();
+    queueMicrotask(emitVisualDiagnostics);
+  }
+
+  function suppressDuplicateBasemapCityLabels() {
+    const cityNames = ["广州", "广州市", "Guangzhou", "Guangzhou 广州市"];
+    const nameExpression = ["coalesce",
+      ["get", "name:zh"],
+      ["get", "name_zh"],
+      ["get", "name_en"],
+      ["get", "name"],
+      "",
+    ];
+    const excludeCity = ["!", ["in", nameExpression, ["literal", cityNames]]];
+    for (const layer of map.getStyle()?.layers || []) {
+      if (layer.type !== "symbol" || String(layer.id).startsWith("robotaxi-")) continue;
+      if (!layer.layout?.["text-field"]) continue;
+      if (filteredBasemapLabelLayers.has(layer.id)) continue;
+      try {
+        const originalFilter = map.getFilter(layer.id) || layer.filter;
+        map.setFilter(layer.id, originalFilter ? ["all", originalFilter, excludeCity] : excludeCity);
+        filteredBasemapLabelLayers.add(layer.id);
+      } catch {
+        // A third-party style may expose a non-expression filter. Keep the map usable.
+      }
+    }
+  }
+
+  function emitVisualDiagnostics() {
+    if (destroyed || !ready || !map.isStyleLoaded()) return;
+    const zoom = Number(map.getZoom().toFixed(2));
+    const cityLayerIds = ["robotaxi-city-outside-mask", "robotaxi-city-extent-fill", "robotaxi-city-boundary"];
+    const zoneLayerIds = ["robotaxi-zones", "robotaxi-zone-boundaries", "robotaxi-sub-zones", "robotaxi-sub-zone-boundaries"];
+    const renderedCityFeatures = countRenderedFeatures(cityLayerIds);
+    const renderedZoneFeatures = countRenderedFeatures(zoneLayerIds);
+    const installedBusinessLayerIds = (map.getStyle()?.layers || [])
+      .map((layer) => layer.id)
+      .filter((layerId) => String(layerId).startsWith("robotaxi-"));
+    const diagnostics = {
+      zoom,
+      cityScopeExpected: zoom >= CITY_SPATIAL_ZOOM_BANDS.cityScope.min && zoom < CITY_SPATIAL_ZOOM_BANDS.cityScope.boundaryMax,
+      citySourceFeatureCount: countSourceFeatures(["cityMask", "cityBoundary"]),
+      cityLayerCount: cityLayerIds.filter((layerId) => map.getLayer(layerId)).length,
+      renderedCityFeatures,
+      zoneSourceFeatureCount: countSourceFeatures(["zones"]),
+      zoneLayerCount: zoneLayerIds.filter((layerId) => map.getLayer(layerId)).length,
+      renderedZoneFeatures,
+    };
+    const shell = options.container?.closest?.(".geospatial-map-shell") || options.container;
+    if (shell?.dataset) {
+      shell.dataset.mapZoom = String(zoom);
+      shell.dataset.cityScopeExpected = String(diagnostics.cityScopeExpected);
+      shell.dataset.citySourceFeatureCount = String(diagnostics.citySourceFeatureCount);
+      shell.dataset.cityLayerCount = String(diagnostics.cityLayerCount);
+      shell.dataset.cityScopeRendered = String(renderedCityFeatures > 0);
+      shell.dataset.zoneSourceFeatureCount = String(diagnostics.zoneSourceFeatureCount);
+      shell.dataset.zoneLayerCount = String(diagnostics.zoneLayerCount);
+      shell.dataset.operatingZoneRendered = String(renderedZoneFeatures > 0);
+      shell.dataset.businessLayerCount = String(installedBusinessLayerIds.length);
+      shell.dataset.layerInstallErrorCount = String(layerInstallErrors.length);
+      shell.dataset.lastLayerInstallError = layerInstallErrors.at(-1) || "";
+      shell.dataset.mapErrorCount = String(mapErrors.length);
+      shell.dataset.lastMapError = mapErrors.at(-1) || "";
+    }
+    options.onVisualStateChange?.(diagnostics);
+  }
+
+  function countSourceFeatures(sourceIds) {
+    return sourceIds.reduce((total, sourceId) => total + Number(currentScene?.[sourceId]?.features?.length || 0), 0);
+  }
+
+  function countRenderedFeatures(layerIds) {
+    const available = layerIds.filter((layerId) => map.getLayer(layerId));
+    if (!available.length) return 0;
+    try {
+      return map.queryRenderedFeatures({ layers: available }).length;
+    } catch {
+      return 0;
+    }
   }
 
   function installLabelLayers() {
@@ -190,9 +288,9 @@ export function createGeospatialMapAdapter(options = {}) {
         id: layerId,
         type: "symbol",
         source: sourceId,
-        minzoom,
-        maxzoom,
-        filter,
+        ...(Number.isFinite(minzoom) ? { minzoom } : {}),
+        ...(Number.isFinite(maxzoom) ? { maxzoom } : {}),
+        ...(Array.isArray(filter) ? { filter } : {}),
         layout: {
           "text-field": ["get", "object_name"],
           "text-size": size,
@@ -304,6 +402,7 @@ export function createGeospatialMapAdapter(options = {}) {
       map.getSource(definition.sourceId)?.setData(createLabelCollection(currentScene?.[sceneKey]));
       appliedSourceVersions[definition.sourceId] = nextVersion;
     }
+    map.once("idle", emitVisualDiagnostics);
   }
 
   function updatePhysicalSelection(features = []) {
@@ -576,6 +675,10 @@ export function createGeospatialMapAdapter(options = {}) {
     ))?.id;
   }
 
+  function shouldSitBelowBasemapLabels(sourceId) {
+    return ["cityMask", "cityBoundary", "administrativeUnits", "physicalSelection", "zones", "places", "serviceAreas"].includes(sourceId);
+  }
+
   return {
     updateScene,
     updateSelection,
@@ -632,9 +735,9 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
       id: layerId,
       type,
       source: sourceId,
-      minzoom,
-      maxzoom,
-      filter,
+      ...(Number.isFinite(minzoom) ? { minzoom } : {}),
+      ...(Number.isFinite(maxzoom) ? { maxzoom } : {}),
+      ...(Array.isArray(filter) ? { filter } : {}),
       paint: {
         "fill-color": style.color,
         "fill-opacity": ["case",
@@ -652,6 +755,9 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
       id: layerId,
       type,
       source: sourceId,
+      ...(Number.isFinite(minzoom) ? { minzoom } : {}),
+      ...(Number.isFinite(maxzoom) ? { maxzoom } : {}),
+      ...(Array.isArray(filter) ? { filter } : {}),
       paint: {
         "circle-radius": isVehicle ? ["interpolate", ["linear"], ["zoom"], 10, 3, 16, 6] : 7,
         "circle-color": ["case", ["boolean", ["feature-state", "selected"], false], "#2f6fe4", isVehicle ? "#2f756c" : "#315c82"],
@@ -666,9 +772,9 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
     id: layerId,
     type,
     source: sourceId,
-    minzoom,
-    maxzoom,
-    filter,
+    ...(Number.isFinite(minzoom) ? { minzoom } : {}),
+    ...(Number.isFinite(maxzoom) ? { maxzoom } : {}),
+    ...(Array.isArray(filter) ? { filter } : {}),
     paint: {
       "line-color": boundaryStyle.color,
       "line-width": boundaryStyle.width,
@@ -851,7 +957,9 @@ function administrativeSelectionFilter(selectedIds = []) {
 }
 
 function layerDefinitions(definition) {
-  return definition.layers || [definition];
+  return definition.layers
+    ? definition.layers.map((layer) => ({ ...layer, type: layer.type || definition.type }))
+    : [definition];
 }
 
 function classifyBasemapFeature(feature) {
