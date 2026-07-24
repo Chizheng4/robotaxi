@@ -1,9 +1,20 @@
 export const OperatingSpatialPlanStatus = Object.freeze({
   DRAFT: "DRAFT",
+  // Kept for reading historical plans. New validation never changes lifecycle to this value.
   VALIDATED: "VALIDATED",
   PUBLISHED: "PUBLISHED",
   SUPERSEDED: "SUPERSEDED",
   CANCELLED: "CANCELLED",
+});
+
+export const SpatialObjectStatus = Object.freeze({
+  ACTIVE: "ACTIVE",
+  INACTIVE: "INACTIVE",
+});
+
+export const SpatialObjectVersionStatus = Object.freeze({
+  CURRENT: "CURRENT",
+  SUPERSEDED: "SUPERSEDED",
 });
 
 export const SpatialPlanTargetType = Object.freeze({
@@ -25,12 +36,14 @@ export const SpatialPlanValidationStatus = Object.freeze({
 export const SpatialPlanChangeType = Object.freeze({
   UPSERT: "UPSERT",
   DEACTIVATE: "DEACTIVATE",
+  ACTIVATE: "ACTIVATE",
 });
 
 export const SpatialFormationMode = Object.freeze({
   ADMINISTRATIVE_UNIT_REUSE: "ADMINISTRATIVE_UNIT_REUSE",
   ADMINISTRATIVE_UNIT_COMBINATION: "ADMINISTRATIVE_UNIT_COMBINATION",
   MAP_FEATURE_SELECTION: "MAP_FEATURE_SELECTION",
+  PHYSICAL_UNIT_SELECTION: "PHYSICAL_UNIT_SELECTION",
 });
 
 export const CITY_SPATIAL_PLAN_CONTRACT_VERSION = "CITY_SPATIAL_V3";
@@ -77,6 +90,7 @@ export function createSpatialPlanFeature(input = {}) {
     spatial_formation_mode: input.spatial_formation_mode || SpatialFormationMode.MAP_FEATURE_SELECTION,
     source_spatial_unit_refs: Array.isArray(input.source_spatial_unit_refs) ? input.source_spatial_unit_refs : [],
     source_feature_snapshot: Array.isArray(input.source_feature_snapshot) ? input.source_feature_snapshot : [],
+    selection_geometry_geojson: input.selection_geometry_geojson || null,
     spatial_validation_summary: input.spatial_validation_summary || null,
     planning_zoom_band: input.planning_zoom_band || null,
     relationship_inference_status: input.relationship_inference_status || null,

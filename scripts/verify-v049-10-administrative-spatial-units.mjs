@@ -54,7 +54,7 @@ const validated = validateDraft(draft, {
   dataset: GEOSPATIAL_MAP_DATASET,
   catalog: CITY_SPATIAL_CATALOG,
 });
-assert.equal(validated.operating_spatial_plan_status, OperatingSpatialPlanStatus.VALIDATED);
+assert.equal(validated.operating_spatial_plan_status, OperatingSpatialPlanStatus.DRAFT);
 assert.deepEqual(validated.validation_issues, []);
 
 const { plans, published } = publishValidatedPlan(validated, { plans: [] });

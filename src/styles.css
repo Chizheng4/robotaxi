@@ -1416,6 +1416,39 @@
   font-weight: 600;
 }
 
+.spatial-plan-source-units {
+  align-items: flex-start;
+}
+
+.spatial-plan-source-unit-list {
+  display: grid;
+  width: 100%;
+  max-height: 112px;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface-subtle);
+}
+
+.spatial-plan-source-unit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  min-height: 28px;
+  padding-left: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.spatial-plan-source-unit:last-child {
+  border-bottom: 0;
+}
+
+.spatial-plan-source-unit > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .spatial-plan-editor header {
   grid-template-columns: 1fr auto;
   align-items: center;

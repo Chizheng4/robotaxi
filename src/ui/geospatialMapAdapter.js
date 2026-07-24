@@ -39,6 +39,10 @@ const SOURCE_DEFINITIONS = Object.freeze({
     { layerId: "robotaxi-selected-administrative-units", type: "fill", minzoom: 6, maxzoom: 16, filter: administrativeSelectionFilter([]), interactive: false },
     { layerId: "robotaxi-selected-administrative-unit-boundaries", type: "line", minzoom: 6, maxzoom: 16, filter: administrativeSelectionFilter([]), interactive: false },
   ] },
+  physicalSelection: { type: "fill", layers: [
+    { layerId: "robotaxi-selected-physical-units", type: "fill", minzoom: 12, interactive: false },
+    { layerId: "robotaxi-selected-physical-unit-boundaries", type: "line", minzoom: 12, interactive: false },
+  ] },
   zones: { type: "fill", layers: [
     { layerId: "robotaxi-zones", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
     { layerId: "robotaxi-zone-boundaries", type: "line", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
@@ -88,6 +92,7 @@ export function createGeospatialMapAdapter(options = {}) {
   let initialCamera = null;
   let administrativeSelectionEnabled = false;
   let selectedAdministrativeUnitIds = new Set();
+  let currentPhysicalSelection = emptyCollection();
   const appliedSourceVersions = {};
   const map = new MapLibre.Map({
     container: options.container,
@@ -142,7 +147,12 @@ export function createGeospatialMapAdapter(options = {}) {
     if (!map.isStyleLoaded()) return;
     for (const [sourceId, definition] of Object.entries(SOURCE_DEFINITIONS)) {
       if (!map.getSource(sourceId)) {
-        map.addSource(sourceId, { type: "geojson", data: currentScene?.[sourceId] || emptyCollection() });
+        map.addSource(sourceId, {
+          type: "geojson",
+          data: sourceId === "physicalSelection"
+            ? currentPhysicalSelection
+            : currentScene?.[sourceId] || emptyCollection(),
+        });
       }
       appliedSourceVersions[sourceId] = currentScene?.sourceVersions?.[sourceId] || "";
       for (const layerDefinition of layerDefinitions(definition)) {
@@ -275,6 +285,7 @@ export function createGeospatialMapAdapter(options = {}) {
     currentScene = nextScene;
     if (!ready || !map.isStyleLoaded()) return;
     for (const sourceId of Object.keys(SOURCE_DEFINITIONS)) {
+      if (sourceId === "physicalSelection") continue;
       const nextVersion = currentScene?.sourceVersions?.[sourceId] || "";
       if (appliedSourceVersions[sourceId] === nextVersion) continue;
       map.getSource(sourceId)?.setData(currentScene?.[sourceId] || emptyCollection());
@@ -287,6 +298,26 @@ export function createGeospatialMapAdapter(options = {}) {
       map.getSource(definition.sourceId)?.setData(createLabelCollection(currentScene?.[sceneKey]));
       appliedSourceVersions[definition.sourceId] = nextVersion;
     }
+  }
+
+  function updatePhysicalSelection(features = []) {
+    currentPhysicalSelection = {
+      type: "FeatureCollection",
+      features: features
+        .filter((feature) => ["Polygon", "MultiPolygon"].includes(feature?.source_feature_geometry?.type))
+        .map((feature, index) => ({
+          type: "Feature",
+          id: feature.source_feature_id || `physical-selection-${index + 1}`,
+          properties: {
+            object_id: feature.source_feature_id || `physical-selection-${index + 1}`,
+            object_name: feature.source_feature_name || "已选地图物理单元",
+            feature_category: feature.feature_category || "MAP_OTHER",
+          },
+          geometry: JSON.parse(JSON.stringify(feature.source_feature_geometry)),
+        })),
+    };
+    if (!ready || !map.isStyleLoaded()) return;
+    map.getSource("physicalSelection")?.setData(currentPhysicalSelection);
   }
 
   let selectedReference = null;
@@ -418,10 +449,14 @@ export function createGeospatialMapAdapter(options = {}) {
       const key = `${feature.source || ""}:${feature.sourceLayer || feature.layer?.["source-layer"] || ""}:${feature.id ?? name}:${category}`;
       if (unique.has(key)) continue;
       unique.set(key, {
-        source_feature_id: feature.id == null ? null : String(feature.id),
+        source_feature_id: feature.id == null ? createStableFeatureId(key, feature.geometry) : String(feature.id),
+        source_id: feature.source || feature.layer?.source || "",
         source_layer_id: feature.sourceLayer || feature.layer?.["source-layer"] || feature.layer?.id || "",
         source_feature_name: String(name || ""),
         feature_category: `MAP_${category}`,
+        source_dataset_id: currentScene?.dataset?.map_dataset_id || null,
+        source_dataset_version: currentScene?.dataset?.map_dataset_version || null,
+        source_feature_geometry: cloneGeometry(feature.geometry),
       });
       if (unique.size >= 120) break;
     }
@@ -539,6 +574,7 @@ export function createGeospatialMapAdapter(options = {}) {
     updateScene,
     updateSelection,
     updateAdministrativeSelection,
+    updatePhysicalSelection,
     fitScene,
     fitGeometry,
     getCameraState: readCamera,
@@ -637,6 +673,13 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
 }
 
 function fillStyle(layerId) {
+  if (layerId === "robotaxi-selected-physical-units") {
+    return {
+      color: "#5f91c9",
+      opacity: 0.22,
+      line: "#2f6f9d",
+    };
+  }
   if (layerId === "robotaxi-selected-administrative-units") {
     return {
       color: "#5f91c9",
@@ -709,6 +752,13 @@ function fillStyle(layerId) {
 }
 
 function lineStyle(layerId) {
+  if (layerId === "robotaxi-selected-physical-unit-boundaries") {
+    return {
+      color: "#2f6f9d",
+      width: ["interpolate", ["linear"], ["zoom"], 12, 1.5, 18, 2.6],
+      opacity: 0.94,
+    };
+  }
   if (layerId === "robotaxi-selected-administrative-unit-boundaries") {
     return {
       color: "#326ea5",
@@ -779,6 +829,20 @@ function classifyBasemapFeature(feature) {
   if (/poi|place|label/.test(token)) return "PLACE";
   if (/landuse|landcover|park|industrial|residential|commercial/.test(token)) return "LANDUSE";
   return "OTHER";
+}
+
+function createStableFeatureId(key, geometry) {
+  const input = `${key}:${JSON.stringify(geometry || null)}`;
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `MAP-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function cloneGeometry(geometry) {
+  return geometry ? JSON.parse(JSON.stringify(geometry)) : null;
 }
 
 function featureTouchesPlanningGeometry(feature, planningGeometry) {

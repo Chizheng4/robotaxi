@@ -32,7 +32,7 @@ export function createCityGeographicScene({ catalog, plans = [] } = {}, dataset)
 function activeCollection(collection) {
   return {
     type: "FeatureCollection",
-    features: (collection?.features || []).filter((feature) => feature.properties?.object_status !== "DISABLED").map(clone),
+    features: (collection?.features || []).filter((feature) => !["DISABLED", "INACTIVE"].includes(feature.properties?.object_status)).map(clone),
   };
 }
 

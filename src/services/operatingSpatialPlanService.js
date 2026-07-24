@@ -52,7 +52,9 @@ export function createDraft({ plans = [], dataset, catalog = {}, spatialScenario
     : clone(target.source_spatial_unit_refs || []);
   const effectiveGeometry = administrativeFormation
     ? deriveGeometryFromAdministrativeUnits(spatialUnitIds)
-    : geometry;
+    : target.spatial_formation_mode === SpatialFormationMode.PHYSICAL_UNIT_SELECTION
+      ? deriveGeometryFromPhysicalUnits(target.source_feature_snapshot || [])
+      : geometry;
   return createOperatingSpatialPlan({
     operating_spatial_plan_id: planId,
     operating_spatial_plan_name: `${target.target_object_name || "未命名对象"}运营区域方案`,
@@ -73,6 +75,7 @@ export function createDraft({ plans = [], dataset, catalog = {}, spatialScenario
       spatial_formation_mode: target.spatial_formation_mode || SpatialFormationMode.MAP_FEATURE_SELECTION,
       source_spatial_unit_refs: sourceSpatialUnitRefs,
       source_feature_snapshot: clone(target.source_feature_snapshot || []),
+      selection_geometry_geojson: clone(target.selection_geometry_geojson || geometry || null),
       spatial_validation_summary: clone(target.spatial_validation_summary || null),
       planning_zoom_band: target.planning_zoom_band || null,
       relationship_inference_status: target.relationship_inference_status || null,
@@ -100,7 +103,7 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
   const effectiveCatalog = materializeCitySpatialCatalog(catalog, []);
   for (const feature of plan.spatial_plan_features || []) {
     validateFeature(feature, dataset, effectiveCatalog, issues);
-    if (feature.spatial_change_type !== SpatialPlanChangeType.DEACTIVATE) {
+    if (![SpatialPlanChangeType.DEACTIVATE, SpatialPlanChangeType.ACTIVATE].includes(feature.spatial_change_type)) {
       validateSpatialPlanFeature(feature, effectiveCatalog, issues);
     }
   }
@@ -117,7 +120,7 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
   const now = new Date().toISOString();
   return {
     ...clone(plan),
-    operating_spatial_plan_status: valid ? OperatingSpatialPlanStatus.VALIDATED : OperatingSpatialPlanStatus.DRAFT,
+    operating_spatial_plan_status: OperatingSpatialPlanStatus.DRAFT,
     validation_status: valid ? SpatialPlanValidationStatus.VALID : SpatialPlanValidationStatus.INVALID,
     validation_issues: issues,
     impact_summary: valid ? createImpactSummary(plan) : null,
@@ -125,10 +128,10 @@ export function validateDraft(plan, { dataset, catalog = {} } = {}) {
   };
 }
 
-export function publishValidatedPlan(plan, { plans = [], now = new Date().toISOString() } = {}) {
-  if (plan?.operating_spatial_plan_status !== OperatingSpatialPlanStatus.VALIDATED
-    || plan.validation_status !== SpatialPlanValidationStatus.VALID) {
-    throw new Error("运营区域方案校验通过后才能发布");
+export function publishPlan(plan, { plans = [], dataset, catalog = {}, now = new Date().toISOString() } = {}) {
+  const validated = validateDraft(plan, { dataset, catalog });
+  if (validated.validation_status !== SpatialPlanValidationStatus.VALID) {
+    throw new Error(validated.validation_issues.join("；") || "当前草稿未通过发布校验");
   }
   const supersededIds = new Set(plan.spatial_plan_features
     .filter((feature) => feature.target_object_id)
@@ -146,7 +149,7 @@ export function publishValidatedPlan(plan, { plans = [], now = new Date().toISOS
     } : item;
   });
   const published = {
-    ...clone(plan),
+    ...clone(validated),
     operating_spatial_plan_status: OperatingSpatialPlanStatus.PUBLISHED,
     published_at: now,
     updated_at: now,
@@ -154,11 +157,33 @@ export function publishValidatedPlan(plan, { plans = [], now = new Date().toISOS
   return { plans: [...nextPlans.filter((item) => item.operating_spatial_plan_id !== published.operating_spatial_plan_id), published], published };
 }
 
+// Compatibility entry for historical scripts and stored plans. New UI calls publishPlan.
+export function publishValidatedPlan(plan, { plans = [], dataset, catalog = {}, now = new Date().toISOString() } = {}) {
+  if (dataset) return publishPlan(plan, { plans, dataset, catalog, now });
+  if (plan?.validation_status !== SpatialPlanValidationStatus.VALID) {
+    throw new Error("运营区域方案校验通过后才能发布");
+  }
+  return publishAlreadyValidatedPlan(plan, { plans, now });
+}
+
 export function cancelDraft(plan, now = new Date().toISOString()) {
   if (plan?.operating_spatial_plan_status === OperatingSpatialPlanStatus.PUBLISHED) {
     throw new Error("已发布方案不能直接取消，请创建新版本");
   }
   return { ...clone(plan), operating_spatial_plan_status: OperatingSpatialPlanStatus.CANCELLED, updated_at: now };
+}
+
+export function replaceDraftPhysicalUnits(plan, sourceFeatures = [], { dataset, catalog = {} } = {}) {
+  assertEditable(plan);
+  const next = clone(plan);
+  const feature = next.spatial_plan_features?.[0];
+  if (!feature || feature.spatial_formation_mode !== SpatialFormationMode.PHYSICAL_UNIT_SELECTION) {
+    throw new Error("当前草稿不是地图物理单元选择方案");
+  }
+  feature.source_feature_snapshot = clone(sourceFeatures);
+  feature.geometry_geojson = deriveGeometryFromPhysicalUnits(sourceFeatures);
+  feature.spatial_validation_summary = null;
+  return validateDraft(next, { dataset, catalog });
 }
 
 export function upsertPlan(plans = [], plan) {
@@ -190,10 +215,31 @@ function validateFeature(feature, dataset, catalog, issues) {
     validateDeactivation(feature, catalog, issues);
     return;
   }
+  if (feature.spatial_change_type === SpatialPlanChangeType.ACTIVATE) {
+    validateActivation(feature, catalog, issues);
+    return;
+  }
   const administrativeFormation = [
     SpatialFormationMode.ADMINISTRATIVE_UNIT_REUSE,
     SpatialFormationMode.ADMINISTRATIVE_UNIT_COMBINATION,
   ].includes(feature.spatial_formation_mode);
+  if (feature.spatial_formation_mode === SpatialFormationMode.PHYSICAL_UNIT_SELECTION) {
+    const physicalUnits = feature.source_feature_snapshot || [];
+    if (feature.target_object_type === SpatialPlanTargetType.ZONE) issues.push("运营区域应使用行政区来源单元形成");
+    if (!physicalUnits.length) issues.push("请先从地图选择物理空间单元");
+    if (!physicalUnits.some((item) => item.source_feature_geometry?.type === "Polygon"
+      || item.source_feature_geometry?.type === "MultiPolygon")) {
+      issues.push("已选物理空间单元不能形成有效区域边界");
+    }
+    if (feature.target_object_type === SpatialPlanTargetType.PLACE
+      && !physicalUnits.some((item) => ["MAP_BUILDING", "MAP_PLACE", "MAP_LANDUSE"].includes(item.feature_category))) {
+      issues.push("地点必须选择建筑、地点或土地利用空间单元");
+    }
+    if (feature.target_object_type === SpatialPlanTargetType.SERVICE_AREA
+      && !physicalUnits.some((item) => ["MAP_ROAD", "MAP_PLACE", "MAP_LANDUSE"].includes(item.feature_category))) {
+      issues.push("服务区域必须选择道路接入或可服务场地单元");
+    }
+  }
   if (administrativeFormation) {
     if (feature.target_object_type !== SpatialPlanTargetType.ZONE) issues.push("行政区域只能用于形成运营区域");
     validateAdministrativeUnitReferences(feature.source_spatial_unit_refs, issues);
@@ -238,7 +284,7 @@ function validateDeactivation(feature, catalog, issues) {
     issues.push("只有已发布的城市空间对象可以停用");
     return;
   }
-  const active = (collection) => (collection?.features || []).filter((item) => item.properties?.object_status !== "DISABLED");
+  const active = (collection) => (collection?.features || []).filter((item) => !["DISABLED", "INACTIVE"].includes(item.properties?.object_status));
   if (feature.target_object_type === "ZONE") {
     const dependencies = [
       ...active(catalog.zones).filter((item) => item.properties?.parent_zone_id === feature.target_object_id),
@@ -257,7 +303,26 @@ function validateDeactivation(feature, catalog, issues) {
   }
 }
 
+function validateActivation(feature, catalog, issues) {
+  if (!feature.source_object_exists || !feature.target_object_id) {
+    issues.push("只有已停用的城市空间对象可以启用");
+    return;
+  }
+  const target = findTarget(feature, catalog);
+  if (!target) {
+    issues.push(`目标对象 ${feature.target_object_id} 不存在`);
+    return;
+  }
+  if (!["DISABLED", "INACTIVE"].includes(target.properties?.object_status)) {
+    issues.push("当前城市空间对象不是停用状态，无需重复启用");
+  }
+}
+
 function targetExists(feature, catalog) {
+  return Boolean(findTarget(feature, catalog));
+}
+
+function findTarget(feature, catalog) {
   const source = {
     ZONE: catalog.zones,
     PLACE: catalog.places,
@@ -265,7 +330,7 @@ function targetExists(feature, catalog) {
   }[feature.target_object_type] || [];
   const collection = Array.isArray(source) ? source : source.features || [];
   const key = { ZONE: "zone_id", PLACE: "place_id", SERVICE_AREA: "service_area_id" }[feature.target_object_type];
-  return collection.some((item) => (item[key] || item.properties?.object_id) === feature.target_object_id);
+  return collection.find((item) => (item[key] || item.properties?.object_id) === feature.target_object_id) || null;
 }
 
 function createImpactSummary(plan) {
@@ -286,6 +351,44 @@ function assertEditable(plan) {
   if (!plan || ![OperatingSpatialPlanStatus.DRAFT, OperatingSpatialPlanStatus.VALIDATED].includes(plan.operating_spatial_plan_status)) {
     throw new Error("当前运营区域方案不可编辑");
   }
+}
+
+export function deriveGeometryFromPhysicalUnits(sourceFeatures = []) {
+  const polygons = sourceFeatures.flatMap((feature) => {
+    const geometry = feature.source_feature_geometry;
+    if (geometry?.type === "Polygon") return [clone(geometry.coordinates)];
+    if (geometry?.type === "MultiPolygon") return clone(geometry.coordinates);
+    return [];
+  }).filter((coordinates) => Array.isArray(coordinates?.[0]) && coordinates[0].length >= 4);
+  if (!polygons.length) return null;
+  return polygons.length === 1
+    ? { type: "Polygon", coordinates: polygons[0] }
+    : { type: "MultiPolygon", coordinates: polygons };
+}
+
+function publishAlreadyValidatedPlan(plan, { plans = [], now = new Date().toISOString() } = {}) {
+  const supersededIds = new Set(plan.spatial_plan_features
+    .filter((feature) => feature.target_object_id)
+    .map((feature) => `${feature.target_object_type}:${feature.target_object_id}`));
+  const nextPlans = plans.map((item) => {
+    if (item.operating_spatial_plan_status !== OperatingSpatialPlanStatus.PUBLISHED) return item;
+    const overlaps = item.spatial_scenario_id === plan.spatial_scenario_id
+      && item.spatial_plan_features?.some((feature) => supersededIds.has(`${feature.target_object_type}:${feature.target_object_id}`));
+    return overlaps ? {
+      ...item,
+      operating_spatial_plan_status: OperatingSpatialPlanStatus.SUPERSEDED,
+      superseded_at: now,
+      superseded_by_plan_id: plan.operating_spatial_plan_id,
+      updated_at: now,
+    } : item;
+  });
+  const published = {
+    ...clone(plan),
+    operating_spatial_plan_status: OperatingSpatialPlanStatus.PUBLISHED,
+    published_at: now,
+    updated_at: now,
+  };
+  return { plans: [...nextPlans.filter((item) => item.operating_spatial_plan_id !== published.operating_spatial_plan_id), published], published };
 }
 
 function nextSequence(plans) {

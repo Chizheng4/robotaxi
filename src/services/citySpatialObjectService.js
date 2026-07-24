@@ -148,7 +148,24 @@ function applyFeature(catalog, feature, plan) {
       ...features[existing],
       properties: {
         ...features[existing].properties,
-        object_status: "DISABLED",
+        object_status: "INACTIVE",
+        object_version_status: "CURRENT",
+        operating_spatial_plan_id: plan.operating_spatial_plan_id,
+        spatial_plan_id: plan.operating_spatial_plan_id,
+        spatial_catalog_version: plan.spatial_plan_version,
+      },
+    };
+    catalog[config.collection] = { type: "FeatureCollection", features };
+    return;
+  }
+  if (feature.spatial_change_type === "ACTIVATE" && existing >= 0) {
+    const features = [...(collection.features || [])];
+    features[existing] = {
+      ...features[existing],
+      properties: {
+        ...features[existing].properties,
+        object_status: "ACTIVE",
+        object_version_status: "CURRENT",
         operating_spatial_plan_id: plan.operating_spatial_plan_id,
         spatial_plan_id: plan.operating_spatial_plan_id,
         spatial_catalog_version: plan.spatial_plan_version,
@@ -162,6 +179,8 @@ function applyFeature(catalog, feature, plan) {
     object_id: feature.target_object_id,
     object_name: feature.target_object_name,
     object_status: "ACTIVE",
+    object_version: Number(plan.spatial_plan_version || 1),
+    object_version_status: "CURRENT",
     spatial_scenario_id: plan.spatial_scenario_id,
     spatial_catalog_version: plan.spatial_plan_version,
     operating_spatial_plan_id: plan.operating_spatial_plan_id,
@@ -205,7 +224,7 @@ function synchronizeZoneStructure(catalog, feature) {
   const parentIndex = zones.findIndex((item) => item.properties?.object_id === feature.parent_zone_id);
   if (parentIndex < 0) return;
   const activeChildren = zones.filter((item) => item.properties?.parent_zone_id === feature.parent_zone_id
-    && item.properties?.object_status !== "DISABLED");
+    && !["DISABLED", "INACTIVE"].includes(item.properties?.object_status));
   zones[parentIndex] = {
     ...zones[parentIndex],
     properties: {
@@ -217,12 +236,12 @@ function synchronizeZoneStructure(catalog, feature) {
 }
 
 function activeFeatures(collection) {
-  return (collection?.features || []).filter((feature) => feature.properties?.object_status !== "DISABLED");
+  return (collection?.features || []).filter((feature) => !["DISABLED", "INACTIVE"].includes(feature.properties?.object_status));
 }
 
 function publishedPlans(plans, scenarioId) {
   return (plans || [])
-    .filter((plan) => plan.operating_spatial_plan_status === "PUBLISHED"
+    .filter((plan) => ["PUBLISHED", "SUPERSEDED"].includes(plan.operating_spatial_plan_status)
       && plan.spatial_plan_contract_version === CITY_SPATIAL_PLAN_CONTRACT_VERSION
       && (!scenarioId || plan.spatial_scenario_id === scenarioId))
     .sort((left, right) => String(left.published_at || "").localeCompare(String(right.published_at || "")));
@@ -238,7 +257,7 @@ function collectCatalogIds(catalog, collectionName) {
 }
 
 function findFeature(collection, id) {
-  return (collection?.features || []).find((feature) => feature.properties?.object_status !== "DISABLED"
+  return (collection?.features || []).find((feature) => !["DISABLED", "INACTIVE"].includes(feature.properties?.object_status)
     && (feature.properties?.object_id || feature.id) === id) || null;
 }
 

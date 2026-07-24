@@ -702,7 +702,7 @@
 |---|---|---|---|
 |operating_spatial_plan_id|运营区域方案编号|持久化字段|一次运营区域建模方案的唯一编号|
 |operating_spatial_plan_name|运营区域方案名称|持久化字段|方案的用户可读名称|
-|operating_spatial_plan_status|方案状态|状态字段|草稿、已校验、已发布、已被新版本替代或已取消|
+|operating_spatial_plan_status|方案状态|状态字段|草稿、已发布、已被新版本替代或已取消；校验是草稿的独立结果，不是生命周期状态|
 |superseded_at|版本替代时间|事实字段|旧方案被新版本替代的真实时间|
 |superseded_by_plan_id|替代方案编号|关联字段|替代当前旧版本的运营区域方案编号|
 |spatial_scenario_id|空间场景编号|关系字段|方案只在所属空间场景内校验、发布和覆盖|
@@ -710,7 +710,7 @@
 |spatial_plan_contract_version|空间规划合同版本|治理字段|区分当前城市空间对象合同与只保留历史的旧版空间方案，旧版不得自动进入当前城市目录|
 |spatial_plan_features|空间要素|关系字段|方案包含的 Zone、Place 或 ServiceArea 几何草稿|
 |spatial_plan_feature_id|空间要素编号|持久化字段|方案内空间要素唯一编号|
-|spatial_change_type|空间变更类型|类型字段|空间方案对目标对象执行新增或调整，或者经过依赖校验后停用对象|
+|spatial_change_type|空间变更类型|类型字段|空间方案对目标对象执行新增或调整，或者经过依赖校验后停用、启用对象|
 |target_object_type|目标对象类型|类型字段|空间要素对应的业务对象类型|
 |target_object_id|目标对象编号|关系字段|关联已有对象或创建新对象时均保存稳定编号|
 |target_object_name|目标对象名称|快照字段|发布时使用的目标对象名称快照|
@@ -722,17 +722,22 @@
 |place_type|地点类型|类型字段|地点的业务功能类型，包括住宅、办公、商业、运营中心和工厂等|
 |place_id|地点编号|关系字段|服务区域关联的地点；运营中心和工厂对象也通过此字段关联地点|
 |service_area_type|服务区域类型|类型字段|服务区域承担的上下车、待命等服务类型|
-|geometry_geojson|地理几何|持久化字段|使用 EPSG:4326 的标准 GeoJSON 几何|
+|geometry_geojson|地理几何|持久化字段|使用 EPSG:4326 的标准 GeoJSON 正式几何；由行政区或所选地图物理单元派生，不直接采用页面粗略圈选范围|
+|selection_geometry_geojson|选择范围|审计字段|用户在地图上的粗略查询范围，只用于检索候选物理单元，不作为正式对象边界|
 |geometry_type|几何类型|类型字段|首期区域建模固定为 Polygon|
-|source_feature_snapshot|底图要素快照|快照字段|绘制边界时从当前地图数据集和缩放级别识别的道路、建筑、地点、水域等紧凑参考，不替代正式业务对象|
+|source_feature_snapshot|底图要素快照|来源快照|选择范围命中的道路、建筑、地点、土地利用等物理单元；保存稳定来源、数据版本和几何，用于重建正式边界与追溯|
 |planning_zoom_band|规划视角层级|快照字段|形成空间草稿时的城市、区域、地点或服务区域语义视角|
 |relationship_inference_status|空间关系识别状态|运行态字段|根据正式几何目录自动识别父级、直接归属和关联地点后的状态|
 |contained_object_refs|完整包含对象|关系快照|当前边界完整包含的已发布空间对象引用|
 |conflict_object_refs|边界冲突对象|关系快照|与当前边界部分重叠、需要用户调整的空间对象引用|
 |source_feature_count|底图要素数量|计算字段|当前边界识别到底图参考要素的去重数量|
 |source_feature_id|底图要素编号|外部引用字段|底图数据源提供的要素编号；数据源未提供时为空|
+|source_id|底图数据源编号|外部引用字段|底图物理单元所属的地图数据源|
 |source_layer_id|底图图层编号|外部引用字段|底图要素所属来源图层，用于来源追溯和分类|
 |source_feature_name|底图要素名称|快照字段|底图要素在方案形成时的名称快照|
+|source_feature_geometry|底图要素几何|来源快照|物理单元在来源数据版本中的标准 GeoJSON 几何|
+|object_version|对象版本|版本字段|同一正式城市空间对象成功发布后的递增版本|
+|object_version_status|对象版本状态|状态字段|当前版本或已被替代版本|
 |feature_category|底图要素类型|类型字段|道路、建筑、地点、水域、土地利用或其他参考类型|
 |spatial_validation_summary|空间校验摘要|结果字段|几何、层级、底图覆盖和可服务性校验结果摘要|
 |road_reference_count|道路参考数量|计算字段|边界内识别到的道路参考数量|

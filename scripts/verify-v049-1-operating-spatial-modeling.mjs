@@ -43,7 +43,7 @@ const validated = validateDraft(draft, {
   dataset: GEOSPATIAL_MAP_DATASET,
   catalog: data,
 });
-assert.equal(validated.operating_spatial_plan_status, "VALIDATED", validated.validation_issues.join("；"));
+assert.equal(validated.operating_spatial_plan_status, "DRAFT", validated.validation_issues.join("；"));
 assert.equal(validated.impact_summary.existing_projection_update_count, 1);
 assert.equal(validated.impact_summary.simulation_runtime_changed, false);
 

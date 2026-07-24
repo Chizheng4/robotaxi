@@ -107,7 +107,7 @@ assert(
   "已发布对象编辑必须区分行政区事实复用和自由边界编辑",
 );
 assert(mainSource.includes("仅作为推荐，不会覆盖你的选择"));
-assert(mainSource.includes('drawingBoundary ? "完成绘制"'), "用户必须能通过可见按钮完成绘制");
+assert(mainSource.includes('drawingBoundary ? "完成选择"'), "用户必须能通过可见按钮完成空间选择");
 assert(!mainSource.includes('disabled={!selectedSpatialTarget}'), "新建空间对象时必须允许用户选择对象类型");
 
 console.log("v049.8 城市空间规划可靠性验证通过");
