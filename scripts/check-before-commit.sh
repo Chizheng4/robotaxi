@@ -142,6 +142,7 @@ node --check scripts/verify-v049-12-1-spatial-visual-feedback.mjs
 node scripts/verify-v049-12-1-spatial-visual-feedback.mjs
 node --check scripts/verify-v049-12-2-spatial-rendering-contract.mjs
 node scripts/verify-v049-12-2-spatial-rendering-contract.mjs
+node scripts/verify-v049-12-3-map-legend-retirement.mjs
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
 node --check src/data/simulationRunBusinessScope.js

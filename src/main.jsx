@@ -1021,21 +1021,6 @@ const cellClass = {
   BLOCKED: "cell-blocked",
 };
 
-const legendItems = [
-  ["cell-empty", "空白网格"],
-  ["cell-road", "道路网格"],
-  ["place-residential-swatch", "住宅地点"],
-  ["place-office-swatch", "办公地点"],
-  ["place-commercial-swatch", "商业地点"],
-  ["place-hospital-swatch", "医院学校"],
-  ["place-metro-station-swatch", "地铁接驳"],
-  ["place-ops-center-swatch", "运营中心地点"],
-  ["service-area-swatch", "服务区域"],
-  ["ops-center-swatch", "运营中心覆盖"],
-  ["route-swatch", "选中路径"],
-  ["road-node-swatch", "道路节点"],
-];
-
 const routePlanningResultOptions = ["SUCCESS", "FAILED"];
 const pricingResultOptions = ["SUCCESS", "FAILED"];
 const orderMatchingResultOptions = ["SUCCESS", "FAILED"];
@@ -8431,7 +8416,6 @@ function MapCanvas({ data, selected, mobileLayout = false, forcedMode = null, on
   const [viewport, setViewport] = useState(defaultViewport);
   const [hovered, setHovered] = useState(null);
   const [focusedCellId, setFocusedCellId] = useState(null);
-  const [layersOpen, setLayersOpen] = useState(false);
   const selectedRobotaxi = selected?.type === "robotaxi"
     ? data.robotaxis?.find((robotaxi) => robotaxi.robotaxi_id === selected.id)
     : null;
@@ -8668,15 +8652,7 @@ function MapCanvas({ data, selected, mobileLayout = false, forcedMode = null, on
           <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeActiveMapZoom(1)}>+</Button>
           <Button size="small" aria-label="缩小地图" title="缩小" onClick={() => changeActiveMapZoom(-1)}>−</Button>
           <Button size="small" aria-label="复位地图" title="复位" onClick={resetActiveMap}>⌖</Button>
-          <Button size="small" aria-label="地图图层" title="图层" onClick={() => setLayersOpen((current) => !current)}>▤</Button>
         </div>
-        {layersOpen && (
-          <div className="map-layer-panel" role="dialog" aria-label="地图图层说明">
-            {legendItems.map(([className, label]) => (
-              <span className="legend-item" key={className}><span className={`legend-dot ${className}`} />{label}</span>
-            ))}
-          </div>
-        )}
         {activeMapMode === "CITY_GEOGRAPHIC" ? (
           <GeospatialMapCanvas
             scene={geospatialScene}
@@ -11994,7 +11970,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-12-2e"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-12-3"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),

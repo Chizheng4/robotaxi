@@ -555,15 +555,12 @@
 
 .map-navigation-actions .ant-btn:first-child { border-left: 0; }
 .spatial-plan-trigger { top: 54px; right: auto; left: 12px; }
-.map-layer-panel { top: auto; right: 12px; bottom: 54px; }
 
 @media (min-width: 768px) {
   .console-workbench:not(.detail-collapsed) .map-floating-actions,
   .console-workbench.detail-collapsed .map-floating-actions { right: auto !important; }
-  .console-workbench:not(.detail-collapsed) .map-navigation-actions,
-  .console-workbench:not(.detail-collapsed) .map-layer-panel { right: 340px !important; }
-  .console-workbench.detail-collapsed .map-navigation-actions,
-  .console-workbench.detail-collapsed .map-layer-panel { right: 52px !important; }
+  .console-workbench:not(.detail-collapsed) .map-navigation-actions { right: 340px !important; }
+  .console-workbench.detail-collapsed .map-navigation-actions { right: 52px !important; }
 }
 
 @media (max-width: 767px) {
@@ -571,7 +568,6 @@
   .spatial-plan-editor { display: none !important; }
   .map-floating-actions { top: 8px; left: 8px; }
   .map-navigation-actions { right: 8px; bottom: 8px; }
-  .map-layer-panel { right: 8px; bottom: 50px; }
   .geospatial-map-attribution {
     right: 124px;
     bottom: 8px;
@@ -1078,23 +1074,6 @@
   box-shadow: none;
 }
 
-.map-layer-panel {
-  position: absolute;
-  top: 52px;
-  right: 12px;
-  z-index: 7;
-  display: grid;
-  width: 176px;
-  max-height: min(360px, calc(100% - 64px));
-  gap: 8px;
-  padding: 12px;
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 22px rgba(39, 61, 82, 0.12);
-}
-
 .map-hover-card {
   position: absolute;
   z-index: 8;
@@ -1573,30 +1552,14 @@
     right: 340px !important;
   }
 
-  .console-workbench:not(.detail-collapsed) .map-layer-panel {
-    right: 340px !important;
-  }
-
   .console-workbench.detail-collapsed .map-floating-actions {
     right: 52px !important;
   }
-
-  .console-workbench.detail-collapsed .map-layer-panel {
-    right: 52px !important;
-  }
-}
-
-.map-layer-panel {
-  inset: auto 12px 52px auto !important;
 }
 
 @media (max-width: 560px) {
   .map-floating-actions {
     inset: auto 8px 8px auto !important;
-  }
-
-  .map-layer-panel {
-    inset: auto 8px 48px auto !important;
   }
 }
 
@@ -1767,21 +1730,11 @@
     right: 8px;
   }
 
-  .map-layer-panel {
-    top: 50px;
-    right: 8px;
-    width: min(176px, calc(100% - 16px));
-  }
 }
 
 @media (max-width: 767px) {
   .map-floating-actions {
     top: 8px;
-    right: 8px;
-  }
-
-  .map-layer-panel {
-    top: 46px;
     right: 8px;
   }
 
@@ -6418,10 +6371,8 @@ html[data-keyboard-open="true"] .platform-login-panel {
     box-shadow: -8px 0 20px rgba(39, 61, 82, 0.045);
   }
   .console-workbench.detail-collapsed > .detail-rail { width: 40px; }
-  .console-workbench:not(.detail-collapsed) .map-floating-actions,
-  .console-workbench:not(.detail-collapsed) .map-layer-panel { right: 340px !important; }
-  .console-workbench.detail-collapsed .map-floating-actions,
-  .console-workbench.detail-collapsed .map-layer-panel { right: 52px !important; }
+  .console-workbench:not(.detail-collapsed) .map-floating-actions { right: 340px !important; }
+  .console-workbench.detail-collapsed .map-floating-actions { right: 52px !important; }
 }
 
 .map-hover-card.touch {
