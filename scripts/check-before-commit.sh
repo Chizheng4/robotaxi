@@ -138,6 +138,8 @@ node --check scripts/verify-v049-7-spatial-planning-closure.mjs
 node --check scripts/verify-v049-9-spatial-visual-language.mjs
 node --check scripts/verify-v049-10-administrative-spatial-units.mjs
 node --check scripts/verify-v049-11-physical-spatial-lifecycle.mjs
+node --check scripts/verify-v049-12-1-spatial-visual-feedback.mjs
+node scripts/verify-v049-12-1-spatial-visual-feedback.mjs
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
 node --check src/data/simulationRunBusinessScope.js

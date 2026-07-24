@@ -16,6 +16,7 @@ export function createCityGeographicScene({ catalog, plans = [] } = {}, dataset)
     spatialScenarioId: scenarioId,
     spatialCatalogVersion: materializedCatalog.spatial_catalog_version,
     bounds: dataset.geographic_bounds,
+    cityMask: createCityBoundaryMask(dataset),
     cityBoundary: createCityBoundaryReference(dataset),
     administrativeUnits: createAdministrativeUnitCollection(),
     zones,
@@ -70,6 +71,8 @@ export function createGeospatialScene(data = {}, dataset, projectionConfig = {})
   return {
     dataset,
     bounds: projector.mapBounds,
+    cityMask: createCityBoundaryMask(dataset),
+    cityBoundary: createCityBoundaryReference(dataset),
     administrativeUnits: EMPTY_COLLECTION,
     zones,
     places,
@@ -90,7 +93,7 @@ export function validateGeospatialScene(scene) {
   const errors = [];
   if (!scene?.dataset?.map_dataset_id) errors.push("缺少地图数据集编号");
   if (scene?.dataset?.coordinate_reference_system !== "EPSG:4326") errors.push("当前仅支持 EPSG:4326 地理事实");
-  for (const key of ["administrativeUnits", "zones", "places", "serviceAreas", "roads", "opsCenters", "robotaxis", "route"]) {
+  for (const key of ["cityMask", "administrativeUnits", "zones", "places", "serviceAreas", "roads", "opsCenters", "robotaxis", "route"]) {
     if (scene?.[key]?.type !== "FeatureCollection") errors.push(`${key} 不是有效地理图层`);
   }
   if (scene?.cityBoundary && scene.cityBoundary.type !== "FeatureCollection") errors.push("cityBoundary 不是有效地理图层");
@@ -312,6 +315,7 @@ function createEmptyScene(dataset) {
   return {
     dataset,
     bounds: null,
+    cityMask: dataset ? createCityBoundaryMask(dataset) : EMPTY_COLLECTION,
     cityBoundary: dataset ? createCityBoundaryReference(dataset) : EMPTY_COLLECTION,
     administrativeUnits: dataset ? createAdministrativeUnitCollection() : EMPTY_COLLECTION,
     zones: EMPTY_COLLECTION,
@@ -330,6 +334,31 @@ function createCityBoundaryReference(dataset) {
   return featureCollection([{
     ...clone(GUANGZHOU_ADMINISTRATIVE_BOUNDARY),
     id: GUANGZHOU_ADMINISTRATIVE_BOUNDARY.properties.object_id,
+  }]);
+}
+
+function createCityBoundaryMask(dataset) {
+  if (!dataset?.geographic_bounds) return EMPTY_COLLECTION;
+  const boundaryRing = clone(GUANGZHOU_ADMINISTRATIVE_BOUNDARY.geometry.coordinates[0]);
+  const outerRing = [
+    [109, 19],
+    [118, 19],
+    [118, 27],
+    [109, 27],
+    [109, 19],
+  ];
+  return featureCollection([{
+    type: "Feature",
+    id: "CN-44-440100-MASK",
+    properties: {
+      object_type: "cityMask",
+      object_id: "CN-44-440100-MASK",
+      object_name: "广州市行政范围外部遮罩",
+    },
+    geometry: {
+      type: "Polygon",
+      coordinates: [outerRing, boundaryRing.reverse()],
+    },
   }]);
 }
 

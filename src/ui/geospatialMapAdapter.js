@@ -1,7 +1,7 @@
 export const CITY_SPATIAL_VISUAL_TOKENS = Object.freeze({
-  city: { fill: "#6f9d98", opacity: 0.08, line: "#315f73" },
-  zone: { fill: "#78a58e", opacity: 0.18, line: "#3f6f62" },
-  subZone: { fill: "#78a9ad", opacity: 0.19, line: "#3f7278" },
+  city: { fill: "#6f9d98", opacity: 0.11, line: "#315f73" },
+  zone: { fill: "#78a58e", opacity: 0.22, line: "#3f6f62" },
+  subZone: { fill: "#78a9ad", opacity: 0.21, line: "#3f7278" },
   place: {
     fallback: "#a5b3bd",
     residential: "#8fb89f",
@@ -29,8 +29,12 @@ export const CITY_SPATIAL_VISUAL_TOKENS = Object.freeze({
 });
 
 const SOURCE_DEFINITIONS = Object.freeze({
+  cityMask: { type: "fill", layers: [
+    { layerId: "robotaxi-city-outside-mask", type: "fill", minzoom: 5, maxzoom: 11, interactive: false },
+  ] },
   cityBoundary: { type: "fill", layers: [
     { layerId: "robotaxi-city-extent-fill", type: "fill", minzoom: 5, maxzoom: 11, interactive: false },
+    { layerId: "robotaxi-city-boundary-halo", type: "line", minzoom: 5, maxzoom: 16, interactive: false },
     { layerId: "robotaxi-city-boundary", type: "line", minzoom: 5, maxzoom: 16, interactive: false },
   ] },
   administrativeUnits: { type: "fill", layers: [
@@ -45,8 +49,10 @@ const SOURCE_DEFINITIONS = Object.freeze({
   ] },
   zones: { type: "fill", layers: [
     { layerId: "robotaxi-zones", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
+    { layerId: "robotaxi-zone-boundary-halo", type: "line", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
     { layerId: "robotaxi-zone-boundaries", type: "line", minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
     { layerId: "robotaxi-sub-zones", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
+    { layerId: "robotaxi-sub-zone-boundary-halo", type: "line", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
     { layerId: "robotaxi-sub-zone-boundaries", type: "line", minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"], interactive: false },
   ] },
   places: { type: "fill", layers: [
@@ -64,7 +70,7 @@ const SOURCE_DEFINITIONS = Object.freeze({
 });
 
 const LABEL_DEFINITIONS = Object.freeze([
-  { sceneKey: "cityBoundary", sourceId: "cityBoundaryLabels", layerId: "robotaxi-city-boundary-label", size: 12, minzoom: 5, maxzoom: 10 },
+  { sceneKey: "cityBoundary", sourceId: "cityBoundaryLabels", layerId: "robotaxi-city-boundary-label", size: 12, minzoom: 5, maxzoom: 9 },
   { sceneKey: "administrativeUnits", sourceId: "administrativeUnitLabels", layerId: "robotaxi-administrative-unit-labels", size: 11, minzoom: 7, maxzoom: 11 },
   { sceneKey: "zones", sourceId: "zoneLabels", layerId: "robotaxi-zone-labels", size: 12, minzoom: 5, maxzoom: 13, filter: ["!=", ["get", "zone_level"], "SUB_ZONE"] },
   { sceneKey: "zones", sourceId: "zoneLabels", layerId: "robotaxi-sub-zone-labels", size: 11, minzoom: 9, maxzoom: 15, filter: ["==", ["get", "zone_level"], "SUB_ZONE"] },
@@ -673,6 +679,13 @@ function createLayer(sourceId, { layerId, type, minzoom, maxzoom, filter }) {
 }
 
 function fillStyle(layerId) {
+  if (layerId === "robotaxi-city-outside-mask") {
+    return {
+      color: "#dbe3e8",
+      opacity: 0.34,
+      line: "rgba(0,0,0,0)",
+    };
+  }
   if (layerId === "robotaxi-selected-physical-units") {
     return {
       color: "#5f91c9",
@@ -769,16 +782,37 @@ function lineStyle(layerId) {
   if (layerId === "robotaxi-selected-route") {
     return { color: CITY_SPATIAL_VISUAL_TOKENS.selected, width: 5, opacity: 0.92 };
   }
+  if (layerId === "robotaxi-city-boundary-halo") {
+    return {
+      color: "rgba(250,252,253,0.96)",
+      width: ["interpolate", ["linear"], ["zoom"], 5, 5.6, 10, 6.4, 16, 7],
+      opacity: 0.88,
+    };
+  }
   if (layerId === "robotaxi-city-boundary") {
     return {
       color: CITY_SPATIAL_VISUAL_TOKENS.city.line,
-      width: ["interpolate", ["linear"], ["zoom"], 5, 1.7, 10, 2.2, 16, 2.5],
-      opacity: 0.96,
+      width: ["interpolate", ["linear"], ["zoom"], 5, 2.1, 10, 2.6, 16, 2.8],
+      opacity: 0.98,
+    };
+  }
+  if (layerId === "robotaxi-zone-boundary-halo") {
+    return {
+      color: "rgba(250,252,253,0.94)",
+      width: ["interpolate", ["linear"], ["zoom"], 5, 4.8, 10, 5.6, 13, 6.2],
+      opacity: 0.86,
+    };
+  }
+  if (layerId === "robotaxi-sub-zone-boundary-halo") {
+    return {
+      color: "rgba(250,252,253,0.92)",
+      width: ["interpolate", ["linear"], ["zoom"], 9, 4.2, 15, 5.2],
+      opacity: 0.82,
     };
   }
   const style = {
-    "robotaxi-zone-boundaries": { line: CITY_SPATIAL_VISUAL_TOKENS.zone.line, width: [1.4, 2.6] },
-    "robotaxi-sub-zone-boundaries": { line: CITY_SPATIAL_VISUAL_TOKENS.subZone.line, width: [1.2, 2.3] },
+    "robotaxi-zone-boundaries": { line: CITY_SPATIAL_VISUAL_TOKENS.zone.line, width: [2.1, 3.4], opacity: 0.94 },
+    "robotaxi-sub-zone-boundaries": { line: CITY_SPATIAL_VISUAL_TOKENS.subZone.line, width: [1.8, 3], opacity: 0.91 },
     "robotaxi-place-boundaries": { line: "#7b8993", width: [0.85, 1.8] },
     "robotaxi-service-area-boundaries": { line: "#477d77", width: [0.9, 1.9], dasharray: [2, 1.4] },
   }[layerId];
@@ -797,7 +831,7 @@ function lineStyle(layerId) {
       opacity: ["case",
         ["boolean", ["feature-state", "selected"], false], 0.98,
         ["boolean", ["feature-state", "hovered"], false], 0.9,
-        0.72,
+        style.opacity || 0.72,
       ],
       dasharray: style.dasharray,
     };

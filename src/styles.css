@@ -1468,8 +1468,25 @@
 
 .spatial-plan-editor-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 6px;
+}
+
+.spatial-plan-action-feedback {
+  min-height: 32px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border-subtle));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--success) 7%, var(--surface));
+  color: var(--text-primary);
+  font-size: var(--font-xs);
+  line-height: 1.45;
+}
+
+.spatial-plan-action-feedback.error {
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border-subtle));
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+  color: var(--danger);
 }
 
 .spatial-plan-history-actions {

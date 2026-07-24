@@ -8856,6 +8856,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   const [drawingBoundary, setDrawingBoundary] = useState(false);
   const [editingExistingBoundary, setEditingExistingBoundary] = useState(false);
   const [editorNotice, setEditorNotice] = useState("");
+  const [editorFeedback, setEditorFeedback] = useState(null);
   const formationModeRef = useRef(formationMode);
   const targetTypeRef = useRef(targetType);
   const administrativeDraftSignatureRef = useRef("");
@@ -8989,6 +8990,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     setActivePlan(null);
     setEditingExistingBoundary(false);
     setSelectedSpatialUnitIds([]);
+    setEditorFeedback(null);
     setEditorNotice(`已切换为${getDisplayValue(value, "target_object_type")}，请填写名称后在地图上选择范围`);
   }
 
@@ -9005,6 +9007,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     setNewTargetName("");
     setFormationMode("ADMINISTRATIVE_UNIT_REUSE");
     setSelectedSpatialUnitIds([]);
+    setEditorFeedback(null);
     setEditorNotice(`已按当前视角推荐${getDisplayValue(planningContext.recommended_target_type, "target_object_type")}，你可以修改`);
   }
 
@@ -9297,12 +9300,22 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       setActivePlan(result.published);
       onSpatialPlansChange?.(result.plans);
       adapterRef.current?.stopDrawing();
+      setDrawingBoundary(false);
+      setEditingExistingBoundary(false);
+      const publishedFeature = result.published.spatial_plan_features?.[0];
+      if (publishedFeature?.geometry_geojson) {
+        adapterRef.current?.fitGeometry(publishedFeature.geometry_geojson);
+      }
       const isDeactivation = result.published.spatial_plan_features?.[0]?.spatial_change_type === "DEACTIVATE";
-      setEditorNotice(isDeactivation
-        ? "对象已停用并退出当前城市地图；历史版本已保留，网格业务未改变"
-        : "空间规划方案已发布；城市空间对象已更新，网格业务与模拟运行未改变");
+      setEditorFeedback({
+        tone: "success",
+        message: isDeactivation
+          ? "对象已停用，历史版本仍保留"
+          : `已发布“${publishedFeature?.target_object_name || newTargetName || "空间对象"}”，正式范围已显示在地图中`,
+      });
+      setEditorNotice("");
     } catch (error) {
-      setEditorNotice(error.message || "方案发布失败");
+      setEditorFeedback({ tone: "error", message: error.message || "发布失败，请检查当前空间选择" });
     }
   }
 
@@ -9323,6 +9336,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   function closeEditor() {
     adapterRef.current?.stopDrawing();
     setEditorOpen(false);
+    setEditorFeedback(null);
     setActivePlan(null);
     setEditingExistingBoundary(false);
     setDrawingBoundary(false);
@@ -9388,13 +9402,24 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
             <Button
               size="small"
               type="primary"
-              disabled={!activePlan || activePlan.validation_status !== "VALID"}
+              disabled={!activePlan
+                || activePlan.validation_status !== "VALID"
+                || activePlan.operating_spatial_plan_status === "PUBLISHED"}
               title={activePlan?.validation_issues?.[0] || (!activePlan ? "完成空间选择后才能发布" : "发布为正式城市空间对象")}
               onClick={publishPlan}
             >
-              发布
+              {activePlan?.operating_spatial_plan_status === "PUBLISHED" ? "已发布" : "发布"}
             </Button>
           </div>
+          {editorFeedback && (
+            <div
+              className={`spatial-plan-action-feedback ${editorFeedback.tone}`}
+              role="status"
+              aria-live="polite"
+            >
+              {editorFeedback.message}
+            </div>
+          )}
           {activePlan?.spatial_plan_features?.[0]?.source_spatial_unit_refs?.length > 0 && (
             <div className="spatial-plan-reference">
               <strong>地理来源</strong>
