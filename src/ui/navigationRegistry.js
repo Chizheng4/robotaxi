@@ -119,14 +119,22 @@ export const navigationGroups = Object.freeze([
     page("workers", "作业人员"),
   ]),
   group("space", "地图空间", [
-    page("maps", "地图管理"),
-    page("cells", "网格单元"),
-    page("roads", "道路管理"),
-    page("roadNodes", "道路节点"),
-    page("roadSegments", "道路片段"),
-    page("places", "地点管理"),
-    page("serviceAreas", "服务区域"),
-    page("zones", "Zone 管理"),
+    group("gridSpatialManagement", "网格仿真", [
+      page("maps", "网格地图"),
+      page("cells", "网格单元"),
+      page("roads", "道路"),
+      page("roadNodes", "道路节点"),
+      page("roadSegments", "道路片段"),
+      page("places", "地点"),
+      page("serviceAreas", "服务区域"),
+      page("zones", "运营区域"),
+    ]),
+    group("citySpatialManagement", "城市地理", [
+      page("cityMap", "城市地图"),
+      page("cityZones", "运营区域"),
+      page("cityPlaces", "地点"),
+      page("cityServiceAreas", "服务区域"),
+    ]),
   ]),
   group("simulation", "运营模拟", [
     group("demandSimulationPolicyGroup", "需求模拟", [

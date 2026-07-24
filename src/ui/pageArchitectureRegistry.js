@@ -7,7 +7,7 @@ function register(keys, contract) {
   });
 }
 
-register(["console"], {
+register(["console", "cityMap"], {
   mode: "map",
   resourceKind: "object",
   detailMode: "contextual",
@@ -51,6 +51,7 @@ register([
   "businessTargets", "demandProfiles", "supplyProductionProfiles", "productionFactories", "customers", "ownerSupplies",
   "robotaxis", "opsCenters", "workers", "maps", "cells", "roads", "roadNodes", "roadSegments",
   "places", "serviceAreas", "zones",
+  "cityZones", "cityPlaces", "cityServiceAreas",
 ], {
   mode: "record",
   resourceKind: "object",
@@ -140,6 +141,7 @@ const rowActionPages = new Set([
   "pricingStrategyRuns", "orderMatchingRuns", "cleaningTasks", "chargingTasks", "maintenanceTasks",
   "failureHandlingTasks", "retirementTasks", "fleetOperationPolicies", "costParameterRules",
   "simulationRuns", "workflowTimingRules",
+  "cityZones", "cityPlaces", "cityServiceAreas",
 ]);
 
 const eventPanels = Object.freeze({

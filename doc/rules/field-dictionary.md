@@ -710,6 +710,10 @@
 |spatial_plan_contract_version|空间规划合同版本|治理字段|区分当前城市空间对象合同与只保留历史的旧版空间方案，旧版不得自动进入当前城市目录|
 |spatial_plan_features|空间要素|关系字段|方案包含的 Zone、Place 或 ServiceArea 几何草稿|
 |spatial_plan_feature_id|空间要素编号|持久化字段|方案内空间要素唯一编号|
+|spatial_object_id|空间对象编号|统一展示字段|城市运营区域、地点或服务区域的稳定对象编号|
+|spatial_object_name|空间对象名称|统一展示字段|城市空间对象的当前正式名称|
+|spatial_object_type|空间对象类型|统一展示字段|城市运营区域、地点或服务区域|
+|spatial_object_status|空间对象状态|统一展示字段|城市空间对象当前为可用或已停用|
 |spatial_change_type|空间变更类型|类型字段|空间方案对目标对象执行新增或调整，或者经过依赖校验后停用、启用对象|
 |target_object_type|目标对象类型|类型字段|空间要素对应的业务对象类型|
 |target_object_id|目标对象编号|关系字段|关联已有对象或创建新对象时均保存稳定编号|

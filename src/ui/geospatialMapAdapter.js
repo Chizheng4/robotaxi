@@ -1,7 +1,7 @@
 export const CITY_SPATIAL_VISUAL_TOKENS = Object.freeze({
-  city: { fill: "#6f9d98", opacity: 0.055, line: "#3f7084" },
-  zone: { fill: "#78a58e", opacity: 0.145, line: "#4f7868" },
-  subZone: { fill: "#78a9ad", opacity: 0.16, line: "#4c7f84" },
+  city: { fill: "#6f9d98", opacity: 0.08, line: "#315f73" },
+  zone: { fill: "#78a58e", opacity: 0.18, line: "#3f6f62" },
+  subZone: { fill: "#78a9ad", opacity: 0.19, line: "#3f7278" },
   place: {
     fallback: "#a5b3bd",
     residential: "#8fb89f",
@@ -772,9 +772,8 @@ function lineStyle(layerId) {
   if (layerId === "robotaxi-city-boundary") {
     return {
       color: CITY_SPATIAL_VISUAL_TOKENS.city.line,
-      width: ["interpolate", ["linear"], ["zoom"], 5, 1.1, 10, 1.8, 16, 2.2],
-      opacity: 0.9,
-      dasharray: [3, 2],
+      width: ["interpolate", ["linear"], ["zoom"], 5, 1.7, 10, 2.2, 16, 2.5],
+      opacity: 0.96,
     };
   }
   const style = {

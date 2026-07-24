@@ -246,6 +246,7 @@ node scripts/verify-v049-7-spatial-planning-closure.mjs
 node scripts/verify-v049-9-spatial-visual-language.mjs
 node scripts/verify-v049-10-administrative-spatial-units.mjs
 node scripts/verify-v049-11-physical-spatial-lifecycle.mjs
+node scripts/verify-v049-12-city-spatial-workbench.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

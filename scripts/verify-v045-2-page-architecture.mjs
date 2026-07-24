@@ -8,7 +8,7 @@ const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), 
 const rulesSource = fs.readFileSync(new URL("../doc/rules/04-frontend-ux-rules.md", import.meta.url), "utf8");
 const leafKeys = flattenLeafKeys(navigationGroups);
 
-assert.equal(leafKeys.length, 87, "导航叶子页面数量发生变化时必须同步更新页面架构合同");
+assert.equal(leafKeys.length, 91, "导航叶子页面数量发生变化时必须同步更新页面架构合同");
 assert.equal(Object.keys(pageArchitectureRegistry).length, leafKeys.length, "每个页面必须且只能有一个架构合同");
 assert.deepEqual(validatePageArchitecture(leafKeys), { valid: true, errors: [] }, "页面架构注册表必须完整有效");
 
@@ -28,6 +28,13 @@ assert.deepEqual(
   { mode: "analysis", resourceKind: "projection", detailMode: "none", actionMode: "none", hasEventPanel: false },
   "供应跟踪必须是无详情、无事件区的派生分析页面",
 );
+assert.equal(getPageArchitecture("cityMap").mode, "map", "城市地图必须使用统一地图页面合同");
+["cityZones", "cityPlaces", "cityServiceAreas"].forEach((page) => {
+  const contract = getPageArchitecture(page);
+  assert.equal(contract.mode, "record", `${page} 必须使用统一对象表单框架`);
+  assert.equal(contract.resourceKind, "object", `${page} 必须声明为独立城市空间对象`);
+  assert.equal(contract.actionMode, "row", `${page} 必须通过统一行操作控件管理对象`);
+});
 
 const coreDocumentPages = [
   "readinessTasks", "routeExecutions", "serviceFulfillmentRecords", "deploymentTasks", "serviceOrders",

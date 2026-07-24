@@ -75,6 +75,7 @@ let citySpatialCatalog;
 let spatialScenarioService;
 let spatialScenarioInitialization;
 let operatingSpatialPlanService;
+let citySpatialWorkbenchService;
 let spatialPlanningContextService;
 let geographicSpatialUnitService;
 let pageContextService;
@@ -213,6 +214,26 @@ const tableConfig = {
     title: "运营区域管理",
     description: "运营区域用于经营统计和管理。",
     columns: ["zone_id", "parent_zone_id", "zone_name", "zone_level", "zone_type", "zone_status", "cell_count", "place_ids", "service_area_ids"],
+  },
+  cityMap: {
+    title: "城市地图",
+    description: "在广州城市地理中查看和规划正式运营空间对象。",
+    columns: [],
+  },
+  cityZones: {
+    title: "城市运营区域",
+    description: "管理从城市地图规划并正式发布的运营区域。",
+    columns: ["spatial_object_id", "spatial_object_name", "zone_level", "parent_zone_id", "spatial_object_status", "object_version", "operating_spatial_plan_id"],
+  },
+  cityPlaces: {
+    title: "城市地点",
+    description: "管理从城市地理事实形成的地点及其运营属性。",
+    columns: ["spatial_object_id", "spatial_object_name", "place_type", "zone_id", "spatial_object_status", "object_version", "operating_spatial_plan_id"],
+  },
+  cityServiceAreas: {
+    title: "城市服务区域",
+    description: "管理依附城市地点的上下车、停靠和服务承载区域。",
+    columns: ["spatial_object_id", "spatial_object_name", "service_area_type", "place_id", "zone_id", "spatial_object_status", "object_version", "operating_spatial_plan_id"],
   },
   demandProfiles: {
     title: "需求画像",
@@ -694,6 +715,10 @@ const pageObjectType = {
   places: "place",
   serviceAreas: "serviceArea",
   zones: "zone",
+  cityMap: "cityMap",
+  cityZones: "cityZone",
+  cityPlaces: "cityPlace",
+  cityServiceAreas: "cityServiceArea",
   demandProfiles: "demandProfile",
   businessTargets: "businessTarget",
   supplyProductionProfiles: "supplyProductionProfile",
@@ -798,6 +823,10 @@ const idFieldByType = {
   place: "place_id",
   serviceArea: "service_area_id",
   zone: "zone_id",
+  cityMap: "map_id",
+  cityZone: "spatial_object_id",
+  cityPlace: "spatial_object_id",
+  cityServiceArea: "spatial_object_id",
   demandProfile: "profile_id",
   businessTarget: "business_target_id",
   placeDemandProfile: "profile_id",
@@ -1996,6 +2025,14 @@ function App({ currentUser, onLogout }) {
     return () => { cancelled = true; };
   }, [initialData]);
 
+  const citySpatialWorkbench = useMemo(
+    () => citySpatialWorkbenchService.createCitySpatialWorkbench(
+      citySpatialCatalog.CITY_SPATIAL_CATALOG,
+      data.operatingSpatialPlans || [],
+    ),
+    [data.operatingSpatialPlans],
+  );
+
   const rowsByPage = useMemo(() => {
     const demandProfileRows = createDemandProfileRows(data);
     const legacyDemandProfileRows = splitDemandProfilesByTarget ? splitDemandProfilesByTarget(demandProfileRows) : {
@@ -2014,6 +2051,10 @@ function App({ currentUser, onLogout }) {
     places: data.places,
     serviceAreas: data.serviceAreas,
     zones: data.zones,
+    cityMap: [],
+    cityZones: citySpatialWorkbench.pages.cityZones,
+    cityPlaces: citySpatialWorkbench.pages.cityPlaces,
+    cityServiceAreas: citySpatialWorkbench.pages.cityServiceAreas,
     businessTargets: data.businessTargets || [],
     demandProfiles: demandProfileRows,
     placeDemandProfiles: legacyDemandProfileRows.placeDemandProfiles,
@@ -2154,6 +2195,9 @@ function App({ currentUser, onLogout }) {
       place: data.places,
       serviceArea: data.serviceAreas,
       zone: data.zones,
+      cityZone: rowsByPage.cityZones,
+      cityPlace: rowsByPage.cityPlaces,
+      cityServiceArea: rowsByPage.cityServiceAreas,
       demandProfile: rowsByPage.demandProfiles,
       placeDemandProfile: rowsByPage.placeDemandProfiles,
       serviceAreaDemandProfile: rowsByPage.serviceAreaDemandProfiles,
@@ -4076,18 +4120,19 @@ function App({ currentUser, onLogout }) {
 
           <Layout className={detailHidden ? "workbench detail-hidden" : detailCollapsed ? "workbench detail-collapsed" : "workbench"}>
             <Content className="work-content">
-              {activePage === "console" ? (
+              {activePage === "console" || activePage === "cityMap" ? (
                 <MapCanvas
                   data={data}
                   selected={selected}
                   mobileLayout={mobileLayout}
+                  forcedMode={activePage === "cityMap" ? "CITY_GEOGRAPHIC" : null}
                   onSelect={(type, id) => {
-                    selectForPage("console", type, id);
-                    setDetailCollapsedForPage("console", false);
+                    selectForPage(activePage, type, id);
+                    setDetailCollapsedForPage(activePage, false);
                   }}
                   onClear={() => {
-                    selectForPage("console", "map", data.maps[0].map_id);
-                    setDetailCollapsedForPage("console", true);
+                    selectForPage(activePage, activePage === "cityMap" ? "cityMap" : "map", data.maps[0].map_id);
+                    setDetailCollapsedForPage(activePage, true);
                   }}
                   onBlankCell={(cellId) => {
                     selectForPage("console", "cell", cellId);
@@ -4105,6 +4150,8 @@ function App({ currentUser, onLogout }) {
                 onUiStateChange={(nextState) => updatePageUiState(activePage, nextState)}
                 onSelect={(type, id) => viewRecordDetail(activePage, type, id)}
                 actions={{
+                  viewRecordDetail,
+                  openCitySpatialObjectOnMap,
                   createManualTask,
                   runAutoReadinessCheck,
                   runFleetOperationPolicyForPage,
@@ -4649,6 +4696,28 @@ function App({ currentUser, onLogout }) {
   function viewRecordDetail(page, type, id) {
     selectForPage(page, type, id);
     setDetailCollapsedForPage(page, false);
+  }
+
+  function openCitySpatialObjectOnMap(row, intent = "VIEW") {
+    const mapObjectType = {
+      ZONE: "zone",
+      PLACE: "place",
+      SERVICE_AREA: "serviceArea",
+    }[row.spatial_object_type];
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("robotaxi.citySpatialFocus", JSON.stringify({
+        objectId: row.spatial_object_id,
+        objectType: row.spatial_object_type,
+        intent,
+      }));
+    }
+    setActivePageAndMenu("cityMap");
+    if (mapObjectType) {
+      selectForPage("cityMap", mapObjectType, row.spatial_object_id);
+      return;
+    }
+    setWorkspacePages((current) => addWorkspacePage(current, "cityMap"));
+    setDetailCollapsedForPage("cityMap", true);
   }
 
   function viewRouteExecutionForDeployment(task) {
@@ -6885,6 +6954,7 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   const isRobotaxiTaskPlanningStrategyPage = page === "robotaxiTaskPlanningStrategies";
   const isTaskDispatchStrategyPage = page === "taskDispatchStrategies";
   const isRobotaxiPage = page === "robotaxis";
+  const isCitySpatialObjectPage = citySpatialWorkbenchService.isCitySpatialPage(page);
   const isDeploymentPage = page === "deploymentTasks";
   const isRouteExecutionPage = page === "routeExecutions";
   const isRoutePlanningPage = page === "routePlanningStrategies";
@@ -7325,6 +7395,35 @@ function RecordTable({ page, rows, selected, uiState, onUiStateChange, onSelect,
   );
 
   function getActionColumn() {
+    if (isCitySpatialObjectPage) {
+      return {
+        key: "actions",
+        title: "操作",
+        fixed: "right",
+        width: 132,
+        render: (_, row) => renderActionCell(row, (
+          <RowActionGroup>
+            {citySpatialWorkbenchService.getCitySpatialObjectActions(row)
+              .filter((action) => action.enabled)
+              .map((action) => (
+                <RowActionButton
+                  key={action.key}
+                  type={action.key === "VIEW_MAP" ? "link" : "default"}
+                  onClick={() => {
+                    if (action.key === "VIEW_DETAIL") {
+                      actions.viewRecordDetail(page, objectType, row[idField]);
+                      return;
+                    }
+                    actions.openCitySpatialObjectOnMap(row, action.key === "MANAGE_OBJECT" ? "MANAGE" : "VIEW");
+                  }}
+                >
+                  {action.label}
+                </RowActionButton>
+              ))}
+          </RowActionGroup>
+        )),
+      };
+    }
     if (isReadinessPage) {
       return {
         key: "actions",
@@ -8306,7 +8405,7 @@ function formatCostAmount(amount, currencyCode = "CNY") {
   return `${value.toFixed(2)} ${currencyCode || "CNY"}`;
 }
 
-function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, onBlankCell, onSpatialPlansChange }) {
+function MapCanvas({ data, selected, mobileLayout = false, forcedMode = null, onSelect, onClear, onBlankCell, onSpatialPlansChange }) {
   const map = data.maps[0];
   const compactMapViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 560px)").matches;
   const defaultViewport = { zoom: 1, panX: 0, panY: 0 };
@@ -8317,6 +8416,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
     if (saved === "simulation") return "GRID_SIMULATION";
     return saved || "CITY_GEOGRAPHIC";
   });
+  const activeMapMode = forcedMode || mapMode;
   const scene = useMemo(
     () => mapSceneService.createMapScene(data),
     [data.maps, data.zones, data.places, data.serviceAreas, data.roads, data.roadSegments],
@@ -8406,12 +8506,12 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
   }
 
   function changeActiveMapZoom(delta) {
-    if (mapMode === "CITY_GEOGRAPHIC") cityMapControllerRef.current?.zoomBy(delta);
+    if (activeMapMode === "CITY_GEOGRAPHIC") cityMapControllerRef.current?.zoomBy(delta);
     else changeZoom(viewport.zoom + delta * 0.2);
   }
 
   function resetActiveMap() {
-    if (mapMode === "CITY_GEOGRAPHIC") cityMapControllerRef.current?.fitScene();
+    if (activeMapMode === "CITY_GEOGRAPHIC") cityMapControllerRef.current?.fitScene();
     else resetViewport();
   }
 
@@ -8556,13 +8656,13 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
     <section className="map-page-new">
       <div ref={stageRef} className="map-stage" data-zoom-band={zoomBand}>
         <div className="map-floating-actions">
-          <Segmented
+          {!forcedMode && <Segmented
             className="map-mode-switch"
             size="small"
             value={mapMode}
             options={[{ label: "城市地理", value: "CITY_GEOGRAPHIC" }, { label: "网格仿真", value: "GRID_SIMULATION" }]}
             onChange={changeMapMode}
-          />
+          />}
         </div>
         <div className="map-navigation-actions">
           <Button size="small" aria-label="放大地图" title="放大" onClick={() => changeActiveMapZoom(1)}>+</Button>
@@ -8577,7 +8677,7 @@ function MapCanvas({ data, selected, mobileLayout = false, onSelect, onClear, on
             ))}
           </div>
         )}
-        {mapMode === "CITY_GEOGRAPHIC" ? (
+        {activeMapMode === "CITY_GEOGRAPHIC" ? (
           <GeospatialMapCanvas
             scene={geospatialScene}
             spatialScenario={cityScenario}
@@ -8983,6 +9083,22 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       ? "已载入来源行政区。调整来源后形成新版本，边界仍由来源数据派生"
       : "已载入所选对象。调整底图要素选择后形成新版本草稿");
   }
+
+  useEffect(() => {
+    if (!selectedSpatialTarget || typeof window === "undefined") return;
+    const raw = window.localStorage.getItem("robotaxi.citySpatialFocus");
+    if (!raw) return;
+    try {
+      const request = JSON.parse(raw);
+      if (request.objectId !== selectedSpatialTarget.id
+        || request.objectType !== selectedSpatialTarget.targetType) return;
+      window.localStorage.removeItem("robotaxi.citySpatialFocus");
+      adapterRef.current?.fitGeometry(selectedSpatialTarget.feature.geometry);
+      if (request.intent === "MANAGE") openSelectedObjectEditor();
+    } catch {
+      window.localStorage.removeItem("robotaxi.citySpatialFocus");
+    }
+  }, [selectedSpatialTarget?.id, selectedSpatialTarget?.targetType]);
 
   function createPlanFromGeometry(geometry) {
     const selectedTarget = targetOptions.find((option) => option.value === targetId);
@@ -11762,6 +11878,7 @@ async function bootstrap() {
 		    spatialScenarioServiceModule,
 		    spatialScenarioInitializationModule,
 		    operatingSpatialPlanServiceModule,
+		    citySpatialWorkbenchServiceModule,
 		    spatialPlanningContextServiceModule,
 		    geographicSpatialUnitServiceModule,
 		    pageContextServiceModule,
@@ -11850,6 +11967,7 @@ async function bootstrap() {
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
 				    import("./data/spatialScenarioInitialization.js?v=20260722-v049-4-0"),
 			    import("./services/operatingSpatialPlanService.js?v=20260724-v049-10-0"),
+			    import("./services/citySpatialWorkbenchService.js?v=20260724-v049-12-0"),
 			    import("./services/spatialPlanningContextService.js?v=20260722-v049-7-0"),
 			    import("./services/geographicSpatialUnitService.js?v=20260724-v049-10-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
@@ -11944,6 +12062,7 @@ async function bootstrap() {
 		  spatialScenarioService = spatialScenarioServiceModule;
 		  spatialScenarioInitialization = spatialScenarioInitializationModule;
 		  operatingSpatialPlanService = operatingSpatialPlanServiceModule;
+		  citySpatialWorkbenchService = citySpatialWorkbenchServiceModule;
 		  spatialPlanningContextService = spatialPlanningContextServiceModule;
 		  geographicSpatialUnitService = geographicSpatialUnitServiceModule;
 		  pageContextService = pageContextServiceModule;
