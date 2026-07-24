@@ -118,6 +118,8 @@ node --check src/services/spatialCatalogService.js
 node --check src/domain/geospatialTypes.js
 node --check src/data/geospatialReferenceData.js
 node --check src/data/guangzhouAdministrativeBoundary.js
+node --check src/data/guangzhouAdministrativeDistricts.js
+node --check src/services/geographicSpatialUnitService.js
 node --check src/services/geospatialCatalogService.js
 node --check src/ui/geospatialMapAdapter.js
 node --check scripts/verify-v049-geospatial-map.mjs
@@ -134,6 +136,7 @@ node --check scripts/verify-v049-5-spatial-hierarchy.mjs
 node --check scripts/verify-v049-6-map-driven-spatial-planning.mjs
 node --check scripts/verify-v049-7-spatial-planning-closure.mjs
 node --check scripts/verify-v049-9-spatial-visual-language.mjs
+node --check scripts/verify-v049-10-administrative-spatial-units.mjs
 node --check src/domain/taskDispatchTypes.js
 node --check src/domain/robotaxiTaskPlanningTypes.js
 node --check src/data/simulationRunBusinessScope.js
@@ -240,6 +243,7 @@ node scripts/verify-v049-5-spatial-hierarchy.mjs
 node scripts/verify-v049-6-map-driven-spatial-planning.mjs
 node scripts/verify-v049-7-spatial-planning-closure.mjs
 node scripts/verify-v049-9-spatial-visual-language.mjs
+node scripts/verify-v049-10-administrative-spatial-units.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

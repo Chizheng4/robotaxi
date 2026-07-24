@@ -4,9 +4,15 @@ import {
   SpatialPlanChangeType,
   SpatialPlanTargetType,
   SpatialPlanValidationStatus,
+  SpatialFormationMode,
   createOperatingSpatialPlan,
   createSpatialPlanFeature,
-} from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-7-0";
+} from "../domain/operatingSpatialPlanTypes.js?v=20260724-v049-10-0";
+import {
+  createAdministrativeUnitReferences,
+  deriveGeometryFromAdministrativeUnits,
+  validateAdministrativeUnitReferences,
+} from "./geographicSpatialUnitService.js?v=20260724-v049-10-0";
 import {
   createCityObjectId,
   createCitySpatialImpact,
@@ -14,12 +20,12 @@ import {
   materializeCitySpatialCatalog,
   validateCitySpatialCatalog,
   validateSpatialPlanFeature,
-} from "./citySpatialObjectService.js?v=20260722-v049-7-0";
+} from "./citySpatialObjectService.js?v=20260724-v049-10-0";
 import {
   geometryContains,
   summarizeSpatialCoverage,
   validatePolygonGeometry,
-} from "./spatialTopologyService.js?v=20260722-v049-6-0";
+} from "./spatialTopologyService.js?v=20260724-v049-10-0";
 import { GUANGZHOU_ADMINISTRATIVE_BOUNDARY } from "../data/guangzhouAdministrativeBoundary.js?v=20260722-v049-8-0";
 
 export { getCitySpatialPlanningContract };
@@ -36,6 +42,17 @@ export function createDraft({ plans = [], dataset, catalog = {}, spatialScenario
     && feature.target_object_id === target.target_object_id
   )));
   const targetObjectId = target.target_object_id || createCityObjectId(target.target_object_type, plans, catalog);
+  const administrativeFormation = [
+    SpatialFormationMode.ADMINISTRATIVE_UNIT_REUSE,
+    SpatialFormationMode.ADMINISTRATIVE_UNIT_COMBINATION,
+  ].includes(target.spatial_formation_mode);
+  const spatialUnitIds = target.source_spatial_unit_ids || [];
+  const sourceSpatialUnitRefs = administrativeFormation
+    ? createAdministrativeUnitReferences(spatialUnitIds)
+    : clone(target.source_spatial_unit_refs || []);
+  const effectiveGeometry = administrativeFormation
+    ? deriveGeometryFromAdministrativeUnits(spatialUnitIds)
+    : geometry;
   return createOperatingSpatialPlan({
     operating_spatial_plan_id: planId,
     operating_spatial_plan_name: `${target.target_object_name || "未命名对象"}运营区域方案`,
@@ -52,7 +69,9 @@ export function createDraft({ plans = [], dataset, catalog = {}, spatialScenario
       spatial_change_type: changeType,
       target_object_id: targetObjectId,
       source_object_exists: target.source_object_exists ?? Boolean(target.target_object_id),
-      geometry_geojson: clone(geometry),
+      geometry_geojson: clone(effectiveGeometry),
+      spatial_formation_mode: target.spatial_formation_mode || SpatialFormationMode.MAP_FEATURE_SELECTION,
+      source_spatial_unit_refs: sourceSpatialUnitRefs,
       source_feature_snapshot: clone(target.source_feature_snapshot || []),
       spatial_validation_summary: clone(target.spatial_validation_summary || null),
       planning_zoom_band: target.planning_zoom_band || null,
@@ -171,14 +190,31 @@ function validateFeature(feature, dataset, catalog, issues) {
     validateDeactivation(feature, catalog, issues);
     return;
   }
+  const administrativeFormation = [
+    SpatialFormationMode.ADMINISTRATIVE_UNIT_REUSE,
+    SpatialFormationMode.ADMINISTRATIVE_UNIT_COMBINATION,
+  ].includes(feature.spatial_formation_mode);
+  if (administrativeFormation) {
+    if (feature.target_object_type !== SpatialPlanTargetType.ZONE) issues.push("行政区域只能用于形成运营区域");
+    validateAdministrativeUnitReferences(feature.source_spatial_unit_refs, issues);
+    if (feature.spatial_formation_mode === SpatialFormationMode.ADMINISTRATIVE_UNIT_REUSE
+      && feature.source_spatial_unit_refs.length !== 1) {
+      issues.push("直接采用行政区域时只能选择一个行政区");
+    }
+    if (feature.spatial_formation_mode === SpatialFormationMode.ADMINISTRATIVE_UNIT_COMBINATION
+      && feature.source_spatial_unit_refs.length < 2) {
+      issues.push("组合行政区域时至少选择两个行政区");
+    }
+  }
   const geometryIssues = [];
   validatePolygonGeometry(feature.geometry_geojson, geometryIssues);
   issues.push(...geometryIssues);
-  const ring = feature.geometry_geojson?.type === "Polygon" ? feature.geometry_geojson.coordinates?.[0] : null;
-  if (!ring || geometryIssues.length) return;
+  const coordinates = flattenGeometryCoordinates(feature.geometry_geojson);
+  if (!coordinates.length || geometryIssues.length) return;
   const bounds = dataset?.geographic_bounds;
-  if (Array.isArray(bounds) && ring.some((point) => !insideBounds(point, bounds))) issues.push("区域超出广州受控演示范围");
-  if (!geometryContains(GUANGZHOU_ADMINISTRATIVE_BOUNDARY.geometry, feature.geometry_geojson)) {
+  if (Array.isArray(bounds) && coordinates.some((point) => !insideBounds(point, bounds))) issues.push("区域超出广州受控演示范围");
+  if (!administrativeFormation
+    && !geometryContains(GUANGZHOU_ADMINISTRATIVE_BOUNDARY.geometry, feature.geometry_geojson)) {
     issues.push("区域必须完整位于广州市行政范围内");
   }
   if (feature.source_feature_snapshot?.length) {
@@ -258,6 +294,20 @@ function nextSequence(plans) {
 
 function insideBounds(point, bounds) {
   return point[0] >= bounds[0][0] && point[0] <= bounds[1][0] && point[1] >= bounds[0][1] && point[1] <= bounds[1][1];
+}
+
+function flattenGeometryCoordinates(geometry) {
+  const output = [];
+  const visit = (value) => {
+    if (!Array.isArray(value)) return;
+    if (value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1])) {
+      output.push(value);
+      return;
+    }
+    value.forEach(visit);
+  };
+  visit(geometry?.coordinates);
+  return output;
 }
 
 function clone(value) {

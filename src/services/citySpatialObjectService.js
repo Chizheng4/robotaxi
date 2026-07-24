@@ -1,6 +1,6 @@
 import { PlaceType, ServiceAreaType, ZoneLevel } from "../domain/types.js?v=20260722-v049-4-0";
-import { CITY_SPATIAL_PLAN_CONTRACT_VERSION, ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260722-v049-7-0";
-import { geometryContains, geometryIntersects } from "./spatialTopologyService.js?v=20260722-v049-6-0";
+import { CITY_SPATIAL_PLAN_CONTRACT_VERSION, ZoneStructureMode } from "../domain/operatingSpatialPlanTypes.js?v=20260724-v049-10-0";
+import { geometryContains, geometryIntersects } from "./spatialTopologyService.js?v=20260724-v049-10-0";
 
 const OBJECT_CONFIG = Object.freeze({
   ZONE: { collection: "zones", prefix: "GZ-Z", objectType: "zone" },
@@ -175,6 +175,8 @@ function applyFeature(catalog, feature, plan) {
     service_area_type: feature.service_area_type || null,
     planning_zoom_band: feature.planning_zoom_band || null,
     relationship_inference_status: feature.relationship_inference_status || null,
+    spatial_formation_mode: feature.spatial_formation_mode || null,
+    source_spatial_unit_refs: clone(feature.source_spatial_unit_refs || []),
     contained_object_refs: clone(feature.contained_object_refs || []),
     conflict_object_refs: clone(feature.conflict_object_refs || []),
     source_feature_snapshot: clone(feature.source_feature_snapshot || []),

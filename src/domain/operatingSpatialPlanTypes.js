@@ -27,7 +27,13 @@ export const SpatialPlanChangeType = Object.freeze({
   DEACTIVATE: "DEACTIVATE",
 });
 
-export const CITY_SPATIAL_PLAN_CONTRACT_VERSION = "CITY_SPATIAL_V2";
+export const SpatialFormationMode = Object.freeze({
+  ADMINISTRATIVE_UNIT_REUSE: "ADMINISTRATIVE_UNIT_REUSE",
+  ADMINISTRATIVE_UNIT_COMBINATION: "ADMINISTRATIVE_UNIT_COMBINATION",
+  MAP_FEATURE_SELECTION: "MAP_FEATURE_SELECTION",
+});
+
+export const CITY_SPATIAL_PLAN_CONTRACT_VERSION = "CITY_SPATIAL_V3";
 
 export function createOperatingSpatialPlan(input = {}) {
   return {
@@ -68,6 +74,8 @@ export function createSpatialPlanFeature(input = {}) {
     place_type: input.place_type || null,
     place_id: input.place_id || null,
     service_area_type: input.service_area_type || null,
+    spatial_formation_mode: input.spatial_formation_mode || SpatialFormationMode.MAP_FEATURE_SELECTION,
+    source_spatial_unit_refs: Array.isArray(input.source_spatial_unit_refs) ? input.source_spatial_unit_refs : [],
     source_feature_snapshot: Array.isArray(input.source_feature_snapshot) ? input.source_feature_snapshot : [],
     spatial_validation_summary: input.spatial_validation_summary || null,
     planning_zoom_band: input.planning_zoom_band || null,

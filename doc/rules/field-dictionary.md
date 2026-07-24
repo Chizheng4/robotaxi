@@ -3204,3 +3204,30 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |GITHUB_REFERRAL|GitHub 引导|
 |WECHAT_REFERRAL|微信引导|
 |EXTERNAL_REFERRAL|外部引导|
+
+## 30. 城市地理空间单元与运营区域来源
+
+城市地理中的行政区、道路、建筑等属于物理地理事实；运营区域属于企业经营对象。运营区域只能引用或组合已登记的地理空间单元，页面绘制仅用于选择物理要素，不得把自由几何直接保存为地理事实。
+
+|字段名|中文名|字段性质|业务含义|
+|---|---|---|---|
+|spatial_formation_mode|空间形成方式|持久化字段|运营空间范围由一个行政区、多个行政区组合或地图物理要素选择形成|
+|source_spatial_unit_refs|来源空间单元|持久化字段|形成运营空间范围的地理空间单元快照|
+|source_spatial_unit_id|来源空间单元编号|持久化字段|稳定引用的地理空间单元编号|
+|source_spatial_unit_name|来源空间单元名称|快照字段|发布时的地理空间单元名称|
+|source_spatial_unit_type|来源空间单元类型|持久化字段|当前支持行政区，后续可扩展道路、建筑和地块等物理要素|
+|administrative_code|行政区划代码|持久化字段|行政区来源代码|
+|administrative_level|行政区划层级|持久化字段|当前行政区数据的层级|
+|source_dataset_id|来源数据集编号|持久化字段|地理空间单元的数据集编号|
+|source_dataset_version|来源数据集版本|持久化字段|用于重算边界和追溯的数据版本|
+
+### 30.1 枚举中文
+
+|枚举值|中文名|用途|
+|---|---|---|
+|ADMINISTRATIVE_UNIT_REUSE|直接采用一个行政区|空间形成方式|
+|ADMINISTRATIVE_UNIT_COMBINATION|组合多个行政区|空间形成方式|
+|MAP_FEATURE_SELECTION|选择地图物理要素|空间形成方式|
+|ADMINISTRATIVE_DISTRICT|行政区|来源空间单元类型|
+|DISTRICT|区级行政区|行政区划层级|
+|CONFIRMED_BY_SOURCE_UNITS|来源空间单元已确认|空间关系识别状态|

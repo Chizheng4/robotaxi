@@ -1,38 +1,45 @@
 const EPSILON = 1e-10;
 
 export function validatePolygonGeometry(geometry, issues = []) {
-  const ring = polygonOuterRing(geometry);
-  if (!ring || ring.length < 4) {
+  const rings = polygonOuterRings(geometry);
+  if (!rings.length) {
     issues.push("请绘制至少三个顶点的闭合区域");
     return issues;
   }
-  if (!samePoint(ring[0], ring[ring.length - 1])) issues.push("区域边界必须闭合");
-  if (ring.some((point) => !validCoordinate(point))) issues.push("区域包含无效经纬度坐标");
-  if (Math.abs(signedArea(ring)) < EPSILON) issues.push("区域面积过小或边界无效");
-  if (hasSelfIntersection(ring)) issues.push("区域边界存在交叉，请调整边界后重试");
+  for (const ring of rings) {
+    if (ring.length < 4) issues.push("请绘制至少三个顶点的闭合区域");
+    if (!samePoint(ring[0], ring[ring.length - 1])) issues.push("区域边界必须闭合");
+    if (ring.some((point) => !validCoordinate(point))) issues.push("区域包含无效经纬度坐标");
+    if (Math.abs(signedArea(ring)) < EPSILON) issues.push("区域面积过小或边界无效");
+    if (hasSelfIntersection(ring)) issues.push("区域边界存在交叉，请调整边界后重试");
+  }
   return issues;
 }
 
 export function geometryContains(containerGeometry, childGeometry) {
-  const container = polygonOuterRing(containerGeometry);
-  const child = polygonOuterRing(childGeometry);
-  if (!container || !child) return false;
-  if (!child.slice(0, -1).every((point) => pointInPolygonInclusive(point, container))) return false;
-  return !ringsCross(container, child);
+  const containers = polygonOuterRings(containerGeometry);
+  const children = polygonOuterRings(childGeometry);
+  if (!containers.length || !children.length) return false;
+  return children.every((child) => containers.some((container) => (
+    child.slice(0, -1).every((point) => pointInPolygonInclusive(point, container))
+    && !ringsCross(container, child)
+  )));
 }
 
 export function geometryIntersects(leftGeometry, rightGeometry) {
-  const left = polygonOuterRing(leftGeometry);
-  const right = polygonOuterRing(rightGeometry);
-  if (!left || !right) return false;
-  if (ringsIntersect(left, right)) return true;
-  return pointInPolygonInclusive(left[0], right) || pointInPolygonInclusive(right[0], left);
+  const leftRings = polygonOuterRings(leftGeometry);
+  const rightRings = polygonOuterRings(rightGeometry);
+  return leftRings.some((left) => rightRings.some((right) => (
+    ringsIntersect(left, right)
+    || pointInPolygonInclusive(left[0], right)
+    || pointInPolygonInclusive(right[0], left)
+  )));
 }
 
 export function geometryBounds(geometry) {
-  const ring = polygonOuterRing(geometry);
-  if (!ring?.length) return null;
-  return ring.reduce((bounds, point) => ({
+  const points = polygonOuterRings(geometry).flat();
+  if (!points.length) return null;
+  return points.reduce((bounds, point) => ({
     minLng: Math.min(bounds.minLng, point[0]),
     minLat: Math.min(bounds.minLat, point[1]),
     maxLng: Math.max(bounds.maxLng, point[0]),
@@ -68,10 +75,14 @@ export function summarizeSpatialCoverage({ targetType, sourceFeatures = [] } = {
   };
 }
 
-function polygonOuterRing(geometry) {
-  return geometry?.type === "Polygon" && Array.isArray(geometry.coordinates?.[0])
-    ? geometry.coordinates[0]
-    : null;
+export function polygonOuterRings(geometry) {
+  if (geometry?.type === "Polygon" && Array.isArray(geometry.coordinates?.[0])) {
+    return [geometry.coordinates[0]];
+  }
+  if (geometry?.type === "MultiPolygon" && Array.isArray(geometry.coordinates)) {
+    return geometry.coordinates.map((polygon) => polygon?.[0]).filter(Array.isArray);
+  }
+  return [];
 }
 
 function validCoordinate(point) {

@@ -1,5 +1,6 @@
-import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260722-v049-7-0";
+import { materializeCitySpatialCatalog } from "./citySpatialObjectService.js?v=20260724-v049-10-0";
 import { GUANGZHOU_ADMINISTRATIVE_BOUNDARY } from "../data/guangzhouAdministrativeBoundary.js?v=20260722-v049-8-0";
+import { createAdministrativeUnitCollection } from "./geographicSpatialUnitService.js?v=20260724-v049-10-0";
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 
@@ -16,6 +17,7 @@ export function createCityGeographicScene({ catalog, plans = [] } = {}, dataset)
     spatialCatalogVersion: materializedCatalog.spatial_catalog_version,
     bounds: dataset.geographic_bounds,
     cityBoundary: createCityBoundaryReference(dataset),
+    administrativeUnits: createAdministrativeUnitCollection(),
     zones,
     places,
     serviceAreas,
@@ -68,6 +70,7 @@ export function createGeospatialScene(data = {}, dataset, projectionConfig = {})
   return {
     dataset,
     bounds: projector.mapBounds,
+    administrativeUnits: EMPTY_COLLECTION,
     zones,
     places,
     serviceAreas,
@@ -87,7 +90,7 @@ export function validateGeospatialScene(scene) {
   const errors = [];
   if (!scene?.dataset?.map_dataset_id) errors.push("缺少地图数据集编号");
   if (scene?.dataset?.coordinate_reference_system !== "EPSG:4326") errors.push("当前仅支持 EPSG:4326 地理事实");
-  for (const key of ["zones", "places", "serviceAreas", "roads", "opsCenters", "robotaxis", "route"]) {
+  for (const key of ["administrativeUnits", "zones", "places", "serviceAreas", "roads", "opsCenters", "robotaxis", "route"]) {
     if (scene?.[key]?.type !== "FeatureCollection") errors.push(`${key} 不是有效地理图层`);
   }
   if (scene?.cityBoundary && scene.cityBoundary.type !== "FeatureCollection") errors.push("cityBoundary 不是有效地理图层");
@@ -310,6 +313,7 @@ function createEmptyScene(dataset) {
     dataset,
     bounds: null,
     cityBoundary: dataset ? createCityBoundaryReference(dataset) : EMPTY_COLLECTION,
+    administrativeUnits: dataset ? createAdministrativeUnitCollection() : EMPTY_COLLECTION,
     zones: EMPTY_COLLECTION,
     places: EMPTY_COLLECTION,
     serviceAreas: EMPTY_COLLECTION,

@@ -76,6 +76,7 @@ let spatialScenarioService;
 let spatialScenarioInitialization;
 let operatingSpatialPlanService;
 let spatialPlanningContextService;
+let geographicSpatialUnitService;
 let pageContextService;
 let dataChartService;
 let metricObjectPresentationService;
@@ -8749,10 +8750,14 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   const [zoneLevel, setZoneLevel] = useState("ZONE");
   const [placeType, setPlaceType] = useState("RESIDENTIAL");
   const [serviceAreaType, setServiceAreaType] = useState("PICKUP_DROPOFF");
+  const [formationMode, setFormationMode] = useState("ADMINISTRATIVE_UNIT_REUSE");
+  const [selectedSpatialUnitIds, setSelectedSpatialUnitIds] = useState([]);
   const [activePlan, setActivePlan] = useState(null);
   const [drawingBoundary, setDrawingBoundary] = useState(false);
   const [editingExistingBoundary, setEditingExistingBoundary] = useState(false);
   const [editorNotice, setEditorNotice] = useState("");
+  const formationModeRef = useRef(formationMode);
+  const targetTypeRef = useRef(targetType);
   const hoverPresentation = hovered
     ? mapSceneService.getMapObjectPresentation(hovered.type, hovered.id, data) || createSpatialPlanHoverPresentation(hovered.properties)
     : null;
@@ -8788,6 +8793,15 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
           setHovered(null);
           onClear?.();
         },
+        onAdministrativeUnitSelect: (properties) => {
+          if (targetTypeRef.current !== "ZONE") return;
+          const id = properties.object_id;
+          setSelectedSpatialUnitIds((current) => (
+            formationModeRef.current === "ADMINISTRATIVE_UNIT_REUSE"
+              ? [id]
+              : (current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+          ));
+        },
       });
       onControllerReady?.(adapterRef.current);
       setMapStatus({ status: "READY", message: "" });
@@ -8808,6 +8822,30 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   useEffect(() => {
     adapterRef.current?.updateSelection(selected);
   }, [selected]);
+
+  const administrativeUnitOptions = useMemo(() => geographicSpatialUnitService.getAdministrativeUnitOptions(), []);
+
+  useEffect(() => {
+    formationModeRef.current = formationMode;
+    targetTypeRef.current = targetType;
+    adapterRef.current?.updateAdministrativeSelection({
+      enabled: editorOpen && targetType === "ZONE" && ["NEW", "EDIT_ADMIN"].includes(editorMode),
+      selectedIds: selectedSpatialUnitIds,
+    });
+  }, [editorOpen, editorMode, formationMode, selectedSpatialUnitIds, targetType]);
+
+  useEffect(() => {
+    if (!editorOpen || !["NEW", "EDIT_ADMIN"].includes(editorMode) || targetType !== "ZONE" || !selectedSpatialUnitIds.length) return;
+    const selectedUnits = administrativeUnitOptions.filter((option) => selectedSpatialUnitIds.includes(option.value));
+    if (!selectedUnits.length) return;
+    if (editorMode === "NEW") {
+      setNewTargetName(selectedUnits.length === 1
+        ? `${selectedUnits[0].label}运营区域`
+        : `${selectedUnits.map((item) => item.label).join("、")}联合运营区域`);
+    }
+    const geometry = geographicSpatialUnitService.deriveGeometryFromAdministrativeUnits(selectedSpatialUnitIds);
+    adapterRef.current?.fitGeometry(geometry);
+  }, [administrativeUnitOptions, editorMode, editorOpen, selectedSpatialUnitIds, targetType]);
 
   const targetOptions = useMemo(() => createSpatialPlanTargetOptions(targetType, scene), [targetType, scene]);
   const planningContract = useMemo(() => operatingSpatialPlanService.getCitySpatialPlanningContract(), []);
@@ -8834,22 +8872,78 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     setTargetId("__NEW__");
     setZoneLevel(planningContext.recommended_zone_level || "ZONE");
     setNewTargetName("");
+    setFormationMode("ADMINISTRATIVE_UNIT_REUSE");
+    setSelectedSpatialUnitIds([]);
     setEditorNotice(`已按当前视角推荐${getDisplayValue(planningContext.recommended_target_type, "target_object_type")}，你可以修改`);
+  }
+
+  function updateAdministrativeUnitSelection(nextIds) {
+    const values = formationMode === "ADMINISTRATIVE_UNIT_REUSE" ? nextIds.slice(-1) : nextIds;
+    setSelectedSpatialUnitIds(values);
+  }
+
+  function createPlanFromAdministrativeUnits() {
+    if (!selectedSpatialUnitIds.length) {
+      setEditorNotice("请从地图或行政区列表中选择区域");
+      return;
+    }
+    const targetName = newTargetName.trim();
+    if (!targetName) {
+      setEditorNotice("请填写运营区域名称");
+      return;
+    }
+    try {
+      const plan = operatingSpatialPlanService.createDraft({
+        plans,
+        dataset: scene.dataset,
+        spatialScenarioId: spatialScenario.spatial_scenario_id,
+        target: {
+          target_object_type: "ZONE",
+          target_object_id: editorMode === "EDIT_ADMIN" ? targetId : null,
+          target_object_name: targetName,
+          source_object_exists: editorMode === "EDIT_ADMIN",
+          zone_level: zoneLevel,
+          zone_structure_mode: zoneLevel === "ZONE" ? "FLAT" : null,
+          spatial_formation_mode: formationMode,
+          source_spatial_unit_ids: selectedSpatialUnitIds,
+          planning_zoom_band: planningContext.zoom_band,
+          relationship_inference_status: "CONFIRMED_BY_SOURCE_UNITS",
+        },
+        catalog: scene,
+      });
+      setActivePlan(plan);
+      onSpatialPlansChange?.(operatingSpatialPlanService.upsertPlan(plans, plan));
+      setEditorNotice(`草稿已形成，范围来自${selectedSpatialUnitIds.length}个版本化行政区空间单元`);
+    } catch (error) {
+      setEditorNotice(error.message || "行政区域草稿形成失败");
+    }
   }
 
   function openSelectedObjectEditor() {
     if (!selectedSpatialTarget) return;
+    const sourcePlanFeature = plans
+      .filter((plan) => plan.operating_spatial_plan_status === "PUBLISHED")
+      .flatMap((plan) => plan.spatial_plan_features || [])
+      .filter((feature) => feature.target_object_type === selectedSpatialTarget.targetType
+        && feature.target_object_id === selectedSpatialTarget.id)
+      .at(-1);
+    const sourceRefs = sourcePlanFeature?.source_spatial_unit_refs || [];
+    const usesAdministrativeUnits = selectedSpatialTarget.targetType === "ZONE" && sourceRefs.length > 0;
     adapterRef.current?.stopDrawing();
     setEditorOpen(true);
-    setEditorMode("EDIT");
+    setEditorMode(usesAdministrativeUnits ? "EDIT_ADMIN" : "EDIT");
     setActivePlan(null);
     setEditingExistingBoundary(false);
     setDrawingBoundary(false);
+    setFormationMode(sourcePlanFeature?.spatial_formation_mode || "MAP_FEATURE_SELECTION");
+    setSelectedSpatialUnitIds(sourceRefs.map((item) => item.source_spatial_unit_id));
     setTargetType(selectedSpatialTarget.targetType);
     setTargetId(selectedSpatialTarget.id);
     setNewTargetName(selectedSpatialTarget.feature.properties?.object_name || "");
     applyTargetProperties(selectedSpatialTarget.feature.properties);
-    setEditorNotice("已载入所选对象。调整顶点后形成新版本草稿");
+    setEditorNotice(usesAdministrativeUnits
+      ? "已载入来源行政区。调整来源后形成新版本，边界仍由来源数据派生"
+      : "已载入所选对象。调整底图要素选择后形成新版本草稿");
   }
 
   function createPlanFromGeometry(geometry) {
@@ -9027,6 +9121,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     setEditingExistingBoundary(false);
     setDrawingBoundary(false);
     setEditorNotice("");
+    setSelectedSpatialUnitIds([]);
   }
 
   return (
@@ -9043,31 +9138,67 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       {!mobileLayout && selectedSpatialTarget && <Button className="spatial-plan-edit-trigger" size="small" onClick={openSelectedObjectEditor}>编辑所选对象</Button>}
       {editorOpen && !mobileLayout && (
         <aside className="spatial-plan-editor" aria-label="运营区域规划">
-          <header><strong>{editorMode === "EDIT" ? "编辑空间对象" : "规划运营区域"}</strong><Button type="text" size="small" aria-label="关闭运营区域规划" onClick={closeEditor}>×</Button></header>
+          <header><strong>{editorMode === "NEW" ? "规划运营区域" : "编辑空间对象"}</strong><Button type="text" size="small" aria-label="关闭运营区域规划" onClick={closeEditor}>×</Button></header>
           <div className="spatial-plan-context" role="status">
             <strong>{getDisplayValue(planningContext.zoom_band)}</strong>
             <span>{planningContext.message}，仅作为推荐，不会覆盖你的选择</span>
           </div>
-          <label><span>空间对象</span><Select size="small" value={targetType} disabled={editorMode === "EDIT"} options={[
+          <label><span>空间对象</span><Select size="small" value={targetType} disabled={editorMode !== "NEW"} options={[
             { label: "运营区域", value: "ZONE" },
             { label: "地点", value: "PLACE" },
             { label: "服务区域", value: "SERVICE_AREA" },
-          ]} onChange={(value) => { setTargetType(value); setTargetId("__NEW__"); setActivePlan(null); setEditingExistingBoundary(false); }} /></label>
-          {targetType === "ZONE" && <label><span>{getFieldLabel("zone_level")}</span><Select size="small" value={zoneLevel} disabled={editorMode === "EDIT"} options={planningContract.zoneLevels.map((value) => ({ value, label: getDisplayValue(value, "zone_level") }))} onChange={setZoneLevel} /></label>}
+          ]} onChange={(value) => { setTargetType(value); setTargetId("__NEW__"); setActivePlan(null); setEditingExistingBoundary(false); setSelectedSpatialUnitIds([]); }} /></label>
+          {targetType === "ZONE" && <label><span>{getFieldLabel("zone_level")}</span><Select size="small" value={zoneLevel} disabled={editorMode !== "NEW"} options={planningContract.zoneLevels.map((value) => ({ value, label: getDisplayValue(value, "zone_level") }))} onChange={setZoneLevel} /></label>}
+          {targetType === "ZONE" && ["NEW", "EDIT_ADMIN"].includes(editorMode) && <>
+            <label><span>{getFieldLabel("spatial_formation_mode")}</span><Select size="small" value={formationMode} options={[
+              { label: getDisplayValue("ADMINISTRATIVE_UNIT_REUSE", "spatial_formation_mode"), value: "ADMINISTRATIVE_UNIT_REUSE" },
+              { label: getDisplayValue("ADMINISTRATIVE_UNIT_COMBINATION", "spatial_formation_mode"), value: "ADMINISTRATIVE_UNIT_COMBINATION" },
+            ]} onChange={(value) => {
+              setFormationMode(value);
+              setSelectedSpatialUnitIds([]);
+              setActivePlan(null);
+              setEditorNotice(value === "ADMINISTRATIVE_UNIT_REUSE"
+                ? "从地图或列表选择一个行政区，系统直接采用其版本化边界"
+                : "选择相邻行政区，系统按来源单元组合运营范围");
+            }} /></label>
+            <label><span>{getFieldLabel("source_spatial_unit_refs")}</span><Select
+              size="small"
+              mode={formationMode === "ADMINISTRATIVE_UNIT_COMBINATION" ? "multiple" : undefined}
+              showSearch
+              optionFilterProp="label"
+              value={formationMode === "ADMINISTRATIVE_UNIT_COMBINATION" ? selectedSpatialUnitIds : selectedSpatialUnitIds[0]}
+              options={administrativeUnitOptions}
+              placeholder="选择或点击地图行政区"
+              onChange={(value) => updateAdministrativeUnitSelection(Array.isArray(value) ? value : [value].filter(Boolean))}
+            /></label>
+          </>}
           {targetType === "PLACE" && <label><span>{getFieldLabel("place_type")}</span><Select size="small" value={placeType} options={planningContract.placeTypes.map((value) => ({ value, label: getDisplayValue(value) }))} onChange={setPlaceType} /></label>}
           {targetType === "SERVICE_AREA" && <label><span>{getFieldLabel("service_area_type")}</span><Select size="small" value={serviceAreaType} options={planningContract.serviceAreaTypes.map((value) => ({ value, label: getDisplayValue(value) }))} onChange={setServiceAreaType} /></label>}
           <label><span>空间名称</span><Input size="small" value={newTargetName} onChange={(event) => setNewTargetName(event.target.value)} /></label>
           <div className="spatial-plan-editor-actions">
-            <Button size="small" onClick={editingExistingBoundary ? captureEditedBoundary : beginDrawing}>{editingExistingBoundary ? "形成草稿" : (drawingBoundary ? "完成绘制" : (editorMode === "NEW" ? "开始绘制" : "调整边界"))}</Button>
+            <Button size="small" onClick={targetType === "ZONE" && ["NEW", "EDIT_ADMIN"].includes(editorMode)
+              ? createPlanFromAdministrativeUnits
+              : (editingExistingBoundary ? captureEditedBoundary : beginDrawing)}>
+              {targetType === "ZONE" && ["NEW", "EDIT_ADMIN"].includes(editorMode)
+                ? "形成草稿"
+                : (editingExistingBoundary ? "形成草稿" : (drawingBoundary ? "完成绘制" : (editorMode === "NEW" ? "开始选择" : "调整边界")))}
+            </Button>
             <Button size="small" disabled={!activePlan} onClick={validatePlan}>校验</Button>
             <Button size="small" type="primary" disabled={activePlan?.operating_spatial_plan_status !== "VALIDATED"} onClick={publishPlan}>发布</Button>
           </div>
+          {activePlan?.spatial_plan_features?.[0]?.source_spatial_unit_refs?.length > 0 && (
+            <div className="spatial-plan-reference">
+              <strong>地理来源</strong>
+              <span>{activePlan.spatial_plan_features[0].source_spatial_unit_refs.map((item) => item.source_spatial_unit_name).join("、")}</span>
+              <span>边界随来源数据版本派生，不由页面自由绘制</span>
+            </div>
+          )}
           <div className="spatial-plan-history-actions">
             <Button type="text" size="small" onClick={() => adapterRef.current?.undoDrawing()}>撤销</Button>
             <Button type="text" size="small" onClick={() => adapterRef.current?.redoDrawing()}>重做</Button>
             <Button type="text" size="small" disabled={!activePlan || activePlan.operating_spatial_plan_status === "PUBLISHED"} onClick={cancelPlan}>取消草稿</Button>
           </div>
-          {editorMode === "EDIT" && <div className="spatial-plan-object-management"><span>对象管理</span><Button type="text" danger size="small" onClick={createDeactivationPlan}>停用已发布对象</Button></div>}
+          {editorMode !== "NEW" && <div className="spatial-plan-object-management"><span>对象管理</span><Button type="text" danger size="small" onClick={createDeactivationPlan}>停用已发布对象</Button></div>}
           {activePlan?.spatial_plan_features?.[0]?.source_feature_snapshot?.length > 0 && (() => {
             const sourceFeatures = activePlan.spatial_plan_features[0].source_feature_snapshot;
             const count = (category) => sourceFeatures.filter((item) => item.feature_category === `MAP_${category}`).length;
@@ -11516,6 +11647,7 @@ async function bootstrap() {
 		    spatialScenarioInitializationModule,
 		    operatingSpatialPlanServiceModule,
 		    spatialPlanningContextServiceModule,
+		    geographicSpatialUnitServiceModule,
 		    pageContextServiceModule,
 		    dataChartServiceModule,
 		    metricObjectPresentationServiceModule,
@@ -11595,14 +11727,15 @@ async function bootstrap() {
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
-		    import("./services/geospatialCatalogService.js?v=20260722-v049-8-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260723-v049-9-0"),
+		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-10-0"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
 				    import("./data/spatialScenarioInitialization.js?v=20260722-v049-4-0"),
-			    import("./services/operatingSpatialPlanService.js?v=20260722-v049-8-0"),
+			    import("./services/operatingSpatialPlanService.js?v=20260724-v049-10-0"),
 			    import("./services/spatialPlanningContextService.js?v=20260722-v049-7-0"),
+			    import("./services/geographicSpatialUnitService.js?v=20260724-v049-10-0"),
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
         import("./ui/dataChartService.js?v=20260717-v047-1-0"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),
@@ -11696,6 +11829,7 @@ async function bootstrap() {
 		  spatialScenarioInitialization = spatialScenarioInitializationModule;
 		  operatingSpatialPlanService = operatingSpatialPlanServiceModule;
 		  spatialPlanningContextService = spatialPlanningContextServiceModule;
+		  geographicSpatialUnitService = geographicSpatialUnitServiceModule;
 		  pageContextService = pageContextServiceModule;
 		  dataChartService = dataChartServiceModule;
 		  metricObjectPresentationService = metricObjectPresentationServiceModule;

@@ -104,7 +104,10 @@ const mapAdapterSource = fs.readFileSync("src/ui/geospatialMapAdapter.js", "utf8
 assert(mainSource.includes("!mobileLayout && <Button"), "手机端不得显示运营区域规划入口");
 assert(mainSource.includes("editorOpen && !mobileLayout"), "手机端不得挂载复杂空间编辑器");
 assert(mainSource.includes("编辑所选对象"), "地图选中空间对象后必须提供直接编辑入口");
-assert(mainSource.includes("停用已发布对象") && mainSource.includes('editorMode === "EDIT"'), "停用入口必须只属于已发布对象管理");
+assert(
+  mainSource.includes("停用已发布对象") && mainSource.includes('editorMode !== "NEW"'),
+  "停用入口必须只属于已发布对象管理，并覆盖行政区复用形成的已发布对象",
+);
 assert(styleSource.includes(".spatial-plan-trigger") && styleSource.includes(".spatial-plan-editor { display: none !important; }"), "手机端规划入口必须有样式降级合同");
 assert(styleSource.includes(".map-page-new > .map-stage > .map-floating-actions"), "场景切换必须使用不受旧样式覆盖的左上角定位合同");
 assert(mapAdapterSource.includes("addition?.id ?? addition"), "绘图适配器必须兼容 Terra Draw 的特征返回结构");
