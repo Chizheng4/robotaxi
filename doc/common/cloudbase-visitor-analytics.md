@@ -2,7 +2,7 @@
 
 ## 1. 目标与边界
 
-公开网站继续使用 `https://chizheng4.github.io/robotaxi/`。GitHub Pages 负责静态网站，腾讯云 CloudBase 仅提供 HTTP 云函数和访问记录存储，不承载 Robotaxi 业务数据。
+公开网站固定使用 `https://robotaxi.xingbuild.top/`。EdgeOne 负责静态网站和个人域名，腾讯云 CloudBase 仅提供 HTTP 云函数和访问记录存储，不承载 Robotaxi 业务数据。
 
 - 输入“金星”并成功进入平台后，才创建一条访问记录。
 - 输入“访问”时不计入普通访问；密码验证成功后只显示访问记录。
@@ -22,11 +22,11 @@
 
 环境 ID：`robotaxi-visit-records-d8e34876e`。
 
-当前免费体验版不能增加 GitHub Pages 安全域名，因此不使用 Web SDK 匿名登录。正式链路固定为：GitHub Pages `fetch` → CloudBase 默认 HTTP 域名 → `visitorAnalytics` HTTP 云函数 → `visitor_sessions`。
+正式链路固定为：EdgeOne 正式网站 `fetch` → CloudBase 默认 HTTP 域名 → `visitorAnalytics` HTTP 云函数 → `visitor_sessions`。
 
 1. 创建集合 `visitor_sessions`，客户端权限保持关闭。
 2. 使用 CloudBase CLI 将 `cloudfunctions/visitorAnalytics` 部署为 Node.js 20 HTTP 云函数，并绑定默认域名路径。
-3. HTTP 网关关闭安全域名跨域校验，由云函数只放行 GitHub Pages 正式域名和本地验证域名。
+3. HTTP 网关关闭安全域名跨域校验，由云函数只放行 `https://robotaxi.xingbuild.top` 和本地验证域名。
 4. 为云函数配置环境变量：
 
 |变量名|要求|
@@ -35,7 +35,7 @@
 |`VISIT_TOKEN_SECRET`|至少 24 位随机字符串，只在控制台设置|
 
 5. 将生成的 HTTPS 地址写入 `index.html` 的 `robotaxi-visit-api-base` 元数据。
-6. 部署后使用 GitHub Pages 正式地址分别验证“金星”和“访问”入口。
+6. 部署后使用个人正式域名分别验证“金星”和“访问”入口。
 
 当前已部署 HTTP 地址：`https://robotaxi-visit-records-d8e34876e.service.tcloudbase.com/visitor-analytics`。云函数、集合、跨域、密码验证、写入和查询已通过真实 API 验证，验收产生的临时记录已清理。
 

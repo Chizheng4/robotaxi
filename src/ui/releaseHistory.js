@@ -1,6 +1,24 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.13.0",
+    "title": "将 Robotaxi 唯一正式网站迁移到个人域名和 EdgeOne，统一发布、运行时与访问记录的生产环境边界",
+    "changes": [
+      "正式网站统一为 `https://robotaxi.xingbuild.top/`，README、页面规范地址和部署清单不再指向旧 GitHub Pages 站点。",
+      "GitHub 保留代码、提交、标签和贡献记录职责，停止仓库内 GitHub Pages 自动部署，避免形成两个不同步的生产网站。",
+      "一键发布继续推送标签和 `main`，由 EdgeOne 自动构建；发布完成改为校验个人正式域名的版本号与提交。",
+      "线上版本刷新、公开演示数据初始化和访问记录跨域统一识别个人正式域名。",
+      "更新 EdgeOne 发布与 CloudBase 访问记录配置文档，明确旧 GitHub Pages 的停用步骤和外部配置边界。"
+    ],
+    "audienceTitle": "启用个人正式域名",
+    "audienceChanges": [
+      "Robotaxi 现在以 robotaxi.xingbuild.top 作为唯一正式访问地址。",
+      "正式网站发布后会自动校验线上版本，避免访问到旧内容。",
+      "访问记录继续保持简洁和私密，并适配新的正式域名。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.12.3",
     "title": "移除城市地理与网格仿真共用的旧地图图例浮层，让地图对象直接通过范围、边界、标签和交互状态表达",
     "changes": [

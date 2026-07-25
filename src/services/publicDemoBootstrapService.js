@@ -18,7 +18,7 @@ const executedSimulationStatuses = new Set([
 export function isPublicDemoEnvironment(locationLike = globalThis.location) {
   const hostname = String(locationLike?.hostname || "").toLowerCase();
   const search = String(locationLike?.search || "");
-  return hostname === "chizheng4.github.io" || new URLSearchParams(search).get("publicDemo") === "1";
+  return hostname === "robotaxi.xingbuild.top" || new URLSearchParams(search).get("publicDemo") === "1";
 }
 
 export function createPublicDemoBootstrapPlan({

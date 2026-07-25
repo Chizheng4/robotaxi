@@ -16,7 +16,7 @@ export async function ensureLatestRelease({
   sessionStorageLike = globalThis.sessionStorage,
   timeoutMs = 1800,
 } = {}) {
-  if (String(locationLike?.hostname || "").toLowerCase() !== "chizheng4.github.io") return false;
+  if (String(locationLike?.hostname || "").toLowerCase() !== "robotaxi.xingbuild.top") return false;
   if (typeof fetchImplementation !== "function") return false;
 
   const controller = typeof AbortController === "function" ? new AbortController() : null;

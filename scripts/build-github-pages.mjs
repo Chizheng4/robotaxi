@@ -43,10 +43,11 @@ fs.writeFileSync(path.join(outputDir, "deployment-manifest.json"), `${JSON.strin
   version,
   commit,
   cache_version: cacheVersion,
-  deployment_target: "GITHUB_PAGES",
+  deployment_target: "EDGEONE",
+  production_url: "https://robotaxi.xingbuild.top/",
 }, null, 2)}\n`);
 
-console.log(`GitHub Pages 生产站点已生成：dist (${version}, ${cacheVersion})`);
+console.log(`EdgeOne 生产站点已生成：dist (${version}, ${cacheVersion})`);
 
 function readGitCommit() {
   try {

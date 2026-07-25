@@ -24,7 +24,7 @@ const index = fs.readFileSync(indexPath, "utf8");
 const bundle = fs.readFileSync(bundlePath, "utf8");
 const manifest = JSON.parse(fs.readFileSync(path.join(outputDir, "deployment-manifest.json"), "utf8"));
 
-assert(!/(?:src|href)=["']\//.test(index), "入口资源必须使用相对路径，确保 GitHub 项目子路径可用");
+assert(!/(?:src|href)=["']\//.test(index), "入口资源必须使用相对路径，确保本地预览与正式域名均可用");
 assert(index.includes(`?v=${manifest.cache_version}`), "入口资源没有使用本次提交缓存版本");
 assert(bundle.includes(`?v=${manifest.cache_version}`), "动态模块没有使用本次提交缓存版本");
 
@@ -39,8 +39,10 @@ for (const dynamicImport of bundle.matchAll(/import\(["']([^"']+)["']\)/g)) {
 }
 
 const totalBytes = directorySize(outputDir);
-assert(totalBytes < 1024 ** 3, "生产站点超过 GitHub Pages 1 GB 限制");
-console.log(`GitHub Pages 发布产物验证通过：${(totalBytes / 1024 / 1024).toFixed(2)} MiB`);
+assert(totalBytes < 1024 ** 3, "生产站点超过 1 GB 静态发布上限");
+assert.equal(manifest.deployment_target, "EDGEONE", "生产清单必须声明 EdgeOne 正式托管");
+assert.equal(manifest.production_url, "https://robotaxi.xingbuild.top/", "生产清单正式域名不正确");
+console.log(`EdgeOne 发布产物验证通过：${(totalBytes / 1024 / 1024).toFixed(2)} MiB`);
 
 function assertResourceExists(baseDirectory, reference, message) {
   const normalized = reference.split(/[?#]/)[0].replace(/^\.\//, "");

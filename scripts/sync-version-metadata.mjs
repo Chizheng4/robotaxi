@@ -14,8 +14,10 @@ const releases = parseReleaseHistory(versionMarkdown);
 const indexPath = "index.html";
 const verificationPath = "scripts/verify-release-history-user-display.mjs";
 const releaseHistoryPath = "src/ui/releaseHistory.js";
+const mainPath = "src/main.jsx";
 const currentIndex = fs.readFileSync(indexPath, "utf8");
 const currentVerification = fs.readFileSync(verificationPath, "utf8");
+const currentMain = fs.readFileSync(mainPath, "utf8");
 const versionAssertionPattern = /assert\.equal\(latest\.version,\s*"v\d+(?:\.\d+)+"/;
 assert(versionAssertionPattern.test(currentVerification), "最新版本检查脚本格式无法自动同步");
 const nextIndex = currentIndex
@@ -25,16 +27,22 @@ const nextVerification = currentVerification.replace(
   versionAssertionPattern,
   `assert.equal(latest.version, "${latestVersion}"`,
 );
+const nextMain = currentMain.replace(
+  /geospatialMapAdapter\.js\?v=20260724-v\d+(?:-\d+)+/,
+  `geospatialMapAdapter.js?v=20260724-${cacheToken}`,
+);
 
 assert.equal(releases[0]?.version, latestVersion, "站内更新记录无法识别 VERSION.md 最新版本");
 
 if (checkMode) {
   assert.equal(currentIndex, nextIndex, "index.html 缓存标识与最新版本不一致，请执行版本元数据同步");
+  assert.equal(currentMain, nextMain, "地图动态模块缓存标识与最新版本不一致，请执行版本元数据同步");
   assert(currentVerification.includes(`latest.version, "${latestVersion}"`), "站内更新记录检查版本与最新版本不一致");
   assert.equal(fs.readFileSync(releaseHistoryPath, "utf8"), expectedReleaseSource, "站内更新记录与 VERSION.md 不一致");
   console.log(`版本元数据同步检查通过：${latestVersion}`);
 } else {
   fs.writeFileSync(indexPath, nextIndex);
+  fs.writeFileSync(mainPath, nextMain);
   fs.writeFileSync(verificationPath, nextVerification);
   fs.writeFileSync(releaseHistoryPath, expectedReleaseSource);
   console.log(`版本元数据已同步：${latestVersion}`);

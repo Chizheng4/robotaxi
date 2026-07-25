@@ -11,7 +11,7 @@ export async function handleCors(request, env) {
 
 export function corsHeaders(request, env) {
   const origin = request.headers.get("Origin") || "";
-  const allowedOrigin = String(env.visitAllowedOrigin || "https://chizheng4.github.io").replace(/\/$/, "");
+  const allowedOrigin = String(env.visitAllowedOrigin || "https://robotaxi.xingbuild.top").replace(/\/$/, "");
   const requestUrl = new URL(request.url);
   const sameOrigin = origin === requestUrl.origin;
   if (origin && origin !== allowedOrigin && !sameOrigin) return null;

@@ -85,9 +85,9 @@ echo "==> 正在发布 $VERSION"
 push_with_retry "$HEAD_TAG"
 push_with_retry main
 
-echo "==> 推送完成，正在等待 GitHub Actions 与公网网站更新"
+echo "==> 推送完成，正在等待 EdgeOne 正式域名更新"
 node scripts/wait-for-github-pages.mjs "$VERSION" "$(git rev-parse HEAD)"
 
 echo "==> $VERSION 已正式上线"
-echo "网站：https://chizheng4.github.io/robotaxi/"
-echo "发布记录：https://github.com/Chizheng4/robotaxi/actions"
+echo "网站：https://robotaxi.xingbuild.top/"
+echo "EdgeOne 部署记录：https://console.cloud.tencent.com/edgeone/makers"

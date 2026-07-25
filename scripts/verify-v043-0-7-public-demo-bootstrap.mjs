@@ -13,7 +13,7 @@ import {
 } from "../src/services/publicDemoBootstrapService.js";
 import { ensureLatestRelease } from "../src/ui/releaseFreshnessService.js";
 
-const publicLocation = { hostname: "chizheng4.github.io", search: "", href: "https://chizheng4.github.io/robotaxi/" };
+const publicLocation = { hostname: "robotaxi.xingbuild.top", search: "", href: "https://robotaxi.xingbuild.top/" };
 const emptyPlan = createPublicDemoBootstrapPlan({ locationLike: publicLocation });
 assert.equal(emptyPlan.forecastAction, PublicDemoBootstrapAction.EXECUTE_FORECAST, "线上无预测结果时必须执行预测");
 assert.equal(emptyPlan.shortTermForecastAction, PublicDemoBootstrapAction.EXECUTE_SHORT_TERM_FORECAST, "线上无短期预测结果时必须执行短期预测");
@@ -75,8 +75,8 @@ assert.equal(shortTermForecast.operationalData.shortTermDemandForecastRuns[0].sh
 let replacedUrl = null;
 const latestReleaseReloaded = await ensureLatestRelease({
   locationLike: {
-    hostname: "chizheng4.github.io",
-    href: "https://chizheng4.github.io/robotaxi/",
+    hostname: "robotaxi.xingbuild.top",
+    href: "https://robotaxi.xingbuild.top/",
     replace: (url) => { replacedUrl = url; },
   },
   documentLike: {

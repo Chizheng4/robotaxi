@@ -192,7 +192,7 @@ flowchart LR
 
 ## 查看项目
 
-- 在线体验：<https://chizheng4.github.io/robotaxi/>
+- 在线体验：<https://robotaxi.xingbuild.top/>
 - 本地运行：双击 `start-robotaxi.command`，由系统默认浏览器访问 `http://127.0.0.1:4173/`
 - 数据边界：数据保存在访问者自己的浏览器中，不与其他访客共享
 

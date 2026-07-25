@@ -9,7 +9,7 @@ const allowedPeriods = new Map([["1D", 1], ["7D", 7], ["30D", 30]]);
 const allowedActions = new Set(["START_VISIT", "HEARTBEAT_VISIT", "END_VISIT", "AUTHENTICATE", "LIST_RECORDS"]);
 const tokenLifetimeSeconds = 15 * 60;
 const allowedOrigins = new Set([
-  "https://chizheng4.github.io",
+  "https://robotaxi.xingbuild.top",
   "http://127.0.0.1:4173",
   "http://127.0.0.1:8765",
   "http://localhost:4173",
