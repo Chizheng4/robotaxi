@@ -1940,6 +1940,15 @@
   font-weight: 500;
 }
 
+.platform-login-brand p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: var(--font-lg);
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .platform-login-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -6721,6 +6730,11 @@ html[data-keyboard-open="true"] .platform-login-panel {
   .platform-login-brand h1 {
     font-size: 20px;
     line-height: 1.35;
+  }
+
+  .platform-login-brand p {
+    margin-top: 5px;
+    font-size: var(--font-md);
   }
 
   .page-presentation-analysis {

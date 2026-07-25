@@ -40,7 +40,7 @@ export function renderPlatformNav({ activePage, onNavigate }) {
 
   const brand = document.createElement("div");
   brand.className = "platform-brand";
-  brand.textContent = "Robotaxi 经营模拟";
+  brand.textContent = "Robotaxi 运营平台";
 
   const nav = document.createElement("nav");
   nav.className = "platform-menu";

@@ -1352,7 +1352,8 @@ function PlatformLogin({ onEnter, onVisitorRecordsAuthenticated }) {
     <main className="platform-login-shell">
       <section className="platform-login-panel" aria-labelledby="platform-login-title">
         <div className="platform-login-brand">
-          <h1 id="platform-login-title">Robotaxi 经营模拟</h1>
+          <h1 id="platform-login-title">Robotaxi 运营平台</h1>
+          <p lang="en">Robotaxi Operations Platform</p>
         </div>
         <form className="platform-login-form" onSubmit={submitLogin}>
           <input
@@ -4018,12 +4019,12 @@ function App({ currentUser, onLogout }) {
       <header className="global-system-bar">
         <div className={collapsed ? "system-brand collapsed" : "system-brand"}>
           <Button
-            aria-label="Robotaxi 经营模拟，返回运营中控台"
+            aria-label="Robotaxi 运营平台，返回运营中控台"
             className="brand-title-button"
             type="text"
             onClick={goToConsole}
           >
-            {collapsed ? "R" : "Robotaxi 经营模拟"}
+            {collapsed ? "R" : "Robotaxi 运营平台"}
           </Button>
           <Button type="text" size="small" aria-label={collapsed ? "展开菜单" : "收起菜单"} onClick={() => setCollapsed((value) => !value)}>
             {collapsed ? "≡" : "‹"}
@@ -11970,7 +11971,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-1"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-2"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
