@@ -2276,7 +2276,7 @@ function App({ currentUser, onLogout }) {
     const children = createMenuItems(group.children || []);
     return {
       key: group.key,
-      label: group.label,
+      label: <NavigationNodeContent label={group.label} />,
       icon,
       ...(children.length ? { children } : {}),
     };
@@ -11974,7 +11974,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-7"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-8"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
@@ -13514,10 +13514,14 @@ function createMenuItems(items = []) {
       const children = createMenuItems(item.children || []);
       return {
         key: item.key,
-        label: item.label,
+        label: <NavigationNodeContent label={item.label} />,
         ...(children.length ? { children } : {}),
       };
     });
+}
+
+function NavigationNodeContent({ label }) {
+  return <span className="workspace-navigation-node">{label}</span>;
 }
 
 function getVisibleNavigationItems(items = []) {
@@ -13590,6 +13594,32 @@ function buildCollapsedNavigationPanels(root, openPath = []) {
     currentItems = group.children;
   });
   return panels;
+}
+
+const collapsedNavigationPanelSize = Object.freeze({
+  min: 144,
+  max: 196,
+  fixedSpace: 42,
+  cjkUnit: 13,
+  latinUnit: 7,
+});
+
+function measureNavigationLabelWidth(label = "") {
+  return Array.from(String(label)).reduce((width, character) => (
+    width + (character.codePointAt(0) > 255
+      ? collapsedNavigationPanelSize.cjkUnit
+      : collapsedNavigationPanelSize.latinUnit)
+  ), 0);
+}
+
+function getCollapsedNavigationPanelWidth(panel) {
+  const labels = [panel.label, ...(panel.items || []).map((item) => item.label)];
+  const contentWidth = Math.max(...labels.map(measureNavigationLabelWidth), 0)
+    + collapsedNavigationPanelSize.fixedSpace;
+  return Math.max(
+    collapsedNavigationPanelSize.min,
+    Math.min(collapsedNavigationPanelSize.max, contentWidth),
+  );
 }
 
 function CollapsedNavigation({ items = [], icons = {}, activePage, onNavigate }) {
@@ -13673,13 +13703,19 @@ function CollapsedNavigationFlyout({
       className="collapsed-navigation-flyout"
       role="menu"
       aria-label={root.label}
-      style={{ "--collapsed-navigation-panel-count": panels.length }}
     >
       {panels.map((panel, panelIndex) => (
-        <section className="collapsed-navigation-panel" key={panel.key} aria-label={panel.label}>
+        <section
+          className="collapsed-navigation-panel"
+          key={panel.key}
+          aria-label={panel.label}
+          style={{ "--navigation-panel-inline-size": `${getCollapsedNavigationPanelWidth(panel)}px` }}
+        >
           {!panel.rootLeaf && (
             panelIndex === 0 ? (
-              <div className="collapsed-navigation-panel-title">{panel.label}</div>
+              <div className="collapsed-navigation-panel-title">
+                <NavigationNodeContent label={panel.label} />
+              </div>
             ) : (
               <button
                 type="button"
@@ -13688,7 +13724,7 @@ function CollapsedNavigationFlyout({
                 onClick={() => onOpenPathChange(openPath.slice(0, panelIndex - 1))}
               >
                 <span aria-hidden="true">‹</span>
-                <span>{panel.label}</span>
+                <NavigationNodeContent label={panel.label} />
               </button>
             )
           )}
@@ -13750,7 +13786,7 @@ function CollapsedNavigationLevel({
           }
         }}
       >
-        <span>{item.label}</span>
+        <NavigationNodeContent label={item.label} />
         {isGroup && <span className="collapsed-navigation-chevron" aria-hidden="true">›</span>}
       </button>
     );

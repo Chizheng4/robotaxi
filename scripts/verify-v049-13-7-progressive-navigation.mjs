@@ -32,12 +32,12 @@ assert.match(
 );
 assert.match(
   source,
-  /className=\{classNames\}[\s\S]*?\{item\.label\}[\s\S]*?collapsed-navigation-chevron/,
+  /className=\{classNames\}[\s\S]*?<NavigationNodeContent label=\{item\.label\} \/>[\s\S]*?collapsed-navigation-chevron/,
   "分组和叶子必须共用标准菜单行，分组仅增加子级标识",
 );
 assert.match(
   styles,
-  /\.collapsed-navigation-item\s*\{[^}]*min-height:\s*36px;[^}]*font-size:\s*var\(--font-sm\);[^}]*font-weight:\s*400;/s,
+  /\.collapsed-navigation-item\s*\{[^}]*min-height:\s*var\(--navigation-item-height\);[^}]*font-size:\s*var\(--navigation-font-size\);[^}]*font-weight:\s*var\(--navigation-font-weight\);/s,
   "所有浮层菜单节点必须共享标准字号、行高和常规字重",
 );
 assert.doesNotMatch(
@@ -47,8 +47,8 @@ assert.doesNotMatch(
 );
 assert.match(
   styles,
-  /\.collapsed-navigation-panel\s*\{[^}]*width:\s*var\(--collapsed-navigation-width\);[^}]*min-width:\s*var\(--collapsed-navigation-width\);/s,
-  "每一级菜单面板必须使用相同稳定宽度",
+  /\.collapsed-navigation-panel\s*\{[\s\S]*?var\(--navigation-panel-inline-size,[\s\S]*?var\(--navigation-panel-max-width\)/s,
+  "每一级菜单面板必须使用统一边界内的内容自适应宽度",
 );
 assert.match(
   rules,

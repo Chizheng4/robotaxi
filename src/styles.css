@@ -23,6 +23,13 @@
   --font-sm: 13px;
   --font-md: 14px;
   --font-lg: 16px;
+  --font-family: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --navigation-font-size: var(--font-sm);
+  --navigation-item-height: 36px;
+  --navigation-font-weight: 400;
+  --navigation-selected-font-weight: 600;
+  --navigation-panel-min-width: 144px;
+  --navigation-panel-max-width: 196px;
   --cell-empty: #fafbfc;
   --cell-road: #dfe3e9;
   --cell-place: #f8e1a6;
@@ -2263,7 +2270,7 @@ body {
   color: var(--text);
   background: var(--bg);
   font-size: var(--font-xs);
-  font-family: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-family);
   font-weight: 400;
   -webkit-font-smoothing: auto;
   text-rendering: auto;
@@ -3438,24 +3445,26 @@ body {
 .ops-menu.ant-menu {
   padding: 10px 8px;
   color: #30343a;
-  font-size: var(--font-sm);
-  font-weight: 400;
+  font-size: var(--navigation-font-size);
+  font-weight: var(--navigation-font-weight);
 }
 
 .ops-menu .ant-menu-item,
 .ops-menu .ant-menu-submenu-title {
-  height: 36px !important;
+  height: var(--navigation-item-height) !important;
   margin: 2px 0 !important;
   padding-inline: 14px !important;
   border-radius: 6px !important;
-  line-height: 36px !important;
+  line-height: var(--navigation-item-height) !important;
+  font-size: var(--navigation-font-size);
+  font-weight: var(--navigation-font-weight);
   transition: color 140ms ease, background 140ms ease;
 }
 
 .ops-menu.ant-menu-root > .ant-menu-item,
 .ops-menu.ant-menu-root > .ant-menu-submenu > .ant-menu-submenu-title {
   padding-inline-start: 14px !important;
-  font-weight: 500;
+  font-weight: var(--navigation-font-weight);
 }
 
 .ops-menu.ant-menu-root > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
@@ -3492,13 +3501,13 @@ body {
 .ops-menu .ant-menu-item-selected {
   color: #205dcc !important;
   background: var(--accent-soft) !important;
-  font-weight: 600 !important;
+  font-weight: var(--navigation-selected-font-weight) !important;
   box-shadow: inset 3px 0 0 #3f73dc;
 }
 
 .ops-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
   color: #2b5fac !important;
-  font-weight: 500;
+  font-weight: var(--navigation-font-weight);
 }
 
 .ops-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
@@ -3512,6 +3521,16 @@ body {
 .ops-menu:focus,
 .ops-menu:focus-visible {
   outline: none;
+}
+
+.workspace-navigation-node {
+  min-width: 0;
+  color: inherit;
+  font-family: var(--font-family);
+  font-size: var(--navigation-font-size);
+  font-weight: inherit;
+  letter-spacing: 0;
+  line-height: 1.35;
 }
 
 .ops-menu .ant-menu-item:focus-visible,
@@ -5907,10 +5926,6 @@ body {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.collapsed-navigation-popover {
-  --collapsed-navigation-width: 200px;
-}
-
 .collapsed-navigation-popover .ant-popover-inner {
   width: auto;
   max-width: calc(100vw - 72px);
@@ -5926,7 +5941,7 @@ body {
 }
 
 .collapsed-navigation-flyout {
-  width: calc(var(--collapsed-navigation-width) * var(--collapsed-navigation-panel-count, 1));
+  width: max-content;
   max-width: calc(100vw - 86px);
   max-height: min(70vh, 560px);
   display: flex;
@@ -5936,8 +5951,17 @@ body {
 }
 
 .collapsed-navigation-panel {
-  width: var(--collapsed-navigation-width);
-  min-width: var(--collapsed-navigation-width);
+  width: clamp(
+    var(--navigation-panel-min-width),
+    var(--navigation-panel-inline-size, var(--navigation-panel-min-width)),
+    var(--navigation-panel-max-width)
+  );
+  min-width: clamp(
+    var(--navigation-panel-min-width),
+    var(--navigation-panel-inline-size, var(--navigation-panel-min-width)),
+    var(--navigation-panel-max-width)
+  );
+  flex: 0 0 auto;
   padding: 0 4px;
 }
 
@@ -5955,8 +5979,8 @@ body {
   color: var(--muted);
   background: transparent;
   font: inherit;
-  font-size: var(--font-sm);
-  font-weight: 500;
+  font-size: var(--navigation-font-size);
+  font-weight: var(--navigation-font-weight);
   line-height: 1.35;
   text-align: left;
 }
@@ -5976,7 +6000,7 @@ body {
 
 .collapsed-navigation-item {
   width: 100%;
-  min-height: 36px;
+  min-height: var(--navigation-item-height);
   padding: 7px 10px;
   display: flex;
   align-items: center;
@@ -5987,8 +6011,8 @@ body {
   color: #30343a;
   background: transparent;
   font: inherit;
-  font-size: var(--font-sm);
-  font-weight: 400;
+  font-size: var(--navigation-font-size);
+  font-weight: var(--navigation-font-weight);
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
@@ -6015,7 +6039,7 @@ body {
   color: #205dcc;
   background: var(--accent-soft);
   box-shadow: inset 3px 0 0 var(--accent);
-  font-weight: 600;
+  font-weight: var(--navigation-selected-font-weight);
 }
 
 .collapsed-navigation-chevron {
@@ -6028,12 +6052,24 @@ body {
 
 @media (max-width: 640px) {
   .collapsed-navigation-flyout {
-    width: var(--collapsed-navigation-width);
+    width: max-content;
+    max-width: calc(100vw - 86px);
     overflow: hidden auto;
   }
 
   .collapsed-navigation-panel:not(:last-child) {
     display: none;
+  }
+
+  .collapsed-navigation-panel {
+    width: min(
+      var(--navigation-panel-inline-size, var(--navigation-panel-min-width)),
+      calc(100vw - 86px)
+    );
+    min-width: min(
+      var(--navigation-panel-inline-size, var(--navigation-panel-min-width)),
+      calc(100vw - 86px)
+    );
   }
 }
 

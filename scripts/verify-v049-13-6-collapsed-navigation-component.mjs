@@ -42,12 +42,12 @@ assert.doesNotMatch(
 );
 assert.match(
   styles,
-  /\.collapsed-navigation-popover\s*\{\s*--collapsed-navigation-width:\s*200px;/s,
-  "所有收缩导航浮层必须共享稳定宽度",
+  /--navigation-panel-min-width:\s*144px;[\s\S]*?--navigation-panel-max-width:\s*196px;/s,
+  "所有收缩导航浮层必须共享统一宽度边界",
 );
 assert.match(
   styles,
-  /\.collapsed-navigation-item\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*6px;/s,
+  /\.collapsed-navigation-item\s*\{[^}]*min-height:\s*var\(--navigation-item-height\);[^}]*border-radius:\s*6px;/s,
   "浮层菜单行必须继承标准导航尺寸",
 );
 assert.match(
