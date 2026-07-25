@@ -25,17 +25,17 @@ assert(
 
 assert.match(
   styles,
-  /\.ops-menu\.ant-menu-inline-collapsed\s*>\s*\.ant-menu-submenu-selected\s*>\s*\.ant-menu-submenu-title\s*\{[^}]*background:\s*#e5eefb\s*!important;[^}]*box-shadow:\s*inset 2px 0 0 var\(--accent\);/s,
+  /\.collapsed-navigation-trigger\.selected\s*\{[^}]*background:\s*var\(--accent-soft\);[^}]*box-shadow:\s*inset 2px 0 0 var\(--accent\);/s,
   "深层页面所属一级菜单必须继承完整选中背景和边缘标记",
 );
 assert.match(
   styles,
-  /\.ant-menu-inline-collapsed-tooltip\s+\.ant-tooltip-arrow\s*\{\s*display:\s*none;/s,
-  "一级叶子浮层不得保留深色气泡箭头",
+  /\.collapsed-navigation-popover\s+\.ant-popover-inner\s*\{[^}]*border:\s*1px solid var\(--line\);/s,
+  "收缩导航浮层必须使用统一浅色边界",
 );
 assert.match(
   styles,
-  /\.ant-menu-inline-collapsed-tooltip\s+\.ant-tooltip-inner\s*\{[^}]*border:\s*1px solid var\(--line\);[^}]*background:\s*var\(--navigation-surface\);/s,
+  /\.collapsed-navigation-popover\s+\.ant-popover-inner\s*\{[^}]*background:\s*var\(--navigation-surface\);/s,
   "一级叶子浮层必须继承统一浅色导航表面",
 );
 assert.match(

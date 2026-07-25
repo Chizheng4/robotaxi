@@ -5862,41 +5862,135 @@ body {
   line-height: 1;
 }
 
-.ops-menu.ant-menu-inline-collapsed > .ant-menu-item,
-.ops-menu.ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title {
-  width: 46px;
-  margin-inline: 0;
-  padding-inline: 14px !important;
-}
-
-.ops-menu.ant-menu-inline-collapsed > .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: #205fc5 !important;
-  background: #e5eefb !important;
-  box-shadow: inset 2px 0 0 var(--accent);
-  font-weight: 600 !important;
-}
-
-.ops-menu.ant-menu-inline-collapsed .menu-group-icon {
-  margin-inline: 0 !important;
-}
-
-.ant-menu-inline-collapsed-tooltip .ant-tooltip-arrow {
-  display: none;
-}
-
-.ant-menu-inline-collapsed-tooltip .ant-tooltip-inner {
-  min-height: 36px;
-  padding: 0 14px;
+.collapsed-navigation {
+  height: 100%;
+  padding: 10px 7px;
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: visible;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.collapsed-navigation-trigger {
+  width: 46px;
+  min-width: 46px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  flex: none;
   align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  color: #30343a;
+  background: transparent;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.collapsed-navigation-trigger:hover,
+.collapsed-navigation-trigger:focus-visible {
+  color: #20252c;
+  background: var(--surface-muted);
+}
+
+.collapsed-navigation-trigger:focus-visible {
+  outline: 2px solid rgba(47, 111, 237, 0.35);
+  outline-offset: -2px;
+}
+
+.collapsed-navigation-trigger.selected {
+  color: #205fc5;
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.collapsed-navigation-popover {
+  --collapsed-navigation-width: 200px;
+}
+
+.collapsed-navigation-popover .ant-popover-inner {
+  width: var(--collapsed-navigation-width);
+  padding: 6px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  color: #223449;
   background: var(--navigation-surface);
-  box-shadow: 0 6px 18px rgba(39, 61, 82, 0.12);
-  font-size: var(--font-sm);
+  box-shadow: 0 8px 24px rgba(39, 61, 82, 0.14);
+}
+
+.collapsed-navigation-popover .ant-popover-inner-content {
+  width: 100%;
+}
+
+.collapsed-navigation-flyout {
+  width: 100%;
+  max-height: min(70vh, 560px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: var(--text);
+}
+
+.collapsed-navigation-flyout-title {
+  min-height: 30px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: var(--font-xs);
   font-weight: 500;
-  line-height: 1.4;
+}
+
+.collapsed-navigation-section + .collapsed-navigation-section {
+  margin-top: 4px;
+}
+
+.collapsed-navigation-section-title {
+  min-height: 26px;
+  padding: 6px 10px 4px var(--navigation-indent, 10px);
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: var(--font-xs);
+  font-weight: 500;
+}
+
+.collapsed-navigation-page {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px 7px var(--navigation-indent, 10px);
+  display: flex;
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: #30343a;
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collapsed-navigation-page:hover,
+.collapsed-navigation-page:focus-visible {
+  color: #20252c;
+  background: var(--surface-muted);
+}
+
+.collapsed-navigation-page:focus-visible {
+  outline: 2px solid rgba(47, 111, 237, 0.35);
+  outline-offset: -2px;
+}
+
+.collapsed-navigation-page.selected {
+  color: #205dcc;
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+  font-weight: 600;
 }
 
 .top-strip-metric {
@@ -6133,10 +6227,13 @@ html[data-keyboard-open="true"] .platform-login-panel {
     overscroll-behavior-y: contain;
   }
 
-  .ops-menu.ant-menu-inline-collapsed > .ant-menu-item,
-  .ops-menu.ant-menu-inline-collapsed > .ant-menu-submenu > .ant-menu-submenu-title {
+  .collapsed-navigation {
+    padding-inline: 7px;
+  }
+
+  .collapsed-navigation-trigger {
     width: 38px;
-    padding-inline: 10px !important;
+    min-width: 38px;
   }
 
   .ops-main-layout {

@@ -25,13 +25,18 @@ assert.deepEqual(
 
 assert.match(
   mainSource,
-  /triggerSubMenuAction="hover"/,
+  /function CollapsedNavigation\([\s\S]*?trigger=\{\["hover"\]\}/,
   "侧栏收缩时必须保留鼠标悬停打开子菜单的标准交互",
 );
 assert.match(
   mainSource,
-  /openKeys=\{collapsed \? undefined : openMenuKeys\}/,
-  "收缩状态不得用受控 openKeys 压制正常悬浮子菜单",
+  /if \(hasChildren\) \{\s*setOpenKey\(item\.key\);/,
+  "分组菜单必须通过点击支持键盘和触控打开",
+);
+assert.match(
+  mainSource,
+  /open=\{openKey === item\.key\}[\s\S]*?onOpenChange=\{\(open\) => setOpenKey\(open \? item\.key : null\)\}/,
+  "收缩导航浮层必须使用独立交互状态，不得复用页面菜单展开状态",
 );
 assert.match(
   mainSource,

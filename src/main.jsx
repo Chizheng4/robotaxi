@@ -4086,17 +4086,24 @@ function App({ currentUser, onLogout }) {
 
       <Layout className="ops-workspace-shell">
         <Sider className="ops-sider" width={200} collapsedWidth={mobileLayout ? 52 : 60} collapsed={collapsed} trigger={null}>
-          <Menu
-            mode="inline"
-            inlineCollapsed={collapsed}
-            triggerSubMenuAction="hover"
-            className="ops-menu"
-            selectedKeys={[activePage]}
-            openKeys={collapsed ? undefined : openMenuKeys}
-            items={menuItems}
-            onOpenChange={handleMenuOpenChange}
-            onClick={({ key }) => handleMenuClick(key)}
-          />
+          {collapsed ? (
+            <CollapsedNavigation
+              items={pageGroups}
+              icons={menuGroupIcons}
+              activePage={activePage}
+              onNavigate={handleMenuClick}
+            />
+          ) : (
+            <Menu
+              mode="inline"
+              className="ops-menu"
+              selectedKeys={[activePage]}
+              openKeys={openMenuKeys}
+              items={menuItems}
+              onOpenChange={handleMenuOpenChange}
+              onClick={({ key }) => handleMenuClick(key)}
+            />
+          )}
         </Sider>
 
         <Layout className="ops-main-layout">
@@ -11975,7 +11982,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-5"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-6"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
@@ -13519,6 +13526,119 @@ function createMenuItems(items = []) {
         ...(children.length ? { children } : {}),
       };
     });
+}
+
+function getVisibleNavigationItems(items = []) {
+  return items
+    .filter((item) => !hiddenWorkspacePages.has(item.key))
+    .map((item) => {
+      const children = getVisibleNavigationItems(item.children || []);
+      return children.length ? { ...item, children } : { ...item, children: undefined };
+    });
+}
+
+function CollapsedNavigation({ items = [], icons = {}, activePage, onNavigate }) {
+  const [openKey, setOpenKey] = useState(null);
+  const activeRootKey = getRootMenuKey(activePage);
+  const visibleItems = getVisibleNavigationItems(items);
+
+  useEffect(() => {
+    setOpenKey(null);
+  }, [activePage]);
+
+  return (
+    <nav className="collapsed-navigation" aria-label="主导航">
+      {visibleItems.map((item) => {
+        const hasChildren = Boolean(item.children?.length);
+        const selected = item.key === activeRootKey;
+        const flyoutRoot = hasChildren ? item : { ...item, children: undefined };
+        return (
+          <Popover
+            key={item.key}
+            placement="rightTop"
+            trigger={["hover"]}
+            arrow={false}
+            open={openKey === item.key}
+            onOpenChange={(open) => setOpenKey(open ? item.key : null)}
+            overlayClassName="collapsed-navigation-popover"
+            content={(
+              <CollapsedNavigationFlyout
+                root={flyoutRoot}
+                activePage={activePage}
+                onNavigate={(pageKey) => {
+                  setOpenKey(null);
+                  onNavigate(pageKey);
+                }}
+              />
+            )}
+          >
+            <button
+              type="button"
+              className={selected ? "collapsed-navigation-trigger selected" : "collapsed-navigation-trigger"}
+              aria-label={item.label}
+              aria-current={selected ? "page" : undefined}
+              aria-haspopup={hasChildren ? "menu" : undefined}
+              onClick={() => {
+                if (hasChildren) {
+                  setOpenKey(item.key);
+                } else {
+                  onNavigate(item.key);
+                }
+              }}
+            >
+              <span className="menu-group-icon" aria-hidden="true">{icons[item.key] || "·"}</span>
+            </button>
+          </Popover>
+        );
+      })}
+    </nav>
+  );
+}
+
+function CollapsedNavigationFlyout({ root, activePage, onNavigate }) {
+  const hasChildren = Boolean(root.children?.length);
+  return (
+    <div className="collapsed-navigation-flyout" role="menu" aria-label={root.label}>
+      {hasChildren ? (
+        <>
+          <div className="collapsed-navigation-flyout-title">{root.label}</div>
+          <CollapsedNavigationNodes items={root.children} activePage={activePage} onNavigate={onNavigate} depth={0} />
+        </>
+      ) : (
+        <CollapsedNavigationPage item={root} activePage={activePage} onNavigate={onNavigate} depth={0} />
+      )}
+    </div>
+  );
+}
+
+function CollapsedNavigationNodes({ items = [], activePage, onNavigate, depth }) {
+  return items.map((item) => {
+    if (!item.children?.length) {
+      return <CollapsedNavigationPage key={item.key} item={item} activePage={activePage} onNavigate={onNavigate} depth={depth} />;
+    }
+    return (
+      <div className="collapsed-navigation-section" key={item.key}>
+        <div className="collapsed-navigation-section-title" style={{ "--navigation-indent": `${10 + depth * 10}px` }}>{item.label}</div>
+        <CollapsedNavigationNodes items={item.children} activePage={activePage} onNavigate={onNavigate} depth={depth + 1} />
+      </div>
+    );
+  });
+}
+
+function CollapsedNavigationPage({ item, activePage, onNavigate, depth }) {
+  const selected = item.key === activePage;
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={selected ? "collapsed-navigation-page selected" : "collapsed-navigation-page"}
+      style={{ "--navigation-indent": `${10 + depth * 10}px` }}
+      aria-current={selected ? "page" : undefined}
+      onClick={() => onNavigate(item.key)}
+    >
+      <span>{item.label}</span>
+    </button>
+  );
 }
 
 function normalizePageUiStateMap(pageUiState) {
