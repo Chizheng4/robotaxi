@@ -7,8 +7,8 @@ const rules = fs.readFileSync(new URL("../doc/rules/04-frontend-ux-rules.md", im
 
 assert.match(
   source,
-  /collapsed\s*\?\s*\(\s*<CollapsedNavigation[\s\S]*?items=\{pageGroups\}[\s\S]*?activePage=\{activePage\}/,
-  "侧栏收缩状态必须统一进入公共收缩导航组件",
+  /<WorkspaceNavigation[\s\S]*?collapsed=\{collapsed\}[\s\S]*?groups=\{pageGroups\}[\s\S]*?activePage=\{activePage\}/,
+  "展开和收缩侧栏必须统一进入公共导航控件",
 );
 assert.doesNotMatch(
   source,
@@ -17,8 +17,8 @@ assert.doesNotMatch(
 );
 assert.match(
   source,
-  /function CollapsedNavigation\([\s\S]*?function CollapsedNavigationFlyout\([\s\S]*?function CollapsedNavigationNodes\(/,
-  "一级叶子、一级分组和深层节点必须由同一公共组件族递归渲染",
+  /function WorkspaceNavigation\([\s\S]*?function CollapsedNavigation\([\s\S]*?function CollapsedNavigationFlyout\(/,
+  "一级叶子、一级分组和深层节点必须由同一公共导航组件族渲染",
 );
 assert.match(
   source,
@@ -27,12 +27,12 @@ assert.match(
 );
 assert.match(
   source,
-  /useEffect\(\(\) => \{\s*setOpenKey\(null\);\s*\}, \[activePage\]\);/,
+  /useEffect\(\(\) => \{\s*setOpenKey\(null\);\s*setOpenPath\(\[\]\);\s*\}, \[activePage\]\);/,
   "工作区页面变化后必须关闭导航浮层，避免 Tab 与菜单交互状态互相污染",
 );
 assert.match(
   source,
-  /if \(hasChildren\) \{\s*setOpenKey\(item\.key\);/,
+  /if \(hasChildren\) \{\s*setRootOpenState\(item, true\);/,
   "分组点击应确定打开统一浮层",
 );
 assert.doesNotMatch(
@@ -47,12 +47,12 @@ assert.match(
 );
 assert.match(
   styles,
-  /\.collapsed-navigation-page\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*6px;/s,
+  /\.collapsed-navigation-item\s*\{[^}]*min-height:\s*36px;[^}]*border-radius:\s*6px;/s,
   "浮层菜单行必须继承标准导航尺寸",
 );
 assert.match(
   styles,
-  /\.collapsed-navigation-page\.selected\s*\{[^}]*background:\s*var\(--accent-soft\);[^}]*box-shadow:\s*inset 3px 0 0 var\(--accent\);/s,
+  /\.collapsed-navigation-item\.selected\s*\{[^}]*background:\s*var\(--accent-soft\);[^}]*box-shadow:\s*inset 3px 0 0 var\(--accent\);/s,
   "浮层当前页面必须使用完整统一选中视觉",
 );
 assert.doesNotMatch(
@@ -62,7 +62,7 @@ assert.doesNotMatch(
 );
 assert.match(
   rules,
-  /不得分别依赖组件库自动生成的 Tooltip 与子菜单 Popup/,
+  /展开和收缩侧栏必须由同一公共导航控件接收同一导航注册表/,
   "前端规则必须阻止收缩导航重新分叉",
 );
 

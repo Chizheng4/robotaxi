@@ -80,6 +80,7 @@ node --check scripts/verify-v049-13-3-navigation-state.mjs
 node --check scripts/verify-v049-13-4-navigation-interaction.mjs
 node --check scripts/verify-v049-13-5-navigation-visual-contract.mjs
 node --check scripts/verify-v049-13-6-collapsed-navigation-component.mjs
+node --check scripts/verify-v049-13-7-progressive-navigation.mjs
 node --check src/ui/releaseFreshnessService.js
 node --check src/services/operatingDataPoolService.js
 node --check src/services/operatingModelService.js
@@ -261,6 +262,7 @@ node scripts/verify-v049-13-3-navigation-state.mjs
 node scripts/verify-v049-13-4-navigation-interaction.mjs
 node scripts/verify-v049-13-5-navigation-visual-contract.mjs
 node scripts/verify-v049-13-6-collapsed-navigation-component.mjs
+node scripts/verify-v049-13-7-progressive-navigation.mjs
 node scripts/build-github-pages.mjs
 node scripts/verify-github-pages-build.mjs
 python3 -c 'compile(open("scripts/verify-server-readiness.py", encoding="utf-8").read(), "scripts/verify-server-readiness.py", "exec")'

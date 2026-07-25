@@ -4086,24 +4086,16 @@ function App({ currentUser, onLogout }) {
 
       <Layout className="ops-workspace-shell">
         <Sider className="ops-sider" width={200} collapsedWidth={mobileLayout ? 52 : 60} collapsed={collapsed} trigger={null}>
-          {collapsed ? (
-            <CollapsedNavigation
-              items={pageGroups}
-              icons={menuGroupIcons}
-              activePage={activePage}
-              onNavigate={handleMenuClick}
-            />
-          ) : (
-            <Menu
-              mode="inline"
-              className="ops-menu"
-              selectedKeys={[activePage]}
-              openKeys={openMenuKeys}
-              items={menuItems}
-              onOpenChange={handleMenuOpenChange}
-              onClick={({ key }) => handleMenuClick(key)}
-            />
-          )}
+          <WorkspaceNavigation
+            collapsed={collapsed}
+            groups={pageGroups}
+            icons={menuGroupIcons}
+            menuItems={menuItems}
+            activePage={activePage}
+            openKeys={openMenuKeys}
+            onOpenChange={handleMenuOpenChange}
+            onNavigate={handleMenuClick}
+          />
         </Sider>
 
         <Layout className="ops-main-layout">
@@ -11982,7 +11974,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-6"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-7"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
@@ -13537,14 +13529,84 @@ function getVisibleNavigationItems(items = []) {
     });
 }
 
+function WorkspaceNavigation({
+  collapsed,
+  groups,
+  icons,
+  menuItems,
+  activePage,
+  openKeys,
+  onOpenChange,
+  onNavigate,
+}) {
+  if (collapsed) {
+    return (
+      <CollapsedNavigation
+        items={groups}
+        icons={icons}
+        activePage={activePage}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+  return (
+    <Menu
+      mode="inline"
+      className="ops-menu"
+      selectedKeys={[activePage]}
+      openKeys={openKeys}
+      items={menuItems}
+      onOpenChange={onOpenChange}
+      onClick={({ key }) => onNavigate(key)}
+    />
+  );
+}
+
+function findNavigationItemPath(items = [], targetKey, path = []) {
+  for (const item of items) {
+    const nextPath = [...path, item];
+    if (item.key === targetKey) return nextPath;
+    const childPath = findNavigationItemPath(item.children || [], targetKey, nextPath);
+    if (childPath.length) return childPath;
+  }
+  return [];
+}
+
+function getCollapsedActiveGroupKeys(root, activePage) {
+  const path = findNavigationItemPath([root], activePage);
+  return path.slice(1, -1).filter((item) => item.children?.length).map((item) => item.key);
+}
+
+function buildCollapsedNavigationPanels(root, openPath = []) {
+  if (!root.children?.length) {
+    return [{ key: root.key, label: root.label, items: [root], rootLeaf: true }];
+  }
+  const panels = [{ key: root.key, label: root.label, items: root.children }];
+  let currentItems = root.children;
+  openPath.forEach((groupKey) => {
+    const group = currentItems.find((item) => item.key === groupKey && item.children?.length);
+    if (!group) return;
+    panels.push({ key: group.key, label: group.label, items: group.children });
+    currentItems = group.children;
+  });
+  return panels;
+}
+
 function CollapsedNavigation({ items = [], icons = {}, activePage, onNavigate }) {
   const [openKey, setOpenKey] = useState(null);
+  const [openPath, setOpenPath] = useState([]);
   const activeRootKey = getRootMenuKey(activePage);
   const visibleItems = getVisibleNavigationItems(items);
 
   useEffect(() => {
     setOpenKey(null);
+    setOpenPath([]);
   }, [activePage]);
+
+  function setRootOpenState(item, open) {
+    setOpenKey(open ? item.key : null);
+    setOpenPath(open ? getCollapsedActiveGroupKeys(item, activePage) : []);
+  }
 
   return (
     <nav className="collapsed-navigation" aria-label="主导航">
@@ -13559,14 +13621,17 @@ function CollapsedNavigation({ items = [], icons = {}, activePage, onNavigate })
             trigger={["hover"]}
             arrow={false}
             open={openKey === item.key}
-            onOpenChange={(open) => setOpenKey(open ? item.key : null)}
+            onOpenChange={(open) => setRootOpenState(item, open)}
             overlayClassName="collapsed-navigation-popover"
             content={(
               <CollapsedNavigationFlyout
                 root={flyoutRoot}
                 activePage={activePage}
+                openPath={openPath}
+                onOpenPathChange={setOpenPath}
                 onNavigate={(pageKey) => {
                   setOpenKey(null);
+                  setOpenPath([]);
                   onNavigate(pageKey);
                 }}
               />
@@ -13580,7 +13645,7 @@ function CollapsedNavigation({ items = [], icons = {}, activePage, onNavigate })
               aria-haspopup={hasChildren ? "menu" : undefined}
               onClick={() => {
                 if (hasChildren) {
-                  setOpenKey(item.key);
+                  setRootOpenState(item, true);
                 } else {
                   onNavigate(item.key);
                 }
@@ -13595,50 +13660,101 @@ function CollapsedNavigation({ items = [], icons = {}, activePage, onNavigate })
   );
 }
 
-function CollapsedNavigationFlyout({ root, activePage, onNavigate }) {
-  const hasChildren = Boolean(root.children?.length);
+function CollapsedNavigationFlyout({
+  root,
+  activePage,
+  openPath,
+  onOpenPathChange,
+  onNavigate,
+}) {
+  const panels = buildCollapsedNavigationPanels(root, openPath);
   return (
-    <div className="collapsed-navigation-flyout" role="menu" aria-label={root.label}>
-      {hasChildren ? (
-        <>
-          <div className="collapsed-navigation-flyout-title">{root.label}</div>
-          <CollapsedNavigationNodes items={root.children} activePage={activePage} onNavigate={onNavigate} depth={0} />
-        </>
-      ) : (
-        <CollapsedNavigationPage item={root} activePage={activePage} onNavigate={onNavigate} depth={0} />
-      )}
+    <div
+      className="collapsed-navigation-flyout"
+      role="menu"
+      aria-label={root.label}
+      style={{ "--collapsed-navigation-panel-count": panels.length }}
+    >
+      {panels.map((panel, panelIndex) => (
+        <section className="collapsed-navigation-panel" key={panel.key} aria-label={panel.label}>
+          {!panel.rootLeaf && (
+            panelIndex === 0 ? (
+              <div className="collapsed-navigation-panel-title">{panel.label}</div>
+            ) : (
+              <button
+                type="button"
+                className="collapsed-navigation-panel-title back"
+                aria-label={`返回${panels[panelIndex - 1].label}`}
+                onClick={() => onOpenPathChange(openPath.slice(0, panelIndex - 1))}
+              >
+                <span aria-hidden="true">‹</span>
+                <span>{panel.label}</span>
+              </button>
+            )
+          )}
+          <CollapsedNavigationLevel
+            items={panel.items}
+            activePage={activePage}
+            panelIndex={panelIndex}
+            openPath={openPath}
+            onOpenPathChange={onOpenPathChange}
+            onNavigate={onNavigate}
+          />
+        </section>
+      ))}
     </div>
   );
 }
 
-function CollapsedNavigationNodes({ items = [], activePage, onNavigate, depth }) {
+function CollapsedNavigationLevel({
+  items = [],
+  activePage,
+  panelIndex,
+  openPath,
+  onOpenPathChange,
+  onNavigate,
+}) {
   return items.map((item) => {
-    if (!item.children?.length) {
-      return <CollapsedNavigationPage key={item.key} item={item} activePage={activePage} onNavigate={onNavigate} depth={depth} />;
-    }
+    const isGroup = Boolean(item.children?.length);
+    const selected = item.key === activePage;
+    const activeAncestor = isGroup && findNavigationItemPath(item.children, activePage).length > 0;
+    const expanded = isGroup && openPath[panelIndex] === item.key;
+    const classNames = [
+      "collapsed-navigation-item",
+      selected ? "selected" : "",
+      activeAncestor ? "active-ancestor" : "",
+      expanded ? "expanded" : "",
+    ].filter(Boolean).join(" ");
     return (
-      <div className="collapsed-navigation-section" key={item.key}>
-        <div className="collapsed-navigation-section-title" style={{ "--navigation-indent": `${10 + depth * 10}px` }}>{item.label}</div>
-        <CollapsedNavigationNodes items={item.children} activePage={activePage} onNavigate={onNavigate} depth={depth + 1} />
-      </div>
+      <button
+        type="button"
+        role="menuitem"
+        key={item.key}
+        className={classNames}
+        aria-current={selected ? "page" : undefined}
+        aria-haspopup={isGroup ? "menu" : undefined}
+        aria-expanded={isGroup ? expanded : undefined}
+        onMouseEnter={() => {
+          onOpenPathChange(isGroup
+            ? [...openPath.slice(0, panelIndex), item.key]
+            : openPath.slice(0, panelIndex));
+        }}
+        onFocus={() => {
+          if (isGroup) onOpenPathChange([...openPath.slice(0, panelIndex), item.key]);
+        }}
+        onClick={() => {
+          if (isGroup) {
+            onOpenPathChange([...openPath.slice(0, panelIndex), item.key]);
+          } else {
+            onNavigate(item.key);
+          }
+        }}
+      >
+        <span>{item.label}</span>
+        {isGroup && <span className="collapsed-navigation-chevron" aria-hidden="true">›</span>}
+      </button>
     );
   });
-}
-
-function CollapsedNavigationPage({ item, activePage, onNavigate, depth }) {
-  const selected = item.key === activePage;
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      className={selected ? "collapsed-navigation-page selected" : "collapsed-navigation-page"}
-      style={{ "--navigation-indent": `${10 + depth * 10}px` }}
-      aria-current={selected ? "page" : undefined}
-      onClick={() => onNavigate(item.key)}
-    >
-      <span>{item.label}</span>
-    </button>
-  );
 }
 
 function normalizePageUiStateMap(pageUiState) {

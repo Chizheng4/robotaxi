@@ -30,12 +30,12 @@ assert.match(
 );
 assert.match(
   mainSource,
-  /if \(hasChildren\) \{\s*setOpenKey\(item\.key\);/,
+  /if \(hasChildren\) \{\s*setRootOpenState\(item,\s*true\);/,
   "分组菜单必须通过点击支持键盘和触控打开",
 );
 assert.match(
   mainSource,
-  /open=\{openKey === item\.key\}[\s\S]*?onOpenChange=\{\(open\) => setOpenKey\(open \? item\.key : null\)\}/,
+  /open=\{openKey === item\.key\}[\s\S]*?onOpenChange=\{\(open\) => setRootOpenState\(item,\s*open\)\}/,
   "收缩导航浮层必须使用独立交互状态，不得复用页面菜单展开状态",
 );
 assert.match(
