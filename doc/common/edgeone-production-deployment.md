@@ -6,7 +6,7 @@ Robotaxi 经营闭环模拟平台的唯一正式网站为：
 
 `https://robotaxi.xingbuild.top/`
 
-GitHub 仓库继续承担源代码、提交、标签和贡献记录管理，不再通过 GitHub Pages 形成第二个生产站点。EdgeOne 监听 `main` 分支并完成静态构建、全球访问和个人域名托管。
+GitHub 仓库继续承担源代码、提交、标签和贡献记录管理，不再通过 GitHub Pages 形成第二个生产站点。发布命令把经过本地检查的 `dist/` 明确部署到 EdgeOne Makers 的 `robotaxi-nochina` 生产项目，EdgeOne 承担全球访问和个人域名托管。
 
 ## 2. 发布链路
 
@@ -33,8 +33,10 @@ flowchart LR
 1. Codex 完成本地验证、版本提交和标签。
 2. 用户决定上线时双击 `publish-robotaxi.command`，无需再点击 `Commit or push`。
 3. 命令先推送标签，再推送 `main`。
-4. EdgeOne 自动构建并部署。
+4. 发布命令将 `dist/` 直接部署到 EdgeOne Makers 的 `robotaxi-nochina` 生产项目。
 5. 发布命令轮询正式域名的 `deployment-manifest.json`；版本号和提交一致后才报告上线完成。
+
+双击 `publish-robotaxi.command` 本身就是明确的生产发布动作，不再要求二次输入确认。GitHub 推送与 EdgeOne 部署仍是两个独立步骤，任何一步失败都必须停止并报告实际状态。
 
 发布命令优先探测 Clash Verge 本地代理 `127.0.0.1:7897`，代理不可用时回退直连。可使用 `ROBOTAXI_GITHUB_PROXY` 临时覆盖代理地址，不修改 Git 全局配置。
 

@@ -10,6 +10,8 @@ VERSION="$(sed -n 's/^## \(v[^ ]*\).*/\1/p' VERSION.md | head -n 1)"
 HEAD_TAG="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
 DEFAULT_GITHUB_PROXY="http://127.0.0.1:7897"
 GITHUB_PROXY=""
+EDGEONE_PROJECT="${ROBOTAXI_EDGEONE_PROJECT:-robotaxi-nochina}"
+EDGEONE_CLI="./node_modules/.bin/edgeone"
 
 if [ "$BRANCH" != "main" ]; then
   echo "发布已停止：当前分支是 $BRANCH，请切换到 main。"
@@ -28,6 +30,18 @@ if [ -z "$HEAD_TAG" ]; then
 fi
 
 node scripts/verify-release-version.mjs "$HEAD_TAG"
+
+if [ ! -x "$EDGEONE_CLI" ]; then
+  echo "发布已停止：项目内尚未安装 EdgeOne CLI。"
+  echo "请先执行：npm ci"
+  exit 1
+fi
+
+if ! "$EDGEONE_CLI" whoami >/dev/null 2>&1; then
+  echo "发布已停止：EdgeOne CLI 尚未登录。"
+  echo "请先执行：npx edgeone login"
+  exit 1
+fi
 
 configure_github_network() {
   local proxy_candidate="${ROBOTAXI_GITHUB_PROXY:-${HTTPS_PROXY:-${https_proxy:-$DEFAULT_GITHUB_PROXY}}}"
@@ -85,7 +99,10 @@ echo "==> 正在发布 $VERSION"
 push_with_retry "$HEAD_TAG"
 push_with_retry main
 
-echo "==> 推送完成，正在等待 EdgeOne 正式域名更新"
+echo "==> GitHub 同步完成，正在部署 EdgeOne 生产项目：$EDGEONE_PROJECT"
+"$EDGEONE_CLI" makers deploy dist --name "$EDGEONE_PROJECT" --env production
+
+echo "==> EdgeOne 部署完成，正在验证正式域名"
 node scripts/wait-for-github-pages.mjs "$VERSION" "$(git rev-parse HEAD)"
 
 echo "==> $VERSION 已正式上线"

@@ -8,3 +8,6 @@
 
 # Generated production site
 dist/
+
+# Project-local publishing tools
+node_modules/

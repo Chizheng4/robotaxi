@@ -48,6 +48,7 @@ rm -f "$TMP_BUNDLE"
 
 print_step "检查 JavaScript 语法"
 node --check src/main.bundle.js
+node --check scripts/build-main-bundle.mjs
 node --check scripts/build-github-pages.mjs
 node --check scripts/verify-browser-load.mjs
 node --check scripts/verify-github-pages-build.mjs
