@@ -190,6 +190,10 @@ export function getNavigationOpenKeys(pageKey) {
   return findNavigationPath(pageKey).slice(0, -1).map((item) => item.key);
 }
 
+export function resolveNavigationOpenKeys(pageKey, collapsed = false) {
+  return collapsed ? [] : getNavigationOpenKeys(pageKey);
+}
+
 export function getNavigationRootKey(pageKey) {
   return findNavigationPath(pageKey)[0]?.key || pageKey;
 }

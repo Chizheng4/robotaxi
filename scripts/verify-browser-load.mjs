@@ -123,7 +123,7 @@ try {
       hasLogin: Boolean(document.querySelector(".platform-login-shell")),
       hasWorkbench: Boolean(document.querySelector(".workbench")),
       loginTitle: document.querySelector("#platform-login-title")?.textContent?.trim() || "",
-      hasLoginSubtitle: Boolean(document.querySelector(".platform-login-subtitle")),
+      loginSubtitle: document.querySelector('.platform-login-brand p[lang="en"]')?.textContent?.trim() || "",
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
     })`,
     returnByValue: true,
@@ -131,8 +131,8 @@ try {
   const entryState = JSON.parse(entryResult.result?.result?.value || "{}");
   assert(entryState.hasLogin || entryState.hasWorkbench, `页面既未渲染登录入口也未渲染工作台：${JSON.stringify({ ...entryState, exceptions, messages })}`);
   if (entryState.hasLogin) {
-    assert.equal(entryState.loginTitle, "Robotaxi 经营模拟", "登录页必须使用统一短品牌名称和自然中英文间距");
-    assert.equal(entryState.hasLoginSubtitle, false, "登录标题下方不得显示额外说明文字");
+    assert.equal(entryState.loginTitle, "Robotaxi 运营平台", "登录页必须使用统一中文品牌名称");
+    assert.equal(entryState.loginSubtitle, "Robotaxi Operations Platform", "登录页必须显示同一品牌的英文名称");
     assert.equal(entryState.documentOverflow, 0, "登录页不得产生横向溢出");
     const loginResult = await send("Runtime.evaluate", {
       expression: `(() => {
@@ -161,8 +161,8 @@ try {
     returnByValue: true,
   });
   const platformBrand = JSON.parse(platformBrandResult.result?.result?.value || "{}");
-  assert.equal(platformBrand.brandLabel, "Robotaxi 经营模拟，返回运营中控台", "站内 Logo 必须提供统一品牌语义");
-  assert.equal(platformBrand.brand, platformBrand.collapsed ? "R" : "Robotaxi 经营模拟", "站内 Logo 必须复用旧版自适应展示结构");
+  assert.equal(platformBrand.brandLabel, "Robotaxi 运营平台，返回运营中控台", "站内 Logo 必须提供统一品牌语义");
+  assert.equal(platformBrand.brand, platformBrand.collapsed ? "R" : "Robotaxi 运营平台", "站内 Logo 必须复用统一自适应展示结构");
   assert.equal(platformBrand.documentOverflow, 0, "进入平台后不得产生页面级横向溢出");
 
   if (publicDemoAssertionEnabled) {

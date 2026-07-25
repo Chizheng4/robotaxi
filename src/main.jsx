@@ -1769,7 +1769,7 @@ function App({ currentUser, onLogout }) {
   const [releaseHistoryOpen, setReleaseHistoryOpen] = useState(false);
   const [projectReadmeOpen, setProjectReadmeOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [openMenuKeys, setOpenMenuKeys] = useState(getOpenKeysForPage(initialRuntime.activePage));
+  const [openMenuKeys, setOpenMenuKeys] = useState(getOpenKeysForPage(initialRuntime.activePage, false));
   const [workspacePages, setWorkspacePages] = useState(initialRuntime.workspacePages);
   const [detailCollapsedByPage, setDetailCollapsedByPage] = useState(initialRuntime.detailCollapsedByPage);
   const [pageSelections, setPageSelections] = useState(initialRuntime.pageSelections);
@@ -1900,6 +1900,10 @@ function App({ currentUser, onLogout }) {
   }, [activePage]);
 
   useEffect(() => {
+    setOpenMenuKeys(getOpenKeysForPage(activePage, collapsed));
+  }, [activePage, collapsed]);
+
+  useEffect(() => {
     if (!releaseHistoryOpen) return undefined;
     const handleEscape = (event) => {
       if (event.key === "Escape") setReleaseHistoryOpen(false);
@@ -2002,7 +2006,6 @@ function App({ currentUser, onLogout }) {
       });
       setPageSelections(restoredSelections);
       setSelected(restoredSelection);
-      setOpenMenuKeys(getOpenKeysForPage(restoredPage));
       setPageUiState(normalizePageUiStateMap(snapshot.pageUiState));
       restoreRuntimeSequences(snapshot);
     }).finally(() => {
@@ -4521,6 +4524,10 @@ function App({ currentUser, onLogout }) {
   }
 
   function handleMenuOpenChange(keys) {
+    if (collapsed) {
+      setOpenMenuKeys([]);
+      return;
+    }
     const latestKey = keys.find((key) => !openMenuKeys.includes(key));
     if (!latestKey) {
       setOpenMenuKeys(keys);
@@ -4798,7 +4805,6 @@ function App({ currentUser, onLogout }) {
 
   function setActivePageAndMenu(page) {
     setActivePage(page);
-    setOpenMenuKeys(getOpenKeysForPage(page));
   }
 
   function setDetailCollapsedForPage(page, collapsedValue) {
@@ -11971,7 +11977,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-2"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-3"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
@@ -11983,7 +11989,7 @@ async function bootstrap() {
 		    import("./ui/pageContextService.js?v=20260717-v047-0-0"),
         import("./ui/dataChartService.js?v=20260717-v047-1-0"),
 		    import("./ui/metricObjectPresentationService.js?v=20260717-v047-0-0"),
-		    import("./ui/navigationRegistry.js?v=20260717-v047-0-0"),
+		    import("./ui/navigationRegistry.js?v=20260725-v049-13-3"),
 		    import("./ui/pageArchitectureRegistry.js?v=20260717-v047-0-0"),
 		    import("./services/operatingModelService.js?v=20260717-v047-0-0"),
 		    import("./services/decisionControlService.js?v=20260719-v047-5-0"),
@@ -14324,9 +14330,9 @@ function createStatusOptions(rows, statusField, orderedValues = [], statusContex
   })).filter((item) => item.count > 0 || orderedValues.includes(item.value));
 }
 
-function getOpenKeysForPage(pageKey) {
+function getOpenKeysForPage(pageKey, collapsed = false) {
   if (pageKey === "console") return [];
-  return navigationRegistry?.getNavigationOpenKeys(pageKey) || [];
+  return navigationRegistry?.resolveNavigationOpenKeys(pageKey, collapsed) || [];
 }
 
 function getRootMenuKey(key) {
