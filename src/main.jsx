@@ -4089,9 +4089,10 @@ function App({ currentUser, onLogout }) {
           <Menu
             mode="inline"
             inlineCollapsed={collapsed}
+            triggerSubMenuAction="hover"
             className="ops-menu"
             selectedKeys={[activePage]}
-            openKeys={openMenuKeys}
+            openKeys={collapsed ? undefined : openMenuKeys}
             items={menuItems}
             onOpenChange={handleMenuOpenChange}
             onClick={({ key }) => handleMenuClick(key)}
@@ -4524,10 +4525,7 @@ function App({ currentUser, onLogout }) {
   }
 
   function handleMenuOpenChange(keys) {
-    if (collapsed) {
-      setOpenMenuKeys([]);
-      return;
-    }
+    if (collapsed) return;
     const latestKey = keys.find((key) => !openMenuKeys.includes(key));
     if (!latestKey) {
       setOpenMenuKeys(keys);
@@ -11977,7 +11975,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-3"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-4"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),

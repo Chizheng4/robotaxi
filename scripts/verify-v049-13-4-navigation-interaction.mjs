@@ -15,28 +15,33 @@ assert.deepEqual(
 assert.deepEqual(
   resolveNavigationOpenKeys("longTermDemandForecastStrategies", true),
   [],
-  "侧栏收缩时不得保留父菜单展开状态",
+  "侧栏收缩时不得由页面状态主动展开父菜单",
 );
 assert.deepEqual(
   resolveNavigationOpenKeys("longTermDemandForecastStrategies", false),
   ["businessPlanning", "demandForecastManagement"],
   "侧栏展开时必须同步定位当前页面",
 );
-assert.deepEqual(
-  resolveNavigationOpenKeys("decisionCenter", true),
-  [],
-  "侧栏收缩时一级页面也不得触发菜单浮层",
-);
 
 assert.match(
   mainSource,
-  /useEffect\(\(\) => \{\s*setOpenMenuKeys\(getOpenKeysForPage\(activePage, collapsed\)\);\s*\}, \[activePage, collapsed\]\);/,
-  "页面激活和侧栏状态必须通过统一导航合同同步",
+  /triggerSubMenuAction="hover"/,
+  "侧栏收缩时必须保留鼠标悬停打开子菜单的标准交互",
+);
+assert.match(
+  mainSource,
+  /openKeys=\{collapsed \? undefined : openMenuKeys\}/,
+  "收缩状态不得用受控 openKeys 压制正常悬浮子菜单",
+);
+assert.match(
+  mainSource,
+  /function handleMenuOpenChange\(keys\) \{\s*if \(collapsed\) return;/,
+  "收缩状态的悬浮子菜单不得写入页面导航状态",
 );
 assert.doesNotMatch(
   mainSource,
   /function setActivePageAndMenu\(page\) \{\s*setActivePage\(page\);\s*setOpenMenuKeys/,
-  "页面激活不得直接操纵菜单展开状态",
+  "工作台页签激活不得直接操纵菜单展开状态",
 );
 
-console.log("v049.13.3 统一导航状态验证通过");
+console.log("v049.13.4 菜单与工作台交互合同验证通过");
