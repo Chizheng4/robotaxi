@@ -5869,8 +5869,34 @@ body {
   padding-inline: 14px !important;
 }
 
+.ops-menu.ant-menu-inline-collapsed > .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: #205fc5 !important;
+  background: #e5eefb !important;
+  box-shadow: inset 2px 0 0 var(--accent);
+  font-weight: 600 !important;
+}
+
 .ops-menu.ant-menu-inline-collapsed .menu-group-icon {
   margin-inline: 0 !important;
+}
+
+.ant-menu-inline-collapsed-tooltip .ant-tooltip-arrow {
+  display: none;
+}
+
+.ant-menu-inline-collapsed-tooltip .ant-tooltip-inner {
+  min-height: 36px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: #223449;
+  background: var(--navigation-surface);
+  box-shadow: 0 6px 18px rgba(39, 61, 82, 0.12);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .top-strip-metric {
