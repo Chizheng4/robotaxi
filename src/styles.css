@@ -26,10 +26,13 @@
   --font-family: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --navigation-font-size: var(--font-sm);
   --navigation-item-height: 36px;
+  --navigation-line-height: 18px;
   --navigation-font-weight: 400;
   --navigation-selected-font-weight: 600;
-  --navigation-panel-min-width: 144px;
-  --navigation-panel-max-width: 196px;
+  --navigation-text: #30343a;
+  --navigation-text-active: #205dcc;
+  --navigation-panel-min-width: 128px;
+  --navigation-panel-max-width: 184px;
   --cell-empty: #fafbfc;
   --cell-road: #dfe3e9;
   --cell-place: #f8e1a6;
@@ -3444,9 +3447,7 @@ body {
 
 .ops-menu.ant-menu {
   padding: 10px 8px;
-  color: #30343a;
-  font-size: var(--navigation-font-size);
-  font-weight: var(--navigation-font-weight);
+  color: var(--navigation-text);
 }
 
 .ops-menu .ant-menu-item,
@@ -3456,15 +3457,12 @@ body {
   padding-inline: 14px !important;
   border-radius: 6px !important;
   line-height: var(--navigation-item-height) !important;
-  font-size: var(--navigation-font-size);
-  font-weight: var(--navigation-font-weight);
   transition: color 140ms ease, background 140ms ease;
 }
 
 .ops-menu.ant-menu-root > .ant-menu-item,
 .ops-menu.ant-menu-root > .ant-menu-submenu > .ant-menu-submenu-title {
   padding-inline-start: 14px !important;
-  font-weight: var(--navigation-font-weight);
 }
 
 .ops-menu.ant-menu-root > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
@@ -3524,13 +3522,25 @@ body {
 }
 
 .workspace-navigation-node {
+  display: block;
   min-width: 0;
-  color: inherit;
+  color: var(--navigation-text);
   font-family: var(--font-family);
   font-size: var(--navigation-font-size);
-  font-weight: inherit;
+  font-weight: var(--navigation-font-weight);
   letter-spacing: 0;
-  line-height: 1.35;
+  line-height: var(--navigation-line-height);
+}
+
+.ops-menu .ant-menu-item-selected .workspace-navigation-node,
+.collapsed-navigation-item.selected .workspace-navigation-node {
+  color: var(--navigation-text-active);
+  font-weight: var(--navigation-selected-font-weight);
+}
+
+.ops-menu .ant-menu-submenu-selected > .ant-menu-submenu-title .workspace-navigation-node,
+.collapsed-navigation-item.active-ancestor .workspace-navigation-node {
+  color: #315f9b;
 }
 
 .ops-menu .ant-menu-item:focus-visible,
@@ -5971,17 +5981,13 @@ body {
 
 .collapsed-navigation-panel-title {
   width: 100%;
-  min-height: 36px;
-  padding: 7px 10px;
+  min-height: var(--navigation-item-height);
+  padding: 9px 10px;
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--line-soft);
-  color: var(--muted);
+  color: var(--navigation-text);
   background: transparent;
-  font: inherit;
-  font-size: var(--navigation-font-size);
-  font-weight: var(--navigation-font-weight);
-  line-height: 1.35;
   text-align: left;
 }
 
@@ -6008,12 +6014,8 @@ body {
   gap: 10px;
   border: 0;
   border-radius: 6px;
-  color: #30343a;
+  color: var(--navigation-text);
   background: transparent;
-  font: inherit;
-  font-size: var(--navigation-font-size);
-  font-weight: var(--navigation-font-weight);
-  line-height: 1.35;
   text-align: left;
   cursor: pointer;
 }
@@ -6036,10 +6038,9 @@ body {
 }
 
 .collapsed-navigation-item.selected {
-  color: #205dcc;
+  color: var(--navigation-text-active);
   background: var(--accent-soft);
   box-shadow: inset 3px 0 0 var(--accent);
-  font-weight: var(--navigation-selected-font-weight);
 }
 
 .collapsed-navigation-chevron {

@@ -1,6 +1,22 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.13.9",
+    "title": "将展开侧栏与收缩浮层的导航文字所有权收敛到同一共享节点，消除组件容器继承导致的字体差异",
+    "changes": [
+      "`workspace-navigation-node` 统一管理导航字体、字号、行高、普通字重、选中字重和文字颜色。",
+      "Ant Menu 与收缩浮层容器只负责布局、交互和状态，不再维护各自的字体规格。",
+      "收缩浮层宽度边界进一步收敛，减少短菜单中的无效留白，同时保留多级菜单按内容扩展能力。",
+      "更新导航结构门禁，阻止容器重新定义字体或展开、收缩菜单再次形成两套视觉实现。"
+    ],
+    "audienceTitle": "统一菜单字体来源",
+    "audienceChanges": [
+      "展开菜单与收缩浮层现在使用完全一致的字体、字号、行高和层级视觉。",
+      "供应管理等短菜单浮层更加紧凑，不再因独立样式产生突兀字体和多余留白。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.13.8",
     "title": "统一全站导航字体合同和展开、收缩节点结构，并按每级实际内容收敛级联浮层宽度",
     "changes": [

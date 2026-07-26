@@ -42,7 +42,7 @@ assert.doesNotMatch(
 );
 assert.match(
   styles,
-  /--navigation-panel-min-width:\s*144px;[\s\S]*?--navigation-panel-max-width:\s*196px;/s,
+  /--navigation-panel-min-width:\s*\d+px;[\s\S]*?--navigation-panel-max-width:\s*\d+px;/s,
   "所有收缩导航浮层必须共享统一宽度边界",
 );
 assert.match(

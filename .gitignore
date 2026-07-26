@@ -11,3 +11,6 @@ dist/
 
 # Project-local publishing tools
 node_modules/
+
+# EdgeOne local project binding
+.edgeone/

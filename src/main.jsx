@@ -11974,7 +11974,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-8"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-9"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
@@ -13597,9 +13597,9 @@ function buildCollapsedNavigationPanels(root, openPath = []) {
 }
 
 const collapsedNavigationPanelSize = Object.freeze({
-  min: 144,
-  max: 196,
-  fixedSpace: 42,
+  min: 128,
+  max: 184,
+  fixedSpace: 34,
   cjkUnit: 13,
   latinUnit: 7,
 });

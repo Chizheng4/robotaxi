@@ -37,8 +37,13 @@ assert.match(
 );
 assert.match(
   styles,
-  /\.collapsed-navigation-item\s*\{[^}]*min-height:\s*var\(--navigation-item-height\);[^}]*font-size:\s*var\(--navigation-font-size\);[^}]*font-weight:\s*var\(--navigation-font-weight\);/s,
-  "所有浮层菜单节点必须共享标准字号、行高和常规字重",
+  /\.collapsed-navigation-item\s*\{[^}]*min-height:\s*var\(--navigation-item-height\);/s,
+  "所有浮层菜单节点必须继承标准导航行高",
+);
+assert.match(
+  styles,
+  /\.workspace-navigation-node\s*\{[^}]*font-size:\s*var\(--navigation-font-size\);[^}]*font-weight:\s*var\(--navigation-font-weight\);[^}]*line-height:\s*var\(--navigation-line-height\);/s,
+  "所有浮层菜单文字必须通过共享节点继承标准字号、行高和常规字重",
 );
 assert.doesNotMatch(
   styles,

@@ -42,18 +42,23 @@ assert.doesNotMatch(
 
 assert.match(
   styles,
-  /--font-family:[^;]+;[\s\S]*?--navigation-font-size:\s*var\(--font-sm\);[\s\S]*?--navigation-item-height:\s*36px;/,
+  /--font-family:[^;]+;[\s\S]*?--navigation-font-size:\s*var\(--font-sm\);[\s\S]*?--navigation-item-height:\s*36px;[\s\S]*?--navigation-line-height:\s*18px;/,
   "全站字体与导航尺寸必须使用根级语义令牌",
 );
 assert.match(
   styles,
-  /\.ops-menu \.ant-menu-item,[\s\S]*?font-size:\s*var\(--navigation-font-size\);[\s\S]*?font-weight:\s*var\(--navigation-font-weight\);/,
-  "展开菜单必须使用统一导航字体令牌",
+  /\.workspace-navigation-node\s*\{[^}]*font-family:\s*var\(--font-family\);[^}]*font-size:\s*var\(--navigation-font-size\);[^}]*font-weight:\s*var\(--navigation-font-weight\);[^}]*line-height:\s*var\(--navigation-line-height\);/s,
+  "共享导航节点必须完整拥有字体、字号、字重和行高",
 );
 assert.match(
   styles,
-  /\.collapsed-navigation-item\s*\{[\s\S]*?font-size:\s*var\(--navigation-font-size\);[\s\S]*?font-weight:\s*var\(--navigation-font-weight\);/,
-  "收缩菜单必须使用统一导航字体令牌",
+  /\.ops-menu \.ant-menu-item-selected \.workspace-navigation-node,[\s\S]*?\.collapsed-navigation-item\.selected \.workspace-navigation-node\s*\{[^}]*font-weight:\s*var\(--navigation-selected-font-weight\);/s,
+  "展开与收缩选中项必须通过共享节点使用同一字重",
+);
+assert.doesNotMatch(
+  styles,
+  /\.collapsed-navigation-(?:panel-title|item)\s*\{[^}]*(?:font-size|font-weight|line-height):/s,
+  "收缩浮层容器不得维护独立字体规格",
 );
 assert.match(
   styles,
