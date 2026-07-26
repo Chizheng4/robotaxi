@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import {
+  closeManagedBrowser,
+  createBoundedCdpSender,
+} from "./browser-process-lifecycle.mjs";
 
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const targetUrl = process.env.ROBOTAXI_BROWSER_VERIFY_URL || "http://127.0.0.1:4173/?verifyBrowserLoad=1";
@@ -19,39 +23,40 @@ const browserWindowSize = planningAssertionEnabled && mobileAssertionEnabled ? "
 
 assert(fs.existsSync(chromePath), "未找到 Google Chrome，无法执行真实浏览器白屏检查");
 
+const profileDir = `/private/tmp/robotaxi-browser-load-${Date.now()}`;
 const chrome = spawn(chromePath, [
   "--headless=new",
   "--no-first-run",
   "--disable-gpu",
   "--hide-scrollbars",
   "--remote-debugging-port=0",
-  `--user-data-dir=/private/tmp/robotaxi-browser-load-${Date.now()}`,
+  `--user-data-dir=${profileDir}`,
   `--window-size=${browserWindowSize}`,
   targetUrl,
 ], { stdio: ["ignore", "ignore", "pipe"] });
 
 let stderr = "";
-const devtoolsUrl = await new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error("Chrome DevTools 启动超时")), 8000);
-  chrome.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
-    const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-    if (match) {
-      clearTimeout(timer);
-      resolve(match[1]);
-    }
-  });
-  chrome.on("error", reject);
-  chrome.on("exit", (code) => {
-    reject(new Error(`Chrome 提前退出：${code}\n${stderr}`));
-  });
-});
-
+let socket = null;
 try {
+  const devtoolsUrl = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Chrome DevTools 启动超时")), 8000);
+    chrome.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+      const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
+      if (match) {
+        clearTimeout(timer);
+        resolve(match[1]);
+      }
+    });
+    chrome.on("error", reject);
+    chrome.on("exit", (code) => {
+      reject(new Error(`Chrome 提前退出：${code}\n${stderr}`));
+    });
+  });
   const pageWebSocketUrl = await waitForPageWebSocketUrl(devtoolsUrl, targetUrl);
   const messages = [];
   const exceptions = [];
-  const socket = new WebSocket(pageWebSocketUrl);
+  socket = new WebSocket(pageWebSocketUrl);
   let nextId = 1;
   const pending = new Map();
 
@@ -82,11 +87,7 @@ try {
     socket.addEventListener("error", reject, { once: true });
   });
 
-  const send = (method, params = {}) => new Promise((resolve) => {
-    const id = nextId++;
-    pending.set(id, resolve);
-    socket.send(JSON.stringify({ id, method, params }));
-  });
+  const send = createBoundedCdpSender(socket, pending, () => nextId++);
 
   const clickElementCenter = async (selector, text = null) => {
     const result = await send("Runtime.evaluate", {
@@ -502,6 +503,17 @@ try {
   await delay(100);
 
   if (mapAssertionEnabled) {
+    const gridModeSwitchResult = await send("Runtime.evaluate", {
+      expression: `(() => {
+        const option = [...document.querySelectorAll(".map-mode-switch label, .map-mode-switch [role='radio'], .map-mode-switch .ant-segmented-item")]
+          .find((node) => node.textContent?.trim() === "网格仿真");
+        option?.click();
+        return { switched: Boolean(option), text: option?.textContent?.trim() || "" };
+      })()`,
+      returnByValue: true,
+    });
+    assert(gridModeSwitchResult.result?.result?.value?.switched, "地图 Cell 验收前必须能够显式切换到网格仿真");
+    await delay(250);
     const initialMapState = await send("Runtime.evaluate", {
       expression: `({ detailCollapsed: document.querySelector(".workbench")?.classList.contains("detail-collapsed") })`,
       returnByValue: true,
@@ -773,8 +785,6 @@ try {
     const screenshot = await send("Page.captureScreenshot", { format: "png", fromSurface: true });
     fs.writeFileSync(screenshotPath, Buffer.from(screenshot.result?.data || "", "base64"));
   }
-  socket.close();
-
   const pageState = JSON.parse(result.result?.result?.value || "{}");
   assert(pageState.hasApp, `页面缺少 #app 容器：${JSON.stringify(pageState)}`);
   assert(pageState.hasWorkbench, `页面未渲染工作台主体，可能白屏：${JSON.stringify(pageState)}\n${exceptions.join("\n")}\n${messages.join("\n")}`);
@@ -801,7 +811,7 @@ try {
   }
   console.log("真实浏览器加载验证通过");
 } finally {
-  chrome.kill("SIGTERM");
+  await closeManagedBrowser({ browser: chrome, socket, profileDir });
 }
 
 async function waitForPageWebSocketUrl(browserWebSocketUrl, expectedUrl) {

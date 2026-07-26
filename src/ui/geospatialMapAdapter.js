@@ -5,13 +5,13 @@ import {
   CITY_SPATIAL_ZOOM_BANDS,
   getCitySpatialFitPadding,
   normalizeCitySpatialBounds,
-} from "./geospatialPresentationContract.js?v=v049-13-12";
+} from "./geospatialPresentationContract.js?v=v049-13-13";
 
 export {
   CITY_SPATIAL_VISUAL_TOKENS,
   CITY_SPATIAL_ZOOM_BANDS,
   createCitySpatialHoverPresentation,
-} from "./geospatialPresentationContract.js?v=v049-13-12";
+} from "./geospatialPresentationContract.js?v=v049-13-13";
 
 const SOURCE_DEFINITIONS = Object.freeze({
   cityMask: { type: "fill", layers: [
@@ -88,6 +88,8 @@ export function createGeospatialMapAdapter(options = {}) {
   const filteredBasemapLabelLayers = new Set();
   const layerInstallErrors = [];
   const mapErrors = [];
+  let visualDiagnosticsRevision = 0;
+  let inspectedVisualDiagnosticsRevision = -1;
   const map = new MapLibre.Map({
     container: options.container,
     style: currentScene?.dataset?.basemap_style_url || cloneFallbackStyle(),
@@ -123,6 +125,7 @@ export function createGeospatialMapAdapter(options = {}) {
   map.on("error", (event) => {
     mapErrors.push(event?.error?.message || "地图运行异常");
     if (mapErrors.length > 12) mapErrors.shift();
+    markVisualDiagnosticsDirty();
     if (!ready && !fallbackApplied) applyFallbackStyle();
     options.onStatusChange?.({ status: fallbackApplied ? "FALLBACK" : "DEGRADED", message: event?.error?.message || "底图加载异常" });
   });
@@ -132,7 +135,7 @@ export function createGeospatialMapAdapter(options = {}) {
   function emitViewChange() {
     if (destroyed) return;
     options.onViewChange?.(readCamera());
-    emitVisualDiagnostics();
+    markVisualDiagnosticsDirty();
   }
 
   function applyFallbackStyle() {
@@ -175,7 +178,7 @@ export function createGeospatialMapAdapter(options = {}) {
     installLabelLayers();
     updateSelection(options.selected || null);
     applyAdministrativeSelection();
-    queueMicrotask(emitVisualDiagnostics);
+    markVisualDiagnosticsDirty();
   }
 
   function suppressDuplicateBasemapCityLabels() {
@@ -204,6 +207,7 @@ export function createGeospatialMapAdapter(options = {}) {
 
   function emitVisualDiagnostics() {
     if (destroyed || !ready || !map.isStyleLoaded()) return;
+    if (inspectedVisualDiagnosticsRevision === visualDiagnosticsRevision) return;
     const zoom = Number(map.getZoom().toFixed(2));
     const cityLayerIds = ["robotaxi-city-outside-mask", "robotaxi-city-extent-fill", "robotaxi-city-boundary"];
     const zoneLayerIds = ["robotaxi-zones", "robotaxi-zone-boundaries", "robotaxi-sub-zones", "robotaxi-sub-zone-boundaries"];
@@ -238,7 +242,12 @@ export function createGeospatialMapAdapter(options = {}) {
       shell.dataset.mapErrorCount = String(mapErrors.length);
       shell.dataset.lastMapError = mapErrors.at(-1) || "";
     }
+    inspectedVisualDiagnosticsRevision = visualDiagnosticsRevision;
     options.onVisualStateChange?.(diagnostics);
+  }
+
+  function markVisualDiagnosticsDirty() {
+    visualDiagnosticsRevision += 1;
   }
 
   function countSourceFeatures(sourceIds) {
@@ -383,12 +392,14 @@ export function createGeospatialMapAdapter(options = {}) {
   function updateScene(nextScene) {
     currentScene = nextScene;
     if (!ready || !map.isStyleLoaded()) return;
+    let changed = false;
     for (const sourceId of Object.keys(SOURCE_DEFINITIONS)) {
       if (sourceId === "physicalSelection") continue;
       const nextVersion = currentScene?.sourceVersions?.[sourceId] || "";
       if (appliedSourceVersions[sourceId] === nextVersion) continue;
       map.getSource(sourceId)?.setData(currentScene?.[sourceId] || emptyCollection());
       appliedSourceVersions[sourceId] = nextVersion;
+      changed = true;
     }
     for (const definition of LABEL_DEFINITIONS) {
       const { sceneKey } = definition;
@@ -396,8 +407,9 @@ export function createGeospatialMapAdapter(options = {}) {
       if (appliedSourceVersions[definition.sourceId] === nextVersion) continue;
       map.getSource(definition.sourceId)?.setData(createLabelCollection(currentScene?.[sceneKey]));
       appliedSourceVersions[definition.sourceId] = nextVersion;
+      changed = true;
     }
-    map.once("idle", emitVisualDiagnostics);
+    if (changed) markVisualDiagnosticsDirty();
   }
 
   function updatePhysicalSelection(features = []) {

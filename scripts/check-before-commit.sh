@@ -51,6 +51,8 @@ node --check src/main.bundle.js
 node --check scripts/build-main-bundle.mjs
 node --check scripts/build-github-pages.mjs
 node --check scripts/verify-browser-load.mjs
+node --check scripts/browser-process-lifecycle.mjs
+node --check scripts/verify-browser-resource-lifecycle.mjs
 node --check scripts/verify-github-pages-build.mjs
 node --check scripts/serve-github-pages-preview.mjs
 node --check scripts/generate-release-history.mjs
@@ -82,6 +84,7 @@ node --check scripts/verify-v049-13-5-navigation-visual-contract.mjs
 node --check scripts/verify-v049-13-6-collapsed-navigation-component.mjs
 node --check scripts/verify-v049-13-7-progressive-navigation.mjs
 node --check scripts/verify-v049-13-8-navigation-typography.mjs
+node scripts/verify-browser-resource-lifecycle.mjs
 node --check src/ui/releaseFreshnessService.js
 node --check src/services/operatingDataPoolService.js
 node --check src/services/operatingModelService.js

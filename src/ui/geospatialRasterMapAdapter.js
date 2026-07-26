@@ -1,6 +1,6 @@
 import {
   normalizePlanningPolygon,
-} from "./geospatialMapAdapter.js?v=v049-13-12";
+} from "./geospatialMapAdapter.js?v=v049-13-13";
 import {
   CITY_SPATIAL_LAYER_CONTRACT,
   CITY_SPATIAL_LAYER_ORDER,
@@ -9,7 +9,7 @@ import {
   getCitySpatialFillOpacity,
   isCitySpatialLayerVisible,
   normalizeCitySpatialBounds,
-} from "./geospatialPresentationContract.js?v=v049-13-12";
+} from "./geospatialPresentationContract.js?v=v049-13-13";
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 const RASTER_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -43,6 +43,7 @@ export function createGeospatialRasterMapAdapter(options = {}) {
   let destroyed = false;
   const objectLayers = new Map();
   const sceneLayers = new Map();
+  const appliedSourceVersions = new Map();
   const initialBounds = toLeafletBounds(currentScene?.bounds, Leaflet);
   const map = Leaflet.map(options.container, {
     attributionControl: true,
@@ -73,7 +74,7 @@ export function createGeospatialRasterMapAdapter(options = {}) {
   map.createPane("robotaxi-line");
   map.createPane("robotaxi-point");
   setPaneOrder(map);
-  installScene();
+  installScene({ force: true });
 
   map.on("zoomend moveend", () => {
     if (destroyed) return;
@@ -100,11 +101,12 @@ export function createGeospatialRasterMapAdapter(options = {}) {
     options.onStatusChange?.({ status: "RASTER_READY", message: "" });
   });
 
-  function installScene() {
-    clearSceneLayers();
-    objectLayers.clear();
+  function installScene({ force = false } = {}) {
     for (const key of CITY_SPATIAL_LAYER_ORDER) {
       const collection = currentScene?.[key] || EMPTY_COLLECTION;
+      const nextVersion = getSceneSourceVersion(currentScene, key, collection);
+      if (!force && sceneLayers.has(key) && appliedSourceVersions.get(key) === nextVersion) continue;
+      removeSceneLayer(key);
       const group = Leaflet.layerGroup();
       const geoJson = Leaflet.geoJSON(collection, {
         pane: paneFor(key),
@@ -114,8 +116,8 @@ export function createGeospatialRasterMapAdapter(options = {}) {
       });
       geoJson.addTo(group);
       sceneLayers.set(key, group);
+      appliedSourceVersions.set(key, nextVersion);
     }
-    renderPhysicalSelection();
     applyZoomVisibility();
   }
 
@@ -309,10 +311,21 @@ export function createGeospatialRasterMapAdapter(options = {}) {
   }
 
   function clearSceneLayers() {
-    for (const layer of sceneLayers.values()) {
-      if (map.hasLayer(layer)) map.removeLayer(layer);
-    }
+    for (const key of [...sceneLayers.keys()]) removeSceneLayer(key);
     sceneLayers.clear();
+    objectLayers.clear();
+    appliedSourceVersions.clear();
+  }
+
+  function removeSceneLayer(key) {
+    const layer = sceneLayers.get(key);
+    if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+    sceneLayers.delete(key);
+    appliedSourceVersions.delete(key);
+    const prefix = `${key}:`;
+    for (const objectKey of objectLayers.keys()) {
+      if (objectKey.startsWith(prefix)) objectLayers.delete(objectKey);
+    }
   }
 
   return {
@@ -469,6 +482,15 @@ function toLeafletBounds(bounds, Leaflet) {
 function fitPadding(compact) {
   const padding = getCitySpatialFitPadding(compact);
   return [padding, padding];
+}
+
+function getSceneSourceVersion(scene, key, collection) {
+  const declaredVersion = scene?.sourceVersions?.[key];
+  if (declaredVersion !== undefined) return String(declaredVersion);
+  const features = collection?.features || [];
+  return `${features.length}:${features.map((feature) => (
+    feature?.id || feature?.properties?.object_id || ""
+  )).join("|")}`;
 }
 
 function drawingStyle() {

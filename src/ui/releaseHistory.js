@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.13.13",
+    "title": "收敛城市地图更新与真实浏览器验收的资源生命周期，避免重复场景重建、重复视觉诊断和浏览器验证残留",
+    "changes": [
+      "MapLibre 视觉诊断改为按有效场景或视图变化执行，同一变化不再在 `moveend`、`idle` 和临时监听器中重复扫描图层。",
+      "Leaflet 二维地图接入与矢量地图相同的 `sourceVersions` 合同，只替换真正发生变化的来源图层，不再因 React 场景对象更新而完整重建。",
+      "普通 Chrome 验收统一增加 DevTools 调用超时、异常路径 WebSocket 关闭、进程退出等待和临时目录清理。",
+      "网格地图交互验收先显式切换场景，避免城市地理成为默认视图后把场景差异误判为 Cell 回归。",
+      "增加项目级资源生命周期规则与提交前门禁，明确普通浏览器和 Codex worker 分开归因，并固化高内存停止阈值。"
+    ],
+    "audienceTitle": "收敛地图与浏览器资源生命周期",
+    "audienceChanges": [
+      "城市地图在数据和视图变化时减少重复计算，两种地图渲染方式保持同一套增量更新逻辑。",
+      "浏览器验证完成或失败后都会主动释放连接、进程和临时文件，避免长期验证留下后台资源。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.13.12",
     "title": "统一城市地图双渲染器的视觉与交互合同，保证 Chrome 和内置浏览器呈现同一套清晰、稳定的空间体验",
     "changes": [

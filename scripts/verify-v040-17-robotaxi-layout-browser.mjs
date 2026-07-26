@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import {
+  closeManagedBrowser,
+  createBoundedCdpSender,
+} from "./browser-process-lifecycle.mjs";
 
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const targetUrl = process.env.ROBOTAXI_BROWSER_VERIFY_URL || "http://127.0.0.1:4173/?verifyRobotaxiLayout=1";
@@ -8,35 +12,36 @@ const viewport = process.env.ROBOTAXI_BROWSER_VIEWPORT || "1280,720";
 
 assert(fs.existsSync(chromePath), "未找到 Google Chrome，无法执行 Robotaxi 布局检查");
 
+const profileDir = `/private/tmp/robotaxi-layout-${Date.now()}`;
 const chrome = spawn(chromePath, [
   "--headless=new",
   "--no-first-run",
   "--disable-gpu",
   "--hide-scrollbars",
   "--remote-debugging-port=0",
-  `--user-data-dir=/private/tmp/robotaxi-layout-${Date.now()}`,
+  `--user-data-dir=${profileDir}`,
   `--window-size=${viewport}`,
   targetUrl,
 ], { stdio: ["ignore", "ignore", "pipe"] });
 
 let stderr = "";
-const devtoolsUrl = await new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error("Chrome DevTools 启动超时")), 8000);
-  chrome.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
-    const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-    if (match) {
-      clearTimeout(timer);
-      resolve(match[1]);
-    }
-  });
-  chrome.on("error", reject);
-  chrome.on("exit", (code) => reject(new Error(`Chrome 提前退出：${code}\n${stderr}`)));
-});
-
+let socket = null;
 try {
+  const devtoolsUrl = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Chrome DevTools 启动超时")), 8000);
+    chrome.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+      const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
+      if (match) {
+        clearTimeout(timer);
+        resolve(match[1]);
+      }
+    });
+    chrome.on("error", reject);
+    chrome.on("exit", (code) => reject(new Error(`Chrome 提前退出：${code}\n${stderr}`)));
+  });
   const pageWebSocketUrl = await waitForPageWebSocketUrl(devtoolsUrl, targetUrl);
-  const socket = new WebSocket(pageWebSocketUrl);
+  socket = new WebSocket(pageWebSocketUrl);
   let nextId = 1;
   const pending = new Map();
 
@@ -53,11 +58,7 @@ try {
     socket.addEventListener("error", reject, { once: true });
   });
 
-  const send = (method, params = {}) => new Promise((resolve) => {
-    const id = nextId++;
-    pending.set(id, resolve);
-    socket.send(JSON.stringify({ id, method, params }));
-  });
+  const send = createBoundedCdpSender(socket, pending, () => nextId++);
 
   await send("Page.enable");
   await send("Runtime.enable");
@@ -99,7 +100,6 @@ try {
     })`,
     returnByValue: true,
   });
-  socket.close();
   const state = JSON.parse(result.result?.result?.value || "{}");
   assert.equal(state.hasPanel, true, `Robotaxi 页面缺少运营概览区域：${state.bodyText}`);
   assert.equal(state.hasSelectedSummary, true, "Robotaxi 页面未使用当前选中统一概览结构");
@@ -111,7 +111,7 @@ try {
   assert.equal(truncatedLabels.length, 0, `Robotaxi 概览标签被截断：${JSON.stringify(truncatedLabels)}`);
   console.log(`v040.17 Robotaxi 浏览器布局验证通过 ${viewport}`);
 } finally {
-  chrome.kill("SIGTERM");
+  await closeManagedBrowser({ browser: chrome, socket, profileDir });
 }
 
 async function waitForPageWebSocketUrl(browserWebSocketUrl, expectedUrl) {
