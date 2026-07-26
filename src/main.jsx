@@ -8820,6 +8820,7 @@ function MapCanvas({ data, selected, mobileLayout = false, forcedMode = null, on
 function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, compact, mobileLayout, onSelect, onClear, onSpatialPlansChange, onControllerReady }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
+  const hoverEndTimerRef = useRef(null);
   const [hovered, setHovered] = useState(null);
   const [mapStatus, setMapStatus] = useState({ status: "LOADING", message: "正在加载地理底图" });
   const [planningView, setPlanningView] = useState({ zoom: 8 });
@@ -8858,8 +8859,16 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       compact,
       onStatusChange,
       onViewChange: setPlanningView,
-      onHover: (properties, point) => setHovered((current) => current?.pinned ? current : createGeospatialHover(properties, point, containerRef.current, false)),
-      onHoverEnd: () => setHovered((current) => current?.pinned ? current : null),
+      onHover: (properties, point) => {
+        clearTimeout(hoverEndTimerRef.current);
+        setHovered((current) => current?.pinned ? current : createGeospatialHover(properties, point, containerRef.current, false));
+      },
+      onHoverEnd: () => {
+        clearTimeout(hoverEndTimerRef.current);
+        hoverEndTimerRef.current = setTimeout(() => {
+          setHovered((current) => current?.pinned ? current : null);
+        }, 40);
+      },
       onSelect: (properties, point) => {
         const nextHover = createGeospatialHover(properties, point, containerRef.current, true);
         if (mobileLayout) {
@@ -8953,6 +8962,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
     return () => {
       cancelled = true;
       clearTimeout(retryTimer);
+      clearTimeout(hoverEndTimerRef.current);
       adapterRef.current?.destroy();
       adapterRef.current = null;
       onControllerReady?.(null);
@@ -9589,24 +9599,7 @@ function createGeospatialHover(properties, point, container, pinned) {
 }
 
 function createSpatialPlanHoverPresentation(properties = {}) {
-  if (!['zone', 'place', 'serviceArea'].includes(properties.object_type)) return null;
-  const candidateFields = [
-    ['zone', "zone_level"],
-    ['zone', "zone_structure_mode"],
-    ['place', "place_type"],
-    ['serviceArea', "service_area_type"],
-    ['place', "zone_id"],
-    ['serviceArea', "zone_id"],
-    ['serviceArea', "place_id"],
-  ];
-  return {
-    title: properties.object_name || properties.object_id,
-    subtitle: properties.pending_initialization ? "已规划，待业务初始化" : "已发布空间对象",
-    fields: candidateFields
-      .filter(([type, field]) => type === properties.object_type && properties[field])
-      .slice(0, 3)
-      .map(([, field]) => ({ field, value: properties[field] })),
-  };
+  return geospatialMapAdapter.createCitySpatialHoverPresentation(properties);
 }
 
 function MapAnchorLabel({ className, x, y, scale, label }) {
@@ -12024,8 +12017,8 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260726-v049-13-11"),
-		    import("./ui/geospatialRasterMapAdapter.js?v=20260726-v049-13-11"),
+		    import("./ui/geospatialMapAdapter.js?v=v049-13-12"),
+		    import("./ui/geospatialRasterMapAdapter.js?v=v049-13-12"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),

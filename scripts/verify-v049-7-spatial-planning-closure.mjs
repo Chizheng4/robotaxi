@@ -88,6 +88,7 @@ for (let index = 0; index < 25; index += 1) {
 assert.equal(repeatedPlans.length, 25, "重复规划不得丢失或静默失败");
 
 const adapterSource = fs.readFileSync("src/ui/geospatialMapAdapter.js", "utf8");
+const presentationContractSource = fs.readFileSync("src/ui/geospatialPresentationContract.js", "utf8");
 const mainSource = fs.readFileSync("src/main.jsx", "utf8");
 assert(adapterSource.includes("midpoints: true, draggable: true, deletable: true"), "编辑边界必须提供可拖动顶点和中点");
 assert.match(
@@ -95,7 +96,11 @@ assert.match(
   /feature:\s*\{\s*draggable:\s*false,\s*coordinates:\s*\{\s*midpoints:\s*true,\s*draggable:\s*true,\s*deletable:\s*true\s*\}/s,
   "坐标编辑能力必须配置在 Terra Draw 的 feature 层级内",
 );
-assert(adapterSource.includes('sourceId !== "cityBoundary"'), "城市范围参考不得冒充可编辑业务对象");
+assert.match(
+  presentationContractSource,
+  /cityBoundary:\s*\{\s*zoomBand:\s*"cityScope",\s*interactive:\s*true,\s*selectable:\s*false\s*\}/,
+  "城市范围可以提供悬浮信息，但不得冒充可编辑业务对象",
+);
 assert(adapterSource.includes('sceneKey !== "cityBoundary"'), "业务对象标签必须与区域面共享选中和悬停交互");
 assert(adapterSource.includes("finishPolygonDrawing"), "多边形绘制必须提供明确完成动作");
 assert(!adapterSource.includes('dispatchEvent(new KeyboardEvent("keyup"'), "完成绘制不得依赖伪造键盘事件");

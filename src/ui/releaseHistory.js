@@ -1,6 +1,22 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.13.12",
+    "title": "统一城市地图双渲染器的视觉与交互合同，保证 Chrome 和内置浏览器呈现同一套清晰、稳定的空间体验",
+    "changes": [
+      "MapLibre 与 Leaflet 统一使用同一空间图层、缩放可见范围、颜色、透明度、选中和悬浮状态，不再各自维护地图表现逻辑。",
+      "城市范围、行政区、运营区域、地点及服务区域统一按地图视角分层显示，普通浏览器的高清栅格地图启用高像素密度资源。",
+      "城市范围与行政区统一支持浮动摘要，但保持物理范围不可被当作业务对象选中。",
+      "修复重叠空间图层之间移动时浮动信息过早消失的问题，并增加双渲染合同与历史规划约束门禁。"
+    ],
+    "audienceTitle": "统一城市地图交互体验",
+    "audienceChanges": [
+      "Chrome 与其他浏览器现在使用一致的地图层级、区域视觉和鼠标浮动反馈。",
+      "地图在高清屏上更加清晰，鼠标经过相邻区域时信息提示保持稳定。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.13.11",
     "title": "建立城市地图双渲染合同，让普通浏览器在 WebGL 不可用或矢量底图异常时自动切换成熟二维地图",
     "changes": [

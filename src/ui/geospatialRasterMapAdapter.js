@@ -1,22 +1,18 @@
 import {
-  CITY_SPATIAL_VISUAL_TOKENS,
   normalizePlanningPolygon,
-} from "./geospatialMapAdapter.js?v=20260726-v049-13-11";
+} from "./geospatialMapAdapter.js?v=v049-13-12";
+import {
+  CITY_SPATIAL_LAYER_CONTRACT,
+  CITY_SPATIAL_LAYER_ORDER,
+  CITY_SPATIAL_VISUAL_TOKENS,
+  getCitySpatialFitPadding,
+  getCitySpatialFillOpacity,
+  isCitySpatialLayerVisible,
+  normalizeCitySpatialBounds,
+} from "./geospatialPresentationContract.js?v=v049-13-12";
 
 const EMPTY_COLLECTION = Object.freeze({ type: "FeatureCollection", features: [] });
 const RASTER_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const LAYER_ORDER = Object.freeze([
-  "cityBoundary",
-  "administrativeUnits",
-  "zones",
-  "places",
-  "serviceAreas",
-  "roads",
-  "route",
-  "opsCenters",
-  "robotaxis",
-]);
-
 export function supportsWebGL() {
   try {
     const canvas = document.createElement("canvas");
@@ -61,6 +57,8 @@ export function createGeospatialRasterMapAdapter(options = {}) {
     minZoom: 3,
     maxZoom: 19,
     maxNativeZoom: 19,
+    detectRetina: true,
+    updateWhenZooming: false,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
 
@@ -92,9 +90,11 @@ export function createGeospatialRasterMapAdapter(options = {}) {
     options.onBlankClick?.();
   });
 
-  queueMicrotask(() => {
+  requestAnimationFrame(() => {
     if (destroyed) return;
     map.invalidateSize(false);
+    const stableBounds = toLeafletBounds(currentScene?.bounds, Leaflet);
+    if (stableBounds) map.fitBounds(stableBounds, { padding: fitPadding(options.compact), animate: false });
     applyZoomVisibility();
     options.onViewChange?.(readCamera());
     options.onStatusChange?.({ status: "RASTER_READY", message: "" });
@@ -103,7 +103,7 @@ export function createGeospatialRasterMapAdapter(options = {}) {
   function installScene() {
     clearSceneLayers();
     objectLayers.clear();
-    for (const key of LAYER_ORDER) {
+    for (const key of CITY_SPATIAL_LAYER_ORDER) {
       const collection = currentScene?.[key] || EMPTY_COLLECTION;
       const group = Leaflet.layerGroup();
       const geoJson = Leaflet.geoJSON(collection, {
@@ -123,6 +123,7 @@ export function createGeospatialRasterMapAdapter(options = {}) {
     const properties = feature?.properties || {};
     const objectId = properties.object_id;
     if (objectId) objectLayers.set(`${key}:${objectId}`, { layer, feature, key });
+    if (!CITY_SPATIAL_LAYER_CONTRACT[key]?.interactive) return;
     layer.on("mouseover", (event) => {
       if (editing) return;
       applyFeatureStyle(layer, key, feature, "hovered");
@@ -139,7 +140,7 @@ export function createGeospatialRasterMapAdapter(options = {}) {
         options.onAdministrativeUnitSelect?.(properties);
         return;
       }
-      if (!["cityBoundary", "administrativeUnits"].includes(key)) {
+      if (CITY_SPATIAL_LAYER_CONTRACT[key]?.selectable) {
         options.onSelect?.(properties, toContainerPoint(event));
       }
     });
@@ -152,19 +153,8 @@ export function createGeospatialRasterMapAdapter(options = {}) {
 
   function applyZoomVisibility() {
     const zoom = map.getZoom();
-    const visibility = {
-      cityBoundary: zoom >= 3.5 && zoom < 12,
-      administrativeUnits: zoom >= 6 && zoom < 13,
-      zones: zoom >= 6 && zoom < 15.5,
-      places: zoom >= 12 && zoom < 18,
-      serviceAreas: zoom >= 14,
-      roads: zoom >= 13,
-      route: zoom >= 12,
-      opsCenters: zoom >= 11,
-      robotaxis: zoom >= 14,
-    };
     for (const [key, group] of sceneLayers) {
-      const shouldShow = visibility[key] !== false;
+      const shouldShow = isCitySpatialLayerVisible(key, zoom);
       if (shouldShow && !map.hasLayer(group)) group.addTo(map);
       if (!shouldShow && map.hasLayer(group)) map.removeLayer(group);
     }
@@ -378,16 +368,17 @@ function applyFeatureStyle(layer, key, feature, state) {
 
 function featureStyle(key, feature, selected = false, hovered = false) {
   const accent = selected ? CITY_SPATIAL_VISUAL_TOKENS.selected : (hovered ? CITY_SPATIAL_VISUAL_TOKENS.hovered : null);
+  const state = selected ? "selected" : (hovered ? "hovered" : "default");
   const common = { color: accent || "#8295a6", weight: selected ? 3.2 : (hovered ? 2.4 : 1.2), opacity: 0.9 };
-  if (key === "cityBoundary") return { ...common, color: accent || CITY_SPATIAL_VISUAL_TOKENS.city.line, weight: selected ? 4 : 2.6, fillColor: CITY_SPATIAL_VISUAL_TOKENS.city.fill, fillOpacity: 0.15 };
-  if (key === "administrativeUnits") return { ...common, color: accent || "#6f8490", fillColor: selected ? "#5f91c9" : "#ffffff", fillOpacity: selected ? 0.2 : 0.035 };
+  if (key === "cityBoundary") return { ...common, color: accent || CITY_SPATIAL_VISUAL_TOKENS.city.line, weight: selected ? 4 : (hovered ? 3.2 : 2.6), fillColor: CITY_SPATIAL_VISUAL_TOKENS.city.fill, fillOpacity: getCitySpatialFillOpacity(CITY_SPATIAL_VISUAL_TOKENS.city.opacity, state) };
+  if (key === "administrativeUnits") return { ...common, color: accent || "#6f8490", fillColor: selected ? "#5f91c9" : "#ffffff", fillOpacity: getCitySpatialFillOpacity(0.035, state) };
   if (key === "zones") {
     const isSubZone = feature?.properties?.zone_level === "SUB_ZONE";
     const token = isSubZone ? CITY_SPATIAL_VISUAL_TOKENS.subZone : CITY_SPATIAL_VISUAL_TOKENS.zone;
-    return { ...common, color: accent || token.line, weight: selected ? 3.6 : 2.2, fillColor: token.fill, fillOpacity: selected ? 0.42 : token.opacity };
+    return { ...common, color: accent || token.line, weight: selected ? 3.6 : (hovered ? 2.8 : 2.2), fillColor: token.fill, fillOpacity: getCitySpatialFillOpacity(token.opacity, state) };
   }
-  if (key === "places") return { ...common, color: accent || "#768998", fillColor: placeColor(feature?.properties?.place_type), fillOpacity: selected ? 0.38 : 0.18 };
-  if (key === "serviceAreas") return { ...common, color: accent || "#477d77", dashArray: "4 3", fillColor: serviceAreaColor(feature?.properties?.service_area_type), fillOpacity: selected ? 0.4 : 0.22 };
+  if (key === "places") return { ...common, color: accent || "#768998", fillColor: placeColor(feature?.properties?.place_type), fillOpacity: getCitySpatialFillOpacity(0.18, state) };
+  if (key === "serviceAreas") return { ...common, color: accent || "#477d77", dashArray: "4 3", fillColor: serviceAreaColor(feature?.properties?.service_area_type), fillOpacity: getCitySpatialFillOpacity(0.22, state) };
   if (key === "route") return { color: accent || CITY_SPATIAL_VISUAL_TOKENS.selected, weight: 5, opacity: 0.92 };
   if (key === "roads") return { color: accent || "#8295a6", weight: selected ? 4 : 1.5, opacity: 0.72 };
   return common;
@@ -469,14 +460,15 @@ function normalizeLayerType(type) {
 }
 
 function toLeafletBounds(bounds, Leaflet) {
-  if (!Array.isArray(bounds) || bounds.length !== 2) return null;
-  const [[west, south], [east, north]] = bounds;
-  if (![west, south, east, north].every(Number.isFinite)) return null;
+  const normalized = normalizeCitySpatialBounds(bounds);
+  if (!normalized) return null;
+  const [[west, south], [east, north]] = normalized;
   return Leaflet.latLngBounds([south, west], [north, east]);
 }
 
 function fitPadding(compact) {
-  return compact ? [24, 24] : [52, 52];
+  const padding = getCitySpatialFitPadding(compact);
+  return [padding, padding];
 }
 
 function drawingStyle() {
