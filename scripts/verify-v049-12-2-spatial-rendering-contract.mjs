@@ -6,6 +6,7 @@ import {
 } from "../src/ui/geospatialMapAdapter.js";
 
 const adapterSource = fs.readFileSync(new URL("../src/ui/geospatialMapAdapter.js", import.meta.url), "utf8");
+const rasterAdapterSource = fs.readFileSync(new URL("../src/ui/geospatialRasterMapAdapter.js", import.meta.url), "utf8");
 const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const indexSource = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const versionSource = fs.readFileSync(new URL("../VERSION.md", import.meta.url), "utf8");
@@ -34,14 +35,22 @@ assert(adapterSource.includes("type: layer.type || definition.type"), "嵌套空
 assert(adapterSource.includes("dataset.layerInstallErrorCount"), "缺少图层安装失败计数");
 assert(adapterSource.includes("dataset.mapErrorCount"), "缺少地图运行错误计数");
 assert(!adapterSource.includes("dataset.businessLayerIds"), "运行诊断不应向 DOM 写入完整图层编号列表");
-assert(mainSource.includes('status: "LOCAL_FALLBACK"'), "地图引擎初始化失败后必须启用本地兼容地图");
-assert(mainSource.includes("GeospatialCompatibilityMap scene={scene}"), "缺少非 WebGL 城市地图承接");
-assert(mainSource.includes("attempt < 3"), "地图引擎初始化失败后必须自动重试");
+assert(mainSource.includes("geospatialRasterMapAdapter.supportsWebGL()"), "缺少浏览器 WebGL 能力检测");
+assert(mainSource.includes("activateRasterRenderer"), "地图引擎异常后必须切换二维城市地图");
+assert(mainSource.includes('status?.status === "FALLBACK"'), "矢量底图异常后必须切换二维城市地图");
+assert(mainSource.includes('status: "RASTER_READY"'), "缺少二维城市地图就绪状态");
+assert(!mainSource.includes("GeospatialCompatibilityMap"), "不得重新引入静态城市地图占位实现");
+assert(rasterAdapterSource.includes('renderer: "LEAFLET_RASTER"'), "缺少成熟二维地图渲染器");
+assert(rasterAdapterSource.includes("Leaflet.tileLayer"), "二维地图必须加载真实栅格底图");
+assert(rasterAdapterSource.includes("updateScene"), "二维地图必须接入统一地理场景");
+assert(rasterAdapterSource.includes("updateSelection"), "二维地图必须接入统一对象选中");
+assert(rasterAdapterSource.includes("startPolygonDrawing"), "二维地图必须保留运营区域规划入口");
 assert(mainSource.includes("containerRef.current.replaceChildren()"), "地图重试前必须清理失败的引擎节点");
 assert(!mainSource.includes("地理地图暂不可用"), "城市地图不得退化为不可用提示");
 assert(!mainSource.includes("当前设备暂不支持城市底图"), "城市地图不得要求用户切换网格仿真");
 assert(cacheVersion, "无法读取当前发布版本");
-assert(mainSource.includes(`geospatialMapAdapter.js?v=20260724-${cacheVersion}`), "地图适配器缓存版本未更新");
+assert(mainSource.includes(`geospatialMapAdapter.js?v=20260726-${cacheVersion}`), "矢量地图适配器缓存版本未更新");
+assert(mainSource.includes(`geospatialRasterMapAdapter.js?v=20260726-${cacheVersion}`), "二维地图适配器缓存版本未更新");
 assert(indexSource.includes(`?v=${cacheVersion}`), "页面资源缓存版本未更新");
 
-console.log("v049.12.2 城市与运营范围真实渲染合同验证通过");
+console.log("v049.13.11 城市地图双渲染合同验证通过");
