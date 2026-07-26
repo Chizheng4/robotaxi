@@ -34,8 +34,12 @@ assert(adapterSource.includes("type: layer.type || definition.type"), "嵌套空
 assert(adapterSource.includes("dataset.layerInstallErrorCount"), "缺少图层安装失败计数");
 assert(adapterSource.includes("dataset.mapErrorCount"), "缺少地图运行错误计数");
 assert(!adapterSource.includes("dataset.businessLayerIds"), "运行诊断不应向 DOM 写入完整图层编号列表");
-assert(mainSource.includes("getGeospatialUnavailableMessage(error)"), "城市底图异常必须使用统一用户提示");
-assert(mainSource.includes("当前设备暂不支持城市底图，可切换网格仿真继续查看。"), "WebGL 降级提示不完整");
+assert(mainSource.includes('status: "LOCAL_FALLBACK"'), "地图引擎初始化失败后必须启用本地兼容地图");
+assert(mainSource.includes("GeospatialCompatibilityMap scene={scene}"), "缺少非 WebGL 城市地图承接");
+assert(mainSource.includes("attempt < 3"), "地图引擎初始化失败后必须自动重试");
+assert(mainSource.includes("containerRef.current.replaceChildren()"), "地图重试前必须清理失败的引擎节点");
+assert(!mainSource.includes("地理地图暂不可用"), "城市地图不得退化为不可用提示");
+assert(!mainSource.includes("当前设备暂不支持城市底图"), "城市地图不得要求用户切换网格仿真");
 assert(cacheVersion, "无法读取当前发布版本");
 assert(mainSource.includes(`geospatialMapAdapter.js?v=20260724-${cacheVersion}`), "地图适配器缓存版本未更新");
 assert(indexSource.includes(`?v=${cacheVersion}`), "页面资源缓存版本未更新");

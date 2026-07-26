@@ -8846,51 +8846,66 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
-    try {
-      adapterRef.current = geospatialMapAdapter.createGeospatialMapAdapter({
-        container: containerRef.current,
-        scene,
-        selected,
-        compact,
-        onStatusChange: setMapStatus,
-        onViewChange: setPlanningView,
-        onHover: (properties, point) => setHovered((current) => current?.pinned ? current : createGeospatialHover(properties, point, containerRef.current, false)),
-        onHoverEnd: () => setHovered((current) => current?.pinned ? current : null),
-        onSelect: (properties, point) => {
-          const nextHover = createGeospatialHover(properties, point, containerRef.current, true);
-          if (mobileLayout) {
-            setHovered((current) => {
-              if (current?.touch && current.type === nextHover.type && current.id === nextHover.id) {
-                onSelect(nextHover.type, nextHover.id);
-                return null;
-              }
-              return { ...nextHover, touch: true, pinned: false };
-            });
-            return;
-          }
-          setHovered(nextHover);
-          onSelect(nextHover.type, nextHover.id);
-        },
-        onBlankClick: () => {
-          setHovered(null);
-          onClear?.();
-        },
-        onAdministrativeUnitSelect: (properties) => {
-          if (targetTypeRef.current !== "ZONE") return;
-          const id = properties.object_id;
-          setSelectedSpatialUnitIds((current) => (
-            formationModeRef.current === "ADMINISTRATIVE_UNIT_REUSE"
-              ? [id]
-              : (current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
-          ));
-        },
-      });
-      onControllerReady?.(adapterRef.current);
-      setMapStatus({ status: "READY", message: "" });
-    } catch (error) {
-      setMapStatus({ status: "UNAVAILABLE", message: getGeospatialUnavailableMessage(error) });
-    }
+    let cancelled = false;
+    let retryTimer = null;
+    let attempt = 0;
+    const initializeMap = () => {
+      if (cancelled || !containerRef.current) return;
+      attempt += 1;
+      try {
+        containerRef.current.replaceChildren();
+        adapterRef.current = geospatialMapAdapter.createGeospatialMapAdapter({
+          container: containerRef.current,
+          scene,
+          selected,
+          compact,
+          onStatusChange: setMapStatus,
+          onViewChange: setPlanningView,
+          onHover: (properties, point) => setHovered((current) => current?.pinned ? current : createGeospatialHover(properties, point, containerRef.current, false)),
+          onHoverEnd: () => setHovered((current) => current?.pinned ? current : null),
+          onSelect: (properties, point) => {
+            const nextHover = createGeospatialHover(properties, point, containerRef.current, true);
+            if (mobileLayout) {
+              setHovered((current) => {
+                if (current?.touch && current.type === nextHover.type && current.id === nextHover.id) {
+                  onSelect(nextHover.type, nextHover.id);
+                  return null;
+                }
+                return { ...nextHover, touch: true, pinned: false };
+              });
+              return;
+            }
+            setHovered(nextHover);
+            onSelect(nextHover.type, nextHover.id);
+          },
+          onBlankClick: () => {
+            setHovered(null);
+            onClear?.();
+          },
+          onAdministrativeUnitSelect: (properties) => {
+            if (targetTypeRef.current !== "ZONE") return;
+            const id = properties.object_id;
+            setSelectedSpatialUnitIds((current) => (
+              formationModeRef.current === "ADMINISTRATIVE_UNIT_REUSE"
+                ? [id]
+                : (current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+            ));
+          },
+        });
+        onControllerReady?.(adapterRef.current);
+        setMapStatus({ status: "READY", message: "" });
+      } catch (error) {
+        adapterRef.current = null;
+        onControllerReady?.(null);
+        setMapStatus({ status: "LOCAL_FALLBACK", message: "已启用兼容地图" });
+        if (attempt < 3) retryTimer = setTimeout(initializeMap, attempt * 1200);
+        console.warn("城市地图引擎初始化失败，已启用兼容地图", error);
+      }
+    };
+    initializeMap();
     return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
       adapterRef.current?.destroy();
       adapterRef.current = null;
       onControllerReady?.(null);
@@ -9327,6 +9342,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   return (
     <div className="geospatial-map-shell">
       <div ref={containerRef} className="geospatial-map-canvas" role="img" aria-label="Robotaxi 真实地理空间运营地图" />
+      {mapStatus.status === "LOCAL_FALLBACK" && <GeospatialCompatibilityMap scene={scene} />}
       {!mobileLayout && <Button
         className="spatial-plan-trigger"
         size="small"
@@ -9455,13 +9471,8 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
           {editorNotice && <p className={activePlan?.validation_issues?.length ? "spatial-plan-notice error" : "spatial-plan-notice"}>{editorNotice}</p>}
         </aside>
       )}
-      {mapStatus.status === "UNAVAILABLE" && (
-        <div className="geospatial-map-unavailable" role="status">
-          <strong>地理地图暂不可用</strong>
-          <span>{mapStatus.message}</span>
-        </div>
-      )}
       {mapStatus.status === "FALLBACK" && <span className="geospatial-map-status">底图降级 · 运营对象仍可用</span>}
+      {mapStatus.status === "LOCAL_FALLBACK" && <span className="geospatial-map-status">{mapStatus.message}</span>}
       {hoverPresentation && (
         <div className={hovered.touch ? "map-hover-card touch" : "map-hover-card"} style={{ left: hovered.x, top: hovered.y }} role="status">
           <strong>{hoverPresentation.title}</strong>
@@ -9490,12 +9501,78 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   );
 }
 
-function getGeospatialUnavailableMessage(error) {
-  const technicalMessage = String(error?.message || error || "");
-  if (/webgl|performancecaveat|vector|context/i.test(technicalMessage)) {
-    return "当前设备暂不支持城市底图，可切换网格仿真继续查看。";
+function GeospatialCompatibilityMap({ scene }) {
+  const project = createCompatibilityMapProjector(scene);
+  const areaLayers = [
+    { key: "cityBoundary", className: "city" },
+    { key: "administrativeUnits", className: "administrative" },
+    { key: "zones", className: "zone" },
+    { key: "places", className: "place" },
+    { key: "serviceAreas", className: "service-area" },
+  ];
+  return (
+    <div className="geospatial-compatibility-map" role="img" aria-label="广州城市地理兼容地图">
+      <svg viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <rect className="surface" width="1000" height="700" />
+        <g className="water-lines">
+          {renderCompatibilityFeatures(scene?.roads, project, "road")}
+        </g>
+        {areaLayers.map(({ key, className }) => (
+          <g className={className} key={key}>
+            {renderCompatibilityFeatures(scene?.[key], project, className)}
+          </g>
+        ))}
+        <g className="point">
+          {renderCompatibilityFeatures(scene?.opsCenters, project, "ops-center")}
+          {renderCompatibilityFeatures(scene?.robotaxis, project, "robotaxi")}
+        </g>
+      </svg>
+      <span className="geospatial-compatibility-attribution">广州城市地理 · 本地运营空间数据</span>
+    </div>
+  );
+}
+
+function createCompatibilityMapProjector(scene) {
+  const fallbackBounds = [[112.75, 22.35], [114.75, 24.25]];
+  const bounds = Array.isArray(scene?.bounds) && scene.bounds.length === 2 ? scene.bounds : fallbackBounds;
+  const west = Number(bounds[0]?.[0]) || fallbackBounds[0][0];
+  const south = Number(bounds[0]?.[1]) || fallbackBounds[0][1];
+  const east = Number(bounds[1]?.[0]) || fallbackBounds[1][0];
+  const north = Number(bounds[1]?.[1]) || fallbackBounds[1][1];
+  const longitudeSpan = Math.max(0.0001, east - west);
+  const latitudeSpan = Math.max(0.0001, north - south);
+  return ([longitude, latitude]) => [
+    ((Number(longitude) - west) / longitudeSpan) * 1000,
+    ((north - Number(latitude)) / latitudeSpan) * 700,
+  ];
+}
+
+function renderCompatibilityFeatures(collection, project, className) {
+  return (collection?.features || []).map((feature, index) => {
+    const geometry = feature?.geometry;
+    const key = feature?.properties?.object_id || feature?.id || `${className}-${index}`;
+    if (geometry?.type === "Point") {
+      const [cx, cy] = project(geometry.coordinates);
+      return <circle className={className} cx={cx} cy={cy} r={className === "robotaxi" ? 3 : 5} key={key} />;
+    }
+    const path = compatibilityGeometryPath(geometry, project);
+    return path ? <path className={className} d={path} key={key} vectorEffect="non-scaling-stroke" /> : null;
+  });
+}
+
+function compatibilityGeometryPath(geometry, project) {
+  const line = (coordinates, close = false) => {
+    const points = (coordinates || []).map(project).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+    if (!points.length) return "";
+    return `${points.map(([x, y], index) => `${index ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`).join(" ")}${close ? " Z" : ""}`;
+  };
+  if (geometry?.type === "LineString") return line(geometry.coordinates);
+  if (geometry?.type === "MultiLineString") return geometry.coordinates.map((item) => line(item)).join(" ");
+  if (geometry?.type === "Polygon") return geometry.coordinates.map((item) => line(item, true)).join(" ");
+  if (geometry?.type === "MultiPolygon") {
+    return geometry.coordinates.flatMap((polygon) => polygon.map((item) => line(item, true))).join(" ");
   }
-  return "城市底图加载失败，可稍后重试或切换网格仿真。";
+  return "";
 }
 
 function resolveSelectedSpatialTarget(selected, scene) {
@@ -11974,7 +12051,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-9"),
+		    import("./ui/geospatialMapAdapter.js?v=20260724-v049-13-10"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
