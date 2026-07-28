@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "1.0",
+  "reviewStatus": "approved",
+  "publicStatus": "public",
+  "approvalRecord": {
+    "approvalId": "robotaxi-portfolio-media-2026-07-28",
+    "approvalStatus": "approved",
+    "authority": "user",
+    "approvedAt": "2026-07-28",
+    "scope": "四项 Robotaxi 作品媒体及既定事实边界"
+  },
+  "sourceDraftManifestSha256": "703fa441db99f49a977cee8cd3aeb150fc4fb9167d5a0003af2527677799348e",
+  "projectionContract": {
+    "desktop": "左侧短说明 + 右侧16:10证据图",
+    "mobile": "图上文下"
+  },
+  "rows": [
+    {
+      "id": "robotaxi-operations-current-simulation",
+      "group": "运营中控台",
+      "order": 1,
+      "title": "当前模拟运行",
+      "shortDescription": "网格仿真运营中控台展示当前可运行的网格模拟与系统内空间对象，不代表城市商业运营。",
+      "loopRelation": "当前可运行的网格模拟 → 运营中控台",
+      "mediaAssetId": "robotaxi-evidence-grid-simulation-operations-map-v1",
+      "altZh": "Robotaxi 当前模拟运行的网格仿真运营中控台，展示两个模拟运营区域、道路与服务空间中的 Robotaxi 点位及其运营详情；不代表城市商业运营。",
+      "mediaRole": "current_system_evidence",
+      "robotaxiVersion": "v049.13.13",
+      "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
+      "stateBoundary": "当前可运行的网格模拟；不代表城市商业运营。",
+      "deepLink": null
+    },
+    {
+      "id": "robotaxi-operations-city-spatial-progress",
+      "group": "运营中控台",
+      "order": 2,
+      "title": "城市空间迭代",
+      "shortDescription": "真实城市底图与规划入口已形成城市空间基底；城市模拟运行尚未启用，仅作进行中语境。",
+      "loopRelation": "城市空间基底与规划入口 → 后续城市模拟运行",
+      "mediaAssetId": "robotaxi-evidence-city-geographic-map-v1",
+      "altZh": "Robotaxi 城市空间迭代，展示真实城市底图、行政区空间基底与运营区域规划入口；尚未进入城市模拟运行。",
+      "mediaRole": "in_progress_context",
+      "robotaxiVersion": "v049.13.13",
+      "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
+      "stateBoundary": "城市空间基底与规划入口已形成；城市模拟运行尚未启用，不作运营能力或商业运营主张。",
+      "deepLink": null
+    },
+    {
+      "id": "robotaxi-operating-model",
+      "group": "经营模型",
+      "order": 3,
+      "title": "经营模型",
+      "shortDescription": "展示需求、供应、决策控制、服务、资产、财务与经营反馈之间的系统闭环。",
+      "loopRelation": "经营模型 → 经营事实与指标分析",
+      "mediaAssetId": "robotaxi-evidence-operating-model-v1",
+      "altZh": "Robotaxi 经营模型，展示需求、供应、决策控制、服务、资产、财务与经营反馈之间的闭环关系。",
+      "mediaRole": "current_system_evidence",
+      "robotaxiVersion": "v049.13.13",
+      "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
+      "stateBoundary": "当前系统能力证据；仍需人工审核。",
+      "deepLink": null
+    },
+    {
+      "id": "robotaxi-operating-metrics-overview",
+      "group": "经营总览",
+      "order": 4,
+      "title": "经营总览",
+      "shortDescription": "展示模拟经营的规划基线、经营事实、指标结果与数据质量提示，不代表真实商业运营绩效。",
+      "loopRelation": "经营事实 → 指标结果与数据质量反馈",
+      "mediaAssetId": "robotaxi-evidence-operating-metrics-overview-v1",
+      "altZh": "Robotaxi 经营总览，展示模拟经营的规划基线、经营事实、指标结果与数据质量提示；不代表真实商业运营绩效。",
+      "mediaRole": "current_system_evidence",
+      "robotaxiVersion": "v049.13.13",
+      "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
+      "stateBoundary": "模拟经营数据；不代表真实商业运营绩效。",
+      "deepLink": null
+    }
+  ],
+  "assets": [
+    {
+      "id": "robotaxi-evidence-city-geographic-map-v1",
+      "sourceAssetId": "robotaxi-evidence-city-geographic-map-v1",
+      "scene": "city-geographic-map",
+      "viewport": "1280x800",
+      "assetPath": "assets/robotaxi-evidence-city-geographic-map-v1.png",
+      "assetSha256": "5066d2ded5238813443be324018c04bebb797cff197a88f6bda1998570e72f27",
+      "robotaxiVersion": "v049.13.13",
+      "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
+      "altZh": "Robotaxi 城市空间迭代，展示真实城市底图、行政区空间基底与运营区域规划入口；尚未进入城市模拟运行。",
+      "mediaRole": "in_progress_context",
+      "stateBoundary": "真实城市底图与规划入口的进行中语境；城市模拟运行尚未启用，不作运营能力或商业运营主张。",
+      "approvalStatus": "approved"
+    },
+    {
+      "id": "robotaxi-evidence-grid-simulation-operations-map-v1",
+      "sourceAssetId": "robotaxi-evidence-grid-simulation-operations-map-v1",
+      "scene": "grid-simulation-operations-map",
+      "viewport": "1280x800",
+      "assetPath": "assets/robotaxi-evidence-grid-simulation-operations-map-v1.png",
+      "assetSha256": "cc808740a75bfa8652c0d77e11cc631dcaa65a39864e0cc920f2c5b9573a4f97",
+      "robotaxiVersion": "v049.13.13",
+      "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
+      "altZh": "Robotaxi 当前模拟运行的网格仿真运营中控台，展示两个模拟运营区域、道路与服务空间中的 Robotaxi 点位及其运营详情；不代表城市商业运营。",
+      "mediaRole": "current_system_evidence",
+      "stateBoundary": "当前可运行的网格模拟；不代表城市商业运营。",
+      "approvalStatus": "approved"
+    },
+    {
+      "id": "robotaxi-evidence-operating-model-v1",
+      "sourceAssetId": "robotaxi-evidence-operating-model-v1",
+      "scene": "operating-model",
+      "viewport": "1280x800",
+      "assetPath": "assets/robotaxi-evidence-operating-model-v1.png",
+      "assetSha256": "88e9128a29aa01ed1d1de8f987a575a330952cb38462976c5f22658a098b192c",
+      "robotaxiVersion": "v049.13.13",
+      "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
+      "altZh": "Robotaxi 经营模型，展示需求、供应、决策控制、服务、资产、财务与经营反馈之间的闭环关系。",
+      "mediaRole": "current_system_evidence",
+      "stateBoundary": "当前系统能力证据；仅限已授权作品展示。",
+      "approvalStatus": "approved"
+    },
+    {
+      "id": "robotaxi-evidence-operating-metrics-overview-v1",
+      "sourceAssetId": "robotaxi-evidence-operating-metrics-overview-v1",
+      "scene": "operating-metrics-overview",
+      "viewport": "1280x800",
+      "assetPath": "assets/robotaxi-evidence-operating-metrics-overview-v1.png",
+      "assetSha256": "bc9e7c32d8561ab596f873ca130c00ea4411affadc07f3ff8c3d90f0afdacb82",
+      "robotaxiVersion": "v049.13.13",
+      "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
+      "altZh": "Robotaxi 经营总览，展示模拟经营的规划基线、经营事实、指标结果与数据质量提示；不代表真实商业运营绩效。",
+      "mediaRole": "current_system_evidence",
+      "stateBoundary": "模拟经营数据；不代表真实商业运营绩效。",
+      "approvalStatus": "approved"
+    }
+  ]
+}

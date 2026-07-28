@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Robotaxi 本地审核证据媒体草稿",
+  "type": "object",
+  "required": ["schemaVersion", "reviewStatus", "publicStatus", "assets"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "reviewStatus": { "const": "draft" },
+    "publicStatus": { "const": "internal" },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "scene", "sceneVersion", "route", "state", "viewport", "altZh", "robotaxiVersion", "commit", "sourcePage", "capturedAt", "assetPath", "assetSha256", "reviewStatus", "publicStatus", "candidateStatus", "mediaRole"],
+        "properties": {
+          "id": { "pattern": "^robotaxi-evidence-[a-z0-9-]+-v[0-9]+$" },
+          "scene": { "enum": ["city-geographic-map", "grid-simulation-operations-map", "operating-model", "operating-metrics-overview"] },
+          "sceneVersion": { "const": "1" },
+          "route": { "type": "string", "minLength": 1 },
+          "state": { "type": "object" },
+          "viewport": { "const": "1280x800" },
+          "altZh": { "type": "string", "minLength": 8 },
+          "robotaxiVersion": { "type": "string", "pattern": "^v" },
+          "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+          "sourcePage": { "type": "string", "pattern": "^http://127\\.0\\.0\\.1:4173/" },
+          "capturedAt": { "type": "string", "format": "date-time" },
+          "assetPath": { "type": "string", "pattern": "^assets/[a-z0-9-]+\\.png$" },
+          "assetSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "reviewStatus": { "const": "draft" },
+          "publicStatus": { "const": "internal" },
+          "candidateStatus": { "enum": ["candidate", "rejected"] },
+          "mediaRole": { "enum": ["current_system_evidence", "in_progress_context", "rejected"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

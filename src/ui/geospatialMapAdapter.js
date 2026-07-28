@@ -5,13 +5,13 @@ import {
   CITY_SPATIAL_ZOOM_BANDS,
   getCitySpatialFitPadding,
   normalizeCitySpatialBounds,
-} from "./geospatialPresentationContract.js?v=v049-13-13";
+} from "./geospatialPresentationContract.js?v=v049-13-14";
 
 export {
   CITY_SPATIAL_VISUAL_TOKENS,
   CITY_SPATIAL_ZOOM_BANDS,
   createCitySpatialHoverPresentation,
-} from "./geospatialPresentationContract.js?v=v049-13-13";
+} from "./geospatialPresentationContract.js?v=v049-13-14";
 
 const SOURCE_DEFINITIONS = Object.freeze({
   cityMask: { type: "fill", layers: [
