@@ -28,6 +28,9 @@ assert.equal(handoff.reviewStatus, "draft", "草稿交接必须保持 draft");
 assert.equal(handoff.publicStatus, "internal", "草稿交接必须保持 internal");
 assert.equal(draft.assets.length, 4, "本次授权只能包含四项既有媒体");
 assert.equal(handoff.rows.length, 4, "本次授权只能包含四行既有交接");
+assert(fs.existsSync(approvedManifestPath), "必须先有已归档的逐项审核记录，禁止批量继承历史批准");
+const previousApproved = JSON.parse(fs.readFileSync(approvedManifestPath, "utf8"));
+const previousById = new Map(previousApproved.assets.map((asset) => [asset.id, asset]));
 
 const assetsById = new Map(draft.assets.map((asset) => [asset.id, asset]));
 assert.deepEqual(new Set(assetsById.keys()), approvedAssetIds, "草稿资产必须与批准范围精确一致");
@@ -36,6 +39,10 @@ for (const asset of draft.assets) {
   assert.equal(asset.publicStatus, "internal");
   assert.equal(asset.candidateStatus, "candidate", `${asset.id} 未获候选资格，不能晋级`);
   assert.notEqual(asset.mediaRole, "rejected", `${asset.id} 被拒绝，不能晋级`);
+  const previous = previousById.get(asset.id);
+  assert.equal(previous?.approvalStatus, "approved", `${asset.id} 缺少新的逐项批准记录，禁止继承历史 approvalRecord`);
+  assert.equal(previous?.reviewStatus, "approved", `${asset.id} 未通过新的逐项视觉审核`);
+  assert.equal(previous?.publicStatus, "public", `${asset.id} 未获新的逐项公开授权`);
   const sourcePath = path.join(draftRoot, asset.assetPath);
   const bytes = fs.readFileSync(sourcePath);
   assert.equal(sha256(bytes), asset.assetSha256, `${asset.id} 草稿文件哈希不匹配，不能晋级`);

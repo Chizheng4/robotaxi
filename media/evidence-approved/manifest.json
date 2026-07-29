@@ -1,13 +1,19 @@
 {
   "schemaVersion": "1.0",
-  "reviewStatus": "approved",
-  "publicStatus": "public",
+  "reviewStatus": "superseded",
+  "publicStatus": "internal",
   "approvalRecord": {
     "approvalId": "robotaxi-portfolio-media-2026-07-28",
     "approvalStatus": "approved",
     "authority": "user",
     "approvedAt": "2026-07-28",
     "scope": "四项 Robotaxi 作品媒体及既定事实边界"
+  },
+  "currentPublication": {
+    "status": "suspended",
+    "effectiveAt": "2026-07-29",
+    "authority": "协调设计视觉复核",
+    "reason": "旧截图不满足完整、可复现、意图明确的原生系统页面标准；必须逐项重采集并重新审核。"
   },
   "sourceDraftManifestSha256": "703fa441db99f49a977cee8cd3aeb150fc4fb9167d5a0003af2527677799348e",
   "projectionContract": {
@@ -28,6 +34,8 @@
       "robotaxiVersion": "v049.13.13",
       "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
       "stateBoundary": "当前可运行的网格模拟；不代表城市商业运营。",
+      "reviewStatus": "pending_review",
+      "publicStatus": "internal",
       "deepLink": null
     },
     {
@@ -43,6 +51,8 @@
       "robotaxiVersion": "v049.13.13",
       "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
       "stateBoundary": "城市空间基底与规划入口已形成；城市模拟运行尚未启用，不作运营能力或商业运营主张。",
+      "reviewStatus": "revoked",
+      "publicStatus": "internal",
       "deepLink": null
     },
     {
@@ -58,6 +68,8 @@
       "robotaxiVersion": "v049.13.13",
       "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
       "stateBoundary": "当前系统能力证据；仍需人工审核。",
+      "reviewStatus": "pending_review",
+      "publicStatus": "internal",
       "deepLink": null
     },
     {
@@ -73,6 +85,8 @@
       "robotaxiVersion": "v049.13.13",
       "commit": "a42a1b6a896235eed5c0862ef4cf6c752663ad62",
       "stateBoundary": "模拟经营数据；不代表真实商业运营绩效。",
+      "reviewStatus": "pending_review",
+      "publicStatus": "internal",
       "deepLink": null
     }
   ],
@@ -89,7 +103,16 @@
       "altZh": "Robotaxi 城市空间迭代，展示真实城市底图、行政区空间基底与运营区域规划入口；尚未进入城市模拟运行。",
       "mediaRole": "in_progress_context",
       "stateBoundary": "真实城市底图与规划入口的进行中语境；城市模拟运行尚未启用，不作运营能力或商业运营主张。",
-      "approvalStatus": "approved"
+      "approvalStatus": "revoked",
+      "reviewStatus": "revoked",
+      "publicStatus": "internal",
+      "reviewRecord": {
+        "reviewId": "robotaxi-evidence-city-geographic-map-v1-2026-07-29",
+        "status": "revoked",
+        "effectiveAt": "2026-07-29",
+        "authority": "协调设计视觉复核",
+        "reason": "采集到 Leaflet/OpenStreetMap 兼容回退，未呈现 MapLibre 主地图与完整原生城市工作台控件。"
+      }
     },
     {
       "id": "robotaxi-evidence-grid-simulation-operations-map-v1",
@@ -103,7 +126,16 @@
       "altZh": "Robotaxi 当前模拟运行的网格仿真运营中控台，展示两个模拟运营区域、道路与服务空间中的 Robotaxi 点位及其运营详情；不代表城市商业运营。",
       "mediaRole": "current_system_evidence",
       "stateBoundary": "当前可运行的网格模拟；不代表城市商业运营。",
-      "approvalStatus": "approved"
+      "approvalStatus": "paused",
+      "reviewStatus": "pending_review",
+      "publicStatus": "internal",
+      "reviewRecord": {
+        "reviewId": "robotaxi-evidence-grid-simulation-operations-map-v1-2026-07-29",
+        "status": "paused",
+        "effectiveAt": "2026-07-29",
+        "authority": "协调设计视觉复核",
+        "reason": "原生导航被收缩为图标轨，未满足完整工作台截图标准。"
+      }
     },
     {
       "id": "robotaxi-evidence-operating-model-v1",
@@ -117,7 +149,16 @@
       "altZh": "Robotaxi 经营模型，展示需求、供应、决策控制、服务、资产、财务与经营反馈之间的闭环关系。",
       "mediaRole": "current_system_evidence",
       "stateBoundary": "当前系统能力证据；仅限已授权作品展示。",
-      "approvalStatus": "approved"
+      "approvalStatus": "paused",
+      "reviewStatus": "pending_review",
+      "publicStatus": "internal",
+      "reviewRecord": {
+        "reviewId": "robotaxi-evidence-operating-model-v1-2026-07-29",
+        "status": "paused",
+        "effectiveAt": "2026-07-29",
+        "authority": "协调设计视觉复核",
+        "reason": "原生导航被收缩，未满足完整工作台截图标准。"
+      }
     },
     {
       "id": "robotaxi-evidence-operating-metrics-overview-v1",
@@ -131,7 +172,16 @@
       "altZh": "Robotaxi 经营总览，展示模拟经营的规划基线、经营事实、指标结果与数据质量提示；不代表真实商业运营绩效。",
       "mediaRole": "current_system_evidence",
       "stateBoundary": "模拟经营数据；不代表真实商业运营绩效。",
-      "approvalStatus": "approved"
+      "approvalStatus": "paused",
+      "reviewStatus": "pending_review",
+      "publicStatus": "internal",
+      "reviewRecord": {
+        "reviewId": "robotaxi-evidence-operating-metrics-overview-v1-2026-07-29",
+        "status": "paused",
+        "effectiveAt": "2026-07-29",
+        "authority": "协调设计视觉复核",
+        "reason": "原生导航被收缩且当前视窗未完整呈现经营结果，未满足完整工作台截图标准。"
+      }
     }
   ]
 }

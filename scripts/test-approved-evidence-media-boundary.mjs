@@ -11,7 +11,7 @@ const approvedRoot = path.join(fixtureRoot, "approved");
 fs.cpSync(path.join(root, "media/evidence-drafts"), draftRoot, { recursive: true });
 fs.cpSync(path.join(root, "media/evidence-approved"), approvedRoot, { recursive: true });
 try {
-  expectRejected("unapproved", (manifest) => { manifest.assets[0].approvalStatus = "revoked"; });
+  expectRejected("premature-reapproval", (manifest) => { manifest.assets[0].approvalStatus = "approved"; manifest.assets[0].reviewStatus = "approved"; manifest.assets[0].publicStatus = "public"; });
   expectRejected("hash-mismatch", (manifest) => { manifest.assets[1].assetSha256 = "0".repeat(64); });
   console.log("未批准、撤销与哈希不匹配资产均被批准边界拒绝");
 } finally {

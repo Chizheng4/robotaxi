@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Robotaxi 已批准作品媒体",
   "type": "object",
-  "required": ["schemaVersion", "reviewStatus", "publicStatus", "approvalRecord", "sourceDraftManifestSha256", "projectionContract", "rows", "assets"],
+  "required": ["schemaVersion", "reviewStatus", "publicStatus", "approvalRecord", "currentPublication", "sourceDraftManifestSha256", "projectionContract", "rows", "assets"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
-    "reviewStatus": { "const": "approved" },
-    "publicStatus": { "const": "public" },
+    "reviewStatus": { "enum": ["approved", "superseded"] },
+    "publicStatus": { "enum": ["public", "internal"] },
     "approvalRecord": {
       "type": "object",
       "required": ["approvalId", "approvalStatus", "authority", "approvedAt", "scope"],
@@ -16,6 +16,17 @@
         "authority": { "const": "user" },
         "approvedAt": { "const": "2026-07-28" },
         "scope": { "const": "四项 Robotaxi 作品媒体及既定事实边界" }
+      },
+      "additionalProperties": false
+    },
+    "currentPublication": {
+      "type": "object",
+      "required": ["status", "effectiveAt", "authority", "reason"],
+      "properties": {
+        "status": { "enum": ["active", "suspended"] },
+        "effectiveAt": { "type": "string", "format": "date" },
+        "authority": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     },
