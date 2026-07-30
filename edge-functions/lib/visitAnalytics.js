@@ -1,22 +1,35 @@
-const recordPrefix = "visit:";
+const recordPrefix = "visit_";
 const tokenLifetimeSeconds = 15 * 60;
+const retentionDays = 30;
+const cleanupLimit = 100;
+const listLimit = 500;
 const allowedPeriods = new Map([["1D", 1], ["7D", 7], ["30D", 30]]);
+const allowedSites = new Set(["ALL", "XINGBUILD", "ROBOTAXI"]);
+const productionHosts = new Map([
+  ["xingbuild.top", "XINGBUILD"],
+  ["www.xingbuild.top", "XINGBUILD"],
+  ["robotaxi.xingbuild.top", "ROBOTAXI"],
+]);
+const automatedAgentPattern = /verifybrowserload|robotaxiqa|playwright|puppeteer|headlesschrome|lighthouse|pagespeed|edgeone.*preview/i;
 
-export async function handleCors(request, env) {
-  const headers = corsHeaders(request, env);
+export async function handleCors(request) {
+  const headers = corsHeaders(request);
   if (!headers) return json({ message: "请求来源不受信任" }, 403);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
   return headers;
 }
 
-export function corsHeaders(request, env) {
-  const origin = request.headers.get("Origin") || "";
-  const allowedOrigin = String(env.visitAllowedOrigin || "https://robotaxi.xingbuild.top").replace(/\/$/, "");
+export function corsHeaders(request) {
   const requestUrl = new URL(request.url);
-  const sameOrigin = origin === requestUrl.origin;
-  if (origin && origin !== allowedOrigin && !sameOrigin) return null;
+  const origin = request.headers.get("Origin") || "";
+  if (!productionHosts.has(requestUrl.hostname)) return null;
+  if (origin) {
+    let originHost;
+    try { originHost = new URL(origin).hostname; } catch { return null; }
+    if (originHost !== requestUrl.hostname || !productionHosts.has(originHost)) return null;
+  }
   return {
-    "Access-Control-Allow-Origin": origin || allowedOrigin,
+    "Access-Control-Allow-Origin": origin || requestUrl.origin,
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Cache-Control": "no-store",
@@ -26,71 +39,36 @@ export function corsHeaders(request, env) {
 
 export async function readJson(request) {
   const contentLength = Number(request.headers.get("Content-Length") || 0);
-  if (contentLength > 16_384) throw new HttpError(413, "请求内容过大");
+  if (contentLength > 8_192) throw new HttpError(413, "请求内容过大");
   return request.json().catch(() => { throw new HttpError(400, "请求内容格式错误"); });
 }
 
-export async function startVisit(request, env) {
+export async function qualifyVisit(request, env) {
   const body = await readJson(request);
-  const visitId = validVisitId(body.visit_id);
-  const now = new Date().toISOString();
-  const visitStartedAt = validIsoDate(body.started_at) || now;
-  const key = recordKey(visitId, visitStartedAt);
+  const siteCode = validSiteCode(body.site_code, false);
+  const requestHost = new URL(request.url).hostname;
+  if (productionHosts.get(requestHost) !== siteCode) throw new HttpError(403, "站点来源不匹配");
+  if (isExcludedRequest(request)) return { recorded: false, reason: "DEVICE_EXCLUDED" };
+  if (isAutomatedRequest(request)) return { recorded: false, reason: "AUTOMATED_QA" };
+
+  const visitorSeed = requireVisitorSeed(body.visitor_seed);
+  const qualifiedAt = new Date(env.visitNow || Date.now()).toISOString();
+  const qualifiedDate = formatQualifiedDate(qualifiedAt);
+  const visitorIdentifier = (await hmacHex(`${siteCode}|${visitorSeed}`, requireSecret(env))).slice(0, 24);
+  const key = `${recordPrefix}${siteCode}_${qualifiedDate}_${visitorIdentifier}`;
   const existing = await getRecord(env, key);
-  const visitorHash = await hashVisitor(request, env);
   const record = {
-    visit_id: visitId,
-    visitor_identifier: visitorHash.slice(0, 12),
-    visit_started_at: visitStartedAt,
-    visit_last_active_at: now,
-    visit_ended_at: null,
-    active_duration_seconds: 0,
-    device_type: allowedValue(body.device_type, ["MOBILE", "DESKTOP"], "UNKNOWN_DEVICE"),
-    page_path: cleanText(body.page_path, 300),
-    referrer_type: classifyReferrer(body.referrer),
-    timezone: cleanText(body.timezone, 80),
-    coarse_region: readCoarseRegion(request),
-    website_version: cleanText(body.website_version, 40),
-    platform_entered: false,
-    heartbeat_count: 0,
-    ...(existing || {}),
-    visit_last_active_at: now,
+    site_code: siteCode,
+    qualified_date: qualifiedDate,
+    visitor_identifier: visitorIdentifier,
+    first_qualified_at: existing?.first_qualified_at || qualifiedAt,
+    last_qualified_at: qualifiedAt,
     device_type: allowedValue(body.device_type, ["MOBILE", "DESKTOP"], existing?.device_type || "UNKNOWN_DEVICE"),
-    page_path: cleanText(body.page_path, 300),
-    referrer_type: classifyReferrer(body.referrer),
-    timezone: cleanText(body.timezone, 80),
-    coarse_region: readCoarseRegion(request),
     website_version: cleanText(body.website_version, 40),
   };
   await requireKv(env).put(key, JSON.stringify(record));
-  return record;
-}
-
-export async function heartbeatVisit(request, env) {
-  const body = await readJson(request);
-  const visitId = validVisitId(body.visit_id);
-  const key = recordKey(visitId, requireVisitStartedAt(body.visit_started_at));
-  const record = await getRecord(env, key);
-  if (!record) throw new HttpError(404, "访问记录不存在");
-  const activeDelta = Math.max(0, Math.min(60, Number(body.active_seconds) || 0));
-  record.active_duration_seconds = Math.min(86_400, (Number(record.active_duration_seconds) || 0) + activeDelta);
-  record.visit_last_active_at = new Date().toISOString();
-  record.heartbeat_count = Math.min(2880, (Number(record.heartbeat_count) || 0) + 1);
-  if (body.platform_entered === true) record.platform_entered = true;
-  await requireKv(env).put(key, JSON.stringify(record));
-  return record;
-}
-
-export async function endVisit(request, env) {
-  const body = await readJson(request);
-  const visitId = validVisitId(body.visit_id);
-  const key = recordKey(visitId, requireVisitStartedAt(body.visit_started_at));
-  const record = await getRecord(env, key);
-  if (!record) return null;
-  record.visit_last_active_at = new Date().toISOString();
-  record.visit_ended_at = record.visit_last_active_at;
-  await requireKv(env).put(key, JSON.stringify(record));
-  return record;
+  await cleanupExpiredRecords(env);
+  return { recorded: true, record };
 }
 
 export async function authenticate(request, env) {
@@ -104,41 +82,27 @@ export async function authenticate(request, env) {
 
 export async function listVisitRecords(request, env) {
   await verifyAuthorization(request, env);
-  const period = new URL(request.url).searchParams.get("period") || "7D";
+  const url = new URL(request.url);
+  const period = url.searchParams.get("period") || "7D";
   const days = allowedPeriods.get(period);
   if (!days) throw new HttpError(400, "不支持的查看周期");
+  const site = validSiteCode(url.searchParams.get("site") || "ALL", true);
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  const records = [];
-  const datePrefixes = listUtcDatePrefixes(days);
-  for (const datePrefix of datePrefixes) {
-    let cursor;
-    do {
-      const page = await requireKv(env).list({
-        prefix: `${recordPrefix}${datePrefix}:`,
-        limit: 100,
-        ...(cursor ? { cursor } : {}),
-      });
-      const pageRecords = await Promise.all((page.keys || []).map((keyInfo) => getRecord(env, keyInfo.name || keyInfo.key)));
-      for (const record of pageRecords) {
-        if (record && Date.parse(record.visit_started_at) >= cutoff) records.push(record);
-      }
-      cursor = page.list_complete === false ? page.cursor : null;
-    } while (cursor && records.length < 500);
-    if (records.length >= 500) break;
-  }
-  records.sort((left, right) => Date.parse(right.visit_started_at) - Date.parse(left.visit_started_at));
-  const visitorIds = new Set(records.map((record) => record.visitor_identifier).filter(Boolean));
-  const activeSeconds = records.reduce((sum, record) => sum + (Number(record.active_duration_seconds) || 0), 0);
+  const records = await scanRecords(env, site, cutoff);
+  records.sort((left, right) => Date.parse(right.last_qualified_at) - Date.parse(left.last_qualified_at));
+  await cleanupExpiredRecords(env);
+  const visitorKeys = new Set(records.map((record) => `${record.site_code}:${record.visitor_identifier}`));
   return {
     period,
+    site,
     generated_at: new Date().toISOString(),
+    consistency_note: "EdgeOne KV 最多可能约 60 秒后显示最新记录",
     summary: {
-      visit_count: records.length,
-      unique_visitor_count: visitorIds.size,
-      average_active_duration_seconds: records.length ? Math.round(activeSeconds / records.length) : 0,
-      platform_entry_count: records.filter((record) => record.platform_entered).length,
+      qualified_visit_count: records.length,
+      unique_visitor_count: visitorKeys.size,
+      latest_qualified_at: records[0]?.last_qualified_at || null,
     },
-    records: records.slice(0, 200),
+    records: records.slice(0, 100),
   };
 }
 
@@ -148,50 +112,83 @@ export function json(payload, status = 200, headers = {}) {
 
 export function errorResponse(error, headers = {}) {
   const status = error instanceof HttpError ? error.status : 503;
-  return json({ message: error instanceof HttpError ? error.message : "访问记录服务暂时不可用" }, status, headers);
+  return json({ message: error instanceof HttpError ? error.message : "访问概览服务暂时不可用" }, status, headers);
 }
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
+async function scanRecords(env, site, cutoff) {
+  const kv = requireKv(env);
+  const prefix = site === "ALL" ? recordPrefix : `${recordPrefix}${site}_`;
+  const records = [];
+  let cursor;
+  do {
+    const page = await kv.list({ prefix, limit: cleanupLimit, ...(cursor ? { cursor } : {}) });
+    const values = await Promise.all((page.keys || []).map((entry) => getRecord(env, entry.name || entry.key)));
+    for (const record of values) {
+      if (isAllowedRecord(record) && Date.parse(record.last_qualified_at) >= cutoff) records.push(record);
+    }
+    cursor = page.list_complete === false ? page.cursor : null;
+  } while (cursor && records.length < listLimit);
+  return records;
+}
+
+async function cleanupExpiredRecords(env) {
+  const kv = requireKv(env);
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const page = await kv.list({ prefix: recordPrefix, limit: cleanupLimit });
+  const entries = page.keys || [];
+  const records = await Promise.all(entries.map((entry) => getRecord(env, entry.name || entry.key)));
+  await Promise.all(entries.map((entry, index) => {
+    const record = records[index];
+    if (record && Date.parse(record.last_qualified_at) < cutoff) return kv.delete(entry.name || entry.key);
+    return null;
+  }));
+}
+
 async function verifyAuthorization(request, env) {
   const token = String(request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   const [encodedPayload, signature] = token.split(".");
-  if (!encodedPayload || !signature) throw new HttpError(401, "访问记录登录已失效，请重新验证");
-  const expected = await hmac(encodedPayload, requireSecret(env));
-  if (!safeEqual(signature, expected)) throw new HttpError(401, "访问记录登录已失效，请重新验证");
+  if (!encodedPayload || !signature) throw new HttpError(401, "访问概览登录已失效，请重新验证");
+  const expected = await hmacBase64Url(encodedPayload, requireSecret(env));
+  if (!safeEqual(signature, expected)) throw new HttpError(401, "访问概览登录已失效，请重新验证");
   const payload = JSON.parse(new TextDecoder().decode(fromBase64Url(encodedPayload)));
   if (payload.scope !== "VISIT_RECORDS" || Number(payload.expires_at) <= Date.now() / 1000) {
-    throw new HttpError(401, "访问记录登录已失效，请重新验证");
+    throw new HttpError(401, "访问概览登录已失效，请重新验证");
   }
 }
 
 async function signToken(payload, env) {
   const encoded = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
-  return `${encoded}.${await hmac(encoded, requireSecret(env))}`;
+  return `${encoded}.${await hmacBase64Url(encoded, requireSecret(env))}`;
 }
 
-async function hashVisitor(request, env) {
-  const ip = request.eo?.clientIp || request.headers.get("EO-Connecting-IP") || request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() || request.headers.get("X-Real-IP") || "unknown";
-  const userAgent = request.headers.get("User-Agent") || "unknown";
-  return hmac(`${ip}|${userAgent}`, requireSecret(env));
+async function hmacHex(value, secret) {
+  const bytes = await hmacBytes(value, secret);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function hmac(value, secret) {
+async function hmacBase64Url(value, secret) {
+  return toBase64Url(await hmacBytes(value, secret));
+}
+
+async function hmacBytes(value, secret) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
-  return toBase64Url(new Uint8Array(signature));
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value)));
 }
 
 function requireSecret(env) {
   const secret = String(env.visitHashSecret || "");
-  if (secret.length < 16) throw new HttpError(503, "访问记录服务尚未完成安全配置");
+  if (secret.length < 24) throw new HttpError(503, "访问概览服务尚未完成安全配置");
   return secret;
 }
 
 function requireKv(env) {
-  if (!env.visitKv?.get || !env.visitKv?.put || !env.visitKv?.list) throw new HttpError(503, "访问记录存储正在等待开通");
+  if (!env.visitKv?.get || !env.visitKv?.put || !env.visitKv?.list || !env.visitKv?.delete) {
+    throw new HttpError(503, "访问概览存储尚未完成配置");
+  }
   return env.visitKv;
 }
 
@@ -201,59 +198,57 @@ async function getRecord(env, key) {
   try { return typeof value === "string" ? JSON.parse(value) : value; } catch { return null; }
 }
 
-function validVisitId(value) {
-  const result = String(value || "");
-  if (!/^[a-zA-Z0-9-]{16,80}$/.test(result)) throw new HttpError(400, "访问编号无效");
-  return result;
+function isExcludedRequest(request) {
+  return /(?:^|;\s*)xingbuild_visit_excluded=1(?:;|$)/.test(request.headers.get("Cookie") || "");
 }
 
-function validIsoDate(value) {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+function isAutomatedRequest(request) {
+  return automatedAgentPattern.test([
+    request.headers.get("User-Agent"),
+    request.headers.get("X-Robotaxi-QA"),
+    request.headers.get("Sec-CH-UA"),
+  ].filter(Boolean).join(" "));
 }
 
-function requireVisitStartedAt(value) {
-  const result = validIsoDate(value);
-  if (!result) throw new HttpError(400, "访问开始时间无效");
-  return result;
+function validSiteCode(value, allowAll) {
+  const site = String(value || "").toUpperCase();
+  if (!allowedSites.has(site) || (!allowAll && site === "ALL")) throw new HttpError(400, "站点范围无效");
+  return site;
 }
 
-function recordKey(visitId, startedAt) {
-  return `${recordPrefix}${String(startedAt).slice(0, 10).replace(/-/g, "")}:${visitId}`;
+function requireVisitorSeed(value) {
+  const seed = String(value || "");
+  if (!/^[a-zA-Z0-9-]{16,100}$/.test(seed)) throw new HttpError(400, "匿名访客标识无效");
+  return seed;
 }
 
-function listUtcDatePrefixes(days) {
-  const values = [];
-  const now = new Date();
-  for (let offset = 0; offset <= days; offset += 1) {
-    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - offset));
-    values.push(date.toISOString().slice(0, 10).replace(/-/g, ""));
-  }
-  return values;
+function formatQualifiedDate(value) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value)).replace(/-/g, "");
 }
 
-function cleanText(value, maxLength) { return String(value || "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, maxLength); }
+function isAllowedRecord(record) {
+  if (!record || !["XINGBUILD", "ROBOTAXI"].includes(record.site_code)) return false;
+  const keys = Object.keys(record).sort().join(",");
+  return keys === [
+    "device_type",
+    "first_qualified_at",
+    "last_qualified_at",
+    "qualified_date",
+    "site_code",
+    "visitor_identifier",
+    "website_version",
+  ].sort().join(",");
+}
+
+function cleanText(value, maxLength) {
+  return String(value || "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, maxLength);
+}
 function allowedValue(value, allowed, fallback) { return allowed.includes(value) ? value : fallback; }
-function classifyReferrer(value) {
-  const referrer = cleanText(value, 500);
-  if (!referrer) return "DIRECT_VISIT";
-  try {
-    const host = new URL(referrer).hostname;
-    if (/github\.com$/.test(host)) return "GITHUB_REFERRAL";
-    if (/weixin|wechat/.test(host)) return "WECHAT_REFERRAL";
-    return "EXTERNAL_REFERRAL";
-  } catch { return "EXTERNAL_REFERRAL"; }
-}
-function readCoarseRegion(request) {
-  return cleanText(
-    request.eo?.geo?.regionName
-      || request.eo?.geo?.countryName
-      || request.headers.get("EO-Client-Province")
-      || request.headers.get("EO-Client-Country")
-      || "未知",
-    80,
-  );
-}
 function safeEqual(left, right) {
   if (left.length !== right.length) return false;
   let result = 0;

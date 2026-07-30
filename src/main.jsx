@@ -1414,21 +1414,29 @@ function PlatformLogin({ onEnter, onVisitorRecordsAuthenticated }) {
 
 function VisitorRecordsScreen({ token, onExit }) {
   const [period, setPeriod] = useState("7D");
+  const [site, setSite] = useState("ALL");
   const [data, setData] = useState(() => ({ summary: {}, records: [] }));
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  const [deviceExcluded, setDeviceExcluded] = useState(() => visitorAnalyticsService.isDeviceExcluded());
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setErrorMessage("");
-    visitorAnalyticsService.loadVisitorRecords({ token, period })
+    visitorAnalyticsService.loadVisitorRecords({ token, period, site })
       .then((result) => { if (!cancelled) setData(result); })
       .catch((error) => { if (!cancelled) setErrorMessage(error.message || "访问记录加载失败"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [period, reloadToken, token]);
+  }, [period, reloadToken, site, token]);
+
+  function toggleDeviceExclusion() {
+    const nextValue = !deviceExcluded;
+    visitorAnalyticsService.setDeviceExcluded(nextValue);
+    setDeviceExcluded(nextValue);
+  }
 
   const summary = data.summary || {};
   return (
@@ -1436,11 +1444,19 @@ function VisitorRecordsScreen({ token, onExit }) {
       <section className="visitor-records-panel" aria-labelledby="visitor-records-title">
         <header className="visitor-records-header">
           <div>
-            <h1 id="visitor-records-title">访问记录</h1>
-            <p>{data.storage_mode === "LOCAL_PREVIEW" ? "本地预览数据，仅保存在当前浏览器" : "仅展示匿名访问情况，不保存原始 IP"}</p>
+            <h1 id="visitor-records-title">访问概览</h1>
+            <p>{data.storage_mode === "LOCAL_PREVIEW" ? "本地预览数据，仅保存在当前浏览器" : "仅统计正式站点的有效访问，不记录 IP、路径或精确时长"}</p>
           </div>
-          <Button onClick={onExit}>退出</Button>
+          <div className="visitor-records-header-actions">
+            <Button size="small" onClick={toggleDeviceExclusion}>{deviceExcluded ? "恢复记录本设备" : "本设备不计入访问记录"}</Button>
+            <Button onClick={onExit}>退出</Button>
+          </div>
         </header>
+        <nav className="visitor-records-period" aria-label="站点范围">
+          {[{ key: "ALL", label: "全部" }, { key: "XINGBUILD", label: "xingbuild 网站" }, { key: "ROBOTAXI", label: "Robotaxi 运营平台" }].map((item) => (
+            <button className={site === item.key ? "is-active" : ""} key={item.key} type="button" onClick={() => setSite(item.key)}>{item.label}</button>
+          ))}
+        </nav>
         <nav className="visitor-records-period" aria-label="查看周期">
           {[{ key: "1D", label: "近 24 小时" }, { key: "7D", label: "近 7 日" }, { key: "30D", label: "近 30 日" }].map((item) => (
             <button className={period === item.key ? "is-active" : ""} key={item.key} type="button" onClick={() => setPeriod(item.key)}>{item.label}</button>
@@ -1448,31 +1464,30 @@ function VisitorRecordsScreen({ token, onExit }) {
         </nav>
         {errorMessage ? (
           <div className="visitor-records-message" role="status">
-            <strong>暂时无法读取访问记录</strong>
+            <strong>暂时无法读取访问概览</strong>
             <span>{errorMessage}</span>
             <Button size="small" onClick={() => setReloadToken((current) => current + 1)}>重新加载</Button>
           </div>
         ) : (
           <>
             <div className="visitor-records-summary" aria-busy={loading}>
-              <div><span>访问次数</span><strong>{summary.visit_count || 0}</strong></div>
+              <div><span>有效访问</span><strong>{summary.qualified_visit_count || 0}</strong></div>
               <div><span>匿名访客</span><strong>{summary.unique_visitor_count || 0}</strong></div>
-              <div><span>平均有效时长</span><strong>{visitorAnalyticsService.formatActiveDuration(summary.average_active_duration_seconds)}</strong></div>
-              <div><span>进入平台</span><strong>{summary.platform_entry_count || 0}</strong></div>
+              <div><span>最近访问</span><strong className="visitor-records-latest">{visitorAnalyticsService.formatVisitTime(summary.latest_qualified_at)}</strong></div>
             </div>
+            <p className="visitor-records-generated">生成时间：{visitorAnalyticsService.formatVisitTime(data.generated_at)}{data.consistency_note ? ` · ${data.consistency_note}` : ""}；“全部”为两站加总，不表示跨站去重。</p>
             <div className="visitor-records-list" aria-busy={loading}>
-              {loading && <div className="visitor-records-empty">正在读取访问记录</div>}
+              {loading && <div className="visitor-records-empty">正在读取访问概览</div>}
               {!loading && data.records.length === 0 && <div className="visitor-records-empty">当前周期暂无访问记录</div>}
               {!loading && data.records.map((record) => (
-                <article key={record.visit_id}>
+                <article key={`${record.site_code}-${record.qualified_date}-${record.visitor_identifier}`}>
                   <div>
-                    <strong>{new Date(record.visit_started_at).toLocaleString("zh-CN", { hour12: false })}</strong>
-                    <span>{getDisplayValue(record.device_type, "device_type")} · {getDisplayValue(record.browser_type, "browser_type")}</span>
+                    <strong>{visitorAnalyticsService.formatVisitTime(record.last_qualified_at)}</strong>
+                    <span>{getDisplayValue(record.site_code, "site_code")} · {getDisplayValue(record.device_type, "device_type")}</span>
                   </div>
                   <dl>
                     <div><dt>{getFieldLabel("visitor_identifier")}</dt><dd>{record.visitor_identifier || "-"}</dd></div>
-                    <div><dt>{getFieldLabel("active_duration_seconds")}</dt><dd>{visitorAnalyticsService.formatActiveDuration(record.active_duration_seconds)}</dd></div>
-                    <div><dt>{getFieldLabel("referrer_type")}</dt><dd>{getDisplayValue(record.referrer_type, "referrer_type")}</dd></div>
+                    <div><dt>{getFieldLabel("first_qualified_at")}</dt><dd>{visitorAnalyticsService.formatVisitTime(record.first_qualified_at)}</dd></div>
                     <div><dt>{getFieldLabel("website_version")}</dt><dd>{record.website_version || "-"}</dd></div>
                   </dl>
                 </article>
@@ -11980,13 +11995,13 @@ async function bootstrap() {
 		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
         import("./data/spatialBusinessProfileInitialization.js?v=20260719-v047-4-1"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
-		    import("./ui/visitorAnalyticsService.js?v=20260721-v049-2-1"),
+		    import("./ui/visitorAnalyticsService.js?v=v049-13-17"),
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=v049-13-16"),
+		    import("./ui/geospatialMapAdapter.js?v=v049-13-17"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),

@@ -14,7 +14,9 @@ assert.match(mainSource, /rootClassName="viewport-stable-dialog visitor-password
 assert.match(mainSource, /activeElement\.blur\(\)/);
 assert.match(styleSource, /\.viewport-stable-dialog \.ant-input[\s\S]*font-size: 16px/);
 assert.match(viewportSource, /\.platform-login-panel, \.viewport-stable-dialog/);
-assert.match(indexSource, /robotaxi-visit-api-base/);
+assert.doesNotMatch(indexSource, /robotaxi-visit-api-base|CloudBase/i);
+assert.match(mainSource, /访问概览/);
+assert.match(mainSource, /本设备不计入访问记录/);
 
 console.log("v048 访问记录入口与响应式界面验证通过");
 

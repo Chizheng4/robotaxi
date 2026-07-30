@@ -1,141 +1,93 @@
-const visitSessionKey = "robotaxi.public.visit.v2";
-const visitorSeedKey = "robotaxi.public.visitor.seed.v1";
-const localRecordsKey = "robotaxi.public.visit.records.v2";
+const visitorSeedKey = "robotaxi.public.visitor.seed.v2";
+const localRecordsKey = "robotaxi.public.qualified.visits.v1";
+const exclusionCookieName = "xingbuild_visit_excluded";
 const localPreviewPassword = "金星";
-const heartbeatIntervalMs = 300_000;
+const productionHost = "robotaxi.xingbuild.top";
+const siteCode = "ROBOTAXI";
 let localRecordsToken = null;
-let tracker = null;
+let currentVersion = "未知版本";
 
-export function getVisitorAnalyticsApi(documentRef = globalThis.document) {
-  return String(documentRef?.querySelector?.('meta[name="robotaxi-visit-api-base"]')?.content || "").trim();
-}
-
-export function isConfigured(documentRef = globalThis.document) {
-  return /^https:\/\//.test(getVisitorAnalyticsApi(documentRef));
-}
-
-export function getStorageMode(documentRef = globalThis.document, locationRef = globalThis.location) {
-  if (isConfigured(documentRef)) return "CLOUDBASE_DATABASE";
-  return isLoopback(locationRef?.hostname) ? "LOCAL_PREVIEW" : "UNAVAILABLE";
-}
-
-export function startVisitTracking({ version = "未知版本", onError } = {}) {
-  if (typeof window === "undefined") return () => {};
-  tracker = { version, onError: onError || ignoreFailure, started: false, cleanup: null };
-  return () => {
-    tracker?.cleanup?.();
-    tracker = null;
-  };
+export function startVisitTracking({ version = "未知版本" } = {}) {
+  currentVersion = version;
+  return () => {};
 }
 
 export function markPlatformEntered() {
-  if (typeof window === "undefined" || !tracker || tracker.started) return;
-  tracker.started = true;
-  tracker.cleanup = beginTrackedSession(tracker.version, tracker.onError);
+  if (typeof window === "undefined" || !shouldQualifyVisit()) return;
+  void qualifyVisit().catch(() => {
+    // 访问概览是独立反馈能力，失败不得影响平台登录和运行。
+  });
 }
 
 export async function authenticateVisitorRecords(password) {
-  const storageMode = getStorageMode();
-  if (storageMode === "LOCAL_PREVIEW") {
+  if (isLocalPreview()) {
     if (String(password || "") !== localPreviewPassword) throw new Error("本地预览密码不正确");
     localRecordsToken = globalThis.crypto?.randomUUID?.() || `local-${Date.now()}`;
-    return { token: localRecordsToken, storage_mode: storageMode };
+    return { token: localRecordsToken, storage_mode: "LOCAL_PREVIEW" };
   }
-  if (storageMode === "UNAVAILABLE") throw new Error("访问记录服务尚未完成 CloudBase 配置");
-  const result = await callCloudBase("AUTHENTICATE", { password: String(password || "") });
-  if (!result?.token) throw new Error("访问记录验证失败");
-  return result;
+  return callApi("/api/visits/auth", {
+    method: "POST",
+    body: JSON.stringify({ password: String(password || "") }),
+  });
 }
 
-export async function loadVisitorRecords({ token, period = "7D" }) {
-  if (!token) throw new Error("访问记录登录已失效，请重新验证");
-  if (getStorageMode() === "LOCAL_PREVIEW") {
-    if (token !== localRecordsToken) throw new Error("访问记录登录已失效，请重新验证");
-    return loadLocalVisitorRecords(period);
+export async function loadVisitorRecords({ token, period = "7D", site = "ALL" }) {
+  if (!token) throw new Error("访问概览登录已失效，请重新验证");
+  if (isLocalPreview()) {
+    if (token !== localRecordsToken) throw new Error("访问概览登录已失效，请重新验证");
+    return loadLocalVisitorRecords(period, site);
   }
-  return normalizeVisitorRecords(await callCloudBase("LIST_RECORDS", { token, period }));
+  return normalizeVisitorRecords(await callApi(`/api/visits/records?period=${encodeURIComponent(period)}&site=${encodeURIComponent(site)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }));
 }
 
-export function formatActiveDuration(seconds) {
-  const value = Math.max(0, Number(seconds) || 0);
-  if (value < 60) return `${Math.round(value)} 秒`;
-  if (value < 3600) return `${Math.round(value / 60)} 分钟`;
-  const hours = Math.floor(value / 3600);
-  const minutes = Math.round((value % 3600) / 60);
-  return minutes ? `${hours} 小时 ${minutes} 分钟` : `${hours} 小时`;
+export function isDeviceExcluded() {
+  return new RegExp(`(?:^|;\\s*)${exclusionCookieName}=1(?:;|$)`).test(globalThis.document?.cookie || "");
 }
 
-function beginTrackedSession(version, onError) {
-  const storageMode = getStorageMode();
-  if (storageMode === "UNAVAILABLE") return () => {};
-  const session = readOrCreateSession();
-  const payload = createVisitPayload(session, version);
-  let lastActiveAt = Date.now();
-  let stopped = false;
-  const startPromise = storageMode === "LOCAL_PREVIEW"
-    ? Promise.resolve(startLocalVisit(session, version))
-    : callCloudBase("START_VISIT", payload);
-  void startPromise.catch(onError);
-
-  const heartbeat = (force = false) => {
-    if (stopped || (!force && document.visibilityState !== "visible")) return;
-    const now = Date.now();
-    const activeSeconds = Math.max(0, Math.min(heartbeatIntervalMs / 1000, Math.round((now - lastActiveAt) / 1000)));
-    lastActiveAt = now;
-    if (!activeSeconds) return;
-    const heartbeatPayload = { visit_id: session.visit_id, active_seconds: activeSeconds };
-    const operation = storageMode === "LOCAL_PREVIEW"
-      ? Promise.resolve(heartbeatLocalVisit(heartbeatPayload))
-      : startPromise.then(() => callCloudBase("HEARTBEAT_VISIT", heartbeatPayload));
-    void operation.catch(onError);
-  };
-  const intervalId = window.setInterval(heartbeat, heartbeatIntervalMs);
-  const handleVisibility = () => {
-    if (document.visibilityState === "visible") lastActiveAt = Date.now();
-    else heartbeat(true);
-  };
-  const handlePageHide = () => heartbeat(true);
-  document.addEventListener("visibilitychange", handleVisibility);
-  window.addEventListener("pagehide", handlePageHide);
-  return () => {
-    heartbeat(true);
-    stopped = true;
-    window.clearInterval(intervalId);
-    document.removeEventListener("visibilitychange", handleVisibility);
-    window.removeEventListener("pagehide", handlePageHide);
-    if (storageMode === "LOCAL_PREVIEW") endLocalVisit(session);
-    else void startPromise.then(() => callCloudBase("END_VISIT", { visit_id: session.visit_id })).catch(onError);
-  };
+export function setDeviceExcluded(excluded) {
+  if (!globalThis.document) return;
+  const hostname = globalThis.location?.hostname || "";
+  const parentDomain = hostname === "xingbuild.top" || hostname.endsWith(".xingbuild.top")
+    ? "; Domain=.xingbuild.top"
+    : "";
+  if (excluded) {
+    globalThis.document.cookie = `${exclusionCookieName}=1; Path=/; Max-Age=31536000; SameSite=Lax${parentDomain}${globalThis.location?.protocol === "https:" ? "; Secure" : ""}`;
+  } else {
+    globalThis.document.cookie = `${exclusionCookieName}=; Path=/; Max-Age=0; SameSite=Lax${parentDomain}${globalThis.location?.protocol === "https:" ? "; Secure" : ""}`;
+  }
 }
 
-function normalizeVisitorRecords(payload = {}) {
+export function formatVisitTime(value) {
+  if (!value) return "暂无";
+  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+}
+
+function shouldQualifyVisit() {
+  const hostname = globalThis.location?.hostname || "";
+  if (isDeviceExcluded()) return false;
+  if (hostname !== productionHost && !isLocalPreview()) return false;
+  if (isAutomatedQa()) return false;
+  return true;
+}
+
+async function qualifyVisit() {
+  const payload = createQualifiedPayload();
+  if (isLocalPreview()) {
+    qualifyLocalVisit(payload);
+    return;
+  }
+  await callApi("/api/visits/qualify", { method: "POST", body: JSON.stringify(payload) });
+}
+
+function createQualifiedPayload() {
   return {
-    period: payload.period || "7D",
-    generated_at: payload.generated_at || null,
-    storage_mode: payload.storage_mode || "CLOUDBASE_DATABASE",
-    summary: {
-      visit_count: Number(payload.summary?.visit_count) || 0,
-      unique_visitor_count: Number(payload.summary?.unique_visitor_count) || 0,
-      average_active_duration_seconds: Number(payload.summary?.average_active_duration_seconds) || 0,
-      platform_entry_count: Number(payload.summary?.platform_entry_count) || 0,
-    },
-    records: Array.isArray(payload.records) ? payload.records : [],
+    site_code: siteCode,
+    visitor_seed: readOrCreateVisitorSeed(),
+    device_type: window.matchMedia?.("(max-width: 767px)")?.matches ? "MOBILE" : "DESKTOP",
+    website_version: currentVersion,
   };
-}
-
-function readOrCreateSession() {
-  try {
-    const existing = JSON.parse(window.sessionStorage.getItem(visitSessionKey));
-    if (existing?.visit_id && existing?.started_at) return existing;
-  } catch {
-    // A fresh per-tab session is enough when storage is unavailable or invalid.
-  }
-  const session = {
-    visit_id: globalThis.crypto?.randomUUID?.() || `visit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    started_at: new Date().toISOString(),
-  };
-  try { window.sessionStorage.setItem(visitSessionKey, JSON.stringify(session)); } catch { /* Best effort only. */ }
-  return session;
 }
 
 function readOrCreateVisitorSeed() {
@@ -150,101 +102,92 @@ function readOrCreateVisitorSeed() {
   }
 }
 
-function createVisitPayload(session, version) {
-  const mobile = window.matchMedia?.("(max-width: 767px)")?.matches;
-  return {
-    ...session,
-    visitor_seed: readOrCreateVisitorSeed(),
-    website_version: version,
-    referrer: String(document.referrer || "").slice(0, 500),
-    device_type: mobile ? "MOBILE" : "DESKTOP",
-    browser_type: detectBrowserType(navigator.userAgent),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "未知",
-  };
+function isAutomatedQa() {
+  return Boolean(
+    globalThis.navigator?.webdriver
+    || /verifybrowserload|robotaxiqa|playwright|puppeteer|headlesschrome|lighthouse|pagespeed/i.test(globalThis.navigator?.userAgent || "")
+    || /(?:^|[.-])preview(?:[.-]|$)/i.test(globalThis.location?.hostname || ""),
+  );
 }
 
-async function callCloudBase(action, payload) {
-  const api = getVisitorAnalyticsApi();
-  if (!api) throw new Error("访问记录服务尚未完成 CloudBase 配置");
-  const response = await fetch(api, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, payload }),
+function isLocalPreview() {
+  return ["localhost", "127.0.0.1"].includes(globalThis.location?.hostname || "");
+}
+
+async function callApi(path, options = {}) {
+  const response = await fetch(path, {
     cache: "no-store",
-    keepalive: action === "END_VISIT",
+    credentials: "same-origin",
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok && !result) throw new Error("访问记录服务暂时不可用");
-  if (result?.succeeded === false) throw new Error(result.message || "访问记录服务暂时不可用");
-  return result?.data ?? result;
+  if (!response.ok && !result) throw new Error("访问概览服务暂时不可用");
+  if (!response.ok) throw new Error(result?.message || "访问概览服务暂时不可用");
+  return result;
 }
 
-function detectBrowserType(userAgent = "") {
-  if (/MicroMessenger/i.test(userAgent)) return "WECHAT_BROWSER";
-  if (/Edg/i.test(userAgent)) return "EDGE_BROWSER";
-  if (/CriOS|Chrome/i.test(userAgent)) return "CHROME_BROWSER";
-  if (/Safari/i.test(userAgent)) return "SAFARI_BROWSER";
-  return "OTHER_BROWSER";
-}
-
-function startLocalVisit(session, version) {
-  const payload = createVisitPayload(session, version);
-  const records = readLocalRecords();
-  const existingIndex = records.findIndex((record) => record.visit_id === session.visit_id);
-  const record = {
-    visit_id: session.visit_id,
-    visitor_identifier: "本机预览",
-    visit_started_at: session.started_at,
-    visit_last_active_at: new Date().toISOString(),
-    visit_ended_at: null,
-    active_duration_seconds: 0,
-    device_type: payload.device_type,
-    browser_type: payload.browser_type,
-    referrer_type: classifyLocalReferrer(payload.referrer),
-    website_version: version,
-    platform_entered: true,
+function normalizeVisitorRecords(payload = {}) {
+  return {
+    period: payload.period || "7D",
+    site: payload.site || "ALL",
+    generated_at: payload.generated_at || null,
+    consistency_note: payload.consistency_note || "",
+    storage_mode: payload.storage_mode || "EDGEONE_KV",
+    summary: {
+      qualified_visit_count: Number(payload.summary?.qualified_visit_count) || 0,
+      unique_visitor_count: Number(payload.summary?.unique_visitor_count) || 0,
+      latest_qualified_at: payload.summary?.latest_qualified_at || null,
+    },
+    records: Array.isArray(payload.records) ? payload.records : [],
   };
-  if (existingIndex >= 0) records[existingIndex] = { ...record, ...records[existingIndex], visit_last_active_at: record.visit_last_active_at };
-  else records.push(record);
-  writeLocalRecords(records);
-  return record;
 }
 
-function heartbeatLocalVisit(payload) {
+function qualifyLocalVisit(payload) {
   const records = readLocalRecords();
-  const record = records.find((item) => item.visit_id === payload.visit_id);
-  if (!record) return null;
-  record.active_duration_seconds = Math.min(86_400, (Number(record.active_duration_seconds) || 0) + Math.max(0, Math.min(300, Number(payload.active_seconds) || 0)));
-  record.visit_last_active_at = new Date().toISOString();
-  writeLocalRecords(records);
-  return record;
+  const qualifiedAt = new Date().toISOString();
+  const qualifiedDate = qualifiedAt.slice(0, 10).replace(/-/g, "");
+  const visitorIdentifier = readOrCreateVisitorSeed().replace(/-/g, "").slice(0, 24);
+  const key = `${payload.site_code}_${qualifiedDate}_${visitorIdentifier}`;
+  const existing = records.find((record) => record.local_key === key);
+  if (existing) {
+    existing.last_qualified_at = qualifiedAt;
+    existing.device_type = payload.device_type;
+    existing.website_version = payload.website_version;
+  } else {
+    records.push({
+      local_key: key,
+      site_code: payload.site_code,
+      qualified_date: qualifiedDate,
+      visitor_identifier: visitorIdentifier,
+      first_qualified_at: qualifiedAt,
+      last_qualified_at: qualifiedAt,
+      device_type: payload.device_type,
+      website_version: payload.website_version,
+    });
+  }
+  writeLocalRecords(records.filter((record) => Date.parse(record.last_qualified_at) >= Date.now() - 30 * 86_400_000));
 }
 
-function endLocalVisit(session) {
-  const records = readLocalRecords();
-  const record = records.find((item) => item.visit_id === session.visit_id);
-  if (!record) return;
-  record.visit_last_active_at = new Date().toISOString();
-  record.visit_ended_at = record.visit_last_active_at;
-  writeLocalRecords(records);
-}
-
-function loadLocalVisitorRecords(period) {
+function loadLocalVisitorRecords(period, requestedSite) {
   const allowedDays = { "1D": 1, "7D": 7, "30D": 30 };
   const days = allowedDays[period];
   if (!days) throw new Error("不支持的查看周期");
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  const records = readLocalRecords().filter((record) => Date.parse(record.visit_started_at) >= cutoff).sort((left, right) => Date.parse(right.visit_started_at) - Date.parse(left.visit_started_at));
-  const activeSeconds = records.reduce((sum, record) => sum + (Number(record.active_duration_seconds) || 0), 0);
+  if (!["ALL", "XINGBUILD", "ROBOTAXI"].includes(requestedSite)) throw new Error("站点范围无效");
+  const cutoff = Date.now() - days * 86_400_000;
+  const records = readLocalRecords()
+    .filter((record) => Date.parse(record.last_qualified_at) >= cutoff)
+    .filter((record) => requestedSite === "ALL" || record.site_code === requestedSite)
+    .sort((left, right) => Date.parse(right.last_qualified_at) - Date.parse(left.last_qualified_at));
   return normalizeVisitorRecords({
     period,
+    site: requestedSite,
     generated_at: new Date().toISOString(),
     storage_mode: "LOCAL_PREVIEW",
     summary: {
-      visit_count: records.length,
-      unique_visitor_count: new Set(records.map((record) => record.visitor_identifier)).size,
-      average_active_duration_seconds: records.length ? Math.round(activeSeconds / records.length) : 0,
-      platform_entry_count: records.length,
+      qualified_visit_count: records.length,
+      unique_visitor_count: new Set(records.map((record) => `${record.site_code}:${record.visitor_identifier}`)).size,
+      latest_qualified_at: records[0]?.last_qualified_at || null,
     },
     records,
   });
@@ -258,17 +201,5 @@ function readLocalRecords() {
 }
 
 function writeLocalRecords(records) {
-  try { window.localStorage.setItem(localRecordsKey, JSON.stringify(records.slice(-500))); } catch { /* Preview remains best effort. */ }
+  try { window.localStorage.setItem(localRecordsKey, JSON.stringify(records)); } catch { /* 本地预览尽力保存。 */ }
 }
-
-function classifyLocalReferrer(value) {
-  if (!value) return "DIRECT_VISIT";
-  try { return new URL(value).hostname === window.location.hostname ? "DIRECT_VISIT" : "EXTERNAL_REFERRAL"; }
-  catch { return "EXTERNAL_REFERRAL"; }
-}
-
-function isLoopback(hostname) {
-  return ["localhost", "127.0.0.1", "::1"].includes(String(hostname || "").toLowerCase());
-}
-
-function ignoreFailure() {}

@@ -1,6 +1,6 @@
 # 当前小版本
 
-- 状态：已完成
-- 当前版本：v049.13.16
-- 执行计划：`doc/common/current-iteration/minor/v049.13.16-maplibre-single-engine.md`
-- 当前结果：MapLibre 已成为城市地理浏览与规划的唯一引擎；外部底图失败保留平台运营图层，引擎不可用时诚实关闭规划并提供网格仿真入口
+- 状态：已完成，等待正式发布
+- 当前版本：v049.13.17
+- 执行计划：`doc/common/current-iteration/minor/v049.13.17-edgeone-lightweight-visit-overview.md`
+- 当前结果：EdgeOne KV 轻量访问概览实现、Robotaxi 外部配置和发布前验收已完成，等待提交、部署与公网非写入验收

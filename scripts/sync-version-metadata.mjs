@@ -30,7 +30,7 @@ const nextVerification = currentVerification.replace(
   `assert.equal(latest.version, "${latestVersion}"`,
 );
 const replaceModuleCacheToken = (source) => source.replace(
-  /(geospatialMapAdapter|geospatialPresentationContract)\.js\?v=[^"']+/g,
+  /(geospatialMapAdapter|geospatialPresentationContract|visitorAnalyticsService)\.js\?v=[^"']+/g,
   (_, moduleName) => `${moduleName}.js?v=${cacheToken}`,
 );
 const nextMain = replaceModuleCacheToken(currentMain);

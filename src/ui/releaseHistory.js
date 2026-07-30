@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.13.17",
+    "title": "将访问记录从 CloudBase 会话统计收敛为 EdgeOne KV 轻量访问概览，只回答 xingbuild 与 Robotaxi 是否存在真实外部有效访问",
+    "changes": [
+      "Robotaxi 仅在正式域名输入“金星”成功进入平台后记录，同一匿名访客、站点和自然日幂等；登录页、失败登录、管理员入口、预览和自动 QA 均排除。",
+      "删除生产主路径的会话开始、心跳、结束、精确时长及 CloudBase 调用，KV 对象只保留站点、日期、匿名标识、首次/最近访问、设备和版本。",
+      "管理员页面支持全部、xingbuild 网站和 Robotaxi 运营平台范围，以及近 1 日、7 日和 30 日查看；“全部”只做两站加总，不宣称跨站去重。",
+      "管理员可设置父域设备排除标记，EdgeOne 写入与查询执行有界 30 天机会清理；服务不可用仍不影响普通平台登录。",
+      "新增 EdgeOne KV、Secret、同域接口和 xingbuild 最小共享合同文档；外部 KV 与 Robotaxi Secrets 已按发布门禁完成配置。"
+    ],
+    "audienceTitle": "轻量访问概览",
+    "audienceChanges": [
+      "访问概览只保留判断真实外部访问所需的最少信息，不再统计精确停留时长或页面行为。",
+      "可以分别查看 xingbuild 网站、Robotaxi 运营平台及两站合计，并可将自己的设备排除。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.13.16",
     "title": "将城市地理浏览和规划收敛为 MapLibre 单引擎，避免把不具备物理空间单元选择能力的二维兼容地图误报为完整规划兜底",
     "changes": [

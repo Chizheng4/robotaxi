@@ -3175,27 +3175,25 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |ZONE_DAILY_SERVICE_CAPACITY|区域日服务承载|
 |ZONE_PEAK_SERVICE_CAPACITY|区域峰值服务承载|
 
-## 29. 平台访问记录
+## 29. 轻量访问概览
 
-平台访问记录属于公开演示站点的运维数据，不属于 Robotaxi 业务对象、单据或统一经营事实。访问记录只保存匿名标识和粗粒度环境信息，不保存原始 IP。
+轻量访问概览属于 xingbuild 与 Robotaxi 公开站点的反馈数据，不属于 Robotaxi 业务对象、单据或统一经营事实。它只回答是否存在外部有效访问，不承担网站运营分析。两站匿名标识相互独立，“全部”仅加总，不表示跨站去重。
 
 |字段名|中文名|字段性质|业务含义|
 |---|---|---|---|
-|visit_id|访问编号|平台运维字段|一次浏览器标签页访问会话的唯一编号|
-|visitor_identifier|匿名访客|平台运维字段|由服务端对浏览器本地随机标识进行不可逆摘要后的短标识，不保存原始标识|
-|visit_started_at|开始访问时间|平台运维字段|本次访问开始时间|
-|visit_last_active_at|最后活跃时间|平台运维字段|最近一次可见页面活跃时间|
-|visit_ended_at|结束访问时间|平台运维字段|浏览器上报的访问结束时间，可为空|
-|active_duration_seconds|有效使用时长（秒）|平台运维字段|页面可见期间累计的近似活跃时长|
+|site_code|站点|平台反馈字段|XINGBUILD 或 ROBOTAXI；ALL 仅为查询范围|
+|qualified_date|有效访问日期|平台反馈字段|站点自然日，格式 YYYYMMDD|
+|visitor_identifier|匿名访客|平台反馈字段|服务端以站点和浏览器本地随机标识生成的不可逆短标识；两站不可关联|
+|first_qualified_at|首次有效访问|平台反馈字段|同一匿名访客、站点和自然日第一次满足记录条件的时间|
+|last_qualified_at|最近有效访问|平台反馈字段|同一日重复满足条件时更新的最近时间|
 |device_type|设备类型|平台运维字段|手机、电脑或未知设备|
-|browser_type|浏览器类型|平台运维字段|微信、Edge、Chrome、Safari 或其他浏览器|
-|page_path|访问页面|平台运维兼容字段|旧版记录的站内路径；CloudBase 版本不再采集|
-|referrer_type|访问来源|平台运维字段|直接访问、GitHub、微信或其他外部引导|
-|timezone|时区|平台运维字段|浏览器报告的时区|
-|coarse_region|粗粒度地域|平台运维兼容字段|旧版 EdgeOne 记录可能包含的国家或省级地域；CloudBase 版本不再采集|
-|website_version|网站版本|平台运维字段|访问时公开站点显示的版本|
-|platform_entered|是否进入平台|平台运维字段|本次访问是否通过“金星”进入业务平台|
-|heartbeat_count|活跃记录次数|平台运维字段|页面可见期间成功更新活跃时长的次数|
+|website_version|网站版本|平台反馈字段|满足有效访问条件时公开站点显示的版本|
+|qualified_visit_count|有效访问|聚合展示字段|查询周期内每日幂等访问对象数量|
+|unique_visitor_count|匿名访客|聚合展示字段|范围内按站点分别去重后的匿名访客数量；ALL 为两站数量加总|
+|latest_qualified_at|最近访问|聚合展示字段|查询范围最近一次有效访问时间|
+|generated_at|生成时间|聚合展示字段|EdgeOne KV 查询结果生成时间|
+
+KV 对象只允许保存上述前七个持久字段。禁止记录或推导 IP、地区、页面路径、点击、来源、输入、业务数据、精确停留时长、会话心跳或结束事件。
 
 ### 29.1 枚举中文
 
@@ -3204,15 +3202,9 @@ ValidationResult 不是空间业务对象，仅用于展示初始化校验结果
 |MOBILE|手机|
 |DESKTOP|电脑|
 |UNKNOWN_DEVICE|未知设备|
-|WECHAT_BROWSER|微信浏览器|
-|EDGE_BROWSER|Edge 浏览器|
-|CHROME_BROWSER|Chrome 浏览器|
-|SAFARI_BROWSER|Safari 浏览器|
-|OTHER_BROWSER|其他浏览器|
-|DIRECT_VISIT|直接访问|
-|GITHUB_REFERRAL|GitHub 引导|
-|WECHAT_REFERRAL|微信引导|
-|EXTERNAL_REFERRAL|外部引导|
+|ALL|全部|
+|XINGBUILD|xingbuild 网站|
+|ROBOTAXI|Robotaxi 运营平台|
 
 ## 30. 城市地理空间单元与运营区域来源
 
