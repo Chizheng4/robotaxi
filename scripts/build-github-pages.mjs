@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir = path.join(rootDir, "dist");
 const runtimeDirectories = ["assets", "components", "data", "domain", "services", "ui"];
+const edgeoneCli = process.env.ROBOTAXI_EDGEONE_CLI || path.join(rootDir, "node_modules", ".bin", "edgeone");
 
 const babel = await import(path.join(rootDir, "vendor/babel.min.js"));
 const source = fs.readFileSync(path.join(rootDir, "src/main.jsx"), "utf8");
@@ -30,6 +31,11 @@ for (const directory of runtimeDirectories) {
 fs.cpSync(path.join(rootDir, "vendor"), path.join(outputDir, "vendor"), { recursive: true });
 fs.copyFileSync(path.join(rootDir, "src/styles.css"), path.join(outputDir, "src/styles.css"));
 fs.copyFileSync(path.join(rootDir, "README.md"), path.join(outputDir, "README.md"));
+fs.cpSync(path.join(rootDir, "edge-functions"), path.join(outputDir, "edge-functions"), { recursive: true });
+fs.writeFileSync(path.join(outputDir, "package.json"), `${JSON.stringify({
+  name: "robotaxi-edgeone-release",
+  private: true,
+}, null, 2)}\n`);
 
 const productionBundle = compiledBundle.replace(/(\.js)\?v=[^"')]+/g, `$1?v=${cacheVersion}`);
 fs.writeFileSync(path.join(outputDir, "src/main.bundle.js"), productionBundle);
@@ -47,7 +53,17 @@ fs.writeFileSync(path.join(outputDir, "deployment-manifest.json"), `${JSON.strin
   production_url: "https://robotaxi.xingbuild.top/",
 }, null, 2)}\n`);
 
-console.log(`EdgeOne 生产站点已生成：dist (${version}, ${cacheVersion})`);
+if (fs.existsSync(edgeoneCli)) {
+  execFileSync(edgeoneCli, ["makers", "build"], {
+    cwd: outputDir,
+    encoding: "utf8",
+    stdio: "inherit",
+  });
+  console.log(`EdgeOne 完整部署产物已生成：dist/.edgeone (${version}, ${cacheVersion})`);
+} else {
+  assert.notEqual(process.env.ROBOTAXI_REQUIRE_EDGEONE_BUILD, "1", "缺少项目内 EdgeOne CLI，正式发布不得继续");
+  console.log(`EdgeOne 完整源发布包已生成：dist（当前工作树未安装 CLI，跳过函数编译）`);
+}
 
 function readGitCommit() {
   try {

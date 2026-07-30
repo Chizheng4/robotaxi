@@ -49,6 +49,22 @@ Minor 用于局部方案或局部功能修改，例如：
 10. 归档完成后再提交并打 tag。
 11. **执行 AGENTS.md 规定的完成自检清单，逐项确认。**
 
+### 2.1 跨 Task 草案与 Engineering 串行交付
+
+产品设计可以在隔离 worktree 或 branch 中并行形成 `DRAFT`，但草案不是当前 Engineering 版本，也不是可合入或可发布状态。
+
+`DRAFT` 必须写明：
+
+- 事实源；
+- 已确认决策；
+- 非目标；
+- 待确认项；
+- 目标后续版本。
+
+草案阶段禁止修改当前迭代指针、`VERSION.md`、业务代码、依赖、发布脚本或发布规则，禁止合入 `main`。多个并行 Task 不得同时修改同一 current iteration 或 `main`。
+
+Engineering 当前版本必须从实现、验证、归档到 commit、tag、push、deploy 和公网验收严格串行完成。当前版本完成前，不得让后续草案进入 Engineering 主线。当前版本收口后，只能由产品管理将草案转为正式方案并交给 Engineering；Engineering 不得自行把 `DRAFT` 升级为当前版本。
+
 ---
 
 ## 3. 迭代归档规则

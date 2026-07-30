@@ -39,6 +39,7 @@
 6. Major 或 Minor 完成版本已完成对应归档，current 目录没有遗留已完成计划。
 7. `VERSION.md` 已写入本轮版本条目，且条目内容与本次提交一致（每个子版本独立一条，不合并）。
 8. `scripts/verify-current-iteration-archive.mjs` 已通过，防止已归档版本计划继续留在 current 目录。
+9. 涉及 Edge Functions 的发布必须在提交前证明确定性部署产物同时包含静态资源、编译后函数和路由配置；不得以仅含静态 `dist` 的产物作为完整发布。
 
 ## 4. Git 提交
 
@@ -69,3 +70,9 @@
 - 前端关键路径无法验证；
 - 工作区混入无关改动且无法安全拆分；
 - 用户明确要求先不要提交。
+
+## 7. 发布证据
+
+发布结果必须分别报告 Git push、平台 deployment 和正式域名运行态。静态 manifest 的版本与 commit 只证明静态资源版本，不证明 Edge Functions、资源绑定或动态接口可用。
+
+包含访问接口的正式发布还必须以明确自动 QA 身份验证：`qualify` 返回 JSON `AUTOMATED_QA` 且不写入，`records` 未授权请求返回 JSON `401`。HTML fallback、`404`、函数缺失或资源绑定缺失均不得宣称发布完成。

@@ -1389,12 +1389,13 @@ function PlatformLogin({ onEnter, onVisitorRecordsAuthenticated }) {
         footer={null}
         onCancel={closeVisitorPassword}
       >
-        <form className="visitor-password-form" onSubmit={submitVisitorPassword}>
+        <form className="visitor-password-form" aria-busy={visitorPasswordLoading} onSubmit={submitVisitorPassword}>
           <label htmlFor="visitor-record-password">访问密码</label>
           <Input.Password
             id="visitor-record-password"
             autoComplete="current-password"
             value={visitorPassword}
+            disabled={visitorPasswordLoading}
             status={visitorPasswordError ? "error" : undefined}
             placeholder="请输入访问密码"
             onChange={(event) => {
@@ -1405,7 +1406,7 @@ function PlatformLogin({ onEnter, onVisitorRecordsAuthenticated }) {
           <div className={visitorPasswordError ? "visitor-password-feedback visible" : "visitor-password-feedback"} role="status">
             {visitorPasswordError || "密码仅用于查看访问记录"}
           </div>
-          <Button type="primary" htmlType="submit" loading={visitorPasswordLoading} disabled={!visitorPassword}>进入访问记录</Button>
+          <Button type="primary" htmlType="submit" loading={visitorPasswordLoading} disabled={!visitorPassword || visitorPasswordLoading}>进入访问记录</Button>
         </form>
       </Modal>
     </main>
@@ -11995,13 +11996,13 @@ async function bootstrap() {
 		    import("./data/supplyManagementInitialization.js?v=20260716-v046-0-6"),
         import("./data/spatialBusinessProfileInitialization.js?v=20260719-v047-4-1"),
 		    import("./ui/platformExperience.js?v=20260710-v041-2-15"),
-		    import("./ui/visitorAnalyticsService.js?v=v049-13-17"),
+		    import("./ui/visitorAnalyticsService.js?v=v049-13-18"),
 		    import("./ui/robotaxiMapProjection.js?v=20260712-v042-0-1"),
 		    import("./ui/responsiveViewport.js?v=20260711-v041-4-0"),
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=v049-13-17"),
+		    import("./ui/geospatialMapAdapter.js?v=v049-13-18"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),

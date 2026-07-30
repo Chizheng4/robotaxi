@@ -25,10 +25,12 @@ export async function authenticateVisitorRecords(password) {
     localRecordsToken = globalThis.crypto?.randomUUID?.() || `local-${Date.now()}`;
     return { token: localRecordsToken, storage_mode: "LOCAL_PREVIEW" };
   }
-  return callApi("/api/visits/auth", {
+  const result = await callApi("/api/visits/auth", {
     method: "POST",
     body: JSON.stringify({ password: String(password || "") }),
   });
+  if (!result?.token) throw new Error("访问概览服务返回异常，请稍后重试");
+  return result;
 }
 
 export async function loadVisitorRecords({ token, period = "7D", site = "ALL" }) {
@@ -121,8 +123,12 @@ async function callApi(path, options = {}) {
     ...options,
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
+  const contentType = response.headers.get("Content-Type") || "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error("访问概览服务未正确发布，请稍后重试");
+  }
   const result = await response.json().catch(() => null);
-  if (!response.ok && !result) throw new Error("访问概览服务暂时不可用");
+  if (!result || typeof result !== "object") throw new Error("访问概览服务返回异常，请稍后重试");
   if (!response.ok) throw new Error(result?.message || "访问概览服务暂时不可用");
   return result;
 }

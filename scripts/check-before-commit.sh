@@ -60,6 +60,7 @@ node --check scripts/sync-version-metadata.mjs
 node --check scripts/verify-release-version.mjs
 node --check scripts/verify-versioned-pages-workflow.mjs
 node --check scripts/wait-for-github-pages.mjs
+node --check scripts/verify-v049-13-18-complete-publish.mjs
 node --check src/ui/platformExperience.js
 node --check src/ui/visitorAnalyticsService.js
 node --check edge-functions/lib/visitAnalytics.js
@@ -92,6 +93,7 @@ node --check src/services/publicDemoBootstrapService.js
 node scripts/verify-v045-1-page-presentation.mjs
 node scripts/verify-v048-visitor-analytics.mjs
 node scripts/verify-v049-13-17-edge-visit-overview.mjs
+node scripts/verify-v049-13-18-complete-publish.mjs
 node --check scripts/verify-v049-13-17-visit-browser.mjs
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js

@@ -79,8 +79,23 @@ try {
   assert.equal(state.inputFont, "16px");
   assert.equal(state.overflow, 0);
 
+  await setReactInput(send, "#visitor-record-password", "错误密码");
+  await clickByText(send, ".visitor-password-form button", "进入访问记录");
+  await delay(250);
+  state = JSON.parse(await evaluate(send, `JSON.stringify({
+    modal: Boolean(document.querySelector(".visitor-password-modal-root")),
+    error: document.querySelector(".visitor-password-feedback")?.textContent?.trim(),
+    inputValue: document.querySelector("#visitor-record-password")?.value
+  })`));
+  assert(state.modal, "密码错误后弹框不得关闭");
+  assert.equal(state.error, "本地预览密码不正确");
+  assert.equal(state.inputValue, "错误密码");
+
   await setReactInput(send, "#visitor-record-password", "金星");
-  await evaluate(send, `document.querySelector(".visitor-password-form")?.requestSubmit()`);
+  await evaluate(send, `document.querySelector("#visitor-record-password")?.focus()`);
+  await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await send("Input.dispatchKeyEvent", { type: "char", key: "Enter", code: "Enter", text: "\r", windowsVirtualKeyCode: 13 });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
   await delay(500);
   state = JSON.parse(await evaluate(send, `JSON.stringify({
     title: document.querySelector("#visitor-records-title")?.textContent?.trim(),
@@ -96,6 +111,19 @@ try {
   assert.deepEqual(state.summary, ["有效访问", "匿名访客", "最近访问"]);
   assert(state.excludeButton);
   assert.equal(state.overflow, 0);
+
+  assert(await evaluate(send, `(() => {
+    const buttons = [...document.querySelectorAll(".visitor-records-header-actions button")];
+    buttons.at(-1)?.click();
+    return buttons.length >= 2;
+  })()`), "访问概览缺少退出操作");
+  await delay(250);
+  await submitLogin(send, "访问");
+  await delay(250);
+  await setReactInput(send, "#visitor-record-password", "金星");
+  await clickByText(send, ".visitor-password-form button", "进入访问记录");
+  await delay(500);
+  assert.equal(await evaluate(send, `document.querySelector("#visitor-records-title")?.textContent?.trim()`), "访问概览", "按钮提交必须进入访问概览");
 
   state = JSON.parse(await evaluate(send, `JSON.stringify({
     viewport: document.documentElement.clientWidth,
@@ -131,7 +159,7 @@ try {
   assert.equal(state.overflow, 0);
   assert.deepEqual(exceptions, [], `页面存在运行时异常：${exceptions.join("；")}`);
 
-  console.log("v049.13.17 访问概览桌面、390 手机、弹框与 QA 排除浏览器验证通过");
+  console.log("v049.13.18 访问概览按钮、Enter、错误反馈、桌面、390 手机与 QA 排除验证通过");
 } finally {
   await closeManagedBrowser({ browser: chrome, socket, profileDir });
 }
@@ -150,6 +178,15 @@ async function setReactInput(send, selector, value) {
     return true;
   })()`);
   assert(result, `未找到输入框：${selector}`);
+}
+
+async function clickByText(send, selector, text) {
+  const clicked = await evaluate(send, `(() => {
+    const target = [...document.querySelectorAll(${JSON.stringify(selector)})].find((node) => node.textContent.trim().includes(${JSON.stringify(text)}));
+    target?.click();
+    return Boolean(target);
+  })()`);
+  assert(clicked, `未找到按钮：${text}`);
 }
 
 async function evaluate(send, expression) {

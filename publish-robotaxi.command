@@ -93,16 +93,22 @@ push_with_retry() {
 configure_github_network
 
 echo "==> 正在执行发布前检查"
-bash scripts/check-before-commit.sh
+ROBOTAXI_REQUIRE_EDGEONE_BUILD=1 bash scripts/check-before-commit.sh
 
 echo "==> 正在发布 $VERSION"
 push_with_retry "$HEAD_TAG"
 push_with_retry main
 
-echo "==> GitHub 同步完成，正在部署 EdgeOne 生产项目：$EDGEONE_PROJECT"
-"$EDGEONE_CLI" makers deploy dist --name "$EDGEONE_PROJECT" --env production
+EDGEONE_DEPLOY_DIR="dist/.edgeone"
+if [ ! -f "$EDGEONE_DEPLOY_DIR/edge-functions/index.js" ] || [ ! -f "$EDGEONE_DEPLOY_DIR/edge-functions/config.json" ]; then
+  echo "发布已停止：完整 EdgeOne 函数产物不存在。"
+  exit 1
+fi
 
-echo "==> EdgeOne 部署完成，正在验证正式域名"
+echo "==> GitHub 同步完成，正在部署 EdgeOne 完整生产产物：$EDGEONE_PROJECT"
+"$EDGEONE_CLI" makers deploy "$EDGEONE_DEPLOY_DIR" --name "$EDGEONE_PROJECT" --env production
+
+echo "==> EdgeOne 部署完成，正在验证正式域名与函数端点"
 node scripts/wait-for-github-pages.mjs "$VERSION" "$(git rev-parse HEAD)"
 
 echo "==> $VERSION 已正式上线"
