@@ -102,10 +102,16 @@ push_with_retry main
 
 EDGEONE_SOURCE_DIR="dist"
 EDGEONE_PREFLIGHT_DIR="$EDGEONE_SOURCE_DIR/.edgeone"
-if [ ! -f "$EDGEONE_SOURCE_DIR/edge-functions/index.js" ] || [ ! -f "$EDGEONE_SOURCE_DIR/edge-functions/config.json" ]; then
-  echo "发布已停止：完整 EdgeOne 函数源包不存在。"
-  exit 1
-fi
+for source_function in \
+  "$EDGEONE_SOURCE_DIR/edge-functions/api/visits/auth.js" \
+  "$EDGEONE_SOURCE_DIR/edge-functions/api/visits/qualify.js" \
+  "$EDGEONE_SOURCE_DIR/edge-functions/api/visits/records.js" \
+  "$EDGEONE_SOURCE_DIR/edge-functions/lib/visitAnalytics.js"; do
+  if [ ! -f "$source_function" ]; then
+    echo "发布已停止：完整 EdgeOne 函数源包不存在。"
+    exit 1
+  fi
+done
 if [ ! -f "$EDGEONE_PREFLIGHT_DIR/edge-functions/index.js" ] || [ ! -f "$EDGEONE_PREFLIGHT_DIR/edge-functions/config.json" ]; then
   echo "发布已停止：完整 EdgeOne 函数产物不存在。"
   exit 1
