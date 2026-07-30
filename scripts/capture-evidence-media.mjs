@@ -37,7 +37,7 @@ const scenes = [
         assert.equal(sourceSelectorOpened, true, "未找到行政区选择器");
         await clickSelector(send, ".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option:not(.ant-select-item-option-disabled)", "未找到可选行政区");
         await waitFor(send, `Boolean(document.querySelector('.spatial-plan-editor .spatial-plan-reference'))`, "未形成可核验的行政区来源草稿");
-        const planning = await evaluate(send, `({ source: document.querySelector('.spatial-plan-editor .spatial-plan-reference span')?.textContent?.trim() || '', publishDisabled: Boolean([...document.querySelectorAll('.spatial-plan-editor button')].find((node) => node.textContent.trim() === '发布')?.disabled), visibleMapObjects: document.querySelectorAll('.leaflet-interactive, .maplibregl-canvas').length })`);
+        const planning = await evaluate(send, `({ source: document.querySelector('.spatial-plan-editor .spatial-plan-reference span')?.textContent?.trim() || '', publishDisabled: Boolean([...document.querySelectorAll('.spatial-plan-editor button')].find((node) => node.textContent.trim() === '发布')?.disabled), visibleMapObjects: document.querySelectorAll('.maplibregl-canvas').length })`);
         assert(planning.source, "规划草稿缺少行政区来源名称");
         assert.equal(planning.publishDisabled, false, "规划草稿未达到可核验的有效状态");
         return { anchor: ".geospatial-map-shell", observedMapMode: state.mode || "城市地理", planningSource: planning.source, planningStatus: "draft-not-published", planningLimitation: "城市模拟运行尚未启用", candidateStatus: "candidate", mediaRole: "in_progress_context" };

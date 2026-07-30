@@ -65,6 +65,6 @@ assert(adapterSource.includes("robotaxi-sub-zone-labels"), "二级区域必须�
 assert(adapterSource.includes("firstBasemapLabelLayerId"), "业务区域填充必须保留底图原生文字层级");
 assert(adapterSource.includes("cameraForBounds"), "父级聚焦和目标缩放必须使用同一次相机计算");
 assert(mainSource.includes("source_feature_snapshot: sourceFeatureSnapshot"), "规划草稿必须保存底图要素快照");
-assert(mainSource.includes("editorOpen && !mobileLayout"), "手机端不得挂载运营区域编辑器");
+assert(mainSource.includes('editorOpen && mapStatus.status !== "UNAVAILABLE" && !mobileLayout'), "手机端和地图不可用状态不得挂载运营区域编辑器");
 
 console.log("v049.5 空间层级、底图参考和语义缩放验证通过");

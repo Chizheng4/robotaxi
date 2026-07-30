@@ -5,13 +5,27 @@ import {
   CITY_SPATIAL_ZOOM_BANDS,
   getCitySpatialFitPadding,
   normalizeCitySpatialBounds,
-} from "./geospatialPresentationContract.js?v=v049-13-15";
+} from "./geospatialPresentationContract.js?v=v049-13-16";
 
 export {
   CITY_SPATIAL_VISUAL_TOKENS,
   CITY_SPATIAL_ZOOM_BANDS,
   createCitySpatialHoverPresentation,
-} from "./geospatialPresentationContract.js?v=v049-13-15";
+} from "./geospatialPresentationContract.js?v=v049-13-16";
+
+export function supportsWebGL() {
+  if (!globalThis.maplibregl?.Map || typeof document === "undefined") return false;
+  try {
+    const canvas = document.createElement("canvas");
+    return Boolean(
+      canvas.getContext("webgl2")
+      || canvas.getContext("webgl")
+      || canvas.getContext("experimental-webgl"),
+    );
+  } catch {
+    return false;
+  }
+}
 
 const SOURCE_DEFINITIONS = Object.freeze({
   cityMask: { type: "fill", layers: [

@@ -11,6 +11,8 @@ const targetUrl = process.env.ROBOTAXI_BROWSER_VERIFY_URL || "http://127.0.0.1:4
 const viewport = process.env.ROBOTAXI_BROWSER_VIEWPORT || "1280,720";
 const mobileAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MOBILE === "1";
 const mapAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_MAP === "1";
+const cityMapAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_CITY_MAP === "1";
+const cityUnavailableAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_CITY_UNAVAILABLE === "1";
 const planningAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_PLANNING === "1";
 const publicDemoAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_PUBLIC_DEMO === "1";
 const businessTargetAssertionEnabled = process.env.ROBOTAXI_BROWSER_ASSERT_BUSINESS_TARGET === "1";
@@ -27,7 +29,7 @@ const profileDir = `/private/tmp/robotaxi-browser-load-${Date.now()}`;
 const chrome = spawn(chromePath, [
   "--headless=new",
   "--no-first-run",
-  "--disable-gpu",
+  ...(cityMapAssertionEnabled ? [] : ["--disable-gpu"]),
   "--hide-scrollbars",
   "--remote-debugging-port=0",
   `--user-data-dir=${profileDir}`,
@@ -116,7 +118,9 @@ try {
       mobile: true,
     });
   }
-  await send("Page.navigate", { url: targetUrl });
+  if (!cityMapAssertionEnabled) {
+    await send("Page.navigate", { url: targetUrl });
+  }
   await delay(5000);
 
   const entryResult = await send("Runtime.evaluate", {
@@ -501,6 +505,56 @@ try {
   assert(readmePanel?.visible && readmePanel?.hasTitle && readmePanel?.scrollable && readmePanel?.withinViewport && readmePanel?.diagramCount >= 4 && readmePanel?.diagramsRendered && readmePanel?.rawMermaidHidden, `项目 README 浮层必须可读、可滚动并直接渲染结构图：${JSON.stringify(readmePanel)}`);
   await send("Runtime.evaluate", { expression: `document.querySelector('.project-readme-panel [aria-label="关闭项目说明"]')?.click()`, returnByValue: true });
   await delay(100);
+
+  if (cityMapAssertionEnabled) {
+    const cityMapResult = await send("Runtime.evaluate", {
+      expression: `JSON.stringify({
+        canvas: Boolean(document.querySelector(".maplibregl-canvas")),
+        unavailable: Boolean(document.querySelector(".geospatial-map-unavailable")),
+        planning: Boolean(document.querySelector(".spatial-plan-trigger")),
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+      })`,
+      returnByValue: true,
+    });
+    const cityMap = JSON.parse(cityMapResult.result?.result?.value || "{}");
+    assert(cityMap.canvas && !cityMap.unavailable, `MapLibre 城市地图正常路径不可用：${JSON.stringify({ cityMap, exceptions, messages })}`);
+    assert(cityMap.planning, "MapLibre 正常路径缺少城市空间规划入口");
+    assert.equal(cityMap.overflow, 0, "MapLibre 城市地图产生页面级横向溢出");
+    await clickElementCenter(".spatial-plan-trigger");
+    await delay(200);
+    const editorResult = await send("Runtime.evaluate", {
+      expression: `Boolean(document.querySelector(".spatial-plan-editor"))`,
+      returnByValue: true,
+    });
+    assert(editorResult.result?.result?.value, "MapLibre 正常路径无法打开城市空间规划");
+    await send("Runtime.evaluate", {
+      expression: `document.querySelector('.spatial-plan-editor [aria-label="关闭运营区域规划"]')?.click()`,
+      returnByValue: true,
+    });
+  }
+
+  if (cityUnavailableAssertionEnabled) {
+    const unavailableResult = await send("Runtime.evaluate", {
+      expression: `JSON.stringify({
+        unavailable: Boolean(document.querySelector(".geospatial-map-unavailable")),
+        text: document.querySelector(".geospatial-map-unavailable")?.textContent || "",
+        planning: Boolean(document.querySelector(".spatial-plan-trigger")),
+        gridAction: Boolean([...document.querySelectorAll(".geospatial-map-unavailable button")].find((node) => node.textContent.trim() === "切换网格仿真"))
+      })`,
+      returnByValue: true,
+    });
+    const unavailable = JSON.parse(unavailableResult.result?.result?.value || "{}");
+    assert(unavailable.unavailable && unavailable.text.includes("城市空间规划暂不可用"), `城市地图不可用状态不诚实：${JSON.stringify(unavailable)}`);
+    assert.equal(unavailable.planning, false, "城市地图不可用时不得显示规划入口");
+    assert(unavailable.gridAction, "城市地图不可用时缺少网格仿真入口");
+    await clickElementCenter(".geospatial-map-unavailable button", "切换网格仿真");
+    await delay(250);
+    const gridResult = await send("Runtime.evaluate", {
+      expression: `Boolean(document.querySelector(".zone-canvas-new"))`,
+      returnByValue: true,
+    });
+    assert(gridResult.result?.result?.value, "城市地图不可用时无法切换网格仿真");
+  }
 
   if (mapAssertionEnabled) {
     const gridModeSwitchResult = await send("Runtime.evaluate", {

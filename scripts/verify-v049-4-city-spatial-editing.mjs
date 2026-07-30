@@ -101,8 +101,8 @@ assert(blockedZone.validation_issues.some((issue) => issue.includes("下级对�
 const mainSource = fs.readFileSync("src/main.jsx", "utf8");
 const styleSource = fs.readFileSync("src/styles.css", "utf8");
 const mapAdapterSource = fs.readFileSync("src/ui/geospatialMapAdapter.js", "utf8");
-assert(mainSource.includes("!mobileLayout && <Button"), "手机端不得显示运营区域规划入口");
-assert(mainSource.includes("editorOpen && !mobileLayout"), "手机端不得挂载复杂空间编辑器");
+assert(mainSource.includes('!mobileLayout && mapStatus.status !== "UNAVAILABLE" && <Button'), "手机端和地图不可用状态不得显示运营区域规划入口");
+assert(mainSource.includes('editorOpen && mapStatus.status !== "UNAVAILABLE" && !mobileLayout'), "手机端和地图不可用状态不得挂载复杂空间编辑器");
 assert(mainSource.includes("编辑所选对象"), "地图选中空间对象后必须提供直接编辑入口");
 assert(
   mainSource.includes("停用已发布对象") && mainSource.includes('editorMode !== "NEW"'),

@@ -70,7 +70,6 @@ let spatialCatalogService;
 let mapSceneService;
 let geospatialCatalogService;
 let geospatialMapAdapter;
-let geospatialRasterMapAdapter;
 let geospatialReferenceData;
 let citySpatialCatalog;
 let spatialScenarioService;
@@ -8670,6 +8669,7 @@ function MapCanvas({ data, selected, mobileLayout = false, forcedMode = null, on
             onSelect={onSelect}
             onClear={onClear}
             onSpatialPlansChange={onSpatialPlansChange}
+            onSwitchToGrid={() => changeMapMode("GRID_SIMULATION")}
             onControllerReady={(controller) => { cityMapControllerRef.current = controller; }}
           />
         ) : <svg
@@ -8817,7 +8817,7 @@ function MapCanvas({ data, selected, mobileLayout = false, forcedMode = null, on
   );
 }
 
-function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, compact, mobileLayout, onSelect, onClear, onSpatialPlansChange, onControllerReady }) {
+function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, compact, mobileLayout, onSelect, onClear, onSpatialPlansChange, onSwitchToGrid, onControllerReady }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
   const hoverEndTimerRef = useRef(null);
@@ -8849,9 +8849,6 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   useEffect(() => {
     if (!containerRef.current) return undefined;
     let cancelled = false;
-    let retryTimer = null;
-    let attempt = 0;
-    let switchingToRaster = false;
     const createAdapterOptions = (onStatusChange) => ({
       container: containerRef.current,
       scene,
@@ -8898,70 +8895,37 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
         ));
       },
     });
-    const activateRasterRenderer = (reason) => {
-      if (cancelled || switchingToRaster || !containerRef.current) return;
-      switchingToRaster = true;
-      try {
-        adapterRef.current?.destroy();
-        containerRef.current.replaceChildren();
-        adapterRef.current = geospatialRasterMapAdapter.createGeospatialRasterMapAdapter(
-          createAdapterOptions(setMapStatus),
-        );
-        onControllerReady?.(adapterRef.current);
-        setMapStatus({ status: "RASTER_READY", message: "" });
-        if (reason) console.warn("已切换二维城市地图", reason);
-      } catch (error) {
-        switchingToRaster = false;
-        throw error;
-      }
-    };
     const initializeMap = () => {
       if (cancelled || !containerRef.current) return;
-      attempt += 1;
       try {
         containerRef.current.replaceChildren();
-        const useRasterRenderer = !geospatialRasterMapAdapter.supportsWebGL();
-        if (useRasterRenderer) {
-          activateRasterRenderer("当前浏览器未启用 WebGL");
+        if (!geospatialMapAdapter.supportsWebGL()) {
+          adapterRef.current = null;
+          onControllerReady?.(null);
+          setMapStatus({
+            status: "UNAVAILABLE",
+            message: "当前浏览器无法启用完整城市地图，城市空间规划暂不可用。",
+          });
           return;
         }
         adapterRef.current = geospatialMapAdapter.createGeospatialMapAdapter(
-          createAdapterOptions((status) => {
-            if (status?.status === "FALLBACK") {
-              queueMicrotask(() => {
-                try {
-                  activateRasterRenderer("矢量底图加载失败");
-                } catch (rasterError) {
-                  setMapStatus({ status: "ERROR", message: "城市地图加载失败，请刷新重试" });
-                  console.error("二维城市地图初始化失败", rasterError);
-                }
-              });
-              return;
-            }
-            setMapStatus(status);
-          }),
+          createAdapterOptions(setMapStatus),
         );
         onControllerReady?.(adapterRef.current);
         setMapStatus({ status: "READY", message: "" });
       } catch (error) {
-        if (attempt === 1) {
-          try {
-            activateRasterRenderer(error);
-            return;
-          } catch (rasterError) {
-            console.error("二维城市地图初始化失败", rasterError);
-          }
-        }
         adapterRef.current = null;
         onControllerReady?.(null);
-        setMapStatus({ status: "ERROR", message: "城市地图加载失败，请刷新重试" });
-        if (attempt < 2) retryTimer = setTimeout(initializeMap, 1200);
+        setMapStatus({
+          status: "UNAVAILABLE",
+          message: "城市地图引擎启动失败，城市空间规划暂不可用。",
+        });
+        console.error("城市地图引擎初始化失败", error);
       }
     };
     initializeMap();
     return () => {
       cancelled = true;
-      clearTimeout(retryTimer);
       clearTimeout(hoverEndTimerRef.current);
       adapterRef.current?.destroy();
       adapterRef.current = null;
@@ -9399,7 +9363,7 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
   return (
     <div className="geospatial-map-shell">
       <div ref={containerRef} className="geospatial-map-canvas" role="img" aria-label="Robotaxi 真实地理空间运营地图" />
-      {!mobileLayout && <Button
+      {!mobileLayout && mapStatus.status !== "UNAVAILABLE" && <Button
         className="spatial-plan-trigger"
         size="small"
         title="在地图上新建城市空间对象"
@@ -9407,8 +9371,8 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
       >
         规划运营区域
       </Button>}
-      {!mobileLayout && selectedSpatialTarget && <Button className="spatial-plan-edit-trigger" size="small" onClick={openSelectedObjectEditor}>编辑所选对象</Button>}
-      {editorOpen && !mobileLayout && (
+      {!mobileLayout && mapStatus.status !== "UNAVAILABLE" && selectedSpatialTarget && <Button className="spatial-plan-edit-trigger" size="small" onClick={openSelectedObjectEditor}>编辑所选对象</Button>}
+      {editorOpen && mapStatus.status !== "UNAVAILABLE" && !mobileLayout && (
         <aside className="spatial-plan-editor" aria-label="运营区域规划">
           <header><strong>{editorMode === "NEW" ? "规划运营区域" : "编辑空间对象"}</strong><Button type="text" size="small" aria-label="关闭运营区域规划" onClick={closeEditor}>×</Button></header>
           <div className="spatial-plan-context" role="status">
@@ -9528,7 +9492,13 @@ function GeospatialMapCanvas({ scene, spatialScenario, plans, data, selected, co
         </aside>
       )}
       {mapStatus.status === "FALLBACK" && <span className="geospatial-map-status">底图降级 · 运营对象仍可用</span>}
-      {mapStatus.status === "ERROR" && <span className="geospatial-map-status">{mapStatus.message}</span>}
+      {mapStatus.status === "UNAVAILABLE" && (
+        <div className="geospatial-map-unavailable" role="status">
+          <strong>城市地图暂不可用</strong>
+          <span>{mapStatus.message}</span>
+          <Button size="small" onClick={onSwitchToGrid}>切换网格仿真</Button>
+        </div>
+      )}
       {hoverPresentation && (
         <div className={hovered.touch ? "map-hover-card touch" : "map-hover-card"} style={{ left: hovered.x, top: hovered.y }} role="status">
           <strong>{hoverPresentation.title}</strong>
@@ -11928,7 +11898,6 @@ async function bootstrap() {
 		    mapSceneServiceModule,
 		    geospatialCatalogServiceModule,
 		    geospatialMapAdapterModule,
-		    geospatialRasterMapAdapterModule,
 		    geospatialReferenceDataModule,
 		    citySpatialCatalogModule,
 		    spatialScenarioServiceModule,
@@ -12017,8 +11986,7 @@ async function bootstrap() {
 		    import("./services/spatialCatalogService.js?v=20260712-v042-0-0"),
 		    import("./ui/mapSceneService.js?v=20260715-v044-4-0"),
 		    import("./services/geospatialCatalogService.js?v=20260724-v049-10-0"),
-		    import("./ui/geospatialMapAdapter.js?v=v049-13-15"),
-		    import("./ui/geospatialRasterMapAdapter.js?v=v049-13-15"),
+		    import("./ui/geospatialMapAdapter.js?v=v049-13-16"),
 			    import("./data/geospatialReferenceData.js?v=20260722-v049-8-0"),
 			    import("./data/citySpatialCatalog.js?v=20260722-v049-6-0"),
 			    import("./services/spatialScenarioService.js?v=20260721-v049-2-0"),
@@ -12114,7 +12082,6 @@ async function bootstrap() {
 		  mapSceneService = mapSceneServiceModule;
 		  geospatialCatalogService = geospatialCatalogServiceModule;
 		  geospatialMapAdapter = geospatialMapAdapterModule;
-		  geospatialRasterMapAdapter = geospatialRasterMapAdapterModule;
 		  geospatialReferenceData = geospatialReferenceDataModule;
 		  citySpatialCatalog = citySpatialCatalogModule;
 		  spatialScenarioService = spatialScenarioServiceModule;

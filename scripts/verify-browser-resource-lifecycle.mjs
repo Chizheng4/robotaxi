@@ -5,7 +5,8 @@ const browserVerificationSource = fs.readFileSync("scripts/verify-browser-load.m
 const layoutVerificationSource = fs.readFileSync("scripts/verify-v040-17-robotaxi-layout-browser.mjs", "utf8");
 const lifecycleSource = fs.readFileSync("scripts/browser-process-lifecycle.mjs", "utf8");
 const mapAdapterSource = fs.readFileSync("src/ui/geospatialMapAdapter.js", "utf8");
-const rasterAdapterSource = fs.readFileSync("src/ui/geospatialRasterMapAdapter.js", "utf8");
+const mainSource = fs.readFileSync("src/main.jsx", "utf8");
+const indexSource = fs.readFileSync("index.html", "utf8");
 
 for (const [name, source] of [
   ["真实浏览器加载验证", browserVerificationSource],
@@ -25,8 +26,8 @@ assert(lifecycleSource.includes("Chrome DevTools 调用超时"), "DevTools 调�
 assert(mapAdapterSource.includes("visualDiagnosticsRevision"), "矢量地图视觉诊断缺少变化版本");
 assert(mapAdapterSource.includes("inspectedVisualDiagnosticsRevision === visualDiagnosticsRevision"), "矢量地图视觉诊断缺少重复抑制");
 assert(!mapAdapterSource.includes('map.once("idle", emitVisualDiagnostics)'), "场景更新仍重复注册一次性 idle 诊断");
-assert(rasterAdapterSource.includes("appliedSourceVersions"), "二维地图缺少语义场景版本");
-assert(rasterAdapterSource.includes("getSceneSourceVersion"), "二维地图未按来源版本增量更新");
-assert(!rasterAdapterSource.includes("clearSceneLayers();\n    objectLayers.clear();"), "二维地图仍在每次更新时完整重建场景");
+assert(!mainSource.includes("geospatialRasterMapAdapter"), "运行主路径仍依赖第二地图引擎");
+assert(!mainSource.includes("activateRasterRenderer"), "运行主路径仍包含双引擎切换");
+assert(!indexSource.includes("leaflet"), "页面仍加载 Leaflet 资源");
 
 console.log("浏览器与地图资源生命周期验证通过");

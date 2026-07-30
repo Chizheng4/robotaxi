@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const adapterSource = fs.readFileSync(new URL("../src/ui/geospatialMapAdapter.js", import.meta.url), "utf8");
-const rasterAdapterSource = fs.readFileSync(new URL("../src/ui/geospatialRasterMapAdapter.js", import.meta.url), "utf8");
 const presentationContractSource = fs.readFileSync(new URL("../src/ui/geospatialPresentationContract.js", import.meta.url), "utf8");
 const catalogSource = fs.readFileSync(new URL("../src/services/geospatialCatalogService.js", import.meta.url), "utf8");
 const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -25,8 +24,6 @@ assert.match(presentationContractSource, /city:\s*\{[^}]*opacity:\s*0\.15/);
 assert.match(presentationContractSource, /zone:\s*\{[^}]*opacity:\s*0\.27/);
 assert(adapterSource.includes("CITY_SPATIAL_VISUAL_TOKENS"));
 assert(adapterSource.includes("CITY_SPATIAL_STATE_OPACITY"));
-assert(rasterAdapterSource.includes("CITY_SPATIAL_VISUAL_TOKENS"));
-assert(rasterAdapterSource.includes("getCitySpatialFillOpacity"));
 assert(catalogSource.includes("createCityBoundaryMask(dataset)"));
 assert(catalogSource.includes("boundaryRing.reverse()"));
 assert(adapterSource.includes("CITY_SPATIAL_ZOOM_BANDS.cityLabel.max"));
