@@ -52,9 +52,12 @@ Robotaxi 责任端实现：
 1. 创建并绑定变量名固定为 `visitKv` 的 KV；
 2. 配置 Secret `visitAdminPassword`；
 3. 配置至少 24 位随机 Secret `visitHashSecret`；
-4. 确认两个站点各自部署同源 `/api/visits/*`；
-5. 分别验证正式域名写入、管理员查询、父域排除和约 60 秒最终一致性；
-6. 确认 preview 与自动 QA 不写入。
+4. 配置非秘密环境修订标识 `visitEnvRevision`，用于确认新部署取得最新 Production 环境配置；
+5. 确认两个站点各自部署同源 `/api/visits/*`；
+6. 分别验证正式域名写入、管理员查询、父域排除和约 60 秒最终一致性；
+7. 确认 preview 与自动 QA 不写入。
+
+管理员认证失败只允许返回 `ADMIN_PASSWORD_MISSING`、`ADMIN_PASSWORD_HAS_INVISIBLE_CHARS` 或 `ADMIN_PASSWORD_MISMATCH`，并可原样返回非秘密 `env_revision`。不得返回或记录密码、长度、哈希、局部字符或其他可用于猜测密码的信息。
 
 Secrets 不得进入仓库。当前本地实现不要求真实 KV 写入；未完成上述配置时不得声称公网访问概览可用。
 

@@ -74,7 +74,25 @@ export async function qualifyVisit(request, env) {
 export async function authenticate(request, env) {
   const body = await readJson(request);
   const expected = String(env.visitAdminPassword || "");
-  if (!expected || !safeEqual(String(body.password || ""), expected)) throw new HttpError(401, "密码不正确");
+  const envRevision = String(env.visitEnvRevision || "") || null;
+  if (!expected) {
+    throw new HttpError(401, "访问密码尚未完成配置", {
+      code: "ADMIN_PASSWORD_MISSING",
+      env_revision: envRevision,
+    });
+  }
+  if (hasInvisibleCharacters(expected)) {
+    throw new HttpError(401, "访问密码配置包含不可见字符，请重新保存", {
+      code: "ADMIN_PASSWORD_HAS_INVISIBLE_CHARS",
+      env_revision: envRevision,
+    });
+  }
+  if (!safeEqual(String(body.password || ""), expected)) {
+    throw new HttpError(401, "密码不正确", {
+      code: "ADMIN_PASSWORD_MISMATCH",
+      env_revision: envRevision,
+    });
+  }
   const now = Math.floor(Date.now() / 1000);
   const payload = { scope: "VISIT_RECORDS", issued_at: now, expires_at: now + tokenLifetimeSeconds };
   return { token: await signToken(payload, env), expires_at: payload.expires_at * 1000 };
@@ -112,11 +130,23 @@ export function json(payload, status = 200, headers = {}) {
 
 export function errorResponse(error, headers = {}) {
   const status = error instanceof HttpError ? error.status : 503;
-  return json({ message: error instanceof HttpError ? error.message : "访问概览服务暂时不可用" }, status, headers);
+  return json({
+    message: error instanceof HttpError ? error.message : "访问概览服务暂时不可用",
+    ...(error instanceof HttpError && error.code ? { code: error.code, env_revision: error.env_revision } : {}),
+  }, status, headers);
 }
 
 export class HttpError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
+  constructor(status, message, diagnostics = {}) {
+    super(message);
+    this.status = status;
+    this.code = diagnostics.code;
+    this.env_revision = diagnostics.env_revision;
+  }
+}
+
+function hasInvisibleCharacters(value) {
+  return /[\p{White_Space}\p{Cc}\p{Cf}]/u.test(value);
 }
 
 async function scanRecords(env, site, cutoff) {

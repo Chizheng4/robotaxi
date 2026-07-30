@@ -129,8 +129,17 @@ async function callApi(path, options = {}) {
   }
   const result = await response.json().catch(() => null);
   if (!result || typeof result !== "object") throw new Error("访问概览服务返回异常，请稍后重试");
-  if (!response.ok) throw new Error(result?.message || "访问概览服务暂时不可用");
+  if (!response.ok) throw new Error(resolveVisitApiErrorMessage(result));
   return result;
+}
+
+function resolveVisitApiErrorMessage(result) {
+  const authErrorMessages = {
+    ADMIN_PASSWORD_MISSING: "访问密码尚未完成配置",
+    ADMIN_PASSWORD_HAS_INVISIBLE_CHARS: "访问密码配置包含不可见字符，请重新保存",
+    ADMIN_PASSWORD_MISMATCH: "密码不正确",
+  };
+  return authErrorMessages[result?.code] || result?.message || "访问概览服务暂时不可用";
 }
 
 function normalizeVisitorRecords(payload = {}) {
