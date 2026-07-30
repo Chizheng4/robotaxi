@@ -57,6 +57,8 @@ Robotaxi 责任端实现：
 6. 分别验证正式域名写入、管理员查询、父域排除和约 60 秒最终一致性；
 7. 确认 preview 与自动 QA 不写入。
 
+`visitKv` 是 EdgeOne 注入 Edge Functions 的全局 KV namespace binding，不是普通文本环境变量，也不从 `context.env` 读取。生产函数必须优先使用该平台 binding；本地专项测试可以显式提供具备相同 `get`、`put`、`list`、`delete` 能力的替身。
+
 管理员认证失败只允许返回 `ADMIN_PASSWORD_MISSING`、`ADMIN_PASSWORD_HAS_INVISIBLE_CHARS` 或 `ADMIN_PASSWORD_MISMATCH`，并可原样返回非秘密 `env_revision`。不得返回或记录密码、长度、哈希、局部字符或其他可用于猜测密码的信息。
 
 Secrets 不得进入仓库。当前本地实现不要求真实 KV 写入；未完成上述配置时不得声称公网访问概览可用。

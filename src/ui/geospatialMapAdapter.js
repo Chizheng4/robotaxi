@@ -5,13 +5,13 @@ import {
   CITY_SPATIAL_ZOOM_BANDS,
   getCitySpatialFitPadding,
   normalizeCitySpatialBounds,
-} from "./geospatialPresentationContract.js?v=v049-13-22";
+} from "./geospatialPresentationContract.js?v=v049-13-23";
 
 export {
   CITY_SPATIAL_VISUAL_TOKENS,
   CITY_SPATIAL_ZOOM_BANDS,
   createCitySpatialHoverPresentation,
-} from "./geospatialPresentationContract.js?v=v049-13-22";
+} from "./geospatialPresentationContract.js?v=v049-13-23";
 
 export function supportsWebGL() {
   if (!globalThis.maplibregl?.Map || typeof document === "undefined") return false;

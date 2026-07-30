@@ -3,6 +3,7 @@ const tokenLifetimeSeconds = 15 * 60;
 const retentionDays = 30;
 const cleanupLimit = 100;
 const listLimit = 500;
+const listPageLimit = Math.ceil(listLimit / cleanupLimit);
 const allowedPeriods = new Map([["1D", 1], ["7D", 7], ["30D", 30]]);
 const allowedSites = new Set(["ALL", "XINGBUILD", "ROBOTAXI"]);
 const productionHosts = new Map([
@@ -154,14 +155,16 @@ async function scanRecords(env, site, cutoff) {
   const prefix = site === "ALL" ? recordPrefix : `${recordPrefix}${site}_`;
   const records = [];
   let cursor;
+  let pageCount = 0;
   do {
     const page = await kv.list({ prefix, limit: cleanupLimit, ...(cursor ? { cursor } : {}) });
     const values = await Promise.all((page.keys || []).map((entry) => getRecord(env, entry.name || entry.key)));
     for (const record of values) {
       if (isAllowedRecord(record) && Date.parse(record.last_qualified_at) >= cutoff) records.push(record);
     }
-    cursor = page.list_complete === false ? page.cursor : null;
-  } while (cursor && records.length < listLimit);
+    pageCount += 1;
+    cursor = isListComplete(page) ? null : page.cursor;
+  } while (cursor && records.length < listLimit && pageCount < listPageLimit);
   return records;
 }
 
@@ -216,10 +219,17 @@ function requireSecret(env) {
 }
 
 function requireKv(env) {
-  if (!env.visitKv?.get || !env.visitKv?.put || !env.visitKv?.list || !env.visitKv?.delete) {
+  const kv = typeof visitKv !== "undefined" ? visitKv : env?.visitKv;
+  if (!kv?.get || !kv?.put || !kv?.list || !kv?.delete) {
     throw new HttpError(503, "访问概览存储尚未完成配置");
   }
-  return env.visitKv;
+  return kv;
+}
+
+function isListComplete(page) {
+  if (typeof page?.complete === "boolean") return page.complete;
+  if (typeof page?.list_complete === "boolean") return page.list_complete;
+  return true;
 }
 
 async function getRecord(env, key) {

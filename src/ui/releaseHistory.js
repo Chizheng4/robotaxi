@@ -1,6 +1,21 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.13.23",
+    "title": "修复访问概览把 EdgeOne KV namespace binding 误当普通 `context.env` 变量读取的问题，恢复 Production 记录查询与有界清理能力",
+    "changes": [
+      "生产函数优先使用 EdgeOne 官方全局 `visitKv` binding，仅为本地专项测试保留 `context.env.visitKv` fallback，并统一校验 `get`、`put`、`list`、`delete` 四项能力。",
+      "KV 多页读取改用官方 `complete + cursor` 合同，对旧本地 mock 有界兼容 `list_complete`，同时增加固定页数上限避免异常 cursor 造成无限遍历。",
+      "新增专项覆盖全局 binding 优先级、env fallback、缺失与能力不完整、多页停止、异常 cursor 上限，并保留 30 天清理、字段白名单和自动 QA 不写入合同。"
+    ],
+    "audienceTitle": "恢复访问概览存储连接",
+    "audienceChanges": [
+      "访问概览现在会通过已绑定的 EdgeOne KV 命名空间读取记录，无需重新配置或迁移现有数据。",
+      "多页记录读取遵循 EdgeOne 官方分页规则，并保留固定上限与 30 天机会清理。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.13.22",
     "title": "修正固定发布指令对 EdgeOne 源函数目录与预构建目录的职责混淆，确保正式部署前的两层完整性门禁检查真实文件结构",
     "changes": [
