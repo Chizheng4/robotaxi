@@ -1,6 +1,21 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.13.19",
+    "title": "修复普通 Chrome 中访问密码输入框按 Enter 不触发验证的问题，使键盘与既有按钮稳定复用同一认证提交合同",
+    "changes": [
+      "密码输入框显式处理 Enter，并过滤长按重复键与输入法组合输入，避免依赖浏览器不一致的隐式表单提交。",
+      "Enter 继续调用既有 `submitVisitorPassword`，保留提交中禁用、防重复、弹框内错误反馈和成功进入访问概览的行为。",
+      "普通 Chrome 门禁以真实密码控件键盘事件覆盖桌面与 390 手机，并与既有按钮路径共同验证；不读取管理员密码、不写访问记录。"
+    ],
+    "audienceTitle": "修复访问密码回车确认",
+    "audienceChanges": [
+      "在普通 Chrome 的访问密码框按 Enter 现在可以和点击“进入访问记录”一样提交验证。",
+      "输入法组合输入和按键重复不会造成重复提交，密码错误仍会在弹框内明确显示。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.13.18",
     "title": "恢复访问密码入口的明确反馈，并将固定发布指令收敛为静态资源与 Edge Functions 一体化的确定性发布链",
     "changes": [

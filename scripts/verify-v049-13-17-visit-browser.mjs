@@ -80,7 +80,7 @@ try {
   assert.equal(state.overflow, 0);
 
   await setReactInput(send, "#visitor-record-password", "错误密码");
-  await clickByText(send, ".visitor-password-form button", "进入访问记录");
+  await pressEnterOnPassword(send);
   await delay(250);
   state = JSON.parse(await evaluate(send, `JSON.stringify({
     modal: Boolean(document.querySelector(".visitor-password-modal-root")),
@@ -92,10 +92,7 @@ try {
   assert.equal(state.inputValue, "错误密码");
 
   await setReactInput(send, "#visitor-record-password", "金星");
-  await evaluate(send, `document.querySelector("#visitor-record-password")?.focus()`);
-  await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
-  await send("Input.dispatchKeyEvent", { type: "char", key: "Enter", code: "Enter", text: "\r", windowsVirtualKeyCode: 13 });
-  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await pressEnterOnPassword(send);
   await delay(500);
   state = JSON.parse(await evaluate(send, `JSON.stringify({
     title: document.querySelector("#visitor-records-title")?.textContent?.trim(),
@@ -137,11 +134,24 @@ try {
 
   await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 844, deviceScaleFactor: 1, mobile: false });
   await delay(250);
+  assert(await evaluate(send, `(() => {
+    const buttons = [...document.querySelectorAll(".visitor-records-header-actions button")];
+    buttons.at(-1)?.click();
+    return buttons.length >= 2;
+  })()`), "桌面 Enter 验证前缺少退出操作");
+  await delay(250);
+  await submitLogin(send, "访问");
+  await delay(250);
+  await setReactInput(send, "#visitor-record-password", "金星");
+  await pressEnterOnPassword(send);
+  await delay(500);
   state = JSON.parse(await evaluate(send, `JSON.stringify({
+    title: document.querySelector("#visitor-records-title")?.textContent?.trim(),
     viewport: document.documentElement.clientWidth,
     overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     panelRight: document.querySelector(".visitor-records-panel")?.getBoundingClientRect().right
   })`));
+  assert.equal(state.title, "访问概览", "桌面密码输入框 Enter 必须进入访问概览");
   assert.equal(state.viewport, 1280);
   assert.equal(state.overflow, 0);
   assert(state.panelRight <= 1280, `桌面布局超出视口：${JSON.stringify(state)}`);
@@ -159,7 +169,7 @@ try {
   assert.equal(state.overflow, 0);
   assert.deepEqual(exceptions, [], `页面存在运行时异常：${exceptions.join("；")}`);
 
-  console.log("v049.13.18 访问概览按钮、Enter、错误反馈、桌面、390 手机与 QA 排除验证通过");
+  console.log("v049.13.19 访问密码按钮、普通 Chrome Enter、桌面、390 手机与 QA 排除验证通过");
 } finally {
   await closeManagedBrowser({ browser: chrome, socket, profileDir });
 }
@@ -187,6 +197,17 @@ async function clickByText(send, selector, text) {
     return Boolean(target);
   })()`);
   assert(clicked, `未找到按钮：${text}`);
+}
+
+async function pressEnterOnPassword(send) {
+  assert(await evaluate(send, `(() => {
+    const input = document.querySelector("#visitor-record-password");
+    input?.focus();
+    return document.activeElement === input;
+  })()`), "访问密码输入框无法获得焦点");
+  await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+  await send("Input.dispatchKeyEvent", { type: "char", key: "Enter", code: "Enter", text: "\r", windowsVirtualKeyCode: 13 });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
 }
 
 async function evaluate(send, expression) {
