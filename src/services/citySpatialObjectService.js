@@ -262,5 +262,6 @@ function findFeature(collection, id) {
 }
 
 function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
+  if (value == null) return value;
+  return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
 }

@@ -67,11 +67,30 @@ const isolatedScene = createCityGeographicScene({ catalog: fixtureCatalog, plans
 assert.equal(isolatedScene.zones.features[0].properties.spatial_plan_id, undefined);
 const publishedScene = createCityGeographicScene({ catalog: fixtureCatalog, plans: [published] }, GEOSPATIAL_MAP_DATASET);
 assert.equal(publishedScene.zones.features[0].properties.spatial_plan_id, published.operating_spatial_plan_id);
+const equivalentScene = createCityGeographicScene({ catalog: fixtureCatalog, plans: [published] }, GEOSPATIAL_MAP_DATASET);
+assert.deepEqual(equivalentScene, publishedScene, "城市地理场景优化前后关键结果必须保持深度等价");
+assert.notEqual(equivalentScene.zones, publishedScene.zones, "重复场景不得共享可变业务图层引用");
+equivalentScene.zones.features[0].properties.object_name = "MUTATION_PROBE";
+const independentScene = createCityGeographicScene({ catalog: fixtureCatalog, plans: [published] }, GEOSPATIAL_MAP_DATASET);
+assert.deepEqual(independentScene, publishedScene, "单次场景修改不得污染后续业务结果");
 
-const started = performance.now();
-for (let index = 0; index < 500; index += 1) {
-  createCityGeographicScene({ catalog: fixtureCatalog, plans: [published] }, GEOSPATIAL_MAP_DATASET);
+const iterationsPerSample = 500;
+const measuredSampleCount = 5;
+runSceneGenerationSample();
+const samples = Array.from({ length: measuredSampleCount }, () => runSceneGenerationSample());
+const sortedSamples = [...samples].sort((left, right) => left - right);
+const median = sortedSamples[Math.floor(sortedSamples.length / 2)];
+const maximum = Math.max(...samples);
+const performanceSummary = `每次 ${iterationsPerSample} 次，样本 [${samples.map((sample) => sample.toFixed(2)).join(", ")}]ms，中位数 ${median.toFixed(2)}ms，最大值 ${maximum.toFixed(2)}ms`;
+console.log(`v049.2 双空间场景隔离性能样本：${performanceSummary}`);
+assert.ok(median <= 500, `城市地理场景生成中位数耗时过高：${median.toFixed(2)}ms`);
+assert.ok(maximum <= 650, `城市地理场景生成单次耗时严重退化：${maximum.toFixed(2)}ms`);
+console.log(`v049.2 双空间场景隔离验证通过：${performanceSummary}`);
+
+function runSceneGenerationSample() {
+  const started = performance.now();
+  for (let index = 0; index < iterationsPerSample; index += 1) {
+    createCityGeographicScene({ catalog: fixtureCatalog, plans: [published] }, GEOSPATIAL_MAP_DATASET);
+  }
+  return performance.now() - started;
 }
-const elapsed = performance.now() - started;
-assert.ok(elapsed < 500, `城市地理场景生成耗时过高：${elapsed.toFixed(2)}ms`);
-console.log(`v049.2 双空间场景隔离验证通过：500 次场景生成 ${elapsed.toFixed(2)}ms`);

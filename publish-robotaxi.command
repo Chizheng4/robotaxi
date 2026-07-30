@@ -12,6 +12,7 @@ DEFAULT_GITHUB_PROXY="http://127.0.0.1:7897"
 GITHUB_PROXY=""
 EDGEONE_PROJECT="${ROBOTAXI_EDGEONE_PROJECT:-robotaxi-nochina}"
 EDGEONE_CLI="./node_modules/.bin/edgeone"
+EXPECTED_VISIT_ENV_REVISION="rev-20260730-01"
 
 if [ "$BRANCH" != "main" ]; then
   echo "发布已停止：当前分支是 $BRANCH，请切换到 main。"
@@ -99,17 +100,22 @@ echo "==> 正在发布 $VERSION"
 push_with_retry "$HEAD_TAG"
 push_with_retry main
 
-EDGEONE_DEPLOY_DIR="dist/.edgeone"
-if [ ! -f "$EDGEONE_DEPLOY_DIR/edge-functions/index.js" ] || [ ! -f "$EDGEONE_DEPLOY_DIR/edge-functions/config.json" ]; then
+EDGEONE_SOURCE_DIR="dist"
+EDGEONE_PREFLIGHT_DIR="$EDGEONE_SOURCE_DIR/.edgeone"
+if [ ! -f "$EDGEONE_SOURCE_DIR/edge-functions/index.js" ] || [ ! -f "$EDGEONE_SOURCE_DIR/edge-functions/config.json" ]; then
+  echo "发布已停止：完整 EdgeOne 函数源包不存在。"
+  exit 1
+fi
+if [ ! -f "$EDGEONE_PREFLIGHT_DIR/edge-functions/index.js" ] || [ ! -f "$EDGEONE_PREFLIGHT_DIR/edge-functions/config.json" ]; then
   echo "发布已停止：完整 EdgeOne 函数产物不存在。"
   exit 1
 fi
 
-echo "==> GitHub 同步完成，正在部署 EdgeOne 完整生产产物：$EDGEONE_PROJECT"
-"$EDGEONE_CLI" makers deploy "$EDGEONE_DEPLOY_DIR" --name "$EDGEONE_PROJECT" --env production
+echo "==> GitHub 同步完成，正在由 Makers 从完整源包构建并部署：$EDGEONE_PROJECT"
+"$EDGEONE_CLI" makers deploy "$EDGEONE_SOURCE_DIR" --name "$EDGEONE_PROJECT" --env production
 
 echo "==> EdgeOne 部署完成，正在验证正式域名与函数端点"
-node scripts/wait-for-github-pages.mjs "$VERSION" "$(git rev-parse HEAD)"
+node scripts/wait-for-github-pages.mjs "$VERSION" "$(git rev-parse HEAD)" "$EXPECTED_VISIT_ENV_REVISION"
 
 echo "==> $VERSION 已正式上线"
 echo "网站：https://robotaxi.xingbuild.top/"

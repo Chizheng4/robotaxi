@@ -169,7 +169,7 @@ try {
   assert.equal(state.overflow, 0);
   assert.deepEqual(exceptions, [], `页面存在运行时异常：${exceptions.join("；")}`);
 
-  console.log("v049.13.20 访问密码按钮、普通 Chrome Enter、桌面、390 手机与 QA 排除验证通过");
+  console.log("v049.13.21 访问密码按钮、普通 Chrome Enter、桌面、390 手机与 QA 排除验证通过");
 } finally {
   await closeManagedBrowser({ browser: chrome, socket, profileDir });
 }

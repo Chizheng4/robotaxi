@@ -98,6 +98,7 @@ node scripts/verify-v049-13-17-edge-visit-overview.mjs
 node scripts/verify-v049-13-18-complete-publish.mjs
 node scripts/verify-v049-13-19-visit-password-enter.mjs
 node scripts/verify-v049-13-20-visit-env-diagnostics.mjs
+node scripts/verify-v049-13-21-publish-env-injection.mjs
 node --check scripts/verify-v049-13-17-visit-browser.mjs
 node --check src/data/deploymentTaskValidation.js
 node --check src/data/orderMatchingEngine.js

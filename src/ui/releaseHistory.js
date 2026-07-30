@@ -1,6 +1,23 @@
 // Generated from VERSION.md by scripts/generate-release-history.mjs.
 export const releaseHistory = [
   {
+    "version": "v049.13.21",
+    "title": "修复固定发布指令上传预构建目录导致 Makers Production 文本环境变量未进入 Edge Functions 的问题，改用官方支持的完整源目录自动构建部署路径",
+    "changes": [
+      "固定 `publish-robotaxi.command` 继续以 `dist/.edgeone` 验证静态资源、编译函数和三条路由完整性，但正式部署改为由 Makers 从受控 `dist` 源包自动构建。",
+      "公网发布门禁新增故意无效密码诊断，必须取得 `rev-20260730-01` 且分类为 `ADMIN_PASSWORD_MISMATCH`，否则立即失败且不重复部署。",
+      "完整源包和预构建产物禁止包含 `.env` 文件，发布链禁止读取、输出或传递管理员密码和哈希 Secret。",
+      "修复城市地理场景反复深拷贝行政区和目录造成的门禁性能余量不足，保持结果深度等价和跨调用引用独立，不引入陈旧缓存。"
+    ],
+    "audienceTitle": "修复访问密码生产环境注入",
+    "audienceChanges": [
+      "正式发布现在会通过 Makers 官方构建路径取得 Production 环境配置。",
+      "上线后自动确认环境修订和安全错误分类，配置未生效时会立即停止并给出明确证据。",
+      "城市地理场景减少了无效重复处理，既有地图业务结果和规划语义保持不变。"
+    ],
+    "audienceSource": "curated"
+  },
+  {
     "version": "v049.13.20",
     "title": "为访问密码 Production 环境注入增加最小无泄密诊断，区分缺失、不可见字符和正常格式不匹配，并通过非秘密环境修订标识确认部署取得的配置版本",
     "changes": [

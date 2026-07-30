@@ -70,7 +70,7 @@ export function createAdministrativeUnitCollection() {
         source_dataset_id: unit.source_dataset_id,
         source_dataset_version: unit.source_dataset_version,
       },
-      geometry: clone(unit.geometry_geojson),
+      geometry: unit.geometry_geojson,
     })),
   };
 }
@@ -101,5 +101,6 @@ function resolveUnits(spatialUnitIds = []) {
 }
 
 function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
+  if (value == null) return value;
+  return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
 }

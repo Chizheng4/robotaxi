@@ -51,6 +51,7 @@ if (fs.existsSync(edgeoneOutputDir) || process.env.ROBOTAXI_REQUIRE_EDGEONE_BUIL
   assert(fs.existsSync(path.join(edgeoneOutputDir, "edge-functions/config.json")), "EdgeOne 部署产物缺少函数路由配置");
   assert(fs.existsSync(path.join(edgeoneOutputDir, "assets/index.html")), "EdgeOne 部署产物缺少静态入口");
   assert(!fs.existsSync(path.join(edgeoneOutputDir, "assets/.env")), "EdgeOne 部署产物不得包含环境变量文件");
+  assert.equal(findEnvironmentFiles(outputDir).length, 0, "EdgeOne 完整源包及预构建产物不得包含 .env 文件");
   const edgeFunctionConfig = JSON.parse(fs.readFileSync(path.join(edgeoneOutputDir, "edge-functions/config.json"), "utf8"));
   const edgeFunctionRoutes = new Set((edgeFunctionConfig.routes || []).map((route) => route.src));
   for (const route of ["^/api/visits/auth$", "^/api/visits/qualify$", "^/api/visits/records$"]) {
@@ -69,4 +70,13 @@ function directorySize(directory) {
     const entryPath = path.join(directory, entry.name);
     return total + (entry.isDirectory() ? directorySize(entryPath) : fs.statSync(entryPath).size);
   }, 0);
+}
+
+function findEnvironmentFiles(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === "node_modules") return [];
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return findEnvironmentFiles(entryPath);
+    return entry.name === ".env" || entry.name.startsWith(".env.") ? [entryPath] : [];
+  });
 }

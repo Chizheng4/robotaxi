@@ -12,7 +12,11 @@ const workflow = read("doc/rules/01-iteration-workflow.md");
 const execution = read("doc/rules/05-codex-execution-rules.md");
 
 assert(!publish.includes('makers deploy dist --name'), "固定 publish 不得再次只部署静态 dist");
-assert(publish.includes('EDGEONE_DEPLOY_DIR="dist/.edgeone"'));
+assert(publish.includes('EDGEONE_SOURCE_DIR="dist"'));
+assert(publish.includes('EDGEONE_PREFLIGHT_DIR="$EDGEONE_SOURCE_DIR/.edgeone"'));
+assert(publish.includes('makers deploy "$EDGEONE_SOURCE_DIR"'));
+assert(!publish.includes('makers deploy "$EDGEONE_PREFLIGHT_DIR"'), "固定 publish 不得上传预构建目录");
+assert(publish.includes('EXPECTED_VISIT_ENV_REVISION="rev-20260730-01"'));
 assert(publish.includes("ROBOTAXI_REQUIRE_EDGEONE_BUILD=1"));
 assert(build.includes('fs.cpSync(path.join(rootDir, "edge-functions")'));
 assert(build.includes('execFileSync(edgeoneCli, ["makers", "build"]'));
@@ -22,6 +26,8 @@ for (const route of ["auth", "qualify", "records"]) {
 }
 assert(publicVerify.includes('"AUTOMATED_QA"'));
 assert(publicVerify.includes("recordsResponse.status, 401"));
+assert(publicVerify.includes('"ADMIN_PASSWORD_MISMATCH"'));
+assert(publicVerify.includes("expectedEnvRevision"));
 assert(visitorService.includes('contentType.toLowerCase().includes("application/json")'));
 assert(visitorService.includes("访问概览服务未正确发布，请稍后重试"));
 assert(visitorService.includes("if (!result?.token)"));

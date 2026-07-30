@@ -283,7 +283,7 @@ function applyPublishedGeometry(collection, plans = [], targetType, scenarioId =
 }
 
 function cloneCollection(collection) {
-  return collection ? JSON.parse(JSON.stringify(collection)) : { type: "FeatureCollection", features: [] };
+  return collection ? clone(collection) : { type: "FeatureCollection", features: [] };
 }
 
 function createSourceVersions(collections) {
@@ -368,5 +368,6 @@ function parseCellId(cellId) {
 }
 
 function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
+  if (value == null) return value;
+  return typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
 }
