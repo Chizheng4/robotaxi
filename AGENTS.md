@@ -10,7 +10,7 @@ Robotaxi 经营闭环模拟平台。前端单页 React 应用，后端 Python �
 - 运营行驶记录是 Robotaxi 执行运营任务的通用行驶服务，不属于某个任务单私有。新增任务需要行驶时，只能调用服务化的行驶能力。
 - 模拟运行只负责统一时间、调度到期动作、调用已有业务服务。不能自己实现业务闭环。新增业务默认不接入模拟主路径。
 - 修改 `src/main.jsx` 后必须重建 `src/main.bundle.js` 并运行 `bash scripts/check-before-commit.sh`。
-- 跨 Task 的产品草案隔离、Engineering 串行交付与转正式规则必须遵守 `doc/rules/01-iteration-workflow.md`，根规则不复制第二份正文。
+- 跨 Task 的产品草案隔离、Engineering 串行交付、转正式与事件驱动调度必须遵守 `doc/rules/01-iteration-workflow.md`；版本串行不等于同步等待或轮询，根规则不复制第二份正文。
 
 ---
 
